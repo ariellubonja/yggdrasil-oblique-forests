@@ -744,6 +744,12 @@ void FillExampleBucketSet(
                   example_bucket_set->items.end(),
                   typename ExampleBucketSet::ExampleBucketType::SortFeature());
       }
+
+      if constexpr (require_label_sorting) {
+        std::sort(example_bucket_set->items.begin(),
+                  example_bucket_set->items.end(),
+                  typename ExampleBucketSet::ExampleBucketType::SortLabel());
+      }
     }
   }
 
