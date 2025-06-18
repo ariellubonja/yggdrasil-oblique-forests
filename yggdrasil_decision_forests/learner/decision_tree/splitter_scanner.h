@@ -1429,7 +1429,7 @@ SplitSearchResult ScanSplitsRandomBuckets(
 template <typename ExampleBucketSet, typename LabelBucketSet,
           bool require_label_sorting, bool bucket_interpolation = false>
 SplitSearchResult FindBestSplit(
-    absl::Span<const UnsignedExampleIdx> selected_examples,
+    absl::Span<const UnsignedExampleIdx> selected_examples, // IMPORTANT: := dense_example_idxs from oblique.cc := iota(num_examples)
     const typename ExampleBucketSet::FeatureBucketType::Filler& feature_filler,
     const typename ExampleBucketSet::LabelBucketType::Filler& label_filler,
     const typename ExampleBucketSet::LabelBucketType::Initializer& initializer,

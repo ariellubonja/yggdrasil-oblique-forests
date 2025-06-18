@@ -2358,7 +2358,7 @@ namespace yggdrasil_decision_forests::model::decision_tree
                                            &na_replacement); }
     /* #endregion */
 
-    // TODO Ariel Optimize - I think this is why this fn. takes ~13% of runtime
+    // TODO Ariel Optimize - possibly why this fn. takes ~13% of runtime
     FeatureNumericalBucket::Filler feature_filler(selected_examples.size(), na_replacement, attributes);
 
     const auto sorting_strategy = EffectiveStrategy(dt_config, selected_examples.size(), internal_config);

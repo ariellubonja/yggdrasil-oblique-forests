@@ -181,7 +181,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   // This is a class object
   ProjectionEvaluator projection_evaluator(train_dataset,
                                            config_link.numerical_features());
-  /* #endregion */                                         
 
   // TODO Understand Memory Access Pattern. Is this heavy enough to be important?
   // Bunch of memory accesses here - how long do they take?
@@ -193,6 +192,8 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   if (!weights.empty()) {
     selected_weights = Extract(weights, selected_examples);
   }
+
+  /* #endregion */
 
   std::vector<UnsignedExampleIdx> dense_example_idxs(selected_examples.size());
   std::iota(dense_example_idxs.begin(), dense_example_idxs.end(), 0);
@@ -219,13 +220,13 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     matrix.resize(num_projections, std::vector<float>(num_features, 0.f));
   }
 
-  /* #endregion */
-
   if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) {
     end = std::chrono::high_resolution_clock::now();
     dur = end - start;
     std::cout << "\n - Initialization of FindBestCondOblique Took: " << dur.count() << "s\n";
   }
+
+  /* #endregion */
 
   // std::cout << "Num projections: " << num_projections << "\n";
   // remove this outside of profiling!!
