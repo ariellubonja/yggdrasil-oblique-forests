@@ -637,9 +637,7 @@ void FillExampleBucketSet(
   std::chrono::high_resolution_clock::time_point start, end;
   std::chrono::duration<double> dur;
 
-  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
-    start = std::chrono::high_resolution_clock::now();
-  }
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) { start = std::chrono::high_resolution_clock::now(); }
 
   // Initially n_buckets = n. samples in bag
   example_bucket_set->items.resize(feature_filler.NumBuckets());
