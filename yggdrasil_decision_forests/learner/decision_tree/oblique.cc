@@ -345,6 +345,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   /* #endregion */
 }
 
+/* #region LDA-Based Methods */
 
 absl::Status SolveLDA(const proto::DecisionTreeTrainingConfig& dt_config,
                       const ProjectionEvaluator& projection_evaluator,
@@ -453,12 +454,17 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
     ASSIGN_OR_RETURN(
         result,
         FindSplitLabelClassificationFeatureNumericalCart(
-            dense_example_idxs, selected_weights, projection_values,
+            dense_example_idxs, selected_weights, 
+            projection_values, // Ariel: vector?
             selected_labels, label_stats.num_label_classes, na_replacement,
             min_num_obs, dt_config, label_stats.label_distribution,
             first_attribute_idx, effective_internal_config, condition, cache));
-  } else if constexpr (is_same<LabelStats,
-                               RegressionHessianLabelStats>::value) {
+  } 
+
+  /* #region Non-Numerical Methods */   
+  else if constexpr (is_same<LabelStats,
+                               RegressionHessianLabelStats>::value)                    
+    {
     if (!selected_weights.empty()) {
       ASSIGN_OR_RETURN(
           result,
@@ -501,6 +507,8 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
               label_stats.label_distribution, first_attribute_idx,
               effective_internal_config, condition, cache));
     }
+
+    /* #endregion */
   } else {
     static_assert(!is_same<LabelStats, LabelStats>::value, "Not implemented.");
   }
@@ -771,6 +779,8 @@ absl::StatusOr<bool> FindBestConditionMHLDObliqueTemplate(
   return found_better_global;
 }
 
+
+/* #endregion */
 
 /* #region NonInteresting semaphore functions for choosing MHLD or Regular Oblique, based on user call */
 absl::StatusOr<bool> FindBestConditionOblique(
@@ -1231,6 +1241,17 @@ absl::Status ProjectionEvaluator::Evaluate(
     }
     (*values)[selected_idx] = value;
   }
+
+  std::vector<UnsignedExampleIdx> indices(selected_examples.begin(),
+                                             selected_examples.end());
+
+  std::sort(indices.begin(), indices.end(),
+            [&](UnsignedExampleIdx a, UnsignedExampleIdx b) {
+              // Direct attribute access avoids constructing temp buckets.
+              return feature_filler.GetValue(a) < feature_filler.GetValue(b);
+            });
+
+
   return absl::OkStatus();
 }
 

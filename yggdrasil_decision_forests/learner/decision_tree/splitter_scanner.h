@@ -956,6 +956,9 @@ SplitSearchResult ScanSplits(
   }
 }
 
+
+/* #region Irrelevant (to Ariel) ScanSplits alternatives */
+
 // Scans the buckets (similarly to "ScanSplits"), but in the order specified by
 // "bucket_order[i].second" (instead of the bucket order).
 template <typename ExampleBucketSet, typename LabelScoreAccumulator,
@@ -1306,6 +1309,8 @@ SplitSearchResult ScanSplitsRandomBuckets(
     utils::RandomEngine* random) {
   using FeatureBucketType = typename ExampleBucketSet::FeatureBucketType;
 
+  /* #region Check Conditions & Initialize */
+
   if (example_bucket_set.items.size() <= 1) {
     // Not enough examples.
     return SplitSearchResult::kInvalidAttribute;
@@ -1333,6 +1338,8 @@ SplitSearchResult ScanSplitsRandomBuckets(
   SignedExampleIdx num_neg_examples;
   bool tried_one_split = false;
 
+  /* #endregion */
+
   const double weighted_num_examples = pos.WeightedNumExamples();
 
   double best_score =
@@ -1345,23 +1352,25 @@ SplitSearchResult ScanSplitsRandomBuckets(
   // List the non empty buckets.
   active_bucket_idxs.clear();
   const int n = example_bucket_set.items.size();
+
   for (int bucket_idx = 0; bucket_idx < n; bucket_idx++) {
     if (example_bucket_set.items[bucket_idx].label.count > 0) {
       active_bucket_idxs.push_back(bucket_idx);
     }
   }
-  if (active_bucket_idxs.size() <= 1) {
-    // All the examples have the same attribute value.
-    return SplitSearchResult::kInvalidAttribute;
-  }
+  
+  // All the examples have the same attribute value.
+  if (active_bucket_idxs.size() <= 1) { return SplitSearchResult::kInvalidAttribute; }
 
   const auto num_trials = num_trials_fn(active_bucket_idxs.size());
 
   for (int trial_idx = 0; trial_idx < num_trials; trial_idx++) {
+    
     pos_buckets.clear();
     num_pos_examples = 0;
     initializer.InitFull(&neg);
     initializer.InitEmpty(&pos);
+
     for (const int bucket_idx : active_bucket_idxs) {
       if (((*random)() & 1) == 0) {
         const auto& bucket = example_bucket_set.items[bucket_idx];
@@ -1371,6 +1380,8 @@ SplitSearchResult ScanSplitsRandomBuckets(
         pos_buckets.push_back(bucket_idx);
       }
     }
+
+    /* #region Check Exit Conditions, update BestSplit */
     num_neg_examples = num_examples - num_pos_examples;
 
     if (num_pos_examples < min_num_obs) {
@@ -1378,32 +1389,27 @@ SplitSearchResult ScanSplitsRandomBuckets(
       continue;
     }
 
-    if (num_neg_examples < min_num_obs) {
-      // Not enough examples in the negative branch.
-      continue;
-    }
+    // Not enough examples in the negative branch.
+    if (num_neg_examples < min_num_obs) { continue; }
 
-    if (!initializer.IsValidSplit(neg, pos)) {
-      continue;
-    }
+    if (!initializer.IsValidSplit(neg, pos)) { continue; }
 
     DCHECK(!pos_buckets.empty());
 
     const auto score = Score<>(initializer, weighted_num_examples, pos, neg);
     tried_one_split = true;
 
-    if (score > best_score) {
-      // Better split found. Memorize it.
+    if (score > best_score) { // Better split found. Memorize it.
       best_pos_buckets = pos_buckets;
       best_score = score;
       condition->set_num_pos_training_examples_without_weight(num_pos_examples);
       condition->set_num_pos_training_examples_with_weight(
           pos.WeightedNumExamples());
     }
+    /* #endregion */
   }
 
-  if (!best_pos_buckets.empty()) {
-    // Finalize the best found split.
+  if (!best_pos_buckets.empty()) { // Finalize the best found split.
     // Note: The bucket are sorted by index i.e. best_pos_buckets[i] ==
     // example_bucket_set.items[i].feature.value.
     feature_filler.SetConditionFinalWithBuckets(best_pos_buckets, condition);
@@ -1417,6 +1423,8 @@ SplitSearchResult ScanSplitsRandomBuckets(
                            : SplitSearchResult::kInvalidAttribute;
   }
 }
+
+/* #endregion */
 
 // Find the best possible split (and update the condition accordingly) using
 // a simple "scan" of the buckets.  See "ScanSplits".
@@ -1468,6 +1476,18 @@ SplitSearchResult FindBestSplit(
   return scan_splits_result;
 }
 
+// Adds the content's of "src" label bucket to "dst"'s label bucket.
+template <typename ExampleBucketSet>
+void AddLabelBucket(const ExampleBucketSet& src, ExampleBucketSet* dst) {
+  DCHECK_EQ(src.items.size(), dst->items.size());
+  for (size_t item_idx = 0; item_idx < src.items.size(); item_idx++) {
+    src.items[item_idx].label.AddToBucket(&dst->items[item_idx].label);
+  }
+}
+
+
+/* #region Many FindBestSplit() based on ML Task */
+
 // Find the best possible split (and update the condition accordingly) using
 // a random scan of the buckets.  See "ScanSplitsRandomBuckets".
 template <typename ExampleBucketSet, typename LabelBucketSet>
@@ -1496,17 +1516,6 @@ SplitSearchResult FindBestSplitRandom(
       condition, cache, random);
 }
 
-// Adds the content's of "src" label bucket to "dst"'s label bucket.
-template <typename ExampleBucketSet>
-void AddLabelBucket(const ExampleBucketSet& src, ExampleBucketSet* dst) {
-  DCHECK_EQ(src.items.size(), dst->items.size());
-  for (size_t item_idx = 0; item_idx < src.items.size(); item_idx++) {
-    src.items[item_idx].label.AddToBucket(&dst->items[item_idx].label);
-  }
-}
-
-
-/* #region Many FindBestSplit() based on ML Task */
 // Label: Regression.
 
 template <bool weighted>
