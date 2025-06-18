@@ -258,7 +258,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       }
 
       RETURN_IF_ERROR(
-        projection_evaluator.Evaluate(current_projection, selected_examples, &projection_values)
+        projection_evaluator.Evaluate(current_projection, selected_examples, &projection_values, &dense_example_idxs)
       );
 
       if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) {
@@ -517,6 +517,70 @@ absl::Status EvaluateProjectionAndSetCondition(
   return absl::OkStatus();
 }
 
+absl::Status SolveLDA(const proto::DecisionTreeTrainingConfig& dt_config,
+                      const ProjectionEvaluator& projection_evaluator,
+                      const std::vector<int>& selected_features,
+                      const int num_classes, const std::vector<int32_t>& labels,
+                      const std::vector<float>& weights, Projection* projection,
+                      utils::RandomEngine* random) {
+  // TODO: Cache.
+  LDACache lda_cache;
+  RETURN_IF_ERROR(lda_cache.ComputeClassification(
+      dt_config, projection_evaluator, selected_features, num_classes, labels,
+      weights));
+  const auto& sb = lda_cache.FullSB();
+  const auto& sw = lda_cache.FullSW();
+  const int num_features = selected_features.size();
+  const Eigen::Map<const Eigen::MatrixXd> eg_sw(sw.data(), num_features,
+                                                num_features);
+  const Eigen::Map<const Eigen::MatrixXd> eg_sb(sb.data(), num_features,
+                                                num_features);
+
+  // Inverse the SW matrice.
+  Eigen::PartialPivLU<Eigen::MatrixXd> invert_solver(eg_sw);
+  if (invert_solver.determinant() == 0) {
+    // The matrix is not invertible.
+    return absl::OkStatus();
+  }
+  const auto eg_w = invert_solver.inverse() * eg_sb;
+
+  // Get the eigenvalues / vectors.
+  Eigen::EigenSolver<Eigen::MatrixXd> eigen_solver(eg_w, true);
+
+  if (eigen_solver.info() != Eigen::Success) {
+    return absl::OkStatus();
+  }
+
+  const auto& eigenvalues = eigen_solver.eigenvalues();
+  const auto& eigenvectors = eigen_solver.eigenvectors();
+
+  // Get the largest eigenvalue / vector.
+  int arg_abs_max = -1;
+  double abs_max = 0;
+  for (int i = 0; i < num_features; i++) {
+    const auto value = std::abs(eigenvalues(i).real());
+    if (value > abs_max) {
+      arg_abs_max = i;
+      abs_max = value;
+    }
+  }
+  if (arg_abs_max == -1) {
+    return absl::OkStatus();
+  }
+
+  // Convert the top eigen vector into a projection.
+  projection->clear();
+  for (int i = 0; i < num_features; i++) {
+    const float vector = eigenvectors(i, arg_abs_max).real();
+    if (vector == 0) {
+      continue;
+    }
+    projection->push_back({selected_features[i], vector});
+  }
+
+  return absl::OkStatus();
+}
+
 template <typename LabelStats, typename Labels>
 absl::Status EvaluateMHLDCandidates(
     const dataset::proto::DataSpecification& dataspec,
@@ -616,71 +680,6 @@ absl::StatusOr<std::vector<int>> SampleAttributes(
   }
 
   return candidate_attributes;
-}
-
-
-absl::Status SolveLDA(const proto::DecisionTreeTrainingConfig& dt_config,
-                      const ProjectionEvaluator& projection_evaluator,
-                      const std::vector<int>& selected_features,
-                      const int num_classes, const std::vector<int32_t>& labels,
-                      const std::vector<float>& weights, Projection* projection,
-                      utils::RandomEngine* random) {
-  // TODO: Cache.
-  LDACache lda_cache;
-  RETURN_IF_ERROR(lda_cache.ComputeClassification(
-      dt_config, projection_evaluator, selected_features, num_classes, labels,
-      weights));
-  const auto& sb = lda_cache.FullSB();
-  const auto& sw = lda_cache.FullSW();
-  const int num_features = selected_features.size();
-  const Eigen::Map<const Eigen::MatrixXd> eg_sw(sw.data(), num_features,
-                                                num_features);
-  const Eigen::Map<const Eigen::MatrixXd> eg_sb(sb.data(), num_features,
-                                                num_features);
-
-  // Inverse the SW matrice.
-  Eigen::PartialPivLU<Eigen::MatrixXd> invert_solver(eg_sw);
-  if (invert_solver.determinant() == 0) {
-    // The matrix is not invertible.
-    return absl::OkStatus();
-  }
-  const auto eg_w = invert_solver.inverse() * eg_sb;
-
-  // Get the eigenvalues / vectors.
-  Eigen::EigenSolver<Eigen::MatrixXd> eigen_solver(eg_w, true);
-
-  if (eigen_solver.info() != Eigen::Success) {
-    return absl::OkStatus();
-  }
-
-  const auto& eigenvalues = eigen_solver.eigenvalues();
-  const auto& eigenvectors = eigen_solver.eigenvectors();
-
-  // Get the largest eigenvalue / vector.
-  int arg_abs_max = -1;
-  double abs_max = 0;
-  for (int i = 0; i < num_features; i++) {
-    const auto value = std::abs(eigenvalues(i).real());
-    if (value > abs_max) {
-      arg_abs_max = i;
-      abs_max = value;
-    }
-  }
-  if (arg_abs_max == -1) {
-    return absl::OkStatus();
-  }
-
-  // Convert the top eigen vector into a projection.
-  projection->clear();
-  for (int i = 0; i < num_features; i++) {
-    const float vector = eigenvectors(i, arg_abs_max).real();
-    if (vector == 0) {
-      continue;
-    }
-    projection->push_back({selected_features[i], vector});
-  }
-
-  return absl::OkStatus();
 }
 
 template <typename LabelStats>
@@ -1201,7 +1200,9 @@ ProjectionEvaluator::ProjectionEvaluator(
 absl::Status ProjectionEvaluator::Evaluate(
     const Projection& projection,
     const absl::Span<const UnsignedExampleIdx> selected_examples,
-    std::vector<float>* values) const {
+    std::vector<float>* values,
+    std::vector<UnsignedExampleIdx>* dense_example_idxs
+  ) const {
   RETURN_IF_ERROR(constructor_status_);
   values->resize(selected_examples.size());
   // std::cout << "Projection vector: " << projection;
@@ -1244,13 +1245,10 @@ absl::Status ProjectionEvaluator::Evaluate(
     (*values)[selected_idx] = value;
   }
 
-  std::vector<UnsignedExampleIdx> indices(selected_examples.begin(),
-                                             selected_examples.end());
-
-  std::sort(indices.begin(), indices.end(),
+  std::sort(dense_example_idxs->begin(), dense_example_idxs->end(),
             [&](UnsignedExampleIdx a, UnsignedExampleIdx b) {
               // Direct attribute access avoids constructing temp buckets.
-              return feature_filler.GetValue(a) < feature_filler.GetValue(b);
+              return (*values)[a] < (*values)[b];
             });
 
 
