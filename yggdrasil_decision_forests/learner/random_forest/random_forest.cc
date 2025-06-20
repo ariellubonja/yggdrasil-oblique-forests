@@ -663,8 +663,8 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
         std::atomic<int> num_trained_trees{0};
         const absl::Time begin_tree_grow = absl::Now();
 
-        if constexpr (decision_tree::HARD_CODE_1000_PROJECTIONS) { LOG(WARNING) << "\nNum_projections Hard-coded to 1000!\n"; }
-        LOG(INFO) << "\nnum_threads being used: " << deployment().num_threads() << "\n";
+        if constexpr (decision_tree::HARD_CODE_1000_PROJECTIONS) { LOG(WARNING) << "Num_projections Hard-coded to 1000!"; }
+        LOG(INFO) << "num_threads being used: " << deployment().num_threads();
 
         /****** #region FINALLY, START TRAINING ******/
         {
