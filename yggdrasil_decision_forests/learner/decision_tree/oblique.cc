@@ -634,9 +634,13 @@ absl::Status EvaluateMHLDCandidates(
         continue;
       }
 
+      // Ariel - added this here as a placeholder. this is not used and sort is wasted, but Proof of Concept
+      std::vector<UnsignedExampleIdx> dense_example_idxs(selected_examples.size());
+      std::iota(dense_example_idxs.begin(), dense_example_idxs.end(), 0);
+
       // Compute projection
       RETURN_IF_ERROR(projection_evaluator.Evaluate(
-          projection, selected_examples, &projection_values));
+          projection, selected_examples, &projection_values, &dense_example_idxs));
 
       // Evaluate projection quality
       RETURN_IF_ERROR(EvaluateProjectionAndSetCondition(
