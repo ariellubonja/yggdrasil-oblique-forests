@@ -230,8 +230,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
   // std::cout << "Num projections: " << num_projections << "\n";
   // remove this outside of profiling!!
-  // num_projections = 1000;
-  // std::cout << "Hard coded 1000 projections! " << num_projections << "\n";
+  if constexpr (HARD_CODE_1000_PROJECTIONS) { num_projections = 1000; }
 
   /* #region ----------  MAIN LOOP  ------------------ */
   // 1. Declare accumulators

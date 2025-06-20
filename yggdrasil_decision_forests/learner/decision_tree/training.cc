@@ -5032,6 +5032,8 @@ namespace yggdrasil_decision_forests::model::decision_tree
     bool enable_timing = false;
     auto nodetrain_start = std::chrono::high_resolution_clock::now();
 
+    if constexpr (HARD_CODE_1000_PROJECTIONS) { LOG(WARNING) << "Num_projections Hard-coded to 1000!"; }
+
     /* #region Exit Conditions */
     if (selected_examples.empty())
       { return absl::InternalError("No examples fed to the node trainer"); }
