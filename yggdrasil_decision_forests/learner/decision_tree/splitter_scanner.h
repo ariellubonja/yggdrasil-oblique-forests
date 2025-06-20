@@ -637,9 +637,7 @@ void FillExampleBucketSet(
   std::chrono::high_resolution_clock::time_point start, end;
   std::chrono::duration<double> dur;
 
-  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
-    start = std::chrono::high_resolution_clock::now();
-  }
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) { start = std::chrono::high_resolution_clock::now(); }
 
   // Init. takes practically 0 time - time logic removed
   // Allocate the buckets.
@@ -655,17 +653,16 @@ void FillExampleBucketSet(
     bucket_idx++;
   }
 
+  /* #endregion */
+
   if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
     end = std::chrono::high_resolution_clock::now();
     dur = end - start;
     std::cout << " - - Bucket Allocation & Initialization=0 took: " << dur.count() << "s\n";
   }
 
-  // TODO TRY Already sort data (by feature, paired w/ Label), then assign to Buckets
 
-  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
-    start = std::chrono::high_resolution_clock::now();
-  }
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) { start = std::chrono::high_resolution_clock::now(); }
 
   // Fill the buckets. Also takes practically 0 time
   for (size_t select_idx = 0; select_idx < selected_examples.size(); select_idx++) {
@@ -698,12 +695,10 @@ void FillExampleBucketSet(
                   require_label_sorting),
                 "Bucket require sorting");
 
-  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) {
-    start = std::chrono::high_resolution_clock::now();
-  }
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) { start = std::chrono::high_resolution_clock::now(); }
 
   //  Sort the buckets.
-  if constexpr (ExampleBucketSet::FeatureBucketType::kRequireSorting) {
+  // if constexpr (ExampleBucketSet::FeatureBucketType::kRequireSorting) {
     // Ariel: Sorting done here!
     //   std::sort(example_bucket_set->items.begin(),
     //             example_bucket_set->items.end(),
