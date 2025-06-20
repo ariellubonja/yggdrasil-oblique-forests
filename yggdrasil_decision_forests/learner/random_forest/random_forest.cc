@@ -663,6 +663,8 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
         std::atomic<int> num_trained_trees{0};
         const absl::Time begin_tree_grow = absl::Now();
 
+        if constexpr (decision_tree::HARD_CODE_1000_PROJECTIONS) { LOG(WARNING) << "Num_projections Hard-coded to 1000!"; }
+
         /****** #region FINALLY, START TRAINING ******/
         {
           yggdrasil_decision_forests::utils::concurrency::ThreadPool pool(deployment().num_threads(), {.name_prefix = std::string("TrainRF")});

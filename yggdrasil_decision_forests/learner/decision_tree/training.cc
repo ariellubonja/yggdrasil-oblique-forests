@@ -4977,7 +4977,7 @@ namespace yggdrasil_decision_forests::model::decision_tree
       const InternalTrainConfig &internal_config, DecisionTree *dt,
       absl::Span<UnsignedExampleIdx> selected_examples,
       std::optional<absl::Span<UnsignedExampleIdx>> leaf_examples)
-  {
+  {    
     dt->CreateRoot();
     PerThreadCache cache;
 
@@ -5031,8 +5031,6 @@ namespace yggdrasil_decision_forests::model::decision_tree
   {
     bool enable_timing = false;
     auto nodetrain_start = std::chrono::high_resolution_clock::now();
-
-    if constexpr (HARD_CODE_1000_PROJECTIONS) { LOG(WARNING) << "Num_projections Hard-coded to 1000!"; }
 
     /* #region Exit Conditions */
     if (selected_examples.empty())
