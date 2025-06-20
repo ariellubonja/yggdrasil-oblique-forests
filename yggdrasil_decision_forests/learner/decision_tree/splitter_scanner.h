@@ -637,59 +637,91 @@ void FillExampleBucketSet(
   std::chrono::high_resolution_clock::time_point start, end;
   std::chrono::duration<double> dur;
 
-  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) { start = std::chrono::high_resolution_clock::now(); }
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
+    start = std::chrono::high_resolution_clock::now();
+  }
 
-  // Initially n_buckets = n. samples in bag
+  // Init. takes practically 0 time - time logic removed
+  // Allocate the buckets.
   example_bucket_set->items.resize(feature_filler.NumBuckets());
+
+  // Initialize and Zero the buckets.
+  // Initially n_buckets = n. samples in bag
+  // Ariel: also practically takes 0 time. prints removed
+  int bucket_idx = 0;
+  for (auto& bucket : example_bucket_set->items) {
+    feature_filler.InitializeAndZero(bucket_idx, &bucket.feature);
+    label_filler.InitializeAndZero(&bucket.label);
+    bucket_idx++;
+  }
 
   if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
     end = std::chrono::high_resolution_clock::now();
     dur = end - start;
-    std::cout << " - - Bucket Allocation & Initialization=0 took: "
-              << dur.count() << "s\n";
+    std::cout << " - - Bucket Allocation & Initialization=0 took: " << dur.count() << "s\n";
   }
 
-  /* #endregion */
+  // TODO TRY Already sort data (by feature, paired w/ Label), then assign to Buckets
 
-      struct IdVal {                       // <<< NEW – 3 lines
-      UnsignedExampleIdx id;
-      float              val;
-    };
-
-    
-      int bucket_idx = 0;
-      for (auto& bucket : example_bucket_set->items) {
-        feature_filler.InitializeAndZero(bucket_idx, &bucket.feature);
-        label_filler.InitializeAndZero(&bucket.label);
-        ++bucket_idx;
-      }
-
-      for (size_t select_idx = 0; select_idx < selected_examples.size();
-          ++select_idx) {
-        const UnsignedExampleIdx example_idx = selected_examples[select_idx];
-        const size_t item_idx =
-            feature_filler.GetBucketIndex(select_idx, example_idx);
-        auto& bucket = example_bucket_set->items[item_idx];
-
-        feature_filler.ConsumeExample(example_idx, &bucket.feature);
-        label_filler  .ConsumeExample(example_idx, &bucket.label);
-      }
-      for (auto& bucket : example_bucket_set->items) {
-        label_filler.Finalize(&bucket.label);
-      }
-
-      // if constexpr (ExampleBucketSet::FeatureBucketType::kRequireSorting) {
-      //   std::sort(example_bucket_set->items.begin(),
-      //             example_bucket_set->items.end(),
-      //             typename ExampleBucketSet::ExampleBucketType::SortFeature());
-      // }
-
-      if constexpr (require_label_sorting) {
-        std::sort(example_bucket_set->items.begin(),
-                  example_bucket_set->items.end(),
-                  typename ExampleBucketSet::ExampleBucketType::SortLabel());
-      }
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
+    start = std::chrono::high_resolution_clock::now();
   }
+
+  // Fill the buckets. Also takes practically 0 time
+  for (size_t select_idx = 0; select_idx < selected_examples.size(); select_idx++) {
+    // Ariel TODO is example_idx always = select_idx?
+    const UnsignedExampleIdx example_idx = selected_examples[select_idx];
+
+    const size_t item_idx =
+        feature_filler.GetBucketIndex(select_idx, example_idx);
+
+    auto& bucket = example_bucket_set->items[item_idx];
+
+    // ConsumeExample == isnan(attributes_[example_idx])
+    feature_filler.ConsumeExample(example_idx, &bucket.feature);
+    label_filler.ConsumeExample(example_idx, &bucket.label);
+  }
+
+  // Finalize the buckets.
+  // Takes essentially 0 time
+  for (auto& bucket : example_bucket_set->items) {
+    label_filler.Finalize(&bucket.label);
+  }
+
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
+    end = std::chrono::high_resolution_clock::now();
+    dur = end - start;
+    std::cout << " - - Filling & Finalizing the Buckets took: " << dur.count() << "s\n";
+  }
+
+  static_assert(!(ExampleBucketSet::FeatureBucketType::kRequireSorting &&
+                  require_label_sorting),
+                "Bucket require sorting");
+
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) {
+    start = std::chrono::high_resolution_clock::now();
+  }
+
+  //  Sort the buckets.
+  if constexpr (ExampleBucketSet::FeatureBucketType::kRequireSorting) {
+    // Ariel: Sorting done here!
+    //   std::sort(example_bucket_set->items.begin(),
+    //             example_bucket_set->items.end(),
+    //             typename ExampleBucketSet::ExampleBucketType::SortFeature());
+    // }
+
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) {
+    end = std::chrono::high_resolution_clock::now();
+    dur = end - start;
+    std::cout << " - - SortFeature took: " << dur.count() << "s\n";
+  }
+
+  if constexpr (require_label_sorting) {
+    std::sort(example_bucket_set->items.begin(),
+              example_bucket_set->items.end(),
+              typename ExampleBucketSet::ExampleBucketType::SortLabel());
+  }
+}
 
 
 //  If not Weighted: Return preponderance of Binary labels
