@@ -1210,14 +1210,13 @@ absl::Status ProjectionEvaluator::Evaluate(
   values->resize(selected_examples.size());
   // std::cout << "Projection vector: " << projection;
 
-  // TODO make these loops in a vector operation
-  // TODO start w/ full dataE
-
-  // TODO Ariel PRIORITY: Show selected_idx and examples_idx - type, domain
-  //    Maybe plot selected_examples as a mask
-  //    selected_examples should be length n at first iteration, then ~n/2, n/4 ...
-
   // Ariel UPDATE: This consumes <5% of runtime - skip
+
+  std::chrono::high_resolution_clock::time_point start, end;
+  std::chrono::duration<double> dur;
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) {
+      start = std::chrono::high_resolution_clock::now();
+  }
 
   // What is this - should be bag indices
   // Optimization experiment: do this as a vector , then mask out the rows out of bag - values = bag_mask(A+B)
@@ -1248,11 +1247,24 @@ absl::Status ProjectionEvaluator::Evaluate(
     (*values)[selected_idx] = value;
   }
 
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) {
+    end = std::chrono::high_resolution_clock::now();
+    dur = end - start;
+    std::cout << "\n - ApplyProjection w/o Sort Took: " << dur.count() << "s\n";
+    start = std::chrono::high_resolution_clock::now();
+  }
+
   std::sort(dense_example_idxs->begin(), dense_example_idxs->end(),
             [&](UnsignedExampleIdx a, UnsignedExampleIdx b) {
               // Direct attribute access avoids constructing temp buckets.
               return (*values)[a] < (*values)[b];
             });
+
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) {
+    end = std::chrono::high_resolution_clock::now();
+    dur = end - start;
+    std::cout << "\n - Sort inside ApplyProjection Took: " << dur.count() << "s\n";
+  }
 
 
   return absl::OkStatus();
