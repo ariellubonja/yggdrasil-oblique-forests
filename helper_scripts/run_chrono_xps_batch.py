@@ -40,6 +40,8 @@ ORDER = [
     "Initialization of FindBestCondOblique",
     "SampleProjection",
     "ApplyProjection",
+    "ApplyProjection w/o Sort",
+    "Sort inside ApplyProjection",
     "Bucket Allocation & Initialization=0",
     "Filling & Finalizing the Buckets",
     "SortFeature",
