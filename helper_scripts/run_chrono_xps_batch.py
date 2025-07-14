@@ -53,7 +53,8 @@ def enable_e_cores():
         print(f"Warning: Could not re-enable E-cores: {e}")
 
 
-ORDER = [
+# Order for Exact split type (original)
+ORDER_EXACT = [
     "Selecting Bootstrapped Samples",
     "Initialization of FindBestCondOblique",
     "SampleProjection", "ApplyProjection",
@@ -63,6 +64,20 @@ ORDER = [
     "EvaluateProjection",
     "FillExampleBucketSet (next 3 calls)",
 ]
+
+# Order for Histogram split type (new)
+ORDER_HISTOGRAM = [
+    "Selecting Bootstrapped Samples",
+    "Initialization of FindBestCondOblique",
+    "SampleProjection", "ApplyProjection",
+    "Initializing Histogram Bins",
+    "Setting Split Distributions",
+    "Looping over samples",
+    "Looping over splits",
+    "Finding best threshold (Computing Entropies)",
+    "Post-processing after Training all Trees",
+]
+
 RENAMES = {
     "Post-processing after Train": "Post-processing after Training all Trees",
     "FillExampleBucketSet (calls 3 above)": "FillExampleBucketSet (next 3 calls)",
@@ -108,12 +123,15 @@ def _num(tok: str) -> float:
     return float(tok)
 
 
-def fast_parse_tree_depth(log: str) -> pd.DataFrame:
+def fast_parse_tree_depth(log: str, split_type: str = "Exact") -> pd.DataFrame:
     rows: list[tuple[int, int, str, float]] = []
     node_counts: defaultdict[tuple[int, int], int] = defaultdict(int)
 
     cur_tree = -1
     cur_depth: int | None = None
+
+    # Select the appropriate order based on split type
+    order = ORDER_HISTOGRAM if split_type in ["Random", "Equal Width"] else ORDER_EXACT
 
     for line in log.splitlines():
 
@@ -123,7 +141,7 @@ def fast_parse_tree_depth(log: str) -> pd.DataFrame:
             node_counts[(cur_tree, 0)] += 1           # depth-0 node
             rows.append(
                 (
-                    cur_tree, 0, ORDER[0],
+                    cur_tree, 0, order[0],
                     _num(line.rsplit(maxsplit=1)[-1]),
                 )
             )
@@ -161,7 +179,7 @@ def fast_parse_tree_depth(log: str) -> pd.DataFrame:
                        values="time_s",
                        aggfunc="sum",
                        fill_value=0.0)
-          .reindex(columns=ORDER, fill_value=0.0)
+          .reindex(columns=order, fill_value=0.0)
           .reset_index()
     )
 
@@ -175,7 +193,7 @@ def fast_parse_tree_depth(log: str) -> pd.DataFrame:
     wide = wide.merge(counts_df, on=["tree", "depth"], how="left")
     wide["nodes"] = wide["nodes"].fillna(0).astype(int)
 
-    cols = ["tree", "depth", "nodes"] + ORDER
+    cols = ["tree", "depth", "nodes"] + order
     return wide[cols]
 
 
@@ -248,7 +266,8 @@ if __name__ == "__main__":
         enable_e_cores()
 
         log = re.sub(r'\x1B\[[0-?]*[ -/]*[@-~]', '', log)  # strip ANSI
-        table = PARSER[a.verbose](log)
+        # Parse with the appropriate split_type
+        table = fast_parse_tree_depth(log, a.numerical_split_type)
         t2 = time.perf_counter()
 
         wall = TRAIN_RX.search(log).group(1)               # e.g. "0.0084s"

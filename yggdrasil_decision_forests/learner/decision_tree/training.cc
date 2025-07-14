@@ -2223,13 +2223,11 @@ namespace yggdrasil_decision_forests::model::decision_tree
       LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
                                            &na_replacement);
     }
-    /* #endregion */
 
     // Determine the minimum and maximum values of the attribute.
     // Ariel which attribute? Each feature?
     float min_value, max_value;
 
-    /* #region Basic Validity Checks */
     if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
                                   &max_value))
     { return SplitSearchResult::kInvalidAttribute; }
@@ -2249,12 +2247,25 @@ namespace yggdrasil_decision_forests::model::decision_tree
       }
     };
 
+  std::chrono::high_resolution_clock::time_point start, end;
+  std::chrono::duration<double> dur;
+
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) { start = std::chrono::high_resolution_clock::now(); }
+
     // Randomly select some threshold values.
     ASSIGN_OR_RETURN(
         const auto bins,
         internal::GenHistogramBins(dt_config.numerical_split().type(),
                                    dt_config.numerical_split().num_candidates(),
                                    attributes, min_value, max_value, random));
+
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
+    end = std::chrono::high_resolution_clock::now();
+    dur = end - start;
+    std::cout << " - - Initializing Histogram Bins took: " << dur.count() << "s" << std::endl;
+  }
+
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) { start = std::chrono::high_resolution_clock::now(); }
 
     std::vector<CandidateSplit> candidate_splits(bins.size());
     for (int split_idx = 0; split_idx < candidate_splits.size(); split_idx++)
@@ -2263,6 +2274,14 @@ namespace yggdrasil_decision_forests::model::decision_tree
       candidate_split.pos_label_distribution.SetNumClasses(num_label_classes);
       candidate_split.threshold = bins[split_idx];
     }
+
+      if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
+    end = std::chrono::high_resolution_clock::now();
+    dur = end - start;
+    std::cout << " - - Setting Split Distributions took: " << dur.count() << "s" << std::endl;
+  }
+
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) { start = std::chrono::high_resolution_clock::now(); }
 
     // Compute the split score of each threshold.
     for (const auto example_idx : selected_examples)
@@ -2287,6 +2306,14 @@ namespace yggdrasil_decision_forests::model::decision_tree
       it_split->pos_label_distribution.Add(label, weight);
     }
 
+          if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
+    end = std::chrono::high_resolution_clock::now();
+    dur = end - start;
+    std::cout << " - - Looping over samples took: " << dur.count() << "s" << std::endl;
+  }
+
+  if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) { start = std::chrono::high_resolution_clock::now(); }
+
     for (int split_idx = candidate_splits.size() - 2; split_idx >= 0;
          split_idx--)
     {
@@ -2297,9 +2324,17 @@ namespace yggdrasil_decision_forests::model::decision_tree
       dst.pos_label_distribution.Add(src.pos_label_distribution);
     }
 
+          if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
+    end = std::chrono::high_resolution_clock::now();
+    dur = end - start;
+    std::cout << " - - Looping over splits took: " << dur.count() << "s" << std::endl;
+  }
+
     const double initial_entropy = label_distribution.Entropy();
     utils::BinaryToIntegerConfusionMatrixDouble confusion;
     confusion.SetNumClassesIntDim(num_label_classes);
+
+    if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>0) { start = std::chrono::high_resolution_clock::now(); }
 
     // Select the best threshold.
     bool found_split = false;
@@ -2337,6 +2372,13 @@ namespace yggdrasil_decision_forests::model::decision_tree
         found_split = true;
       }
     }
+
+    if constexpr (CHRONO_MEASUREMENTS_LOG_LEVEL>1) {
+    end = std::chrono::high_resolution_clock::now();
+    dur = end - start;
+    std::cout << " - - Finding best threshold (Computing Entropies) took: " << dur.count() << "s" << std::endl;
+  }
+
     return found_split ? SplitSearchResult::kBetterSplitFound
                        : SplitSearchResult::kNoBetterSplitFound;
   }
