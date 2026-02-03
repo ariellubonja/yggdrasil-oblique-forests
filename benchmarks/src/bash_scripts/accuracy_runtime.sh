@@ -146,11 +146,7 @@ else
   exit 0
 fi
 
-# Re-enable CPU features for faster vectorized build
-sudo benchmarks/src/utils/set_cpu_e_features.sh --enable
 bazel build "${BAZEL_FLAGS[@]}" "$vec_cfg" "$BUILD_TARGET"
-# Disable CPU features again for the actual runs
-sudo benchmarks/src/utils/set_cpu_e_features.sh --disable
 
 banner "VECTORIZED EXPERIMENTS [$vec_name] histogram_num_bins=${histogram_num_bins}"
 
