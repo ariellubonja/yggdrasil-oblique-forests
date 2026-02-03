@@ -796,10 +796,12 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                       decision_tree.get(), internal_config
                     );
 
+                  // LOG(INFO) << "After decision_tree::Train and before first Synchronization";
+
                   int current_num_trained_trees;
                   /* #region Synchronization & progress measuring - # nodes trained */
                   {
-                    // Ariel: Synchronization
+                    // TODO Ariel: this lock most likely causes CPU core utilization to drop precipitously, esp. in large servers
                     utils::concurrency::MutexLock lock(&concurrent_fields.mutex);
                     concurrent_fields.status.Update(status_train);
                     if (!concurrent_fields.status.ok()) {
@@ -877,6 +879,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                       absl::StrAppendFormat(&snippet, " work-factor:%f",
                                             bootstrap_size_ratio_factor);
                     }
+                    // Ariel: With our parameters, we don't enter here
                     if (training_config().has_maximum_model_size_in_memory_in_bytes()) {
                       utils::concurrency::MutexLock lock2(&concurrent_fields.mutex);
                       absl::StrAppendFormat(&snippet, " model-size:%d bytes",
@@ -894,6 +897,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                   /* #endregion */
 
                   /* #region OOB Metrics. */
+                  // won't enter here if compute_oob_performances = false in train_oblique_forest.cc
                   if (compute_oob_performances) {
                     utils::concurrency::MutexLock lock(&oob_metrics_mutex);
                     // Update the prediction accumulator.
@@ -1053,6 +1057,8 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                   { return !tree || tree->mutable_root() == nullptr; }),
               trees.end());
         }
+
+        LOG(INFO) << "After Random Forest Training block";
 
         {
           // Note: At this point, there are not concurrent workers running.
