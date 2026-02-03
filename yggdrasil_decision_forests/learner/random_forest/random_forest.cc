@@ -398,8 +398,6 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
           std::optional<std::reference_wrapper<const dataset::VerticalDataset>> valid_dataset) const
       {
         const auto begin_training = absl::Now();
-        std::chrono::high_resolution_clock::time_point start, end;
-        std::chrono::duration<double> dur;
 
         // Timeout in the tree training.
         std::optional<absl::Time> timeout;
@@ -747,7 +745,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                   // Examples selected for the training.
                   // Note: This in the inverse of the Out-of-bag (OOB) set.
 
-                  // TODO: Cache. - TODO Ariel this may be good for performance optimization
+                  // Cache. - TODO Ariel this may be good for performance optimization
                   std::vector<UnsignedExampleIdx> selected_examples;
 
                   auto& decision_tree = (*mdl->mutable_decision_trees())[tree_idx];
@@ -775,7 +773,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                                             rf_config.bootstrap_size_ratio() *
                                             bootstrap_size_ratio_factor));
 
-                    // TODO Ariel - important, bootstrapped samples masked out here
+                    // Ariel - important, bootstrapped samples masked out here
                     internal::SampleTrainingExamples(
                         train_dataset.nrow(), num_samples,
                         rf_config.sampling_with_replacement(), &random,
@@ -797,8 +795,6 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                       rf_config.decision_tree(), deployment(), weights, &random,
                       decision_tree.get(), internal_config
                     );
-
-                  start = std::chrono::high_resolution_clock::now();
 
                   int current_num_trained_trees;
                   /* #region Synchronization & progress measuring - # nodes trained */
@@ -984,6 +980,10 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
       );
           }
         }
+
+        std::cout << std::endl << "random_forest.cc Training block took: " 
+          << absl::ToDoubleSeconds(absl::Now() - begin_training) << "s" 
+          << std::endl << std::endl;
 
         // Print all Timing info after done MultiThreading
         #ifdef CHRONO_ENABLED
