@@ -1059,7 +1059,8 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
               trees.end());
         }
 
-        LOG(INFO) << "After Random Forest Training block";
+        LOG(INFO) << "After Random Forest Training block. RETURNING EARLY TO SPEED UP XPS!!";
+        return mdl;
 
         {
           // Note: At this point, there are not concurrent workers running.

@@ -16,6 +16,9 @@ print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Track whether the CPU is supported
+SUPPORTED_CPU=0
+
 # Check if running as root
 check_root() {
     if [[ $EUID -ne 0 ]]; then
@@ -24,16 +27,15 @@ check_root() {
     fi
 }
 
-# Verify CPU model
+# Verify CPU model (non-185H: warn and skip without error)
 verify_cpu() {
-    local cpu_model=$(grep -m1 "model name" /proc/cpuinfo | cut -d: -f2 | xargs)
-    if [[ "$cpu_model" != "Intel(R) Core(TM) Ultra 9 185H" ]]; then
-        print_warn "CPU model is '$cpu_model', not Intel Core Ultra 9 185H"
-        read -p "Continue anyway? (y/N) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
+    local cpu_model
+    cpu_model=$(grep -m1 "model name" /proc/cpuinfo | cut -d: -f2 | xargs)
+    if [[ "$cpu_model" == "Intel(R) Core(TM) Ultra 9 185H" ]]; then
+        SUPPORTED_CPU=1
+    else
+        SUPPORTED_CPU=0
+        print_warn "CPU model is '$cpu_model', not Intel Core Ultra 9 185H. Skipping; no changes will be made."
     fi
 }
 
@@ -42,14 +44,17 @@ show_status() {
     print_info "Current CPU Configuration:"
     
     # Count online CPUs
-    local online_cpus=$(grep -c 1 /sys/devices/system/cpu/cpu*/online 2>/dev/null || echo "0")
-    local total_cpus=$(nproc --all)
+    local online_cpus
+    online_cpus=$(grep -c 1 /sys/devices/system/cpu/cpu*/online 2>/dev/null || echo "0")
+    local total_cpus
+    total_cpus=$(nproc --all)
     echo "  Online CPUs: $online_cpus / $total_cpus"
     
     # Check turbo boost status
     local turbo_status="Unknown"
     if [[ -f /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then
-        local no_turbo=$(cat /sys/devices/system/cpu/intel_pstate/no_turbo)
+        local no_turbo
+        no_turbo=$(cat /sys/devices/system/cpu/intel_pstate/no_turbo)
         turbo_status=$([[ "$no_turbo" == "0" ]] && echo "Enabled" || echo "Disabled")
     fi
     echo "  Turbo Boost: $turbo_status"
@@ -57,7 +62,7 @@ show_status() {
     # Show which CPUs are online
     echo -n "  Active CPUs: "
     for cpu in /sys/devices/system/cpu/cpu[0-9]*; do
-        cpu_num=$(basename $cpu | sed 's/cpu//')
+        cpu_num=$(basename "$cpu" | sed 's/cpu//')
         if [[ -f "$cpu/online" ]]; then
             online=$(cat "$cpu/online" 2>/dev/null || echo "1")
         else
@@ -145,10 +150,7 @@ main() {
             action="enable"
             ;;
         --status)
-            check_root
-            verify_cpu
-            show_status
-            exit 0
+            action="status"
             ;;
         --help|-h|"")
             echo "Usage: $0 [--enable|--disable|--status]"
@@ -159,7 +161,7 @@ main() {
             echo "  --status   Show current CPU configuration"
             echo "  --help     Show this help message"
             echo ""
-            echo "This script toggles hyperthreading, E-cores, and turbo boost together."
+            echo "Note: On non-Intel Core Ultra 9 185H systems, this script will print a warning and exit without making changes."
             exit 0
             ;;
         *)
@@ -169,26 +171,24 @@ main() {
             ;;
     esac
     
-    # Check prerequisites
-    check_root
+    # Verify CPU first; on non-185H, warn and exit successfully without changes
     verify_cpu
-    
-    # # Show initial status
-    # echo "=== Before ==="
-    # show_status
-    # echo
-    
+    if [[ "$SUPPORTED_CPU" -ne 1 ]]; then
+        # Skip everything, return success
+        exit 0
+    fi
+
+    # Only require root on supported CPU where we might make changes
+    check_root
+
     # Perform requested action
     if [[ "$action" == "disable" ]]; then
         enable_pcore_only_mode
     elif [[ "$action" == "enable" ]]; then
         restore_full_config
+    elif [[ "$action" == "status" ]]; then
+        show_status
     fi
-    
-    # Show final status
-    # echo
-    # echo "=== CPU set to ==="
-    # show_status
 }
 
 # Run main function
