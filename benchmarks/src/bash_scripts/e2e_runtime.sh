@@ -17,8 +17,8 @@ METHODS=(
   "Exact"
   "Random"
   "Dynamic Random Histogram"
-  # "Equal Width"
-#   "Dynamic Equal Width Histogram"
+# "Equal Width"
+# "Dynamic Equal Width Histogram"
 )
 
 # Optional per-method extra args
@@ -31,8 +31,12 @@ METHOD_EXTRA_ARGS["Dynamic Random Histogram"]="--histogram_num_bins $histogram_n
 
 # CSV datasets as "path|label_col" (comment out lines to skip)
 CSV_DATASETS=(
-  # "benchmarks/data/HIGGS_with_header.csv|class"
+  # Big
+  "benchmarks/data/HIGGS_with_header.csv|class"
   "benchmarks/data/SUSY_with_header.csv|class"
+  "benchmarks/data/epsilon_normalized_train.csv|label"
+
+  # Small
   "benchmarks/data/cc18_binary_csv/task_14965_bank-marketing/repeat0_fold0_sample0_train.csv|Class"
   "benchmarks/data/cc18_binary_csv/task_14952_PhishingWebsites/repeat0_fold0_sample0_train.csv|Result"
   "benchmarks/data/cc18_binary_csv/task_29_credit-approval/repeat0_fold0_sample0_train.csv|class"
