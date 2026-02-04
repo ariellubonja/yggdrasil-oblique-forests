@@ -71,7 +71,7 @@ trap 'sudo benchmarks/src/utils/set_cpu_e_features.sh --enable' EXIT
 logdir="benchmarks/results"
 mkdir -p "$logdir"
 ts=$(date +%Y%m%d_%H%M%S)
-logfile="${logdir}/accuracy_runtime_${ts}.log"
+logfile="${logdir}/e2e_runtime_${ts}.log"
 
 # Normal build
 bazel build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
