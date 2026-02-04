@@ -63,7 +63,7 @@ ABSL_FLAG(float, num_projections_exponent, .5,
 ABSL_FLAG(std::string, growing_strategy, "Local",
           "Type of Tree Growing Strategy: 'Local' - depth-first using NodeTrain or 'GlobalBestFirst' - PriorityQueue the nodes based on Score() Gain.");
 
-ABSL_FLAG(bool, compute_oob_performances, true,
+ABSL_FLAG(bool, compute_oob_performances, false,
           "Whether to compute out-of-bag performances (only for csv mode).");
 
 // Synthetic mode flags

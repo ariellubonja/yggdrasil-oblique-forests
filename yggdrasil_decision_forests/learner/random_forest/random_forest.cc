@@ -484,7 +484,6 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
             training_config().task() == model::proto::Task::NUMERICAL_UPLIFT)
             { use_optimized_unit_weights = false; }
  
-        // TODO Ariel: Use this as mask to vectorize (?)
         RETURN_IF_ERROR(dataset::GetWeights(train_dataset, config_link, &weights, use_optimized_unit_weights));
 
         ASSIGN_OR_RETURN(const auto preprocessing,
@@ -606,7 +605,6 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
         std::atomic<bool> training_stopped_early = false;
 
         // **** Init shared variables ****
-        // TODO Ariel - adaptive amount of compute is decided here - might mess up profiling
             std::unique_ptr<utils::AdaptativeWork> adaptative_work;
             if (rf_config.adapt_bootstrap_size_ratio_for_maximum_training_duration())
             {
@@ -745,7 +743,6 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                   // Examples selected for the training.
                   // Note: This in the inverse of the Out-of-bag (OOB) set.
 
-                  // Cache. - TODO Ariel this may be good for performance optimization
                   std::vector<UnsignedExampleIdx> selected_examples;
 
                   auto& decision_tree = (*mdl->mutable_decision_trees())[tree_idx];
@@ -859,6 +856,8 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                   // Note: The OOB computation does not impact the quality of the model
                   // (only the computation of model metrics). Disabling OOB computation
                   // will make the work manager inference more accurate.
+                  
+                  // Ariel - this is off for our parameters
                   if (adaptative_work) {
                     adaptative_work->ReportTaskDone(
                         bootstrap_size_ratio_factor,
@@ -897,7 +896,10 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                   /* #endregion */
 
                   /* #region OOB Metrics. */
-                  // won't enter here if compute_oob_performances = false in train_oblique_forest.cc
+                  
+                  // LOG(INFO) << "Compute OOB Performances: " << compute_oob_performances;
+                  // LOG(INFO) << "Compute OOB Variable Importances: " << compute_oob_variable_importances;
+                  
                   if (compute_oob_performances) {
                     utils::concurrency::MutexLock lock(&oob_metrics_mutex);
                     // Update the prediction accumulator.
@@ -985,9 +987,8 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
           }
         }
 
-        std::cout << std::endl << "random_forest.cc Training block took: " 
-          << absl::ToDoubleSeconds(absl::Now() - begin_training) << "s" 
-          << std::endl << std::endl;
+        LOG(INFO) << "random_forest.cc Training block took: " 
+          << absl::ToDoubleSeconds(absl::Now() - begin_training) << " s";
 
         // Print all Timing info after done MultiThreading
         #ifdef CHRONO_ENABLED
