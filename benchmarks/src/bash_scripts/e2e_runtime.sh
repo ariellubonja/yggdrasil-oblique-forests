@@ -12,7 +12,13 @@ BASE_ARGS="--num_trees $NUM_TREES --num_threads $NUM_THREADS"
 histogram_num_bins=64
 # histogram_num_bins=256   # Uncomment to switch; AVX512 will be used on Vectorized method
 
-# Numerical split method - comment out any you don't want
+# Which feature split types to run (comment out any you don't want)
+SPLIT_TYPES=(
+  "Oblique"
+  "Axis Aligned"
+)
+
+# Numerical split methods (comment out any you don't want)
 METHODS=(
   "Exact"
   "Random"
@@ -61,7 +67,7 @@ BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native")
 VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
 VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
 
-# Vectorization applies only to these methods
+# Vectorization applies only to these methods (Oblique only)
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
 
 # Always: enable -> build -> disable -> run -> re-enable at end
@@ -90,49 +96,80 @@ banner() {
 }
 
 # -------------------------
-# Normal (non-vectorized) experiments
+# Normal experiments (Oblique and/or Axis Aligned per SPLIT_TYPES)
 # -------------------------
 banner "NORMAL EXPERIMENTS (no explicit vector ISA) histogram_num_bins=${histogram_num_bins}"
 
-for method in "${METHODS[@]}"; do
-  extra="${METHOD_EXTRA_ARGS[$method]:-}"
-  if [[ -n "$extra" ]]; then
-    banner "Running $method with $histogram_num_bins bins"
+oblique_selected=false
+for split in "${SPLIT_TYPES[@]}"; do
+  # Select compatible methods for this split type
+  methods_to_run=()
+  if [[ "$split" == "Axis Aligned" ]]; then
+    allowed=("Exact" "Random" "Equal Width")
+    for m in "${METHODS[@]}"; do
+      for a in "${allowed[@]}"; do
+        if [[ "$m" == "$a" ]]; then
+          methods_to_run+=("$m")
+          break
+        fi
+      done
+    done
+    if [[ "${#methods_to_run[@]}" -eq 0 ]]; then
+      banner "AXIS ALIGNED: No compatible methods selected (need Exact, Random, or Equal Width). Skipping."
+      continue
+    fi
+    banner "AXIS ALIGNED EXPERIMENTS feature_split_type=Axis Aligned histogram_num_bins=${histogram_num_bins}"
+    feature_arg='--feature_split_type "Axis Aligned"'
   else
-    banner "Running $method"
+    # Oblique: use METHODS as-is, no feature_split_type flag
+    methods_to_run=("${METHODS[@]}")
+    oblique_selected=true
+    banner "OBLIQUE EXPERIMENTS histogram_num_bins=${histogram_num_bins}"
+    feature_arg='--feature_split_type "Oblique"'
   fi
 
-  # CSV datasets
-  for entry in "${CSV_DATASETS[@]}"; do
-    IFS='|' read -r path label <<<"$entry"
-    cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra"
-    run_cmd "$cmd"
-  done
-
-  # Trunk rows
-  for rows in "${TRUNK_ROWS[@]}"; do
-    cmd="$BINARY --input_mode trunk --rows $rows --numerical_split_type \"$method\" $BASE_ARGS $extra"
-    run_cmd "$cmd"
-  done
-done
-
-# -------------------------
-# Vectorized experiments (Random, Dynamic Random Histogram only)
-# -------------------------
-
-# Determine which vectorizable methods are selected by the user
-selected_vec_methods=()
-for m in "${METHODS[@]}"; do
-  for v in "${VECTORIZE_METHODS[@]}"; do
-    if [[ "$m" == "$v" ]]; then
-      selected_vec_methods+=("$m")
-      break
+  for method in "${methods_to_run[@]}"; do
+    extra="${METHOD_EXTRA_ARGS[$method]:-}"
+    if [[ -n "$extra" ]]; then
+      banner "Running $method [$split] with $histogram_num_bins bins"
+    else
+      banner "Running $method [$split]"
     fi
+
+    # CSV datasets
+    for entry in "${CSV_DATASETS[@]}"; do
+      IFS='|' read -r path label <<<"$entry"
+      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra"
+      run_cmd "$cmd"
+    done
+
+    # Trunk rows
+    for rows in "${TRUNK_ROWS[@]}"; do
+      cmd="$BINARY --input_mode trunk --rows $rows $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra"
+      run_cmd "$cmd"
+    done
   done
 done
+
+# -------------------------
+# Vectorized experiments (Oblique only; Random, Dynamic Random Histogram)
+# -------------------------
+
+# Only run if Oblique was selected and vectorizable methods are present
+selected_vec_methods=()
+if [[ "$oblique_selected" == "true" ]]; then
+  for m in "${METHODS[@]}"; do
+    for v in "${VECTORIZE_METHODS[@]}"; do
+      if [[ "$m" == "$v" ]]; then
+        selected_vec_methods+=("$m")
+        break
+      fi
+    done
+  done
+fi
 
 if [[ "${#selected_vec_methods[@]}" -eq 0 ]]; then
-  banner "No vectorizable methods selected; skipping vectorized experiments"
+  banner "No vectorizable Oblique methods selected; skipping vectorized experiments"
   exit 0
 fi
 
@@ -152,11 +189,12 @@ fi
 
 bazel build "${BAZEL_FLAGS[@]}" "$vec_cfg" "$BUILD_TARGET"
 
-banner "VECTORIZED EXPERIMENTS [$vec_name] histogram_num_bins=${histogram_num_bins}"
+banner "VECTORIZED EXPERIMENTS [${vec_name}] (Oblique only) histogram_num_bins=${histogram_num_bins}"
+echo "USING INSTRUCTION SET: ${vec_name}" | tee -a "$logfile"
 
 for method in "${selected_vec_methods[@]}"; do
   extra="${METHOD_EXTRA_ARGS[$method]:-}"
-  banner "Running $method [VECTORIZE: $vec_name] with $histogram_num_bins bins"
+  banner "Running $method [VECTORIZE: ${vec_name}] with $histogram_num_bins bins"
 
   # CSV datasets
   for entry in "${CSV_DATASETS[@]}"; do
