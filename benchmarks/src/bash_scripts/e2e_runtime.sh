@@ -5,7 +5,7 @@ set -euo pipefail
 # Configuration (edit/comment here)
 # =========================
 
-NUM_TREES=100
+NUM_TREES=240 # Good number for 48-core AWS machine to prevent skewness
 NUM_THREADS=-1
 BASE_ARGS="--num_trees $NUM_TREES --num_threads $NUM_THREADS"
 
