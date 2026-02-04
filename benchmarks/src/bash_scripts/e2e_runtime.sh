@@ -7,10 +7,12 @@ set -euo pipefail
 
 NUM_TREES=240 # Good number for 48-core AWS machine to prevent skewness
 NUM_THREADS=-1
-BASE_ARGS="--num_trees $NUM_TREES --num_threads $NUM_THREADS"
+COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
+# Ariel - ENSURE compute_oob_performances===== - it has an equal sign, not a blank space
+BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_performances=$COMPUTE_OOB_PERFORMANCES"
 
-histogram_num_bins=64
-# histogram_num_bins=256   # Uncomment to switch; AVX512 will be used on Vectorized method
+# histogram_num_bins=64
+histogram_num_bins=256   # Uncomment to switch; AVX512 will be used on Vectorized method
 
 # Which feature split types to run (comment out any you don't want)
 SPLIT_TYPES=(
