@@ -44,7 +44,7 @@ ABSL_FLAG(std::string, model_out_dir, "",
           "Path to output trained model directory (optional)."
           " If empty, model is not saved.");
 ABSL_FLAG(int, num_threads, 1, "Number of threads to use.");
-ABSL_FLAG(int, num_trees, 1000, "Number of trees in the random forest.");
+ABSL_FLAG(int, num_trees, 240, "Number of trees in the random forest.");
 ABSL_FLAG(int, tree_depth, -1,
           "Maximum depth of trees (-1 for unlimited).");
 
@@ -242,7 +242,6 @@ int main(int argc, char** argv) {
         guide,
         &data_spec);
   }
-  /* … csv branch unchanged … */
   else if (mode == "uniform" || mode == "trunk") {
     std::cout << "\nGenerating " << mode << " synthetic dataset: rows="
               << absl::GetFlag(FLAGS_rows)
@@ -357,7 +356,7 @@ int main(int argc, char** argv) {
         absl::GetFlag(FLAGS_num_projections_exponent));
   } else if (feature_split_type == "Axis Aligned") {
     std::cout << "Using axis-aligned splits (default behavior)\n";
-    rf.mutable_decision_tree()->set_num_candidate_attributes(sqrt(absl::GetFlag(FLAGS_cols)) * 1.5);
+    rf.mutable_decision_tree()->set_num_candidate_attributes(ceil(sqrt(data_spec.columns_size())));
     // No additional configuration needed for axis-aligned splits
   } else {
     std::cerr << "Unknown feature_split_type: " << feature_split_type 
