@@ -2637,7 +2637,7 @@ return found_split ? SplitSearchResult::kBetterSplitFound
 
     const auto sorting_strategy = EffectiveStrategy(dt_config, selected_examples.size(), internal_config);
 
-    LOG(INFO) << "Sorting Strategy (0 - In Node, 1 - PreSorted, 2 - Force Presorted, 3- Auto): " << sorting_strategy;
+    // LOG(INFO) << "Sorting Strategy (0 - In Node, 1 - PreSorted, 2 - Force Presorted, 3- Auto): " << sorting_strategy;
     
     if (num_label_classes == 3) { // Binary classification.
     // "Why ==3" ?
