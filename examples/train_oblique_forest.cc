@@ -19,6 +19,7 @@
 #include "yggdrasil_decision_forests/model/model_library.h"
 // #include "yggdrasil_decision_forests/utils/status_macros.h"
 #include "yggdrasil_decision_forests/utils/filesystem.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
 
 #include <random>
 
@@ -356,8 +357,28 @@ int main(int argc, char** argv) {
         absl::GetFlag(FLAGS_num_projections_exponent));
   } else if (feature_split_type == "Axis Aligned") {
     std::cout << "Using axis-aligned splits (default behavior)\n";
-    rf.mutable_decision_tree()->set_num_candidate_attributes(ceil(sqrt(data_spec.columns_size())));
-    // No additional configuration needed for axis-aligned splits
+
+    // Configure sparse_oblique_split parameters to reuse GetNumProjections formula
+    // This does NOT enable oblique splits - it just sets params for the calculation
+    auto* sos = rf.mutable_decision_tree()->mutable_sparse_oblique_split();
+    sos->set_max_num_projections(absl::GetFlag(FLAGS_max_num_projections));
+    sos->set_num_projections_exponent(absl::GetFlag(FLAGS_num_projections_exponent));
+
+    int num_numerical_features = 0;
+    for (int i = 0; i < data_spec.columns_size(); ++i) {
+      if (data_spec.columns(i).type() == dataset::proto::NUMERICAL) {
+        num_numerical_features++;
+      }
+    }
+
+    const int num_candidates = model::decision_tree::GetNumProjections(
+        rf.decision_tree(), num_numerical_features);
+    rf.mutable_decision_tree()->set_num_candidate_attributes(num_candidates);
+
+    // Clear sparse_oblique_split so axis-aligned splits are used, not oblique
+    rf.mutable_decision_tree()->clear_sparse_oblique_split();
+
+    LOG(INFO) << "Num Candidate Attributes: " << num_candidates;
   } else {
     std::cerr << "Unknown feature_split_type: " << feature_split_type 
               << ". Use 'Axis Aligned' or 'Oblique'.\n";

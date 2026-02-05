@@ -75,6 +75,7 @@ cc_binary(
     # features = ["c++17"],
     deps = [
 "//yggdrasil_decision_forests/learner/random_forest:random_forest",
+"//yggdrasil_decision_forests/learner/decision_tree:training",
 "//yggdrasil_decision_forests/learner:learner_library",
 
 "//yggdrasil_decision_forests/model/random_forest:random_forest",
