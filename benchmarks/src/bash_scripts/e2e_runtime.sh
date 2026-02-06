@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# =========================
-# Configuration (edit/comment here)
-# =========================
+###### Parameters
 
 NUM_TREES=240 # Good number for 48-core AWS machine to prevent skewness
 NUM_THREADS=-1
@@ -29,13 +27,22 @@ METHODS=(
 # "Dynamic Equal Width Histogram"
 )
 
-# Optional per-method extra args
-declare -A METHOD_EXTRA_ARGS
-METHOD_EXTRA_ARGS["Exact"]=""
-METHOD_EXTRA_ARGS["Equal Width"]="--histogram_num_bins $histogram_num_bins"
-METHOD_EXTRA_ARGS["Random"]="--histogram_num_bins $histogram_num_bins"
-METHOD_EXTRA_ARGS["Dynamic Equal Width Histogram"]="--histogram_num_bins $histogram_num_bins"
-METHOD_EXTRA_ARGS["Dynamic Random Histogram"]="--histogram_num_bins $histogram_num_bins"
+# Dynamic split threshold (only affects Dynamic methods)
+DYNAMIC_SPLIT_THRESHOLDS=(
+  100
+  350
+  600
+  850
+  1100
+  1350
+  1600
+  1850
+  2100
+  2350
+  2600
+  2850
+  3100
+)
 
 # CSV datasets as "path|label_col" (comment out lines to skip)
 CSV_DATASETS=(
@@ -58,26 +65,17 @@ TRUNK_ROWS=(
   1000000
 )
 
-# Dynamic split threshold (only affects Dynamic methods)
-DYNAMIC_SPLIT_THRESHOLDS=(
-  100
-  350
-  600
-  850
-  1100
-  1350
-  1600
-  1850
-  2100
-  2350
-  2600
-  2850
-  3100
-)
-
 # =========================
 # Main Script
 # =========================
+
+# Optional per-method extra args
+declare -A METHOD_EXTRA_ARGS
+METHOD_EXTRA_ARGS["Exact"]=""
+METHOD_EXTRA_ARGS["Equal Width"]="--histogram_num_bins=$histogram_num_bins"
+METHOD_EXTRA_ARGS["Random"]="--histogram_num_bins=$histogram_num_bins"
+METHOD_EXTRA_ARGS["Dynamic Equal Width Histogram"]="--histogram_num_bins=$histogram_num_bins"
+METHOD_EXTRA_ARGS["Dynamic Random Histogram"]="--histogram_num_bins=$histogram_num_bins"
 
 # Build target and base flags
 BUILD_TARGET="//examples:train_oblique_forest"
@@ -165,7 +163,7 @@ for split in "${SPLIT_TYPES[@]}"; do
       thresh_arg=""
       thresh_label=""
       if [[ -n "$thresh" ]]; then
-        thresh_arg="--dynamic_split_threshold $thresh"
+        thresh_arg="--dynamic_split_threshold=$thresh"
         thresh_label=" threshold=$thresh"
       fi
 
