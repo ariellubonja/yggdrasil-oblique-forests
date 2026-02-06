@@ -58,6 +58,23 @@ TRUNK_ROWS=(
   1000000
 )
 
+# Dynamic split threshold (only affects Dynamic methods)
+DYNAMIC_SPLIT_THRESHOLDS=(
+  100
+  350
+  600
+  850
+  1100
+  1350
+  1600
+  1850
+  2100
+  2350
+  2600
+  2850
+  3100
+)
+
 # =========================
 # Main Script
 # =========================
@@ -97,6 +114,10 @@ banner() {
   echo -e "\n\n======== $* ========\n" | tee -a "$logfile"
 }
 
+is_dynamic_method() {
+  [[ "$1" == Dynamic* ]]
+}
+
 # -------------------------
 # Normal experiments (Oblique and/or Axis Aligned per SPLIT_TYPES)
 # -------------------------
@@ -132,23 +153,40 @@ for split in "${SPLIT_TYPES[@]}"; do
 
   for method in "${methods_to_run[@]}"; do
     extra="${METHOD_EXTRA_ARGS[$method]:-}"
-    if [[ -n "$extra" ]]; then
-      banner "Running $method [$split] with $histogram_num_bins bins"
+
+    # Build list of threshold values to iterate over
+    if is_dynamic_method "$method"; then
+      thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
     else
-      banner "Running $method [$split]"
+      thresholds=("")  # single empty entry so the loop runs once
     fi
 
-    # CSV datasets
-    for entry in "${CSV_DATASETS[@]}"; do
-      IFS='|' read -r path label <<<"$entry"
-      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra"
-      run_cmd "$cmd"
-    done
+    for thresh in "${thresholds[@]}"; do
+      thresh_arg=""
+      thresh_label=""
+      if [[ -n "$thresh" ]]; then
+        thresh_arg="--dynamic_split_threshold $thresh"
+        thresh_label=" threshold=$thresh"
+      fi
 
-    # Trunk rows
-    for rows in "${TRUNK_ROWS[@]}"; do
-      cmd="$BINARY --input_mode trunk --rows $rows $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra"
-      run_cmd "$cmd"
+      if [[ -n "$extra" ]]; then
+        banner "Running $method [$split] with $histogram_num_bins bins${thresh_label}"
+      else
+        banner "Running $method [$split]${thresh_label}"
+      fi
+
+      # CSV datasets
+      for entry in "${CSV_DATASETS[@]}"; do
+        IFS='|' read -r path label <<<"$entry"
+        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+        run_cmd "$cmd"
+      done
+
+      # Trunk rows
+      for rows in "${TRUNK_ROWS[@]}"; do
+        cmd="$BINARY --input_mode trunk --rows $rows $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+        run_cmd "$cmd"
+      done
     done
   done
 done
@@ -196,19 +234,36 @@ echo "USING INSTRUCTION SET: ${vec_name}" | tee -a "$logfile"
 
 for method in "${selected_vec_methods[@]}"; do
   extra="${METHOD_EXTRA_ARGS[$method]:-}"
-  banner "Running $method [VECTORIZE: ${vec_name}] with $histogram_num_bins bins"
 
-  # CSV datasets
-  for entry in "${CSV_DATASETS[@]}"; do
-    IFS='|' read -r path label <<<"$entry"
-    cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra"
-    run_cmd "$cmd"
-  done
+  # Build list of threshold values to iterate over
+  if is_dynamic_method "$method"; then
+    thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
+  else
+    thresholds=("")  # single empty entry so the loop runs once
+  fi
 
-  # Trunk rows
-  for rows in "${TRUNK_ROWS[@]}"; do
-    cmd="$BINARY --input_mode trunk --rows $rows --numerical_split_type \"$method\" $BASE_ARGS $extra"
-    run_cmd "$cmd"
+  for thresh in "${thresholds[@]}"; do
+    thresh_arg=""
+    thresh_label=""
+    if [[ -n "$thresh" ]]; then
+      thresh_arg="--dynamic_split_threshold=$thresh"
+      thresh_label=" threshold=$thresh"
+    fi
+
+    banner "Running $method [VECTORIZE: ${vec_name}] with $histogram_num_bins bins${thresh_label}"
+
+    # CSV datasets
+    for entry in "${CSV_DATASETS[@]}"; do
+      IFS='|' read -r path label <<<"$entry"
+      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+      run_cmd "$cmd"
+    done
+
+    # Trunk rows
+    for rows in "${TRUNK_ROWS[@]}"; do
+      cmd="$BINARY --input_mode trunk --rows $rows --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+      run_cmd "$cmd"
+    done
   done
 done
 
