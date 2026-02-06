@@ -59,6 +59,10 @@ ABSL_FLAG(float, projection_density_factor, 1.5f,
           "Projection density factor.");
 ABSL_FLAG(float, num_projections_exponent, .5,
           "Exponent to determine number of projections.");
+ABSL_FLAG(int, dynamic_split_threshold, 350,
+          "When using dynamic histogram splits, switch to exact splitting if "
+          "the number of examples at a node is below this threshold. "
+          "Set to -1 to disable.");
 
 // Hao uses GlobalBestFirst
 ABSL_FLAG(std::string, growing_strategy, "Local",
@@ -355,6 +359,8 @@ int main(int argc, char** argv) {
         absl::GetFlag(FLAGS_projection_density_factor));
     sos->set_num_projections_exponent(
         absl::GetFlag(FLAGS_num_projections_exponent));
+    sos->set_dynamic_split_threshold(
+        absl::GetFlag(FLAGS_dynamic_split_threshold));
   } else if (feature_split_type == "Axis Aligned") {
     std::cout << "Using axis-aligned splits (default behavior)\n";
 

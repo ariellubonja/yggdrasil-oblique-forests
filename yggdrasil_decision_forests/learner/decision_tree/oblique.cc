@@ -224,8 +224,10 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   proto::DecisionTreeTrainingConfig dynamic_dt_config = dt_config;
 
   // Automatically swap betw. Histogramming and Sorting based on which is faster for given amount of data
-  // Magic number - chosen empirically https://docs.google.com/spreadsheets/d/1k0Td119py6Z_crJPdpt6iggWten86KRtYqSrQmcHhJM/edit?usp=sharing
-  if (dense_example_idxs.size() < 350
+  // Default threshold chosen empirically https://docs.google.com/spreadsheets/d/1k0Td119py6Z_crJPdpt6iggWten86KRtYqSrQmcHhJM/edit?usp=sharing
+  const int dynamic_split_threshold = dt_config.sparse_oblique_split().dynamic_split_threshold();
+  if (dynamic_split_threshold >= 0
+    && dense_example_idxs.size() < static_cast<size_t>(dynamic_split_threshold)
     && (dt_config.numerical_split().type() == yggdrasil_decision_forests::model::decision_tree::proto::NumericalSplit_Type_DYNAMIC_RANDOM_HISTOGRAM
   || dt_config.numerical_split().type() == yggdrasil_decision_forests::model::decision_tree::proto::NumericalSplit_Type_DYNAMIC_EQUAL_WIDTH_HISTOGRAM)
 ) {
