@@ -28,6 +28,11 @@ METHODS=(
 )
 
 # Dynamic split threshold (only affects Dynamic methods)
+# Set true to sweep over all values below; false to use fixed defaults
+USE_THRESHOLD_SWEEP=false
+DYNAMIC_SPLIT_THRESHOLD_DEFAULT=1350             # For Dynamic Random (normal)
+DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT=500   # For Dynamic Random (vectorized)
+
 DYNAMIC_SPLIT_THRESHOLDS=(
   100
   350
@@ -154,7 +159,11 @@ for split in "${SPLIT_TYPES[@]}"; do
 
     # Build list of threshold values to iterate over
     if is_dynamic_method "$method"; then
-      thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
+      if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
+        thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
+      else
+        thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
+      fi
     else
       thresholds=("")  # single empty entry so the loop runs once
     fi
@@ -235,7 +244,11 @@ for method in "${selected_vec_methods[@]}"; do
 
   # Build list of threshold values to iterate over
   if is_dynamic_method "$method"; then
-    thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
+    if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
+      thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
+    else
+      thresholds=("$DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT")
+    fi
   else
     thresholds=("")  # single empty entry so the loop runs once
   fi
