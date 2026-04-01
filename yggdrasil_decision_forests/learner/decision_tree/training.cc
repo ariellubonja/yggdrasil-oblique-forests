@@ -80,6 +80,12 @@
   #define PRINT_PROJECTION_MATRICES_FLAG 0
 #endif
 
+// Node queue order: 0 = BFS (breadth-first, FIFO), 1 = DFS (depth-first, LIFO).
+// Toggle via bazel: --config=dfs_node_queue
+#ifndef NODE_QUEUE_DFS_FLAG
+  #define NODE_QUEUE_DFS_FLAG 0
+#endif
+
 
 namespace yggdrasil_decision_forests::model::decision_tree
 {
@@ -5269,8 +5275,15 @@ return found_split ? SplitSearchResult::kBetterSplitFound
                           set_leaf_already_set});
 
     while (!node_queue.empty()) {
+#if NODE_QUEUE_DFS_FLAG
+      // DFS: pop from back (LIFO = depth-first)
+      auto current = std::move(node_queue.back());
+      node_queue.pop_back();
+#else
+      // BFS: pop from front (FIFO = breadth-first)
       auto current = std::move(node_queue.front());
       node_queue.pop_front();
+#endif
 
       RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
                                 deployment, splitter_concurrency_setup, weights,
