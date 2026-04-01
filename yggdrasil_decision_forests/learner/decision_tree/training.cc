@@ -5233,6 +5233,54 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     return absl::OkStatus();
   }
 
+  // Forward declaration: NodeTrain is defined below but called by GrowTreeLocalBFS.
+  ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
+      const dataset::VerticalDataset &train_dataset,
+      const model::proto::TrainingConfig &config,
+      const model::proto::TrainingConfigLinking &config_link,
+      const proto::DecisionTreeTrainingConfig &dt_config,
+      const model::proto::DeploymentConfig &deployment,
+      const SplitterConcurrencySetup &splitter_concurrency_setup,
+      const std::vector<float> &weights,
+      const InternalTrainConfig &internal_config,
+      utils::RandomEngine *random, PerThreadCache *cache,
+      internal::NodeAndExamples node_and_examples,
+      std::deque<internal::NodeAndExamples> &node_queue);
+
+  absl::Status GrowTreeLocalBFS(
+      const dataset::VerticalDataset &train_dataset,
+      const model::proto::TrainingConfig &config,
+      const model::proto::TrainingConfigLinking &config_link,
+      const proto::DecisionTreeTrainingConfig &dt_config,
+      const model::proto::DeploymentConfig &deployment,
+      const SplitterConcurrencySetup &splitter_concurrency_setup,
+      const std::vector<float> &weights, const int32_t depth,
+      const InternalTrainConfig &internal_config,
+      const NodeConstraints &constraints, bool set_leaf_already_set,
+      NodeWithChildren *root, utils::RandomEngine *random, PerThreadCache *cache,
+      SelectedExamplesRollingBuffer selected_examples,
+      std::optional<SelectedExamplesRollingBuffer> leaf_examples)
+  {
+    // BFS queue: push to back, pop from front (FIFO = level-order traversal).
+    std::deque<internal::NodeAndExamples> node_queue;
+
+    node_queue.push_back({root, std::move(selected_examples),
+                          std::move(leaf_examples), depth, constraints,
+                          set_leaf_already_set});
+
+    while (!node_queue.empty()) {
+      auto current = std::move(node_queue.front());
+      node_queue.pop_front();
+
+      RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
+                                deployment, splitter_concurrency_setup, weights,
+                                internal_config, random, cache,
+                                std::move(current), node_queue));
+    }
+
+    return absl::OkStatus();
+  }
+
   // Ariel: Wrapped by DecisionTreeTrain
   // handles both Single and Multicore, if-s Growth Strategy -- Frontier Best vs. Local
   absl::Status DecisionTreeCoreTrain(
@@ -5265,8 +5313,8 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       {
         const auto constraints = NodeConstraints::CreateNodeConstraints();
 
-        // This is the first call - selected_examples_rb should be full bag
-        return NodeTrain(train_dataset, config, config_link, dt_config,
+        // BFS: iterative breadth-first tree growth
+        return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                         deployment, splitter_concurrency_setup, weights, 1,
                         internal_config, constraints, false, dt->mutable_root(),
                         random, &cache, selected_examples_rb, leaf_examples_rb);
@@ -5283,8 +5331,9 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     }
   }
 
-  // Doesn't itself show up as non-trivial runtime in profiling
-  absl::Status NodeTrain(
+  // Processes a single node: finds best split, partitions examples,
+  // and enqueues children onto node_queue for BFS traversal.
+  ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
       const dataset::VerticalDataset &train_dataset,
       const model::proto::TrainingConfig &config,
       const model::proto::TrainingConfigLinking &config_link,
@@ -5292,19 +5341,24 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       const model::proto::DeploymentConfig &deployment,
       const SplitterConcurrencySetup &splitter_concurrency_setup,
       const std::vector<float> &weights,
-      const int32_t depth, // Ariel: There's already a depth parameter!
       const InternalTrainConfig &internal_config,
-      const NodeConstraints &constraints, bool set_leaf_already_set,
-      NodeWithChildren *node, utils::RandomEngine *random, PerThreadCache *cache,
-      SelectedExamplesRollingBuffer selected_examples,
-      std::optional<SelectedExamplesRollingBuffer> leaf_examples)
+      utils::RandomEngine *random, PerThreadCache *cache,
+      internal::NodeAndExamples node_and_examples,
+      std::deque<internal::NodeAndExamples> &node_queue)
   {
+    auto &selected_examples = node_and_examples.selected_examples;
+    auto &leaf_examples = node_and_examples.leaf_examples;
+    const int32_t depth = node_and_examples.depth;
+    const auto &constraints = node_and_examples.constraints;
+    const bool set_leaf_already_set = node_and_examples.set_leaf_already_set;
+    auto *node = node_and_examples.node;
     #ifdef CHRONO_ENABLED
       using namespace yggdrasil_decision_forests::chrono_prof;
-      DepthScope depth_guard;
+      // Iterative BFS: set depth explicitly from the struct instead of RAII DepthScope.
+      tls_ctx.cur_depth = depth;
 
       const int t = tls_ctx.cur_tree;
-      const int d = tls_ctx.cur_depth;
+      const int d = depth;
       if (t >= 0) {
         if (d >= node_cnt()[t].size()) {           // grow once if new depth
           node_cnt()[t].resize(d + 1);
@@ -5526,35 +5580,33 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     }
     /* #endregion */
 
-    /**************** RECURSE LEFT & RIGHT ****************/
+    /**************** ENQUEUE CHILDREN (BFS) ****************/
 
     // +
     if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::cout << "\nStarting work on Positive child" << std::endl;
+      std::cout << "\nEnqueuing Positive child" << std::endl;
     }
-    RETURN_IF_ERROR(
-        NodeTrain(train_dataset, config, config_link, dt_config, deployment,
-                  splitter_concurrency_setup, weights, depth + 1, internal_config,
-                  pos_constraints, true, node->mutable_pos_child(), random, cache,
-                  example_split.positive_examples,
-                  node_only_example_split.has_value()
-                      ? std::optional<SelectedExamplesRollingBuffer>(
-                            node_only_example_split->positive_examples)
-                      : std::nullopt));
+    node_queue.push_back(
+        {node->mutable_pos_child(),
+         std::move(example_split.positive_examples),
+         node_only_example_split.has_value()
+             ? std::optional<SelectedExamplesRollingBuffer>(
+                   std::move(node_only_example_split->positive_examples))
+             : std::nullopt,
+         depth + 1, pos_constraints, true});
 
     // -
     if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::cout << "Starting work on Negative child" << std::endl;
+      std::cout << "Enqueuing Negative child" << std::endl;
     }
-    RETURN_IF_ERROR(
-        NodeTrain(train_dataset, config, config_link, dt_config, deployment,
-                  splitter_concurrency_setup, weights, depth + 1, internal_config,
-                  neg_constraints, true, node->mutable_neg_child(), random, cache,
-                  example_split.negative_examples,
-                  node_only_example_split.has_value()
-                      ? std::optional<SelectedExamplesRollingBuffer>(
-                            node_only_example_split->negative_examples)
-                      : std::nullopt));
+    node_queue.push_back(
+        {node->mutable_neg_child(),
+         std::move(example_split.negative_examples),
+         node_only_example_split.has_value()
+             ? std::optional<SelectedExamplesRollingBuffer>(
+                   std::move(node_only_example_split->negative_examples))
+             : std::nullopt,
+         depth + 1, neg_constraints, true});
 
     return absl::OkStatus();
   }

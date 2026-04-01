@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -893,8 +894,9 @@ absl::Status DecisionTreeTrain(
     const InternalTrainConfig& internal_config = InternalTrainConfig());
 constexpr auto Train = DecisionTreeTrain;
 
-// Train a node and its children.
-absl::Status NodeTrain(
+// Grows a decision tree using breadth-first (level-order) traversal.
+// Iterative approach using a FIFO queue instead of recursive calls.
+absl::Status GrowTreeLocalBFS(
     const dataset::VerticalDataset& train_dataset,
     const model::proto::TrainingConfig& config,
     const model::proto::TrainingConfigLinking& config_link,
@@ -904,7 +906,7 @@ absl::Status NodeTrain(
     const std::vector<float>& weights, int32_t depth,
     const InternalTrainConfig& internal_config,
     const NodeConstraints& constraints, bool set_leaf_already_set,
-    NodeWithChildren* node, utils::RandomEngine* random, PerThreadCache* cache,
+    NodeWithChildren* root, utils::RandomEngine* random, PerThreadCache* cache,
     SelectedExamplesRollingBuffer selected_examples,
     std::optional<SelectedExamplesRollingBuffer> leaf_examples);
 
@@ -930,6 +932,16 @@ int8_t MonotonicConstraintSign(
     const model::proto::TrainingConfigLinking& config_link, int attribute_idx);
 
 namespace internal {
+
+// Bundles all per-node state for the iterative BFS tree-growing loop.
+struct NodeAndExamples {
+  NodeWithChildren* node;
+  SelectedExamplesRollingBuffer selected_examples;
+  std::optional<SelectedExamplesRollingBuffer> leaf_examples;
+  int32_t depth;
+  NodeConstraints constraints;
+  bool set_leaf_already_set;
+};
 
 // Initializes the item mask i.e. the bitmap of the items to consider or to
 // ignore in the greedy selection for categorical-set attributes. An item is
