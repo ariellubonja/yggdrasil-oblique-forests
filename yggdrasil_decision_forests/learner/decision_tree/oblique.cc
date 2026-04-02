@@ -257,12 +257,44 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     }
   }
 
-  // 2. ApplyProjection: GPU-batched or CPU per-projection.
+  // 2. ApplyProjection: pre-computed (Mode B), GPU-batched (Mode A), or CPU.
   const bool use_gpu = internal_config.oblique_gpu_computer != nullptr &&
                        internal_config.oblique_gpu_computer->use_gpu();
+  const bool has_precomputed = internal_config.precomputed_projections != nullptr;
 
-  if (use_gpu) {
-    // GPU path: batch all projections into a single kernel launch.
+  if (has_precomputed) {
+    // Mode B: projections already computed by multi-node GPU kernel in BFS loop.
+    const auto& all_projections_ref = *internal_config.precomputed_projection_defs;
+    const auto& all_monotonic_ref = *internal_config.precomputed_monotonic;
+    num_projections = internal_config.precomputed_num_proj;
+    const float* all_projected_ptr = internal_config.precomputed_projections;
+    const size_t n = selected_examples.size();
+
+    for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
+      if constexpr (ALLOW_EMPTY_PROJECTIONS) {
+        if (all_projections_ref[proj_idx].empty()) continue;
+      }
+
+      projection_values.assign(
+          all_projected_ptr + proj_idx * n,
+          all_projected_ptr + (proj_idx + 1) * n);
+
+      ASSIGN_OR_RETURN(
+          const auto split_result,
+          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
+                            selected_weights, selected_labels,
+                            projection_values, internal_config,
+                            all_projections_ref[proj_idx].front().attribute_idx,
+                            constraints, all_monotonic_ref[proj_idx],
+                            best_condition, cache, random));
+
+      if (split_result == SplitSearchResult::kBetterSplitFound) {
+        best_projection = all_projections_ref[proj_idx];
+        best_threshold = best_condition->condition().higher_condition().threshold();
+      }
+    }
+  } else if (use_gpu) {
+    // Mode A: per-node GPU — batch all projections into a single kernel launch.
     const size_t n = selected_examples.size();
     std::vector<float> all_projected(num_projections * n);
     std::vector<float> all_min(num_projections);

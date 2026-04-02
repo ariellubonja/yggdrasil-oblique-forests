@@ -79,6 +79,75 @@ __global__ void ColumnAddProjectionKernel(
     projected[col * num_selected_examples + row] = sum;
 }
 
+// Multi-node variant: 3D grid (blocks_per_node, num_proj, num_nodes).
+// All nodes' selected_examples are concatenated; node_row_off gives offsets.
+// col_offset indexes (node * num_proj + proj) segments in flat_col_data/flat_weights.
+// Output: node-major, projection-major within each node.
+__global__ void ColumnAddProjectionMultiNodeKernel(
+    const float* __restrict__ dataset,
+    const unsigned int* __restrict__ d_selected_examples,  // all nodes concatenated
+    float* __restrict__ projected,
+    const int* __restrict__ node_row_off,      // [num_nodes + 1]
+    const int* __restrict__ col_offset,        // [num_nodes * num_proj + 1]
+    const int* __restrict__ flat_col_data,
+    const float* __restrict__ flat_weights,
+    const int num_total_rows,
+    const int num_proj)
+{
+    const int node_id = blockIdx.z;
+    const int proj_id = blockIdx.y;
+    const int row = blockIdx.x * blockDim.x + threadIdx.x;
+
+    const int row_start = node_row_off[node_id];
+    const int rows_node = node_row_off[node_id + 1] - row_start;
+
+    if (row >= rows_node) return;
+
+    const int seg_id = node_id * num_proj + proj_id;
+    const int begin = col_offset[seg_id];
+    const int end = col_offset[seg_id + 1];
+
+    const unsigned int ex_idx = d_selected_examples[row_start + row];
+    float sum = 0.0f;
+    for (int idx = begin; idx < end; ++idx) {
+        sum += flat_weights[idx] * dataset[flat_col_data[idx] * num_total_rows + ex_idx];
+    }
+
+    // Output: node-major, projection-major within node.
+    // Node n starts at node_row_off[n] * num_proj.
+    // Projection p within node n starts at p * rows_node.
+    projected[row_start * num_proj + proj_id * rows_node + row] = sum;
+}
+
+// Host wrapper for multi-node kernel.
+void ApplyProjectionColumnADDMultiNode(
+    const float* d_flat_data,
+    const unsigned int* d_selected_examples,
+    float* d_projected,
+    const int* d_node_row_off,
+    const int* d_col_offset,
+    const int* d_flat_col_data,
+    const float* d_flat_weights,
+    int max_examples_per_node,
+    int num_nodes,
+    int num_proj,
+    int num_total_rows,
+    cudaStream_t cuda_stream)
+{
+    const int BLOCK = 256;
+    const int blocks_per_node = (max_examples_per_node + BLOCK - 1) / BLOCK;
+
+    dim3 grid(blocks_per_node, num_proj, num_nodes);
+    dim3 block(BLOCK);
+
+    ColumnAddProjectionMultiNodeKernel<<<grid, block, 0, cuda_stream>>>(
+        d_flat_data, d_selected_examples, d_projected,
+        d_node_row_off, d_col_offset, d_flat_col_data, d_flat_weights,
+        num_total_rows, num_proj);
+
+    cudaStreamSynchronize(cuda_stream);
+}
+
 __global__ void ColumnAddComputeMinMaxCombined(
     const float* __restrict__ dataset,
     const unsigned int* d_selected_examples,                 

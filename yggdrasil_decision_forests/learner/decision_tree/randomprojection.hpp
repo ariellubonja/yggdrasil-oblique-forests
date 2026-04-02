@@ -71,6 +71,21 @@ void ApplyProjectionColumnADD (const float* d_flat_data,
                                 cudaStream_t cuda_stream = 0
                               );
 
+// Multi-node variant: single kernel launch for all nodes at a BFS depth level.
+void ApplyProjectionColumnADDMultiNode(
+    const float* d_flat_data,
+    const unsigned int* d_selected_examples,
+    float* d_projected,
+    const int* d_node_row_off,
+    const int* d_col_offset,
+    const int* d_flat_col_data,
+    const float* d_flat_weights,
+    int max_examples_per_node,
+    int num_nodes,
+    int num_proj,
+    int num_total_rows,
+    cudaStream_t cuda_stream = 0);
+
 void EqualWidthHistogram (const float* __restrict__ d_col_add_projected, //attributes
 const unsigned int* __restrict__ selected_examples, //selected examples
 const unsigned int* __restrict__ d_global_labels_data,

@@ -27,6 +27,7 @@
 #include "yggdrasil_decision_forests/dataset/types.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/gpu.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_types.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/preprocessing.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/uplift.h"
 #include "yggdrasil_decision_forests/model/decision_tree/decision_tree.h"
@@ -192,6 +193,15 @@ struct InternalTrainConfig {
   // Non-owning pointer to GPU-accelerated oblique projection computer.
   // Created once per training run, shared across tree threads.
   ObliqueGpuComputer* oblique_gpu_computer = nullptr;
+
+  // Pre-computed projected values from multi-node GPU batching (Mode B).
+  // When non-null, oblique.cc skips ApplyProjectionsBatched and uses these
+  // directly. Layout: [num_proj * num_examples], projection-major.
+  // Set per-node by the BFS depth-batching loop before calling NodeTrain.
+  const float* precomputed_projections = nullptr;
+  int precomputed_num_proj = 0;
+  const std::vector<std::vector<internal::AttributeAndWeight>>* precomputed_projection_defs = nullptr;
+  const std::vector<int8_t>* precomputed_monotonic = nullptr;
 
   // If true, the list of selected example index ("selected_examples") can
   // contain duplicated values. If false, all selected examples are expected to

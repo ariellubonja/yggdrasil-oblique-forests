@@ -135,6 +135,80 @@ cleanup:
   return (int)err;
 }
 
+int oblique_gpu_apply_projections_multi_node(
+    const float* d_global_flat_data,
+    const unsigned int* h_selected_examples,
+    int total_examples,
+    const int* h_node_row_off,
+    int num_nodes,
+    int num_proj,
+    int num_total_rows,
+    const int* h_flat_col_indices,
+    const float* h_flat_weights,
+    const int* h_col_offsets,
+    int total_nonzeros,
+    float* h_projected_values,
+    int max_examples_per_node)
+{
+  cudaError_t err;
+
+  // Allocate device buffers.
+  unsigned int* d_selected_examples = nullptr;
+  float* d_projected = nullptr;
+  int* d_node_row_off = nullptr;
+  int* d_col_offsets = nullptr;
+  int* d_flat_col_indices = nullptr;
+  float* d_flat_weights = nullptr;
+
+  const int num_segments = num_nodes * num_proj;
+
+  err = cudaMalloc(&d_selected_examples, total_examples * sizeof(unsigned int));
+  if (err != cudaSuccess) return (int)err;
+  err = cudaMalloc(&d_projected, (size_t)total_examples * num_proj * sizeof(float));
+  if (err != cudaSuccess) goto cleanup;
+  err = cudaMalloc(&d_node_row_off, (num_nodes + 1) * sizeof(int));
+  if (err != cudaSuccess) goto cleanup;
+  err = cudaMalloc(&d_col_offsets, (num_segments + 1) * sizeof(int));
+  if (err != cudaSuccess) goto cleanup;
+  err = cudaMalloc(&d_flat_col_indices, total_nonzeros * sizeof(int));
+  if (err != cudaSuccess) goto cleanup;
+  err = cudaMalloc(&d_flat_weights, total_nonzeros * sizeof(float));
+  if (err != cudaSuccess) goto cleanup;
+
+  // Copy to device.
+  cudaMemcpy(d_selected_examples, h_selected_examples,
+             total_examples * sizeof(unsigned int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_node_row_off, h_node_row_off,
+             (num_nodes + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_col_offsets, h_col_offsets,
+             (num_segments + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_flat_col_indices, h_flat_col_indices,
+             total_nonzeros * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_flat_weights, h_flat_weights,
+             total_nonzeros * sizeof(float), cudaMemcpyHostToDevice);
+
+  // Launch single 3D kernel for all nodes.
+  ApplyProjectionColumnADDMultiNode(
+      d_global_flat_data, d_selected_examples, d_projected,
+      d_node_row_off, d_col_offsets, d_flat_col_indices, d_flat_weights,
+      max_examples_per_node, num_nodes, num_proj, num_total_rows, 0);
+
+  // Copy results back.
+  err = cudaMemcpy(h_projected_values, d_projected,
+                   (size_t)total_examples * num_proj * sizeof(float),
+                   cudaMemcpyDeviceToHost);
+
+cleanup:
+  if (d_selected_examples) cudaFree(d_selected_examples);
+  if (d_projected) cudaFree(d_projected);
+  if (d_node_row_off) cudaFree(d_node_row_off);
+  if (d_col_offsets) cudaFree(d_col_offsets);
+  if (d_flat_col_indices) cudaFree(d_flat_col_indices);
+  if (d_flat_weights) cudaFree(d_flat_weights);
+
+  return (int)err;
+}
+
 bool oblique_gpu_check_available() {
   int count = 0;
   if (cudaGetDeviceCount(&count) != cudaSuccess || count == 0) return false;

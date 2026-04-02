@@ -29,6 +29,14 @@ int oblique_gpu_apply_projections(
     const int* h_flat_col_indices, const float* h_flat_weights,
     const int* h_col_offsets, int total_nonzeros,
     float* h_projected_values, float* h_min_vals, float* h_max_vals);
+int oblique_gpu_apply_projections_multi_node(
+    const float* d_global_flat_data,
+    const unsigned int* h_selected_examples, int total_examples,
+    const int* h_node_row_off, int num_nodes,
+    int num_proj, int num_total_rows,
+    const int* h_flat_col_indices, const float* h_flat_weights,
+    const int* h_col_offsets, int total_nonzeros,
+    float* h_projected_values, int max_examples_per_node);
 }
 
 namespace yggdrasil_decision_forests::model::decision_tree {
@@ -223,11 +231,96 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedGPU(
 
 absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNodeGPU(
     absl::Span<const NodeBatch> node_batches) {
-  for (const auto& batch : node_batches) {
-    RETURN_IF_ERROR(ApplyProjectionsBatchedGPU(
-        batch.projections, batch.selected_examples,
-        batch.projected_values, batch.min_vals, batch.max_vals));
+  const int num_nodes = node_batches.size();
+  if (num_nodes == 0) return absl::OkStatus();
+
+  // Single-node fast path: avoid multi-node overhead.
+  if (num_nodes == 1) {
+    return ApplyProjectionsBatchedGPU(
+        node_batches[0].projections, node_batches[0].selected_examples,
+        node_batches[0].projected_values,
+        node_batches[0].min_vals, node_batches[0].max_vals);
   }
+
+  // All nodes share the same num_proj.
+  const int num_proj = node_batches[0].projections.size();
+
+  // 1. Build node_row_off prefix sum.
+  std::vector<int> node_row_off(num_nodes + 1, 0);
+  int max_examples_per_node = 0;
+  for (int n = 0; n < num_nodes; n++) {
+    const int rows_n = node_batches[n].selected_examples.size();
+    node_row_off[n + 1] = node_row_off[n] + rows_n;
+    if (rows_n > max_examples_per_node) max_examples_per_node = rows_n;
+  }
+  const int total_examples = node_row_off[num_nodes];
+
+  // 2. Concatenate all selected_examples.
+  std::vector<unsigned int> all_selected(total_examples);
+  for (int n = 0; n < num_nodes; n++) {
+    std::memcpy(all_selected.data() + node_row_off[n],
+                node_batches[n].selected_examples.data(),
+                node_batches[n].selected_examples.size() * sizeof(unsigned int));
+  }
+
+  // 3. Flatten projections across all (node, proj) segments.
+  const int num_segments = num_nodes * num_proj;
+  std::vector<int> col_offsets(num_segments + 1, 0);
+  int total_nz = 0;
+  for (int n = 0; n < num_nodes; n++) {
+    for (int p = 0; p < num_proj; p++) {
+      total_nz += node_batches[n].projections[p].size();
+      col_offsets[n * num_proj + p + 1] = total_nz;
+    }
+  }
+
+  std::vector<int> flat_col_indices(total_nz);
+  std::vector<float> flat_weights(total_nz);
+  for (int n = 0; n < num_nodes; n++) {
+    for (int p = 0; p < num_proj; p++) {
+      const int seg = n * num_proj + p;
+      int offset = col_offsets[seg];
+      for (int j = 0; j < static_cast<int>(node_batches[n].projections[p].size()); j++) {
+        flat_col_indices[offset + j] =
+            feature_col_to_flat_offset_[node_batches[n].projections[p][j].attribute_idx];
+        flat_weights[offset + j] = node_batches[n].projections[p][j].weight;
+      }
+    }
+  }
+
+  // 4. Single GPU kernel launch for all nodes.
+  std::vector<float> all_projected(static_cast<size_t>(total_examples) * num_proj);
+
+  int cuda_err = oblique_gpu_apply_projections_multi_node(
+      d_global_flat_data_,
+      all_selected.data(), total_examples,
+      node_row_off.data(), num_nodes,
+      num_proj, num_total_rows_,
+      flat_col_indices.data(), flat_weights.data(),
+      col_offsets.data(), total_nz,
+      all_projected.data(), max_examples_per_node);
+
+  if (cuda_err != 0) {
+    return absl::InternalError(
+        absl::StrCat("GPU MultiNode ApplyProjections failed: CUDA error ", cuda_err));
+  }
+
+  // 5. Unpack results back to per-node output buffers.
+  // Kernel output layout within each node matches NodeBatch.projected_values:
+  // [proj_0_row_0, ..., proj_0_row_N, proj_1_row_0, ..., proj_1_row_N, ...]
+  for (int n = 0; n < num_nodes; n++) {
+    const int rows_n = node_row_off[n + 1] - node_row_off[n];
+    const size_t src_offset = static_cast<size_t>(node_row_off[n]) * num_proj;
+    const size_t block_size = static_cast<size_t>(rows_n) * num_proj;
+    std::memcpy(node_batches[n].projected_values.data(),
+                all_projected.data() + src_offset,
+                block_size * sizeof(float));
+
+    // min/max not computed by the multi-node kernel (not needed for EvaluateProjection).
+    std::memset(node_batches[n].min_vals.data(), 0, num_proj * sizeof(float));
+    std::memset(node_batches[n].max_vals.data(), 0, num_proj * sizeof(float));
+  }
+
   return absl::OkStatus();
 }
 

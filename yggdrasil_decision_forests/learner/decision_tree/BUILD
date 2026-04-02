@@ -72,11 +72,17 @@ cc_library_ydf(
 )
 
 cc_library_ydf(
+    name = "oblique_types",
+    hdrs = ["oblique_types.h"],
+)
+
+cc_library_ydf(
     name = "label",
     srcs = ["label.cc"],
     hdrs = ["label.h"],
     deps = [
         ":gpu",
+        ":oblique_types",
         ":preprocessing",
         ":splitter",
         ":uplift",
@@ -271,9 +277,10 @@ cuda_library(
 cc_library_ydf(
     name = "oblique_gpu",
     srcs = ["oblique_gpu.cc"],
-    hdrs = ["oblique_gpu.h", "oblique_types.h"],
+    hdrs = ["oblique_gpu.h"],
     deps = [
         ":oblique_gpu_kernels",
+        ":oblique_types",
         ":randomprojection",
         "//yggdrasil_decision_forests/dataset:types",
         "//yggdrasil_decision_forests/dataset:vertical_dataset",

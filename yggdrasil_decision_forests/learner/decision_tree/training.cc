@@ -74,6 +74,8 @@
 #include "yggdrasil_decision_forests/utils/random.h"
 #include "yggdrasil_decision_forests/utils/status_macros.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 
 
 #ifndef PRINT_PROJECTION_MATRICES_FLAG
@@ -5295,15 +5297,83 @@ return found_split ? SplitSearchResult::kBetterSplitFound
         node_queue.pop_front();
       }
 
-      // TODO: When CUDA is available and depth_batch.size() > 1, call
-      // BatchedNodeTrainGPU to share ApplyProjection across all nodes at
-      // this depth in a single kernel launch (Mode B).
-      // For now, process each node individually (Mode A or CPU).
-      for (auto& nae : depth_batch) {
-        RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
-                                  deployment, splitter_concurrency_setup, weights,
-                                  internal_config, random, cache,
-                                  std::move(nae), node_queue));
+      const bool use_multi_node_gpu =
+          internal_config.oblique_gpu_computer != nullptr &&
+          internal_config.oblique_gpu_computer->use_gpu() &&
+          dt_config.has_sparse_oblique_split() &&
+          depth_batch.size() > 1;
+
+      if (use_multi_node_gpu) {
+        // Mode B: pre-compute projections for all nodes at this depth
+        // via a single multi-node GPU kernel, then call NodeTrain per-node
+        // with pre-computed data (skips per-node GPU call in oblique.cc).
+        const int num_proj = GetNumProjections(
+            dt_config, config_link.numerical_features_size());
+        const float projection_density =
+            dt_config.sparse_oblique_split().projection_density_factor() /
+            config_link.numerical_features_size();
+
+        // a) Sample projections for all nodes on CPU.
+        const int num_nodes = depth_batch.size();
+        std::vector<std::vector<internal::Projection>> all_node_projs(num_nodes);
+        std::vector<std::vector<int8_t>> all_node_mono(num_nodes);
+        for (int n = 0; n < num_nodes; n++) {
+          all_node_projs[n].resize(num_proj);
+          all_node_mono[n].resize(num_proj, 0);
+          for (int p = 0; p < num_proj; p++) {
+            internal::SampleProjection(
+                config_link.numerical_features(), dt_config,
+                train_dataset.data_spec(), config_link, projection_density,
+                &all_node_projs[n][p], &all_node_mono[n][p], random);
+          }
+        }
+
+        // b) Build NodeBatch structs and output buffers.
+        std::vector<std::vector<float>> proj_buffers(num_nodes);
+        std::vector<std::vector<float>> min_buffers(num_nodes);
+        std::vector<std::vector<float>> max_buffers(num_nodes);
+        std::vector<ObliqueGpuComputer::NodeBatch> node_batches(num_nodes);
+        for (int n = 0; n < num_nodes; n++) {
+          const int rows_n = depth_batch[n].selected_examples.size();
+          proj_buffers[n].resize(num_proj * rows_n);
+          min_buffers[n].resize(num_proj);
+          max_buffers[n].resize(num_proj);
+          node_batches[n] = {
+              depth_batch[n].selected_examples.active,
+              all_node_projs[n],
+              absl::MakeSpan(proj_buffers[n]),
+              absl::MakeSpan(min_buffers[n]),
+              absl::MakeSpan(max_buffers[n])};
+        }
+
+        // c) ONE GPU kernel launch for all nodes at this depth.
+        RETURN_IF_ERROR(
+            internal_config.oblique_gpu_computer
+                ->ApplyProjectionsBatchedMultiNode(node_batches));
+
+        // d) Call NodeTrain per-node with pre-computed projections.
+        for (int n = 0; n < num_nodes; n++) {
+          auto node_config = internal_config;
+          node_config.precomputed_projections = proj_buffers[n].data();
+          node_config.precomputed_num_proj = num_proj;
+          node_config.precomputed_projection_defs = &all_node_projs[n];
+          node_config.precomputed_monotonic = &all_node_mono[n];
+
+          RETURN_IF_ERROR(NodeTrain(
+              train_dataset, config, config_link, dt_config,
+              deployment, splitter_concurrency_setup, weights,
+              node_config, random, cache,
+              std::move(depth_batch[n]), node_queue));
+        }
+      } else {
+        // Per-node fallback (Mode A GPU or CPU).
+        for (auto& nae : depth_batch) {
+          RETURN_IF_ERROR(NodeTrain(
+              train_dataset, config, config_link, dt_config,
+              deployment, splitter_concurrency_setup, weights,
+              internal_config, random, cache,
+              std::move(nae), node_queue));
+        }
       }
 #endif
     }
