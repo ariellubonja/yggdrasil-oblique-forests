@@ -18,12 +18,11 @@
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
-// Forward declaration — Projection is defined in oblique.h but we avoid
-// circular includes by forward-declaring what we need.
-namespace internal {
-struct AttributeAndWeight;
-typedef std::vector<AttributeAndWeight> Projection;
-}  // namespace internal
+}  // namespace yggdrasil_decision_forests::model::decision_tree
+
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_types.h"
+
+namespace yggdrasil_decision_forests::model::decision_tree {
 
 // Accelerates the ApplyProjection step of oblique split-finding on GPU.
 //

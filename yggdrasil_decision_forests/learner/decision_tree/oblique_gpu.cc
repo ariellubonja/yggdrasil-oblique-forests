@@ -1,5 +1,6 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -9,10 +10,26 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
 #include "yggdrasil_decision_forests/dataset/types.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
 #include "yggdrasil_decision_forests/utils/status_macros.h"
+
+// Bridge functions implemented in oblique_gpu_kernels.cu.cc (nvcc-compiled).
+extern "C" {
+bool oblique_gpu_check_available();
+int oblique_gpu_init(const float* h_flat_data, int flat_data_size,
+                     float** d_global_flat_data_out);
+int oblique_gpu_release(float* d_global_flat_data);
+int oblique_gpu_apply_projections(
+    const float* d_global_flat_data,
+    const unsigned int* h_selected_examples,
+    int num_examples, int num_proj, int num_total_rows,
+    const int* h_flat_col_indices, const float* h_flat_weights,
+    const int* h_col_offsets, int total_nonzeros,
+    float* h_projected_values, float* h_min_vals, float* h_max_vals);
+}
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
@@ -25,16 +42,14 @@ absl::StatusOr<std::unique_ptr<ObliqueGpuComputer>> ObliqueGpuComputer::Create(
   c->num_total_rows_ = dataset.nrow();
   c->num_features_ = numerical_features.size();
 
-  // Build feature column mapping and NA replacement values.
   c->feature_col_to_flat_offset_.resize(
       dataset.data_spec().columns_size(), -1);
   c->na_replacement_values_.resize(
       dataset.data_spec().columns_size(), 0.0f);
 
-  for (int i = 0; i < numerical_features.size(); i++) {
+  for (int i = 0; i < static_cast<int>(numerical_features.size()); i++) {
     const int col_idx = numerical_features[i];
     c->feature_col_to_flat_offset_[col_idx] = i;
-    // Store mean as NA replacement.
     const auto& col_spec = dataset.data_spec().columns(col_idx);
     if (col_spec.has_numerical()) {
       c->na_replacement_values_[col_idx] = col_spec.numerical().mean();
@@ -70,7 +85,7 @@ absl::Status ObliqueGpuComputer::Release() {
   return absl::OkStatus();
 }
 
-// ---- CPU fallback for ApplyProjectionsBatched ----
+// ---- CPU fallback ----
 
 absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedCPU(
     absl::Span<const internal::Projection> projections,
@@ -78,19 +93,13 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedCPU(
     absl::Span<float> projected_values,
     absl::Span<float> min_vals,
     absl::Span<float> max_vals) {
-  // This should not normally be called — the CPU path uses
-  // ProjectionEvaluator::Evaluate directly. But it's here for completeness
-  // and testing.
   return absl::UnimplementedError(
-      "CPU fallback for ApplyProjectionsBatched not needed — use "
-      "ProjectionEvaluator::Evaluate directly");
+      "CPU fallback not needed — use ProjectionEvaluator::Evaluate");
 }
 
 absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNodeCPU(
     absl::Span<const NodeBatch> node_batches) {
-  return absl::UnimplementedError(
-      "CPU fallback for ApplyProjectionsBatchedMultiNode not needed — use "
-      "per-node CPU path directly");
+  return absl::UnimplementedError("CPU fallback not needed");
 }
 
 // ---- Public dispatch ----
@@ -102,6 +111,7 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatched(
     absl::Span<float> min_vals,
     absl::Span<float> max_vals) {
   if (use_gpu_) {
+    utils::concurrency::MutexLock l(&gpu_mutex_);
     return ApplyProjectionsBatchedGPU(projections, selected_examples,
                                        projected_values, min_vals, max_vals);
   }
@@ -112,23 +122,60 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatched(
 absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNode(
     absl::Span<const NodeBatch> node_batches) {
   if (use_gpu_) {
+    utils::concurrency::MutexLock l(&gpu_mutex_);
     return ApplyProjectionsBatchedMultiNodeGPU(node_batches);
   }
   return ApplyProjectionsBatchedMultiNodeCPU(node_batches);
 }
 
-// ---- GPU stubs when not compiled with CUDA ----
-
-#ifdef CUDA_DISABLED
+// ---- GPU implementations via extern "C" bridge ----
 
 absl::Status ObliqueGpuComputer::InitializeGPU(
     const dataset::VerticalDataset& dataset,
     absl::Span<const int32_t> numerical_features) {
-  return absl::InvalidArgumentError("Not compiled with GPU support");
+  if (!oblique_gpu_check_available()) {
+    return absl::UnavailableError("No CUDA device found");
+  }
+
+  const int n_rows = dataset.nrow();
+  const int n_features = numerical_features.size();
+  std::vector<float> flat_data(n_features * n_rows, 0.0f);
+
+  for (int f = 0; f < n_features; f++) {
+    const int col_idx = numerical_features[f];
+    const auto* col = dataset.ColumnWithCastOrNull<
+        dataset::VerticalDataset::NumericalColumn>(col_idx);
+    if (!col) continue;
+    const auto& values = col->values();
+    const float na_val = na_replacement_values_[col_idx];
+    for (int r = 0; r < n_rows; r++) {
+      float v = values[r];
+      if (std::isnan(v)) v = na_val;
+      flat_data[f * n_rows + r] = v;
+    }
+  }
+
+  int cuda_err = oblique_gpu_init(flat_data.data(), flat_data.size(),
+                                   &d_global_flat_data_);
+  if (cuda_err != 0) {
+    return absl::InternalError(
+        absl::StrCat("CUDA init failed with error code ", cuda_err));
+  }
+
+  LOG(INFO) << "ObliqueGpuComputer: Uploaded " << n_rows << " rows x "
+            << n_features << " features to GPU ("
+            << (flat_data.size() * sizeof(float)) / (1024 * 1024) << " MB)";
+  return absl::OkStatus();
 }
 
 absl::Status ObliqueGpuComputer::ReleaseGPU() {
-  return absl::InvalidArgumentError("Not compiled with GPU support");
+  int cuda_err = oblique_gpu_release(d_global_flat_data_);
+  d_global_flat_data_ = nullptr;
+  if (cuda_err != 0) {
+    return absl::InternalError(
+        absl::StrCat("CUDA release failed with error code ", cuda_err));
+  }
+  return absl::OkStatus();
 }
 
 absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedGPU(
@@ -137,14 +184,51 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedGPU(
     absl::Span<float> projected_values,
     absl::Span<float> min_vals,
     absl::Span<float> max_vals) {
-  return absl::InvalidArgumentError("Not compiled with GPU support");
+  const int num_proj = projections.size();
+  const int num_examples = selected_examples.size();
+
+  // Flatten projections to CSR format.
+  std::vector<int> col_offsets(num_proj + 1, 0);
+  int total_nz = 0;
+  for (int p = 0; p < num_proj; p++) {
+    total_nz += projections[p].size();
+    col_offsets[p + 1] = total_nz;
+  }
+
+  std::vector<int> flat_col_indices(total_nz);
+  std::vector<float> flat_weights(total_nz);
+  for (int p = 0; p < num_proj; p++) {
+    int offset = col_offsets[p];
+    for (int j = 0; j < static_cast<int>(projections[p].size()); j++) {
+      flat_col_indices[offset + j] =
+          feature_col_to_flat_offset_[projections[p][j].attribute_idx];
+      flat_weights[offset + j] = projections[p][j].weight;
+    }
+  }
+
+  int cuda_err = oblique_gpu_apply_projections(
+      d_global_flat_data_,
+      selected_examples.data(),
+      num_examples, num_proj, num_total_rows_,
+      flat_col_indices.data(), flat_weights.data(),
+      col_offsets.data(), total_nz,
+      projected_values.data(), min_vals.data(), max_vals.data());
+
+  if (cuda_err != 0) {
+    return absl::InternalError(
+        absl::StrCat("GPU ApplyProjections failed with CUDA error ", cuda_err));
+  }
+  return absl::OkStatus();
 }
 
 absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNodeGPU(
     absl::Span<const NodeBatch> node_batches) {
-  return absl::InvalidArgumentError("Not compiled with GPU support");
+  for (const auto& batch : node_batches) {
+    RETURN_IF_ERROR(ApplyProjectionsBatchedGPU(
+        batch.projections, batch.selected_examples,
+        batch.projected_values, batch.min_vals, batch.max_vals));
+  }
+  return absl::OkStatus();
 }
-
-#endif  // CUDA_DISABLED
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
