@@ -37,6 +37,11 @@ build:print_projection_matrices --cxxopt="-DPRINT_PROJECTION_MATRICES_FLAG=1"
 build:fixed_1000_projections --cxxopt="-DHARD_CODE_1000_PROJECTIONS_FLAG=true"
 build:dfs_node_queue --cxxopt="-DNODE_QUEUE_DFS_FLAG=1"
 
+# CUDA: use GCC-13 as nvcc host compiler (ICX not officially supported by NVIDIA)
+build --action_env=CUDA_PATH=/usr/local/cuda
+build --repo_env=CUDA_HOME=/usr/local/cuda
+build --action_env=NVCC_PREPEND_FLAGS="-ccbin=/usr/bin/g++-13"
+
 # Optimizations
 build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
 build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
