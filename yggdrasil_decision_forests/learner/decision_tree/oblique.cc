@@ -14,6 +14,7 @@
  */
 
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 
 #include <algorithm>
 #include <cmath>
@@ -237,47 +238,96 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   // std::cout << "Num Projections: " << num_projections << std::endl;
 
   /* #region ----------  MAIN LOOP  ------------------ */
+
+  // 1. Sample ALL projections on CPU (cheap).
+  std::vector<internal::Projection> all_projections(num_projections);
+  std::vector<int8_t> all_monotonic(num_projections, 0);
+
   for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
-      int8_t monotonic = 0;
+    SampleProjection(config_link.numerical_features(), dynamic_dt_config,
+                    train_dataset.data_spec(), config_link, projection_density,
+                    &all_projections[proj_idx], &all_monotonic[proj_idx], random);
 
-      SampleProjection(config_link.numerical_features(), dynamic_dt_config,
-                      train_dataset.data_spec(), config_link, projection_density,
-                      &current_projection, &monotonic, random);
+    if constexpr (PRINT_PROJECTION_MATRICES) {
+      SparseProjection& buf = projection_buffer.emplace_back();
+      buf.reserve(all_projections[proj_idx].size());
+      for (const auto& feat : all_projections[proj_idx]) {
+        buf.emplace_back(feat.attribute_idx, feat.weight);
+      }
+    }
+  }
 
-      if constexpr (PRINT_PROJECTION_MATRICES) {
-        // store the current projection sparsely
-        SparseProjection& buf = projection_buffer.emplace_back();
-        buf.reserve(current_projection.size());
-        for (const auto& feat : current_projection) {
-          buf.emplace_back(feat.attribute_idx, feat.weight);
-        }
+  // 2. ApplyProjection: GPU-batched or CPU per-projection.
+  const bool use_gpu = internal_config.oblique_gpu_computer != nullptr &&
+                       internal_config.oblique_gpu_computer->use_gpu();
+
+  if (use_gpu) {
+    // GPU path: batch all projections into a single kernel launch.
+    const size_t n = selected_examples.size();
+    std::vector<float> all_projected(num_projections * n);
+    std::vector<float> all_min(num_projections);
+    std::vector<float> all_max(num_projections);
+
+    RETURN_IF_ERROR(
+        internal_config.oblique_gpu_computer->ApplyProjectionsBatched(
+            all_projections, selected_examples,
+            absl::MakeSpan(all_projected),
+            absl::MakeSpan(all_min), absl::MakeSpan(all_max)));
+
+    // 3. EvaluateProjection per-projection (CPU).
+    for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
+      if constexpr (ALLOW_EMPTY_PROJECTIONS) {
+        if (all_projections[proj_idx].empty()) continue;
       }
 
+      // Point projection_values at the GPU output slice for this projection.
+      projection_values.assign(
+          all_projected.begin() + proj_idx * n,
+          all_projected.begin() + (proj_idx + 1) * n);
+
+      ASSIGN_OR_RETURN(
+          const auto split_result,
+          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
+                            selected_weights, selected_labels,
+                            projection_values, internal_config,
+                            all_projections[proj_idx].front().attribute_idx,
+                            constraints, all_monotonic[proj_idx],
+                            best_condition, cache, random));
+
+      if (split_result == SplitSearchResult::kBetterSplitFound) {
+        best_projection = all_projections[proj_idx];
+        best_threshold = best_condition->condition().higher_condition().threshold();
+      }
+    }
+  } else {
+    // CPU path: existing per-projection loop.
+    for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
       if constexpr (ALLOW_EMPTY_PROJECTIONS) {
-        // Skip empty projections, like Treeple
-        if (current_projection.empty()) continue;
+        if (all_projections[proj_idx].empty()) continue;
       }
 
       float min_value, max_value;
 
-      RETURN_IF_ERROR( // ApplyProjection
-        projection_evaluator.Evaluate(current_projection, selected_examples, &projection_values, &min_value, &max_value)
+      RETURN_IF_ERROR(
+        projection_evaluator.Evaluate(all_projections[proj_idx], selected_examples,
+                                       &projection_values, &min_value, &max_value)
       );
 
       ASSIGN_OR_RETURN(
           const auto split_result,
-          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs, selected_weights,
-                            selected_labels, projection_values, internal_config,
-                            current_projection.front().attribute_idx,
-                            constraints, monotonic,
-                            best_condition, cache, random// random needed for Histogramming
-                          ));
+          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
+                            selected_weights, selected_labels,
+                            projection_values, internal_config,
+                            all_projections[proj_idx].front().attribute_idx,
+                            constraints, all_monotonic[proj_idx],
+                            best_condition, cache, random));
 
       if (split_result == SplitSearchResult::kBetterSplitFound) {
-        best_projection = current_projection;
+        best_projection = all_projections[proj_idx];
         best_threshold = best_condition->condition().higher_condition().threshold();
       }
     }
+  }
   /* #endregion */
 
   /* #region update Best Threshold & Projection */

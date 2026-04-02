@@ -5276,19 +5276,36 @@ return found_split ? SplitSearchResult::kBetterSplitFound
 
     while (!node_queue.empty()) {
 #if NODE_QUEUE_DFS_FLAG
-      // DFS: pop from back (LIFO = depth-first)
+      // DFS: pop one node at a time (LIFO). No depth-batching possible.
       auto current = std::move(node_queue.back());
       node_queue.pop_back();
-#else
-      // BFS: pop from front (FIFO = breadth-first)
-      auto current = std::move(node_queue.front());
-      node_queue.pop_front();
-#endif
 
       RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
                                 deployment, splitter_concurrency_setup, weights,
                                 internal_config, random, cache,
                                 std::move(current), node_queue));
+#else
+      // BFS: collect all nodes at the current depth for potential GPU batching.
+      const int32_t current_depth = node_queue.front().depth;
+
+      std::vector<internal::NodeAndExamples> depth_batch;
+      while (!node_queue.empty() &&
+             node_queue.front().depth == current_depth) {
+        depth_batch.push_back(std::move(node_queue.front()));
+        node_queue.pop_front();
+      }
+
+      // TODO: When CUDA is available and depth_batch.size() > 1, call
+      // BatchedNodeTrainGPU to share ApplyProjection across all nodes at
+      // this depth in a single kernel launch (Mode B).
+      // For now, process each node individually (Mode A or CPU).
+      for (auto& nae : depth_batch) {
+        RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
+                                  deployment, splitter_concurrency_setup, weights,
+                                  internal_config, random, cache,
+                                  std::move(nae), node_queue));
+      }
+#endif
     }
 
     return absl::OkStatus();

@@ -35,6 +35,9 @@
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
+// Forward declaration to avoid circular include with oblique_gpu.h.
+class ObliqueGpuComputer;
+
 // Label statistics.
 struct LabelStats {
   virtual ~LabelStats() = default;
@@ -185,6 +188,10 @@ struct InternalTrainConfig {
 
   decision_tree::gpu::VectorSequenceComputer* vector_sequence_computer =
       nullptr;
+
+  // Non-owning pointer to GPU-accelerated oblique projection computer.
+  // Created once per training run, shared across tree threads.
+  ObliqueGpuComputer* oblique_gpu_computer = nullptr;
 
   // If true, the list of selected example index ("selected_examples") can
   // contain duplicated values. If false, all selected examples are expected to

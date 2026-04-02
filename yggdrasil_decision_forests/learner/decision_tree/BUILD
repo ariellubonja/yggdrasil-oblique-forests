@@ -26,6 +26,7 @@ cc_library_ydf(
     deps = [
         ":decision_tree_cc_proto",
         ":label",
+        ":oblique_gpu",
         ":preprocessing",
         ":splitter",
         ":uplift",
@@ -228,6 +229,28 @@ cc_library_ydf(
         "@com_google_absl//absl/types:span",
     ] + select({
         # TODO: Add in OSS
+        "//conditions:default": [],
+    }),
+)
+
+cc_library_ydf(
+    name = "oblique_gpu",
+    srcs = ["oblique_gpu.cc"],
+    hdrs = ["oblique_gpu.h"],
+    defines = [] + select({
+        "//conditions:default": ["CUDA_DISABLED"],
+    }),
+    deps = [
+        "//yggdrasil_decision_forests/dataset:types",
+        "//yggdrasil_decision_forests/dataset:vertical_dataset",
+        "//yggdrasil_decision_forests/utils:status_macros",
+        "//yggdrasil_decision_forests/utils:synchronization_primitives",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ] + select({
         "//conditions:default": [],
     }),
 )
