@@ -1,5 +1,12 @@
 #pragma once
 #ifdef CHRONO_ENABLED
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <thread>
+#include <vector>
+
 namespace yggdrasil_decision_forests::chrono_prof {
 
 // ---------- enum + fallback global --------------------------------
@@ -26,6 +33,13 @@ enum FuncId {
   kUpdateDistributionsHistogram,
   kComputeEntropy,
   kSelectBestThresholdHistogram,
+
+  kGpuInit,
+  kGpuCsrFlatten,
+  kGpuKernelCall,
+  kGpuResultUnpack,
+  kGpuMutexWait,
+  kGpuSampleProjectionsBatch,
   kNumFuncs
 };
 

@@ -284,6 +284,7 @@ cc_library_ydf(
         ":randomprojection",
         "//yggdrasil_decision_forests/dataset:types",
         "//yggdrasil_decision_forests/dataset:vertical_dataset",
+        "//yggdrasil_decision_forests/utils:parallel_chrono",
         "//yggdrasil_decision_forests/utils:status_macros",
         "//yggdrasil_decision_forests/utils:synchronization_primitives",
         "@com_google_absl//absl/log",

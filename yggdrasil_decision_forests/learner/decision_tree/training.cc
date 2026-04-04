@@ -5317,14 +5317,17 @@ return found_split ? SplitSearchResult::kBetterSplitFound
         const int num_nodes = depth_batch.size();
         std::vector<std::vector<internal::Projection>> all_node_projs(num_nodes);
         std::vector<std::vector<int8_t>> all_node_mono(num_nodes);
-        for (int n = 0; n < num_nodes; n++) {
-          all_node_projs[n].resize(num_proj);
-          all_node_mono[n].resize(num_proj, 0);
-          for (int p = 0; p < num_proj; p++) {
-            internal::SampleProjection(
-                config_link.numerical_features(), dt_config,
-                train_dataset.data_spec(), config_link, projection_density,
-                &all_node_projs[n][p], &all_node_mono[n][p], random);
+        {
+          CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuSampleProjectionsBatch);
+          for (int n = 0; n < num_nodes; n++) {
+            all_node_projs[n].resize(num_proj);
+            all_node_mono[n].resize(num_proj, 0);
+            for (int p = 0; p < num_proj; p++) {
+              internal::SampleProjection(
+                  config_link.numerical_features(), dt_config,
+                  train_dataset.data_spec(), config_link, projection_density,
+                  &all_node_projs[n][p], &all_node_mono[n][p], random);
+            }
           }
         }
 

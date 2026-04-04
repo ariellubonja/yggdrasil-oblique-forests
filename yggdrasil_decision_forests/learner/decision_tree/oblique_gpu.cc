@@ -14,6 +14,7 @@
 #include "absl/types/span.h"
 #include "yggdrasil_decision_forests/dataset/types.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
+#include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 #include "yggdrasil_decision_forests/utils/status_macros.h"
 
 // Bridge functions implemented in oblique_gpu_kernels.cu.cc (nvcc-compiled).
@@ -119,7 +120,16 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatched(
     absl::Span<float> min_vals,
     absl::Span<float> max_vals) {
   if (use_gpu_) {
+#ifdef CHRONO_ENABLED
+    auto wait_start = std::chrono::steady_clock::now();
+#endif
     utils::concurrency::MutexLock l(&gpu_mutex_);
+#ifdef CHRONO_ENABLED
+    chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+        chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - wait_start).count());
+#endif
     return ApplyProjectionsBatchedGPU(projections, selected_examples,
                                        projected_values, min_vals, max_vals);
   }
@@ -130,7 +140,16 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatched(
 absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNode(
     absl::Span<const NodeBatch> node_batches) {
   if (use_gpu_) {
+#ifdef CHRONO_ENABLED
+    auto wait_start = std::chrono::steady_clock::now();
+#endif
     utils::concurrency::MutexLock l(&gpu_mutex_);
+#ifdef CHRONO_ENABLED
+    chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+        chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - wait_start).count());
+#endif
     return ApplyProjectionsBatchedMultiNodeGPU(node_batches);
   }
   return ApplyProjectionsBatchedMultiNodeCPU(node_batches);
@@ -141,6 +160,7 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNode(
 absl::Status ObliqueGpuComputer::InitializeGPU(
     const dataset::VerticalDataset& dataset,
     absl::Span<const int32_t> numerical_features) {
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuInit);
   if (!oblique_gpu_check_available()) {
     return absl::UnavailableError("No CUDA device found");
   }
@@ -198,29 +218,37 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedGPU(
   // Flatten projections to CSR format.
   std::vector<int> col_offsets(num_proj + 1, 0);
   int total_nz = 0;
-  for (int p = 0; p < num_proj; p++) {
-    total_nz += projections[p].size();
-    col_offsets[p + 1] = total_nz;
-  }
-
-  std::vector<int> flat_col_indices(total_nz);
-  std::vector<float> flat_weights(total_nz);
-  for (int p = 0; p < num_proj; p++) {
-    int offset = col_offsets[p];
-    for (int j = 0; j < static_cast<int>(projections[p].size()); j++) {
-      flat_col_indices[offset + j] =
-          feature_col_to_flat_offset_[projections[p][j].attribute_idx];
-      flat_weights[offset + j] = projections[p][j].weight;
+  std::vector<int> flat_col_indices;
+  std::vector<float> flat_weights;
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuCsrFlatten);
+    for (int p = 0; p < num_proj; p++) {
+      total_nz += projections[p].size();
+      col_offsets[p + 1] = total_nz;
+    }
+    flat_col_indices.resize(total_nz);
+    flat_weights.resize(total_nz);
+    for (int p = 0; p < num_proj; p++) {
+      int offset = col_offsets[p];
+      for (int j = 0; j < static_cast<int>(projections[p].size()); j++) {
+        flat_col_indices[offset + j] =
+            feature_col_to_flat_offset_[projections[p][j].attribute_idx];
+        flat_weights[offset + j] = projections[p][j].weight;
+      }
     }
   }
 
-  int cuda_err = oblique_gpu_apply_projections(
+  int cuda_err;
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuKernelCall);
+    cuda_err = oblique_gpu_apply_projections(
       d_global_flat_data_,
       selected_examples.data(),
       num_examples, num_proj, num_total_rows_,
       flat_col_indices.data(), flat_weights.data(),
       col_offsets.data(), total_nz,
       projected_values.data(), min_vals.data(), max_vals.data());
+  }
 
   if (cuda_err != 0) {
     return absl::InternalError(
@@ -245,60 +273,69 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNodeGPU(
   // All nodes share the same num_proj.
   const int num_proj = node_batches[0].projections.size();
 
-  // 1. Build node_row_off prefix sum.
+  // 1-3. Build prefix sums, concatenate examples, flatten projections.
   std::vector<int> node_row_off(num_nodes + 1, 0);
   int max_examples_per_node = 0;
-  for (int n = 0; n < num_nodes; n++) {
-    const int rows_n = node_batches[n].selected_examples.size();
-    node_row_off[n + 1] = node_row_off[n] + rows_n;
-    if (rows_n > max_examples_per_node) max_examples_per_node = rows_n;
-  }
-  const int total_examples = node_row_off[num_nodes];
-
-  // 2. Concatenate all selected_examples.
-  std::vector<unsigned int> all_selected(total_examples);
-  for (int n = 0; n < num_nodes; n++) {
-    std::memcpy(all_selected.data() + node_row_off[n],
-                node_batches[n].selected_examples.data(),
-                node_batches[n].selected_examples.size() * sizeof(unsigned int));
-  }
-
-  // 3. Flatten projections across all (node, proj) segments.
-  const int num_segments = num_nodes * num_proj;
-  std::vector<int> col_offsets(num_segments + 1, 0);
+  int total_examples;
+  std::vector<unsigned int> all_selected;
+  std::vector<int> col_offsets;
+  std::vector<int> flat_col_indices;
+  std::vector<float> flat_weights;
   int total_nz = 0;
-  for (int n = 0; n < num_nodes; n++) {
-    for (int p = 0; p < num_proj; p++) {
-      total_nz += node_batches[n].projections[p].size();
-      col_offsets[n * num_proj + p + 1] = total_nz;
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuCsrFlatten);
+    for (int n = 0; n < num_nodes; n++) {
+      const int rows_n = node_batches[n].selected_examples.size();
+      node_row_off[n + 1] = node_row_off[n] + rows_n;
+      if (rows_n > max_examples_per_node) max_examples_per_node = rows_n;
     }
-  }
+    total_examples = node_row_off[num_nodes];
 
-  std::vector<int> flat_col_indices(total_nz);
-  std::vector<float> flat_weights(total_nz);
-  for (int n = 0; n < num_nodes; n++) {
-    for (int p = 0; p < num_proj; p++) {
-      const int seg = n * num_proj + p;
-      int offset = col_offsets[seg];
-      for (int j = 0; j < static_cast<int>(node_batches[n].projections[p].size()); j++) {
-        flat_col_indices[offset + j] =
-            feature_col_to_flat_offset_[node_batches[n].projections[p][j].attribute_idx];
-        flat_weights[offset + j] = node_batches[n].projections[p][j].weight;
+    all_selected.resize(total_examples);
+    for (int n = 0; n < num_nodes; n++) {
+      std::memcpy(all_selected.data() + node_row_off[n],
+                  node_batches[n].selected_examples.data(),
+                  node_batches[n].selected_examples.size() * sizeof(unsigned int));
+    }
+
+    const int num_segments = num_nodes * num_proj;
+    col_offsets.resize(num_segments + 1, 0);
+    for (int n = 0; n < num_nodes; n++) {
+      for (int p = 0; p < num_proj; p++) {
+        total_nz += node_batches[n].projections[p].size();
+        col_offsets[n * num_proj + p + 1] = total_nz;
+      }
+    }
+
+    flat_col_indices.resize(total_nz);
+    flat_weights.resize(total_nz);
+    for (int n = 0; n < num_nodes; n++) {
+      for (int p = 0; p < num_proj; p++) {
+        const int seg = n * num_proj + p;
+        int offset = col_offsets[seg];
+        for (int j = 0; j < static_cast<int>(node_batches[n].projections[p].size()); j++) {
+          flat_col_indices[offset + j] =
+              feature_col_to_flat_offset_[node_batches[n].projections[p][j].attribute_idx];
+          flat_weights[offset + j] = node_batches[n].projections[p][j].weight;
+        }
       }
     }
   }
 
   // 4. Single GPU kernel launch for all nodes.
   std::vector<float> all_projected(static_cast<size_t>(total_examples) * num_proj);
-
-  int cuda_err = oblique_gpu_apply_projections_multi_node(
-      d_global_flat_data_,
-      all_selected.data(), total_examples,
-      node_row_off.data(), num_nodes,
-      num_proj, num_total_rows_,
-      flat_col_indices.data(), flat_weights.data(),
-      col_offsets.data(), total_nz,
-      all_projected.data(), max_examples_per_node);
+  int cuda_err;
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuKernelCall);
+    cuda_err = oblique_gpu_apply_projections_multi_node(
+        d_global_flat_data_,
+        all_selected.data(), total_examples,
+        node_row_off.data(), num_nodes,
+        num_proj, num_total_rows_,
+        flat_col_indices.data(), flat_weights.data(),
+        col_offsets.data(), total_nz,
+        all_projected.data(), max_examples_per_node);
+  }
 
   if (cuda_err != 0) {
     return absl::InternalError(
@@ -306,19 +343,18 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNodeGPU(
   }
 
   // 5. Unpack results back to per-node output buffers.
-  // Kernel output layout within each node matches NodeBatch.projected_values:
-  // [proj_0_row_0, ..., proj_0_row_N, proj_1_row_0, ..., proj_1_row_N, ...]
-  for (int n = 0; n < num_nodes; n++) {
-    const int rows_n = node_row_off[n + 1] - node_row_off[n];
-    const size_t src_offset = static_cast<size_t>(node_row_off[n]) * num_proj;
-    const size_t block_size = static_cast<size_t>(rows_n) * num_proj;
-    std::memcpy(node_batches[n].projected_values.data(),
-                all_projected.data() + src_offset,
-                block_size * sizeof(float));
-
-    // min/max not computed by the multi-node kernel (not needed for EvaluateProjection).
-    std::memset(node_batches[n].min_vals.data(), 0, num_proj * sizeof(float));
-    std::memset(node_batches[n].max_vals.data(), 0, num_proj * sizeof(float));
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuResultUnpack);
+    for (int n = 0; n < num_nodes; n++) {
+      const int rows_n = node_row_off[n + 1] - node_row_off[n];
+      const size_t src_offset = static_cast<size_t>(node_row_off[n]) * num_proj;
+      const size_t block_size = static_cast<size_t>(rows_n) * num_proj;
+      std::memcpy(node_batches[n].projected_values.data(),
+                  all_projected.data() + src_offset,
+                  block_size * sizeof(float));
+      std::memset(node_batches[n].min_vals.data(), 0, num_proj * sizeof(float));
+      std::memset(node_batches[n].max_vals.data(), 0, num_proj * sizeof(float));
+    }
   }
 
   return absl::OkStatus();

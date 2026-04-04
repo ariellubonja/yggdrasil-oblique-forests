@@ -1029,6 +1029,12 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                         << " kSortFinalizeBuckets "   << arr[kSortFinalizeBuckets] * 1e-9 << "s"
                         << " kSortFeatures "   << arr[kSortFeatures] * 1e-9 << "s"
                         << " kSortLabels "   << arr[kSortLabels] * 1e-9 << "s"
+                        << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
+                        << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
+                        << " GpuKernel " << arr[kGpuKernelCall] * 1e-9 << "s"
+                        << " GpuUnpack " << arr[kGpuResultUnpack] * 1e-9 << "s"
+                        << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
+                        << " GpuSampleBatch " << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
                         ;
             } else {
                 LOG(INFO) << "thread "   << tree_thread_id()[t]
@@ -1048,6 +1054,12 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                       << " kUpdateDistributionsHistogram " << arr[kUpdateDistributionsHistogram]   * 1e-9 << "s"
                       << " kComputeEntropy " << arr[kComputeEntropy]   * 1e-9 << "s"
                       << " kSelectBestThresholdHistogram " << arr[kSelectBestThresholdHistogram]   * 1e-9 << "s"
+                      << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
+                      << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
+                      << " GpuKernel " << arr[kGpuKernelCall] * 1e-9 << "s"
+                      << " GpuUnpack " << arr[kGpuResultUnpack] * 1e-9 << "s"
+                      << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
+                      << " GpuSampleBatch " << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
                       ;
             }
           }
