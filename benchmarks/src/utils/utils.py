@@ -112,6 +112,9 @@ def build_binary(args, chrono_mode):
     if chrono_mode:
         finished_cmd.append('--config=multithreaded_chrono_profile')
 
+    if getattr(args, 'gpu_mode', None) == 'per_node':
+        finished_cmd.append('--config=dfs_node_queue')
+
     # if args.enable_fast_equal_width_binning:
     #     finished_cmd.append('--config=enable_fast_equal_width_binning')
         

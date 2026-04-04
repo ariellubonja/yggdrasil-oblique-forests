@@ -29,6 +29,9 @@ def get_args():
     p.add_argument("--skip_build", help="Skip building target. Use whatever's in .bazel-bin", action="store_true")
     p.add_argument("--disable_ecores", action="store_true",
                    help="Disable Intel E-cores for stable measurements (default: leave E-cores on)")
+    p.add_argument("--gpu_mode", choices=["per_depth", "per_node"], default="per_depth",
+                   help="GPU batching mode: per_depth (BFS, one kernel per depth level) "
+                        "or per_node (DFS, one kernel per node). Only relevant when --use_gpu=true")
 
     return p.parse_args()
 
@@ -235,7 +238,11 @@ if __name__ == "__main__":
             print("❌ build failed", file=sys.stderr)
             sys.exit(1)
 
-    exp = f"{a.sample_projection_mode} projections | {a.feature_split_type} | {a.numerical_split_type} | {a.experiment_name}"
+    gpu_mode_label = ""
+    if a.use_gpu:
+        gpu_mode_label = f"GPU {a.gpu_mode} | "
+        print(f"GPU mode: {a.gpu_mode}")
+    exp = f"{gpu_mode_label}{a.sample_projection_mode} projections | {a.feature_split_type} | {a.numerical_split_type} | {a.experiment_name}"
     
     cmd = ["./bazel-bin/examples/train_oblique_forest",
            f"--num_trees={a.num_trees}",
