@@ -11,6 +11,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "yggdrasil_decision_forests/dataset/types.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
@@ -161,6 +162,7 @@ absl::Status ObliqueGpuComputer::InitializeGPU(
     const dataset::VerticalDataset& dataset,
     absl::Span<const int32_t> numerical_features) {
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuInit);
+  const auto init_start = absl::Now();
   if (!oblique_gpu_check_available()) {
     return absl::UnavailableError("No CUDA device found");
   }
@@ -192,7 +194,8 @@ absl::Status ObliqueGpuComputer::InitializeGPU(
 
   LOG(INFO) << "ObliqueGpuComputer: Uploaded " << n_rows << " rows x "
             << n_features << " features to GPU ("
-            << (flat_data.size() * sizeof(float)) / (1024 * 1024) << " MB)";
+            << (flat_data.size() * sizeof(float)) / (1024 * 1024) << " MB) in "
+            << absl::ToDoubleSeconds(absl::Now() - init_start) << " s";
   return absl::OkStatus();
 }
 
