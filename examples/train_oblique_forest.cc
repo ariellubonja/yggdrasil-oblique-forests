@@ -16,6 +16,7 @@
 #include "yggdrasil_decision_forests/dataset/vertical_dataset_io.h"
 #include "yggdrasil_decision_forests/learner/learner_library.h"
 #include "yggdrasil_decision_forests/learner/random_forest/random_forest.pb.h"
+#include "yggdrasil_decision_forests/learner/gradient_boosted_trees/gradient_boosted_trees.pb.h"
 #include "yggdrasil_decision_forests/model/model_library.h"
 // #include "yggdrasil_decision_forests/utils/status_macros.h"
 #include "yggdrasil_decision_forests/utils/filesystem.h"
@@ -63,6 +64,11 @@ ABSL_FLAG(int, dynamic_split_threshold, 350,
           "When using dynamic histogram splits, switch to exact splitting if "
           "the number of examples at a node is below this threshold. "
           "Set to -1 to disable.");
+
+ABSL_FLAG(std::string, ensemble_method, "Bagging",
+          "Ensemble method: 'Bagging' (Random Forest) or 'Boosting' (Gradient Boosted Trees/MART).");
+ABSL_FLAG(float, shrinkage, 0.1f,
+          "Learning rate for boosting (only used when ensemble_method = 'Boosting').");
 
 // Hao uses GlobalBestFirst
 ABSL_FLAG(std::string, growing_strategy, "Local",
@@ -291,7 +297,6 @@ int main(int argc, char** argv) {
 
   // 2) Configure learner
   model::proto::TrainingConfig train_config;
-  train_config.set_learner("RANDOM_FOREST");
   train_config.set_task(model::proto::Task::CLASSIFICATION);
   train_config.set_label(label_col);
 
@@ -321,38 +326,63 @@ int main(int argc, char** argv) {
   }
   /* #endregion */
 
-  auto& rf = *train_config.MutableExtension(
-      model::random_forest::proto::random_forest_config);
-  rf.set_num_trees(absl::GetFlag(FLAGS_num_trees));
+  // Configure ensemble method: Bagging (RF) or Boosting (GBT/MART)
+  const std::string ensemble_method = absl::GetFlag(FLAGS_ensemble_method);
+  model::decision_tree::proto::DecisionTreeTrainingConfig* dt_config;
 
-  train_config.set_random_seed(absl::GetFlag(FLAGS_seed));
-
-  rf.mutable_decision_tree()->set_max_depth(
-      absl::GetFlag(FLAGS_tree_depth));
-  rf.set_bootstrap_training_dataset(true);
-  rf.set_bootstrap_size_ratio(1.0);
-
-  rf.set_winner_take_all_inference(false);
-
-  const auto growing_strategy = absl::GetFlag(FLAGS_growing_strategy);
-
-  if (growing_strategy == "GlobalBestFirst") {
-    rf.mutable_decision_tree()->mutable_growing_strategy_best_first_global();
-    rf.mutable_decision_tree()->mutable_growing_strategy_best_first_global()->set_max_num_nodes(-1);
-  }
-  else if (growing_strategy != "Local") {
-    std::cerr << "Unknown growing_strategy: " << growing_strategy<< ". Use Local or GlobalBestFirst.\n";
+  if (ensemble_method == "Bagging") {
+    train_config.set_learner("RANDOM_FOREST");
+    auto& rf = *train_config.MutableExtension(
+        model::random_forest::proto::random_forest_config);
+    rf.set_num_trees(absl::GetFlag(FLAGS_num_trees));
+    rf.set_bootstrap_training_dataset(true);
+    rf.set_bootstrap_size_ratio(1.0);
+    rf.set_winner_take_all_inference(false);
+    rf.set_compute_oob_performances(
+        absl::GetFlag(FLAGS_compute_oob_performances));
+    dt_config = rf.mutable_decision_tree();
+  } else if (ensemble_method == "Boosting") {
+    train_config.set_learner("GRADIENT_BOOSTED_TREES");
+    auto& gbt = *train_config.MutableExtension(
+        model::gradient_boosted_trees::proto::gradient_boosted_trees_config);
+    gbt.set_num_trees(absl::GetFlag(FLAGS_num_trees));
+    gbt.set_shrinkage(absl::GetFlag(FLAGS_shrinkage));
+    dt_config = gbt.mutable_decision_tree();
+  } else {
+    std::cerr << "Unknown ensemble_method: " << ensemble_method
+              << ". Use 'Bagging' or 'Boosting'.\n";
     return 1;
   }
 
-  rf.mutable_decision_tree()->set_min_examples(1);
+  train_config.set_random_seed(absl::GetFlag(FLAGS_seed));
+
+  // Shared decision tree config
+  int tree_depth = absl::GetFlag(FLAGS_tree_depth);
+  if (ensemble_method == "Boosting" && tree_depth == -1) {
+    tree_depth = 6;
+  }
+  dt_config->set_max_depth(tree_depth);
+  dt_config->set_min_examples(ensemble_method == "Boosting" ? 5 : 1);
+
+  const auto growing_strategy = absl::GetFlag(FLAGS_growing_strategy);
+  if (growing_strategy == "GlobalBestFirst") {
+    dt_config->mutable_growing_strategy_best_first_global()->set_max_num_nodes(-1);
+  } else if (growing_strategy != "Local") {
+    std::cerr << "Unknown growing_strategy: " << growing_strategy
+              << ". Use Local or GlobalBestFirst.\n";
+    return 1;
+  }
 
   /* #region Conditional Feature Split Type Configuration */
   const std::string feature_split_type = absl::GetFlag(FLAGS_feature_split_type);
-  
+
   if (feature_split_type == "Oblique") {
+    if (ensemble_method == "Boosting") {
+      std::cerr << "Oblique splits are not supported with Boosting.\n";
+      return 1;
+    }
     std::cout << "Configuring oblique splits\n";
-    auto* sos = rf.mutable_decision_tree()->mutable_sparse_oblique_split();
+    auto* sos = dt_config->mutable_sparse_oblique_split();
     sos->set_max_num_projections(
         absl::GetFlag(FLAGS_max_num_projections));
     sos->set_projection_density_factor(
@@ -366,7 +396,7 @@ int main(int argc, char** argv) {
 
     // Configure sparse_oblique_split parameters to reuse GetNumProjections formula
     // This does NOT enable oblique splits - it just sets params for the calculation
-    auto* sos = rf.mutable_decision_tree()->mutable_sparse_oblique_split();
+    auto* sos = dt_config->mutable_sparse_oblique_split();
     sos->set_max_num_projections(absl::GetFlag(FLAGS_max_num_projections));
     sos->set_num_projections_exponent(absl::GetFlag(FLAGS_num_projections_exponent));
 
@@ -378,25 +408,22 @@ int main(int argc, char** argv) {
     }
 
     const int num_candidates = model::decision_tree::GetNumProjections(
-        rf.decision_tree(), num_numerical_features);
-    rf.mutable_decision_tree()->set_num_candidate_attributes(num_candidates);
+        *dt_config, num_numerical_features);
+    dt_config->set_num_candidate_attributes(num_candidates);
 
     // Clear sparse_oblique_split so axis-aligned splits are used, not oblique
-    rf.mutable_decision_tree()->clear_sparse_oblique_split();
+    dt_config->clear_sparse_oblique_split();
 
     LOG(INFO) << "Num Candidate Attributes: " << num_candidates;
   } else {
-    std::cerr << "Unknown feature_split_type: " << feature_split_type 
+    std::cerr << "Unknown feature_split_type: " << feature_split_type
               << ". Use 'Axis Aligned' or 'Oblique'.\n";
     return 1;
   }
   /* #endregion */
 
-  rf.set_compute_oob_performances(
-      absl::GetFlag(FLAGS_compute_oob_performances));
-
   // Configure histogram splitting - Updated to match Yggdrasil implementation
-  auto* numerical_split = rf.mutable_decision_tree()->mutable_numerical_split();
+  auto* numerical_split = dt_config->mutable_numerical_split();
   
   const std::string hist_type = absl::GetFlag(FLAGS_numerical_split_type);
   if (hist_type == "Exact") {
