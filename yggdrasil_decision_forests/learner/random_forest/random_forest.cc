@@ -990,6 +990,9 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
         LOG(INFO) << "random_forest.cc Training block took: " 
           << absl::ToDoubleSeconds(absl::Now() - begin_training) << " s";
 
+        LOG(INFO) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
+        exit(0);
+
         // Print all Timing info after done MultiThreading
         #ifdef CHRONO_ENABLED
         using namespace yggdrasil_decision_forests::chrono_prof;
