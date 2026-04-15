@@ -121,6 +121,7 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatched(
     absl::Span<float> min_vals,
     absl::Span<float> max_vals) {
   if (use_gpu_) {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuApplyProjection);
 #ifdef CHRONO_ENABLED
     auto wait_start = std::chrono::steady_clock::now();
 #endif
@@ -141,6 +142,7 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatched(
 absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNode(
     absl::Span<const NodeBatch> node_batches) {
   if (use_gpu_) {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuApplyProjection);
 #ifdef CHRONO_ENABLED
     auto wait_start = std::chrono::steady_clock::now();
 #endif

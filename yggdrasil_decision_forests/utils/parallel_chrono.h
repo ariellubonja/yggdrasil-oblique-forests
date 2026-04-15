@@ -40,6 +40,7 @@ enum FuncId {
   kGpuResultUnpack,
   kGpuMutexWait,
   kGpuSampleProjectionsBatch,
+  kGpuApplyProjection,
   kNumFuncs
 };
 

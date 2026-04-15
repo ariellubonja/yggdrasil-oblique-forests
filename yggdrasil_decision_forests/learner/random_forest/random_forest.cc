@@ -1035,6 +1035,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                         << " GpuUnpack " << arr[kGpuResultUnpack] * 1e-9 << "s"
                         << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
                         << " GpuSampleBatch " << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
+                        << " GpuApplyProj " << arr[kGpuApplyProjection] * 1e-9 << "s"
                         ;
             } else {
                 LOG(INFO) << "thread "   << tree_thread_id()[t]
@@ -1060,6 +1061,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                       << " GpuUnpack " << arr[kGpuResultUnpack] * 1e-9 << "s"
                       << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
                       << " GpuSampleBatch " << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
+                      << " GpuApplyProj " << arr[kGpuApplyProjection] * 1e-9 << "s"
                       ;
             }
           }
