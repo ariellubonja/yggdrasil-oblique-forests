@@ -74,10 +74,18 @@
 #include "yggdrasil_decision_forests/utils/random.h"
 #include "yggdrasil_decision_forests/utils/status_macros.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 
 
 #ifndef PRINT_PROJECTION_MATRICES_FLAG
   #define PRINT_PROJECTION_MATRICES_FLAG 0
+#endif
+
+// Node queue order: 0 = BFS (breadth-first, FIFO), 1 = DFS (depth-first, LIFO).
+// Toggle via bazel: --config=dfs_node_queue
+#ifndef NODE_QUEUE_DFS_FLAG
+  #define NODE_QUEUE_DFS_FLAG 0
 #endif
 
 
@@ -5233,6 +5241,149 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     return absl::OkStatus();
   }
 
+  // Forward declaration: NodeTrain is defined below but called by GrowTreeLocalBFS.
+  ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
+      const dataset::VerticalDataset &train_dataset,
+      const model::proto::TrainingConfig &config,
+      const model::proto::TrainingConfigLinking &config_link,
+      const proto::DecisionTreeTrainingConfig &dt_config,
+      const model::proto::DeploymentConfig &deployment,
+      const SplitterConcurrencySetup &splitter_concurrency_setup,
+      const std::vector<float> &weights,
+      const InternalTrainConfig &internal_config,
+      utils::RandomEngine *random, PerThreadCache *cache,
+      internal::NodeAndExamples node_and_examples,
+      std::deque<internal::NodeAndExamples> &node_queue);
+
+  absl::Status GrowTreeLocalBFS(
+      const dataset::VerticalDataset &train_dataset,
+      const model::proto::TrainingConfig &config,
+      const model::proto::TrainingConfigLinking &config_link,
+      const proto::DecisionTreeTrainingConfig &dt_config,
+      const model::proto::DeploymentConfig &deployment,
+      const SplitterConcurrencySetup &splitter_concurrency_setup,
+      const std::vector<float> &weights, const int32_t depth,
+      const InternalTrainConfig &internal_config,
+      const NodeConstraints &constraints, bool set_leaf_already_set,
+      NodeWithChildren *root, utils::RandomEngine *random, PerThreadCache *cache,
+      SelectedExamplesRollingBuffer selected_examples,
+      std::optional<SelectedExamplesRollingBuffer> leaf_examples)
+  {
+    // BFS queue: push to back, pop from front (FIFO = level-order traversal).
+    std::deque<internal::NodeAndExamples> node_queue;
+
+    node_queue.push_back({root, std::move(selected_examples),
+                          std::move(leaf_examples), depth, constraints,
+                          set_leaf_already_set});
+
+    while (!node_queue.empty()) {
+#if NODE_QUEUE_DFS_FLAG
+      // DFS: pop one node at a time (LIFO). No depth-batching possible.
+      auto current = std::move(node_queue.back());
+      node_queue.pop_back();
+
+      RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
+                                deployment, splitter_concurrency_setup, weights,
+                                internal_config, random, cache,
+                                std::move(current), node_queue));
+#else
+      // BFS: collect all nodes at the current depth for potential GPU batching.
+      const int32_t current_depth = node_queue.front().depth;
+
+      std::vector<internal::NodeAndExamples> depth_batch;
+      while (!node_queue.empty() &&
+             node_queue.front().depth == current_depth) {
+        depth_batch.push_back(std::move(node_queue.front()));
+        node_queue.pop_front();
+      }
+
+      const bool use_multi_node_gpu =
+          internal_config.oblique_gpu_computer != nullptr &&
+          internal_config.oblique_gpu_computer->use_gpu() &&
+          dt_config.has_sparse_oblique_split() &&
+          depth_batch.size() > 1;
+
+      if (use_multi_node_gpu) {
+        // Mode B: pre-compute projections for all nodes at this depth
+        // via a single multi-node GPU kernel, then call NodeTrain per-node
+        // with pre-computed data (skips per-node GPU call in oblique.cc).
+        const int num_proj = GetNumProjections(
+            dt_config, config_link.numerical_features_size());
+        const float projection_density =
+            dt_config.sparse_oblique_split().projection_density_factor() /
+            config_link.numerical_features_size();
+
+        // a) Sample projections for all nodes on CPU.
+        const int num_nodes = depth_batch.size();
+        std::vector<std::vector<internal::Projection>> all_node_projs(num_nodes);
+        std::vector<std::vector<int8_t>> all_node_mono(num_nodes);
+        {
+          CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuSampleProjectionsBatch);
+          for (int n = 0; n < num_nodes; n++) {
+            all_node_projs[n].resize(num_proj);
+            all_node_mono[n].resize(num_proj, 0);
+            for (int p = 0; p < num_proj; p++) {
+              internal::SampleProjection(
+                  config_link.numerical_features(), dt_config,
+                  train_dataset.data_spec(), config_link, projection_density,
+                  &all_node_projs[n][p], &all_node_mono[n][p], random);
+            }
+          }
+        }
+
+        // b) Build NodeBatch structs and output buffers.
+        std::vector<std::vector<float>> proj_buffers(num_nodes);
+        std::vector<std::vector<float>> min_buffers(num_nodes);
+        std::vector<std::vector<float>> max_buffers(num_nodes);
+        std::vector<ObliqueGpuComputer::NodeBatch> node_batches(num_nodes);
+        for (int n = 0; n < num_nodes; n++) {
+          const int rows_n = depth_batch[n].selected_examples.size();
+          proj_buffers[n].resize(num_proj * rows_n);
+          min_buffers[n].resize(num_proj);
+          max_buffers[n].resize(num_proj);
+          node_batches[n] = {
+              depth_batch[n].selected_examples.active,
+              all_node_projs[n],
+              absl::MakeSpan(proj_buffers[n]),
+              absl::MakeSpan(min_buffers[n]),
+              absl::MakeSpan(max_buffers[n])};
+        }
+
+        // c) ONE GPU kernel launch for all nodes at this depth.
+        RETURN_IF_ERROR(
+            internal_config.oblique_gpu_computer
+                ->ApplyProjectionsBatchedMultiNode(node_batches));
+
+        // d) Call NodeTrain per-node with pre-computed projections.
+        for (int n = 0; n < num_nodes; n++) {
+          auto node_config = internal_config;
+          node_config.precomputed_projections = proj_buffers[n].data();
+          node_config.precomputed_num_proj = num_proj;
+          node_config.precomputed_projection_defs = &all_node_projs[n];
+          node_config.precomputed_monotonic = &all_node_mono[n];
+
+          RETURN_IF_ERROR(NodeTrain(
+              train_dataset, config, config_link, dt_config,
+              deployment, splitter_concurrency_setup, weights,
+              node_config, random, cache,
+              std::move(depth_batch[n]), node_queue));
+        }
+      } else {
+        // Per-node fallback (Mode A GPU or CPU).
+        for (auto& nae : depth_batch) {
+          RETURN_IF_ERROR(NodeTrain(
+              train_dataset, config, config_link, dt_config,
+              deployment, splitter_concurrency_setup, weights,
+              internal_config, random, cache,
+              std::move(nae), node_queue));
+        }
+      }
+#endif
+    }
+
+    return absl::OkStatus();
+  }
+
   // Ariel: Wrapped by DecisionTreeTrain
   // handles both Single and Multicore, if-s Growth Strategy -- Frontier Best vs. Local
   absl::Status DecisionTreeCoreTrain(
@@ -5265,8 +5416,8 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       {
         const auto constraints = NodeConstraints::CreateNodeConstraints();
 
-        // This is the first call - selected_examples_rb should be full bag
-        return NodeTrain(train_dataset, config, config_link, dt_config,
+        // BFS: iterative breadth-first tree growth
+        return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                         deployment, splitter_concurrency_setup, weights, 1,
                         internal_config, constraints, false, dt->mutable_root(),
                         random, &cache, selected_examples_rb, leaf_examples_rb);
@@ -5283,8 +5434,9 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     }
   }
 
-  // Doesn't itself show up as non-trivial runtime in profiling
-  absl::Status NodeTrain(
+  // Processes a single node: finds best split, partitions examples,
+  // and enqueues children onto node_queue for BFS traversal.
+  ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
       const dataset::VerticalDataset &train_dataset,
       const model::proto::TrainingConfig &config,
       const model::proto::TrainingConfigLinking &config_link,
@@ -5292,19 +5444,24 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       const model::proto::DeploymentConfig &deployment,
       const SplitterConcurrencySetup &splitter_concurrency_setup,
       const std::vector<float> &weights,
-      const int32_t depth, // Ariel: There's already a depth parameter!
       const InternalTrainConfig &internal_config,
-      const NodeConstraints &constraints, bool set_leaf_already_set,
-      NodeWithChildren *node, utils::RandomEngine *random, PerThreadCache *cache,
-      SelectedExamplesRollingBuffer selected_examples,
-      std::optional<SelectedExamplesRollingBuffer> leaf_examples)
+      utils::RandomEngine *random, PerThreadCache *cache,
+      internal::NodeAndExamples node_and_examples,
+      std::deque<internal::NodeAndExamples> &node_queue)
   {
+    auto &selected_examples = node_and_examples.selected_examples;
+    auto &leaf_examples = node_and_examples.leaf_examples;
+    const int32_t depth = node_and_examples.depth;
+    const auto &constraints = node_and_examples.constraints;
+    const bool set_leaf_already_set = node_and_examples.set_leaf_already_set;
+    auto *node = node_and_examples.node;
     #ifdef CHRONO_ENABLED
       using namespace yggdrasil_decision_forests::chrono_prof;
-      DepthScope depth_guard;
+      // Iterative BFS: set depth explicitly from the struct instead of RAII DepthScope.
+      tls_ctx.cur_depth = depth;
 
       const int t = tls_ctx.cur_tree;
-      const int d = tls_ctx.cur_depth;
+      const int d = depth;
       if (t >= 0) {
         if (d >= node_cnt()[t].size()) {           // grow once if new depth
           node_cnt()[t].resize(d + 1);
@@ -5526,35 +5683,33 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     }
     /* #endregion */
 
-    /**************** RECURSE LEFT & RIGHT ****************/
+    /**************** ENQUEUE CHILDREN (BFS) ****************/
 
     // +
     if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::cout << "\nStarting work on Positive child" << std::endl;
+      std::cout << "\nEnqueuing Positive child" << std::endl;
     }
-    RETURN_IF_ERROR(
-        NodeTrain(train_dataset, config, config_link, dt_config, deployment,
-                  splitter_concurrency_setup, weights, depth + 1, internal_config,
-                  pos_constraints, true, node->mutable_pos_child(), random, cache,
-                  example_split.positive_examples,
-                  node_only_example_split.has_value()
-                      ? std::optional<SelectedExamplesRollingBuffer>(
-                            node_only_example_split->positive_examples)
-                      : std::nullopt));
+    node_queue.push_back(
+        {node->mutable_pos_child(),
+         std::move(example_split.positive_examples),
+         node_only_example_split.has_value()
+             ? std::optional<SelectedExamplesRollingBuffer>(
+                   std::move(node_only_example_split->positive_examples))
+             : std::nullopt,
+         depth + 1, pos_constraints, true});
 
     // -
     if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::cout << "Starting work on Negative child" << std::endl;
+      std::cout << "Enqueuing Negative child" << std::endl;
     }
-    RETURN_IF_ERROR(
-        NodeTrain(train_dataset, config, config_link, dt_config, deployment,
-                  splitter_concurrency_setup, weights, depth + 1, internal_config,
-                  neg_constraints, true, node->mutable_neg_child(), random, cache,
-                  example_split.negative_examples,
-                  node_only_example_split.has_value()
-                      ? std::optional<SelectedExamplesRollingBuffer>(
-                            node_only_example_split->negative_examples)
-                      : std::nullopt));
+    node_queue.push_back(
+        {node->mutable_neg_child(),
+         std::move(example_split.negative_examples),
+         node_only_example_split.has_value()
+             ? std::optional<SelectedExamplesRollingBuffer>(
+                   std::move(node_only_example_split->negative_examples))
+             : std::nullopt,
+         depth + 1, neg_constraints, true});
 
     return absl::OkStatus();
   }

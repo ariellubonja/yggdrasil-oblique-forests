@@ -1,0 +1,34 @@
+# YDF Oblique Forests — Research Fork
+
+> This document covers only the oblique random forest training path in this fork,
+> not the full YDF project.
+
+## Overview
+
+Research fork of Yggdrasil Decision Forests focused on accelerating oblique
+(sparse) random forest training. Oblique splits use linear combinations of
+features instead of single-feature thresholds.
+
+## Key Areas
+
+- Oblique split finding: `yggdrasil_decision_forests/learner/decision_tree/oblique.cc`
+- Tree growth (BFS iterative): `yggdrasil_decision_forests/learner/decision_tree/training.cc`
+- RF training loop: `yggdrasil_decision_forests/learner/random_forest/random_forest.cc`
+- Custom per-function profiling: `yggdrasil_decision_forests/utils/parallel_chrono.h`
+
+## Benchmarks
+
+Experimental instrumentation lives in `benchmarks/`:
+- `benchmarks/src/` — scripts: e2e runtime suite, CHRONO profiling driver, breakeven experiments
+- `benchmarks/data/` — datasets: OpenML CC18 (35 tasks), HIGGS, SUSY, epsilon, synthetic trunk
+- `benchmarks/results/` — committed output: e2e runtime logs, accuracy logs, per-function CSVs by CPU
+
+## Build
+
+Bazel project. Default optimized: `bazel build -c opt //<target>`.
+CHRONO profiling: `--config=multithreaded_chrono_profile`.
+
+## Details
+
+- llms-full.txt: Extended documentation with architecture and file reference
+- AGENTS.md: Instructions for AI coding agents working in this repo

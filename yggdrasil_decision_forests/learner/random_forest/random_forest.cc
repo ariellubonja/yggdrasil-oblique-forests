@@ -53,6 +53,7 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/generic_parameters.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/gpu.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/label.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/preprocessing.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/training.h"
@@ -522,6 +523,17 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
           }
         /* #endregion */
 
+        /* #region Oblique GPU */
+        std::unique_ptr<decision_tree::ObliqueGpuComputer> oblique_gpu_computer;
+        if (rf_config.decision_tree().has_sparse_oblique_split()) {
+          ASSIGN_OR_RETURN(
+              oblique_gpu_computer,
+              decision_tree::ObliqueGpuComputer::Create(
+                  train_dataset, config_link.features(),
+                  /*use_gpu=*/deployment_.use_gpu()));
+        }
+        /* #endregion */
+
 
         /* #region Handle User-specified seeds per-tree */
           utils::RandomEngine global_random(config_with_default.random_seed());
@@ -821,6 +833,8 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                   internal_config.timeout = timeout;
                   if (vector_sequence_computer)
                     { internal_config.vector_sequence_computer = vector_sequence_computer.get(); }
+                  if (oblique_gpu_computer)
+                    { internal_config.oblique_gpu_computer = oblique_gpu_computer.get(); }
 
                   // Ariel: Training starts here
                   auto status_train = decision_tree::Train(
@@ -1139,6 +1153,13 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                         << " kSortFinalizeBuckets "   << arr[kSortFinalizeBuckets] * 1e-9 << "s"
                         << " kSortFeatures "   << arr[kSortFeatures] * 1e-9 << "s"
                         << " kSortLabels "   << arr[kSortLabels] * 1e-9 << "s"
+                        << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
+                        << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
+                        << " GpuKernel " << arr[kGpuKernelCall] * 1e-9 << "s"
+                        << " GpuUnpack " << arr[kGpuResultUnpack] * 1e-9 << "s"
+                        << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
+                        << " GpuSampleBatch " << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
+                        << " GpuApplyProj " << arr[kGpuApplyProjection] * 1e-9 << "s"
                         ;
             } else {
                 LOG(INFO) << "thread "   << tree_thread_id()[t]
@@ -1158,6 +1179,13 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                       << " kUpdateDistributionsHistogram " << arr[kUpdateDistributionsHistogram]   * 1e-9 << "s"
                       << " kComputeEntropy " << arr[kComputeEntropy]   * 1e-9 << "s"
                       << " kSelectBestThresholdHistogram " << arr[kSelectBestThresholdHistogram]   * 1e-9 << "s"
+                      << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
+                      << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
+                      << " GpuKernel " << arr[kGpuKernelCall] * 1e-9 << "s"
+                      << " GpuUnpack " << arr[kGpuResultUnpack] * 1e-9 << "s"
+                      << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
+                      << " GpuSampleBatch " << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
+                      << " GpuApplyProj " << arr[kGpuApplyProjection] * 1e-9 << "s"
                       ;
             }
           }
@@ -1262,6 +1290,8 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
 
         if (vector_sequence_computer)
             { RETURN_IF_ERROR(vector_sequence_computer->Release()); }
+        if (oblique_gpu_computer)
+            { RETURN_IF_ERROR(oblique_gpu_computer->Release()); }
 
         // start = std::chrono::high_resolution_clock::now();
 

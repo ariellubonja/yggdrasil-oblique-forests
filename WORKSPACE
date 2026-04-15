@@ -39,10 +39,17 @@ load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
 grpc_extra_deps()
 
 
-# TODO: Enbable CUDA build in OSS
-# load("@rules_cuda//cuda:repositories.bzl", "register_detected_cuda_toolchains", "rules_cuda_dependencies")
-# rules_cuda_dependencies()
-# register_detected_cuda_toolchains()
+# CUDA support via rules_cuda
+http_archive(
+    name = "rules_cuda",
+    sha256 = "fe8d3d8ed52b9b433f89021b03e3c428a82e10ed90c72808cc4988d1f4b9d1b3",
+    strip_prefix = "rules_cuda-v0.2.5",
+    urls = ["https://github.com/bazel-contrib/rules_cuda/releases/download/v0.2.5/rules_cuda-v0.2.5.tar.gz"],
+)
+
+load("@rules_cuda//cuda:repositories.bzl", "register_detected_cuda_toolchains", "rules_cuda_dependencies")
+rules_cuda_dependencies()
+register_detected_cuda_toolchains()
 
 # Emscripten; needed for the Web build.
 http_archive(

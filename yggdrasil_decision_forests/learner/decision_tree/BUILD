@@ -1,6 +1,4 @@
-# TODO: Enbable CUDA build in OSS
-# load("@rules_cuda//cuda:defs.bzl", "cuda_library", "requires_cuda")
-
+load("@rules_cuda//cuda:defs.bzl", "cuda_library")
 load("//yggdrasil_decision_forests/utils:compile.bzl", "all_proto_library", "cc_library_ydf")
 
 package(
@@ -26,6 +24,7 @@ cc_library_ydf(
     deps = [
         ":decision_tree_cc_proto",
         ":label",
+        ":oblique_gpu",
         ":preprocessing",
         ":splitter",
         ":uplift",
@@ -73,11 +72,17 @@ cc_library_ydf(
 )
 
 cc_library_ydf(
+    name = "oblique_types",
+    hdrs = ["oblique_types.h"],
+)
+
+cc_library_ydf(
     name = "label",
     srcs = ["label.cc"],
     hdrs = ["label.h"],
     deps = [
         ":gpu",
+        ":oblique_types",
         ":preprocessing",
         ":splitter",
         ":uplift",
@@ -230,6 +235,65 @@ cc_library_ydf(
         # TODO: Add in OSS
         "//conditions:default": [],
     }),
+)
+
+cuda_library(
+    name = "oblique_gpu_kernels",
+    srcs = ["oblique_gpu_kernels.cu.cc"],
+    copts = [
+        "-std=c++17",
+        "-Wno-deprecated-gpu-targets",
+        # Override rules_cuda auto-detected ICX with GCC-13 for nvcc host compiler.
+        "-ccbin=/usr/bin/g++-13",
+        "-Xcompiler", "-B/usr/bin",
+    ],
+    deps = [
+        ":randomprojection",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cuda_library(
+    name = "randomprojection",
+    srcs = ["randomprojection.cu"],
+    hdrs = ["randomprojection.hpp"],
+    includes = ["."],
+    copts = [
+        "-std=c++17",
+        "-Wno-deprecated-gpu-targets",
+        "-ccbin=/usr/bin/g++-13",
+        "-Xcompiler", "-B/usr/bin",
+        "-Xcompiler", "-DGOOGLE_PROTOBUF_NO_ARENA=1",
+    ],
+    deps = [
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library_ydf(
+    name = "oblique_gpu",
+    srcs = ["oblique_gpu.cc"],
+    hdrs = ["oblique_gpu.h"],
+    deps = [
+        ":oblique_gpu_kernels",
+        ":oblique_types",
+        ":randomprojection",
+        "//yggdrasil_decision_forests/dataset:types",
+        "//yggdrasil_decision_forests/dataset:vertical_dataset",
+        "//yggdrasil_decision_forests/utils:parallel_chrono",
+        "//yggdrasil_decision_forests/utils:status_macros",
+        "//yggdrasil_decision_forests/utils:synchronization_primitives",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
 )
 
 # Proto

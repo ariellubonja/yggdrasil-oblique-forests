@@ -27,7 +27,12 @@ def get_args():
     p.add_argument("--cols", type=int, default=4096)
     p.add_argument("--save_log", action="store_true")
     p.add_argument("--skip_build", help="Skip building target. Use whatever's in .bazel-bin", action="store_true")
-    
+    p.add_argument("--disable_ecores", action="store_true",
+                   help="Disable Intel E-cores for stable measurements (default: leave E-cores on)")
+    p.add_argument("--gpu_mode", choices=["per_depth", "per_node"], default="per_depth",
+                   help="GPU batching mode: per_depth (BFS, one kernel per depth level) "
+                        "or per_node (DFS, one kernel per node). Only relevant when --use_gpu=true")
+
     return p.parse_args()
 
 
@@ -45,6 +50,13 @@ TIMING_RX_SORT = re.compile(
     r"kSortFinalizeBuckets\s+([0-9.eE+-]+)s\s+"         # 13
     r"kSortFeatures\s+([0-9.eE+-]+)s\s+"                # 14
     r"kSortLabels\s+([0-9.eE+-]+)s"                     # 15
+    r"(?:\s+GpuInit\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuCsrFlatten\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuKernel\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuUnpack\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuMutex\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuSampleBatch\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuApplyProj\s+([0-9.eE+-]+)s)?"
 )
 
 # Extended with the 4 histogram phases
@@ -63,6 +75,13 @@ TIMING_RX_HISTO = re.compile(
     r"kUpdateDistributionsHistogram\s+([0-9.eE+-]+)s\s+"
     r"kComputeEntropy\s+([0-9.eE+-]+)s\s+"
     r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s"
+    r"(?:\s+GpuInit\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuCsrFlatten\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuKernel\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuUnpack\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuMutex\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuSampleBatch\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuApplyProj\s+([0-9.eE+-]+)s)?"
 )
 
 
@@ -74,10 +93,16 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
     for m in rx.finditer(raw_log):
         g = m.groups()
 
+        # Helper for optional GPU fields (None → 0.0)
+        def opt_float(val):
+            return float(val) if val is not None else 0.0
+
         if histo_mode:
             (tid, tree, depth, nodes, samples,
              sp, pe, ep,
-             fsh, chk, fmm, ghb, hsnc, ast, udh, ce, sbt) = g
+             fsh, chk, fmm, ghb, hsnc, ast, udh, ce, sbt,
+             gpu_init, gpu_csr, gpu_kernel, gpu_unpack, gpu_mutex, gpu_sample,
+             gpu_apply) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -97,13 +122,22 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 UpdateDistributionsHistogram = float(udh),
                 ComputeEntropy               = float(ce),
                 SelectBestThresholdHistogram = float(sbt),
+                GpuInit                      = opt_float(gpu_init),
+                GpuCsrFlatten                = opt_float(gpu_csr),
+                GpuKernel                    = opt_float(gpu_kernel),
+                GpuUnpack                    = opt_float(gpu_unpack),
+                GpuMutex                     = opt_float(gpu_mutex),
+                GpuSampleBatch               = opt_float(gpu_sample),
+                GpuApplyProj                 = opt_float(gpu_apply),
             ))
         else:
             (tid, tree, depth, nodes, samples,
              sp, pe, ep,
              fill_example, scan_splits,
              init_buckets, fill_buckets, finalize_buckets,
-             features, labels) = g
+             features, labels,
+             gpu_init, gpu_csr, gpu_kernel, gpu_unpack, gpu_mutex, gpu_sample,
+             gpu_apply) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -121,6 +155,13 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SortFinalizeBuckets          = float(finalize_buckets),
                 SortFeatures                 = float(features),
                 SortLabels                   = float(labels),
+                GpuInit                      = opt_float(gpu_init),
+                GpuCsrFlatten                = opt_float(gpu_csr),
+                GpuKernel                    = opt_float(gpu_kernel),
+                GpuUnpack                    = opt_float(gpu_unpack),
+                GpuMutex                     = opt_float(gpu_mutex),
+                GpuSampleBatch               = opt_float(gpu_sample),
+                GpuApplyProj                 = opt_float(gpu_apply),
             ))
 
     if not rows:
@@ -203,7 +244,11 @@ if __name__ == "__main__":
             print("❌ build failed", file=sys.stderr)
             sys.exit(1)
 
-    exp = f"{a.sample_projection_mode} projections | {a.feature_split_type} | {a.numerical_split_type} | {a.experiment_name}"
+    gpu_mode_label = ""
+    if a.use_gpu:
+        gpu_mode_label = f"GPU {a.gpu_mode} | "
+        print(f"GPU mode: {a.gpu_mode}")
+    exp = f"{gpu_mode_label}{a.sample_projection_mode} projections | {a.feature_split_type} | {a.numerical_split_type} | {a.experiment_name}"
     
     cmd = ["./bazel-bin/examples/train_oblique_forest",
            f"--num_trees={a.num_trees}",
@@ -219,6 +264,8 @@ if __name__ == "__main__":
         cmd.append(f"--num_threads={a.num_threads}")
     if a.tree_depth is not None:
         cmd.append(f"--tree_depth={a.tree_depth}")
+
+    cmd.append(f"--use_gpu={'true' if a.use_gpu else 'false'}")
 
     if (a.numerical_split_type == "Dynamic Random Histogramming" or a.numerical_split_type == "Dynamic Equal Width Histogramming"):
         cmd.append("--numerical_split_type=Exact")
@@ -243,14 +290,22 @@ if __name__ == "__main__":
         dataset_name = f"{a.input_mode}_{a.rows}_x_{a.cols}"
         cmd += [f"--input_mode={a.input_mode}", f"--rows={a.rows}", f"--cols={a.cols}"]
 
-    out_dir = Path("benchmarks/results/per_function_timing") / utils.get_cpu_model_proc() / exp / dataset_name
+    if a.use_gpu:
+        device_name = utils.get_gpu_name() or "Unknown_GPU"
+    else:
+        device_name = utils.get_cpu_model_proc()
+    out_dir = Path("benchmarks/results/per_function_timing") / device_name / exp / dataset_name
     out_dir.mkdir(parents=True, exist_ok=True)   
 
     binary_cmd_str = " ".join(cmd)
     print("\nRunning binary with command:\n", binary_cmd_str, "\n\n")
 
     try:
-        utils.configure_cpu_for_benchmarks(True)
+        if a.disable_ecores:
+            utils.configure_cpu_for_benchmarks(True)
+            print("E-cores: DISABLED")
+        else:
+            print("E-cores: ON (default — use --disable_ecores to disable)")
         t0 = time.perf_counter()
         proc = subprocess.run(
                 cmd,

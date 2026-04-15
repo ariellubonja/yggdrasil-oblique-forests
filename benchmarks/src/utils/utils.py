@@ -36,7 +36,9 @@ def get_base_parser():
     parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast")
     parser.add_argument("--fixed_1000_projections", action="store_true")
     # parser.add_argument("--enable_fast_equal_width_binning", action="store_true") # This is on by default now
-    
+    parser.add_argument("--use_gpu", type=lambda x: x.lower() in ("true", "1", "yes"),
+                       default=True, help="Use GPU for oblique projections (default: true)")
+
     return parser
 
 
@@ -110,6 +112,9 @@ def build_binary(args, chrono_mode):
     if chrono_mode:
         finished_cmd.append('--config=multithreaded_chrono_profile')
 
+    if getattr(args, 'gpu_mode', None) == 'per_node':
+        finished_cmd.append('--config=dfs_node_queue')
+
     # if args.enable_fast_equal_width_binning:
     #     finished_cmd.append('--config=enable_fast_equal_width_binning')
         
@@ -169,6 +174,20 @@ def get_cpu_model_proc():
                     return line.split(":", 1)[1].strip()
     except FileNotFoundError:
         return "Could not access /proc/cpuinfo to get CPU model name"
+
+
+def get_gpu_name():
+    """
+    Returns the GPU name via nvidia-smi, or None if unavailable.
+    """
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, check=True, timeout=5)
+        name = result.stdout.strip().split("\n")[0]
+        return name if name else None
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
 
 
 def run_binary_with_cleanup(cmd):
