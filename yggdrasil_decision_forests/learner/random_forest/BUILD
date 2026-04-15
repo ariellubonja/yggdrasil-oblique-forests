@@ -55,6 +55,7 @@ cc_library_ydf(
         "//yggdrasil_decision_forests/utils:synchronization_primitives",
         "//yggdrasil_decision_forests/utils:time",
         "//yggdrasil_decision_forests/utils:parallel_chrono",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -62,6 +63,7 @@ cc_library_ydf(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
     ],
     alwayslink = 1,
 )
@@ -126,6 +128,7 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
     ],
 )
