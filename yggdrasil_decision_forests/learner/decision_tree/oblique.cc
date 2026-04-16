@@ -239,7 +239,16 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
   /* #region ----------  MAIN LOOP  ------------------ */
 
-  // 1. Sample ALL projections on CPU (cheap).
+  // 2. ApplyProjection: pre-computed (Mode B), GPU-batched (Mode A), or CPU.
+#ifdef OBLIQUE_GPU_ENABLED
+  const bool use_gpu = internal_config.oblique_gpu_computer != nullptr &&
+                       internal_config.oblique_gpu_computer->use_gpu();
+  const bool has_precomputed = internal_config.precomputed_projections != nullptr;
+#endif
+
+#ifdef MERGED_CPU_PROJECTIONS
+  // 1. Sample ALL projections up-front (needed for GPU Mode A; also used by
+  //    CPU path in this configuration).
   std::vector<internal::Projection> all_projections(num_projections);
   std::vector<int8_t> all_monotonic(num_projections, 0);
 
@@ -256,12 +265,32 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       }
     }
   }
+#elif defined(OBLIQUE_GPU_ENABLED)
+  // Only pre-sample when GPU Mode A needs a batched apply call. The CPU path
+  // samples one projection at a time (fused loop below) to avoid N-vector
+  // allocation overhead per node.
+  std::vector<internal::Projection> all_projections;
+  std::vector<int8_t> all_monotonic;
+  if (use_gpu && !has_precomputed) {
+    all_projections.resize(num_projections);
+    all_monotonic.assign(num_projections, 0);
+    for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
+      SampleProjection(config_link.numerical_features(), dynamic_dt_config,
+                      train_dataset.data_spec(), config_link, projection_density,
+                      &all_projections[proj_idx], &all_monotonic[proj_idx], random);
 
-  // 2. ApplyProjection: pre-computed (Mode B), GPU-batched (Mode A), or CPU.
-  const bool use_gpu = internal_config.oblique_gpu_computer != nullptr &&
-                       internal_config.oblique_gpu_computer->use_gpu();
-  const bool has_precomputed = internal_config.precomputed_projections != nullptr;
+      if constexpr (PRINT_PROJECTION_MATRICES) {
+        SparseProjection& buf = projection_buffer.emplace_back();
+        buf.reserve(all_projections[proj_idx].size());
+        for (const auto& feat : all_projections[proj_idx]) {
+          buf.emplace_back(feat.attribute_idx, feat.weight);
+        }
+      }
+    }
+  }
+#endif
 
+#ifdef OBLIQUE_GPU_ENABLED
   if (has_precomputed) {
     // Mode B: projections already computed by multi-node GPU kernel in BFS loop.
     const auto& all_projections_ref = *internal_config.precomputed_projection_defs;
@@ -331,8 +360,11 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
         best_threshold = best_condition->condition().higher_condition().threshold();
       }
     }
-  } else {
-    // CPU path: existing per-projection loop.
+  } else
+#endif
+  {
+#ifdef MERGED_CPU_PROJECTIONS
+    // Merged CPU path: evaluate from the pre-sampled all_projections array.
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
       if constexpr (ALLOW_EMPTY_PROJECTIONS) {
         if (all_projections[proj_idx].empty()) continue;
@@ -359,6 +391,51 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
         best_threshold = best_condition->condition().higher_condition().threshold();
       }
     }
+#else
+    // Original CPU path: sample and evaluate one projection at a time, reusing a
+    // single buffer across iterations to avoid per-node allocation overhead.
+    internal::Projection current_projection;
+    for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
+      int8_t monotonic = 0;
+
+      SampleProjection(config_link.numerical_features(), dynamic_dt_config,
+                      train_dataset.data_spec(), config_link, projection_density,
+                      &current_projection, &monotonic, random);
+
+      if constexpr (PRINT_PROJECTION_MATRICES) {
+        SparseProjection& buf = projection_buffer.emplace_back();
+        buf.reserve(current_projection.size());
+        for (const auto& feat : current_projection) {
+          buf.emplace_back(feat.attribute_idx, feat.weight);
+        }
+      }
+
+      if constexpr (ALLOW_EMPTY_PROJECTIONS) {
+        if (current_projection.empty()) continue;
+      }
+
+      float min_value, max_value;
+
+      RETURN_IF_ERROR(
+        projection_evaluator.Evaluate(current_projection, selected_examples,
+                                       &projection_values, &min_value, &max_value)
+      );
+
+      ASSIGN_OR_RETURN(
+          const auto split_result,
+          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
+                            selected_weights, selected_labels,
+                            projection_values, internal_config,
+                            current_projection.front().attribute_idx,
+                            constraints, monotonic,
+                            best_condition, cache, random));
+
+      if (split_result == SplitSearchResult::kBetterSplitFound) {
+        best_projection = current_projection;
+        best_threshold = best_condition->condition().higher_condition().threshold();
+      }
+    }
+#endif
   }
   /* #endregion */
 
