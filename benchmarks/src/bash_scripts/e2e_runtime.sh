@@ -12,6 +12,8 @@ BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_perfo
 # histogram_num_bins=64
 histogram_num_bins=256   # Uncomment to switch; AVX512 will be used on Vectorized method
 
+RUN_VECTORIZED=false  # set true to run AVX2/AVX512 vectorized experiments
+
 # Which feature split types to run (comment out any you don't want)
 SPLIT_TYPES=(
   "Oblique"
@@ -202,9 +204,9 @@ done
 # Vectorized experiments (Oblique only; Random, Dynamic Random Histogram)
 # -------------------------
 
-# Only run if Oblique was selected and vectorizable methods are present
+# Only run if Oblique was selected, vectorizable methods are present, and toggle is on
 selected_vec_methods=()
-if [[ "$oblique_selected" == "true" ]]; then
+if [[ "$RUN_VECTORIZED" == "true" && "$oblique_selected" == "true" ]]; then
   for m in "${METHODS[@]}"; do
     for v in "${VECTORIZE_METHODS[@]}"; do
       if [[ "$m" == "$v" ]]; then

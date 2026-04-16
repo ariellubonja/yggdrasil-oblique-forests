@@ -90,7 +90,7 @@ ABSL_FLAG(std::string, numerical_split_type, "Exact",
           "Type of histogram splitting: 'Exact (no histogramming)', 'Random', 'Equal Width', 'Subsample Points', 'Subsample Histogram', 'Dynamic Random Histogram' or 'Dynamic Equal Width Histogram.");
 ABSL_FLAG(int, histogram_num_bins, 64,
           "Number of bins for histogram splitting.");
-ABSL_FLAG(bool, use_gpu, true,
+ABSL_FLAG(bool, use_gpu, false,
           "Use GPU for oblique projection computation.");
 
 using namespace yggdrasil_decision_forests;
