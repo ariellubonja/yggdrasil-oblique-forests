@@ -530,6 +530,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
               oblique_gpu_computer,
               decision_tree::ObliqueGpuComputer::Create(
                   train_dataset, config_link.features(),
+                  /*label_col_idx=*/config_link.label(),
                   /*use_gpu=*/deployment_.use_gpu()));
         }
         /* #endregion */
@@ -1122,13 +1123,11 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
           }
         }
 
-        LOG(INFO) << "random_forest.cc Training block took: " 
+        LOG(INFO) << "random_forest.cc Training block took: "
           << absl::ToDoubleSeconds(absl::Now() - begin_training) << " s";
 
-        LOG(INFO) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
-        exit(0);
-
-        // Print all Timing info after done MultiThreading
+        // Print all Timing info after done MultiThreading (must run BEFORE the
+        // early-exit below so chrono logs reach stdout before process exits).
         #ifdef CHRONO_ENABLED
         using namespace yggdrasil_decision_forests::chrono_prof;
 
@@ -1160,6 +1159,8 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                         << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
                         << " GpuSampleBatch " << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
                         << " GpuApplyProj " << arr[kGpuApplyProjection] * 1e-9 << "s"
+                        << " GpuHistogram " << arr[kGpuHistogram] * 1e-9 << "s"
+                        << " GpuHistogramSplit " << arr[kGpuHistogramSplit] * 1e-9 << "s"
                         ;
             } else {
                 LOG(INFO) << "thread "   << tree_thread_id()[t]
@@ -1186,13 +1187,17 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                       << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
                       << " GpuSampleBatch " << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
                       << " GpuApplyProj " << arr[kGpuApplyProjection] * 1e-9 << "s"
+                      << " GpuHistogram " << arr[kGpuHistogram] * 1e-9 << "s"
+                      << " GpuHistogramSplit " << arr[kGpuHistogramSplit] * 1e-9 << "s"
                       ;
             }
           }
         }
         LOG(INFO) << "\n==========================================\n\n";
         #endif
-          
+
+        LOG(INFO) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
+        exit(0);
 
         /* #endregion */
 

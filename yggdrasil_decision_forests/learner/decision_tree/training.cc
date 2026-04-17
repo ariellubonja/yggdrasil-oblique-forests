@@ -5335,7 +5335,82 @@ return found_split ? SplitSearchResult::kBetterSplitFound
           dt_config.has_sparse_oblique_split() &&
           depth_batch.size() > 1;
 
-      if (use_depthwise_gpu) {
+      const auto nsplit_type_for_full_gpu = dt_config.numerical_split().type();
+      const bool depthwise_full_split_type_ok =
+          nsplit_type_for_full_gpu ==
+              proto::NumericalSplit_Type_HISTOGRAM_RANDOM ||
+          nsplit_type_for_full_gpu ==
+              proto::NumericalSplit_Type_DYNAMIC_RANDOM_HISTOGRAM;
+      const bool use_depthwise_full_split =
+          use_depthwise_gpu &&
+          internal_config.oblique_gpu_computer->supports_full_gpu_split() &&
+          depthwise_full_split_type_ok;
+
+      if (use_depthwise_full_split) {
+        // depthwise full-GPU: sample projections, run Apply+Histogram+Split
+        // on device per-node (in one mutex-held bridge call), hand a
+        // best-split descriptor down to each per-node NodeTrain via
+        // InternalTrainConfig::depthwise_best_split.
+        const int num_proj = GetNumProjections(
+            dt_config, config_link.numerical_features_size());
+        const float projection_density =
+            dt_config.sparse_oblique_split().projection_density_factor() /
+            config_link.numerical_features_size();
+
+        const int num_nodes = depth_batch.size();
+        std::vector<std::vector<internal::Projection>> all_node_projs(num_nodes);
+        std::vector<std::vector<int8_t>> all_node_mono(num_nodes);
+        {
+          CHRONO_SCOPE(
+              ::yggdrasil_decision_forests::chrono_prof::kGpuSampleProjectionsBatch);
+          for (int n = 0; n < num_nodes; n++) {
+            all_node_projs[n].resize(num_proj);
+            all_node_mono[n].resize(num_proj, 0);
+            for (int p = 0; p < num_proj; p++) {
+              internal::SampleProjection(
+                  config_link.numerical_features(), dt_config,
+                  train_dataset.data_spec(), config_link, projection_density,
+                  &all_node_projs[n][p], &all_node_mono[n][p], random);
+            }
+          }
+        }
+
+        // Build NodeBatch entries with only projection + selected_examples
+        // populated; output buffers are unused by the full-GPU split path.
+        std::vector<ObliqueGpuComputer::NodeBatch> node_batches(num_nodes);
+        for (int n = 0; n < num_nodes; n++) {
+          node_batches[n] = {
+              depth_batch[n].selected_examples.active,
+              all_node_projs[n],
+              absl::Span<float>{},
+              absl::Span<float>{},
+              absl::Span<float>{}};
+        }
+
+        std::vector<BestSplitResult> split_results(num_nodes);
+        const int num_bins_cfg = dt_config.numerical_split().num_candidates();
+        const int num_bins = num_bins_cfg > 0 ? num_bins_cfg : 64;
+        RETURN_IF_ERROR(
+            internal_config.oblique_gpu_computer->FindBestSplitDepthwise(
+                node_batches, num_bins, /*comp_method=*/0 /*entropy*/,
+                random, absl::MakeSpan(split_results)));
+
+        // Per-node NodeTrain with best-split descriptor handed down.
+        for (int n = 0; n < num_nodes; n++) {
+          auto node_config = internal_config;
+          node_config.depthwise_best_split = &split_results[n];
+          node_config.depthwise_projection_defs = &all_node_projs[n];
+          node_config.depthwise_monotonic = &all_node_mono[n];
+          // depthwise_projections / _num_proj left null so oblique.cc takes
+          // the has_depthwise_best_split branch, not the precomputed-values
+          // branch.
+          RETURN_IF_ERROR(NodeTrain(
+              train_dataset, config, config_link, dt_config,
+              deployment, splitter_concurrency_setup, weights,
+              node_config, random, cache,
+              std::move(depth_batch[n]), node_queue));
+        }
+      } else if (use_depthwise_gpu) {
         // depthwise-gpu: pre-compute projections for all nodes at this depth
         // via a single GPU kernel, then call NodeTrain per-node with the
         // precomputed values (skips per-node GPU call in oblique.cc).

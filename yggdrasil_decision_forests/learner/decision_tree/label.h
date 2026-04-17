@@ -204,6 +204,12 @@ struct InternalTrainConfig {
   const std::vector<std::vector<internal::AttributeAndWeight>>* depthwise_projection_defs = nullptr;
   const std::vector<int8_t>* depthwise_monotonic = nullptr;
 
+  // Pre-computed best-split descriptor from the full-GPU depthwise split path.
+  // When non-null, oblique.cc skips projection evaluation entirely and
+  // materializes the NodeCondition directly from this descriptor + the
+  // projection definition at depthwise_projection_defs[best_proj_idx].
+  const BestSplitResult* depthwise_best_split = nullptr;
+
   // If true, the list of selected example index ("selected_examples") can
   // contain duplicated values. If false, all selected examples are expected to
   // be unique.

@@ -251,6 +251,29 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       internal_config.oblique_gpu_computer->use_gpu();
   const bool has_depthwise_projections =
       internal_config.depthwise_projections != nullptr;
+  // Best-split descriptor pre-computed by the full-GPU depthwise split
+  // pipeline. When present, oblique.cc skips projection evaluation entirely
+  // and materializes NodeCondition from the descriptor.
+  const bool has_depthwise_best_split =
+      internal_config.depthwise_best_split != nullptr &&
+      internal_config.depthwise_projection_defs != nullptr;
+  // Full-GPU nodewise split capability: we'll run Apply + Histogram + Split
+  // entirely on device. Requires classification task, GPU labels uploaded,
+  // a histogram-random-style split, and no weights.
+  bool use_full_gpu_split = false;
+  if constexpr (std::is_same<LabelStats, ClassificationLabelStats>::value) {
+    const auto split_type = dynamic_dt_config.numerical_split().type();
+    const bool split_type_ok =
+        split_type == proto::NumericalSplit_Type_HISTOGRAM_RANDOM ||
+        split_type == proto::NumericalSplit_Type_DYNAMIC_RANDOM_HISTOGRAM;
+    use_full_gpu_split =
+        !has_depthwise_best_split &&
+        !has_depthwise_projections &&
+        use_nodewise_gpu &&
+        internal_config.oblique_gpu_computer->supports_full_gpu_split() &&
+        split_type_ok &&
+        selected_weights.empty();
+  }
 #endif
 
 // CPU layout selection:
@@ -306,7 +329,56 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 #endif
 
 #ifdef OBLIQUE_GPU_ENABLED
-  if (has_depthwise_projections) {
+  if (has_depthwise_best_split) {
+    // depthwise full-GPU: best-split descriptor already computed by the BFS
+    // driver's per-depth GPU pipeline. Materialize NodeCondition from it.
+    const auto* descriptor = internal_config.depthwise_best_split;
+    const auto& depth_projs = *internal_config.depthwise_projection_defs;
+    if (descriptor->best_gain > 0.0f && descriptor->best_proj_idx >= 0 &&
+        descriptor->best_proj_idx < static_cast<int>(depth_projs.size()) &&
+        !depth_projs[descriptor->best_proj_idx].empty()) {
+      best_projection = depth_projs[descriptor->best_proj_idx];
+      best_threshold = descriptor->best_threshold;
+      const int64_t num_examples = selected_examples.size();
+      best_condition->set_num_training_examples_without_weight(num_examples);
+      best_condition->set_num_training_examples_with_weight(num_examples);
+      best_condition->set_num_pos_training_examples_without_weight(
+          descriptor->num_pos_training_examples);
+      best_condition->set_num_pos_training_examples_with_weight(
+          descriptor->num_pos_training_examples);
+      best_condition->set_split_score(descriptor->best_gain);
+      best_condition->mutable_condition()
+          ->mutable_higher_condition()
+          ->set_threshold(descriptor->best_threshold);
+    }
+  } else if (use_full_gpu_split) {
+    // Nodewise full-GPU: run Apply + RandomHistogram + HistogramSplit on
+    // device and get back a single best-split descriptor.
+    BestSplitResult result;
+    const int num_bins_cfg = dynamic_dt_config.numerical_split().num_candidates();
+    const int num_bins = num_bins_cfg > 0 ? num_bins_cfg : 64;
+    RETURN_IF_ERROR(
+        internal_config.oblique_gpu_computer->FindBestSplitNodewise(
+            all_projections, selected_examples, num_bins,
+            /*comp_method=*/0 /*entropy*/, random, &result));
+    if (result.best_gain > 0.0f && result.best_proj_idx >= 0 &&
+        result.best_proj_idx < static_cast<int>(all_projections.size()) &&
+        !all_projections[result.best_proj_idx].empty()) {
+      best_projection = all_projections[result.best_proj_idx];
+      best_threshold = result.best_threshold;
+      const int64_t num_examples = selected_examples.size();
+      best_condition->set_num_training_examples_without_weight(num_examples);
+      best_condition->set_num_training_examples_with_weight(num_examples);
+      best_condition->set_num_pos_training_examples_without_weight(
+          result.num_pos_training_examples);
+      best_condition->set_num_pos_training_examples_with_weight(
+          result.num_pos_training_examples);
+      best_condition->set_split_score(result.best_gain);
+      best_condition->mutable_condition()
+          ->mutable_higher_condition()
+          ->set_threshold(result.best_threshold);
+    }
+  } else if (has_depthwise_projections) {
     // depthwise-gpu: projections already computed by the BFS driver's
     // per-depth GPU kernel; we only evaluate splits here.
     const auto& all_projections_ref = *internal_config.depthwise_projection_defs;

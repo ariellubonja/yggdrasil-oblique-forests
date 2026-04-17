@@ -855,10 +855,10 @@ void RandomHistogram (const float* __restrict__ d_col_add_projected, //attribute
 
         auto d_hist_class1_ptr   = thrust::device_pointer_cast(d_hist_class1);        // input Positive class
         auto d_prefix_1_ptr = thrust::device_pointer_cast(d_prefix_1);  // output
-        
-        // auto d_hist_class0_ptr   = thrust::device_pointer_cast(d_hist_class0);        // input Not Used class
-        // auto d_prefix_0_ptr = thrust::device_pointer_cast(d_prefix_0);  // output
-    
+
+        auto d_hist_class0_ptr   = thrust::device_pointer_cast(d_hist_class0);        // input class 0
+        auto d_prefix_0_ptr = thrust::device_pointer_cast(d_prefix_0);  // output
+
             thrust::inclusive_scan_by_key( //label = 0 second
             thrust::cuda::par.on(cuda_stream),
             keys_begin,                      /* keys   begin   */
@@ -867,7 +867,7 @@ void RandomHistogram (const float* __restrict__ d_col_add_projected, //attribute
             d_prefix_2_ptr,                    /* output         */
             thrust::equal_to<int>(),         /* identical keys */
             thrust::plus<int>()
-        ); 
+        );
 
         thrust::inclusive_scan_by_key( //label = 1 first
             thrust::cuda::par.on(cuda_stream),
@@ -877,7 +877,24 @@ void RandomHistogram (const float* __restrict__ d_col_add_projected, //attribute
             d_prefix_1_ptr,                /* output         */
             thrust::equal_to<int>(),         /* identical keys */
             thrust::plus<int>()              /* inclusive sum  */
-        );            
+        );
+
+        // Scan hist_class0 -> prefix_0. Required by FindBestEntropySplitKernel
+        // / FindBestGiniSplitKernel (which read prefix_0 as the "negative"
+        // class counts). Original code commented this out assuming labels
+        // came in as {1,2} with 0 reserved OOV — which leaves hist_class0
+        // empty and breaks gain computation. The oblique_gpu.cc label upload
+        // shifts labels down so the real classes land in hist_class0 /
+        // hist_class1.
+        thrust::inclusive_scan_by_key(
+            thrust::cuda::par.on(cuda_stream),
+            keys_begin,
+            keys_begin + total_rows,
+            d_hist_class0_ptr,
+            d_prefix_0_ptr,
+            thrust::equal_to<int>(),
+            thrust::plus<int>()
+        );
         CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
 
         TIMER_STOP(RandomInclusiveScan);

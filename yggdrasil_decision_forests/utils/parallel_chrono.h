@@ -41,6 +41,8 @@ enum FuncId {
   kGpuMutexWait,
   kGpuSampleProjectionsBatch,
   kGpuApplyProjection,
+  kGpuHistogram,
+  kGpuHistogramSplit,
   kNumFuncs
 };
 

@@ -24,6 +24,9 @@ bool oblique_gpu_check_available();
 int oblique_gpu_init(const float* h_flat_data, int flat_data_size,
                      float** d_global_flat_data_out);
 int oblique_gpu_release(float* d_global_flat_data);
+int oblique_gpu_upload_labels(const unsigned int* h_labels, int num_rows,
+                              unsigned int** d_labels_out);
+int oblique_gpu_free_labels(unsigned int* d_labels);
 int oblique_gpu_apply_projections(
     const float* d_global_flat_data,
     const unsigned int* h_selected_examples,
@@ -39,6 +42,20 @@ int oblique_gpu_apply_projections_multi_node(
     const int* h_flat_col_indices, const float* h_flat_weights,
     const int* h_col_offsets, int total_nonzeros,
     float* h_projected_values, int max_examples_per_node);
+int oblique_gpu_find_best_split_nodewise(
+    const float* d_global_flat_data,
+    const unsigned int* d_global_labels,
+    int num_total_rows,
+    const unsigned int* h_selected_examples,
+    int num_examples,
+    int num_proj,
+    const int* h_flat_col_indices, const float* h_flat_weights,
+    const int* h_col_offsets, int total_nonzeros,
+    int num_bins, int comp_method,
+    unsigned long long random_seed,
+    int* best_proj, int* best_bin, float* best_gain,
+    float* best_threshold, int* num_pos_examples,
+    double* out_ms_apply, double* out_ms_hist, double* out_ms_split);
 }
 
 namespace yggdrasil_decision_forests::model::decision_tree {
@@ -46,6 +63,7 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 absl::StatusOr<std::unique_ptr<ObliqueGpuComputer>> ObliqueGpuComputer::Create(
     const dataset::VerticalDataset& dataset,
     absl::Span<const int32_t> numerical_features,
+    int label_col_idx,
     bool use_gpu) {
   auto c = absl::WrapUnique(new ObliqueGpuComputer());
 
@@ -67,7 +85,8 @@ absl::StatusOr<std::unique_ptr<ObliqueGpuComputer>> ObliqueGpuComputer::Create(
   }
 
   if (use_gpu) {
-    const auto init_status = c->InitializeGPU(dataset, numerical_features);
+    const auto init_status =
+        c->InitializeGPU(dataset, numerical_features, label_col_idx);
     if (!init_status.ok()) {
       LOG(INFO) << "Cannot initialize oblique GPU: " << init_status.message()
                 << ". Falling back to CPU.";
@@ -158,11 +177,64 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsDepthwise(
   return ApplyProjectionsDepthwiseCPU(node_batches);
 }
 
+absl::Status ObliqueGpuComputer::FindBestSplitNodewise(
+    absl::Span<const internal::Projection> projections,
+    absl::Span<const UnsignedExampleIdx> selected_examples,
+    int num_bins, int comp_method,
+    utils::RandomEngine* random, BestSplitResult* result) {
+  if (!supports_full_gpu_split()) {
+    return absl::FailedPreconditionError(
+        "FindBestSplitNodewise: GPU / labels not available");
+  }
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuApplyProjection);
+#ifdef CHRONO_ENABLED
+  auto wait_start = std::chrono::steady_clock::now();
+#endif
+  utils::concurrency::MutexLock l(&gpu_mutex_);
+#ifdef CHRONO_ENABLED
+  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - wait_start).count());
+#endif
+  return FindBestSplitNodewiseGPU(projections, selected_examples, num_bins,
+                                   comp_method, random, result);
+}
+
+absl::Status ObliqueGpuComputer::FindBestSplitDepthwise(
+    absl::Span<const NodeBatch> node_batches,
+    int num_bins, int comp_method,
+    utils::RandomEngine* random,
+    absl::Span<BestSplitResult> results) {
+  if (!supports_full_gpu_split()) {
+    return absl::FailedPreconditionError(
+        "FindBestSplitDepthwise: GPU / labels not available");
+  }
+  if (node_batches.size() != results.size()) {
+    return absl::InvalidArgumentError(
+        "FindBestSplitDepthwise: results span size mismatch");
+  }
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuApplyProjection);
+#ifdef CHRONO_ENABLED
+  auto wait_start = std::chrono::steady_clock::now();
+#endif
+  utils::concurrency::MutexLock l(&gpu_mutex_);
+#ifdef CHRONO_ENABLED
+  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - wait_start).count());
+#endif
+  return FindBestSplitDepthwiseGPU(node_batches, num_bins, comp_method, random,
+                                    results);
+}
+
 // ---- GPU implementations via extern "C" bridge ----
 
 absl::Status ObliqueGpuComputer::InitializeGPU(
     const dataset::VerticalDataset& dataset,
-    absl::Span<const int32_t> numerical_features) {
+    absl::Span<const int32_t> numerical_features,
+    int label_col_idx) {
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuInit);
   const auto init_start = absl::Now();
   if (!oblique_gpu_check_available()) {
@@ -194,6 +266,55 @@ absl::Status ObliqueGpuComputer::InitializeGPU(
         absl::StrCat("CUDA init failed with error code ", cuda_err));
   }
 
+  // Upload labels if the label column is categorical with <=3 classes.
+  // Failure to upload is NOT fatal: full-GPU split path is disabled, but
+  // ApplyProjections* paths still work.
+  if (label_col_idx >= 0 &&
+      label_col_idx < dataset.data_spec().columns_size()) {
+    const auto& label_spec = dataset.data_spec().columns(label_col_idx);
+    if (label_spec.type() == dataset::proto::ColumnType::CATEGORICAL &&
+        label_spec.has_categorical()) {
+      const int num_classes =
+          label_spec.categorical().number_of_unique_values();
+      if (num_classes > 0 && num_classes <= 3) {
+        const auto* label_col = dataset.ColumnWithCastOrNull<
+            dataset::VerticalDataset::CategoricalColumn>(label_col_idx);
+        if (label_col) {
+          const auto& label_values = label_col->values();
+          // YDF encodes categorical labels as 1..(num_classes-1) with 0
+          // reserved for out-of-vocabulary. The GPU gain kernels
+          // (FindBestEntropySplitKernel / FindBestGiniSplitKernel) are
+          // hardcoded to use hist_class0 / hist_class1 only, so we shift the
+          // labels down by 1 so hist_class0 = real-class-0, etc.
+          std::vector<unsigned int> h_labels(n_rows);
+          for (int r = 0; r < n_rows; r++) {
+            const int32_t v = label_values[r];
+            h_labels[r] = static_cast<unsigned int>(v > 0 ? v - 1 : 0);
+          }
+          int label_err = oblique_gpu_upload_labels(
+              h_labels.data(), n_rows, &d_global_labels_);
+          if (label_err == 0) {
+            num_classes_ = num_classes;
+            LOG(INFO) << "ObliqueGpuComputer: Uploaded " << n_rows
+                      << " labels (" << num_classes
+                      << " classes) to GPU for full-GPU split path.";
+          } else {
+            LOG(WARNING) << "ObliqueGpuComputer: Label upload failed (CUDA "
+                         << label_err << "). Full-GPU split disabled.";
+            d_global_labels_ = nullptr;
+            num_classes_ = 0;
+          }
+        }
+      } else {
+        LOG(INFO) << "ObliqueGpuComputer: label column has " << num_classes
+                  << " classes (>3 unsupported). Full-GPU split disabled.";
+      }
+    } else {
+      LOG(INFO) << "ObliqueGpuComputer: label column is not categorical. "
+                   "Full-GPU split disabled (only classification supported).";
+    }
+  }
+
   LOG(INFO) << "ObliqueGpuComputer: Uploaded " << n_rows << " rows x "
             << n_features << " features to GPU ("
             << (flat_data.size() * sizeof(float)) / (1024 * 1024) << " MB) in "
@@ -204,6 +325,14 @@ absl::Status ObliqueGpuComputer::InitializeGPU(
 absl::Status ObliqueGpuComputer::ReleaseGPU() {
   int cuda_err = oblique_gpu_release(d_global_flat_data_);
   d_global_flat_data_ = nullptr;
+  if (d_global_labels_ != nullptr) {
+    int label_err = oblique_gpu_free_labels(d_global_labels_);
+    d_global_labels_ = nullptr;
+    num_classes_ = 0;
+    if (label_err != 0 && cuda_err == 0) {
+      cuda_err = label_err;
+    }
+  }
   if (cuda_err != 0) {
     return absl::InternalError(
         absl::StrCat("CUDA release failed with error code ", cuda_err));
@@ -362,6 +491,183 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsDepthwiseGPU(
     }
   }
 
+  return absl::OkStatus();
+}
+
+absl::Status ObliqueGpuComputer::FindBestSplitNodewiseGPU(
+    absl::Span<const internal::Projection> projections,
+    absl::Span<const UnsignedExampleIdx> selected_examples,
+    int num_bins, int comp_method,
+    utils::RandomEngine* random, BestSplitResult* result) {
+  const int num_proj = projections.size();
+  const int num_examples = selected_examples.size();
+
+  // Reset to "no split" defaults.
+  *result = BestSplitResult{};
+
+  if (num_proj == 0 || num_examples <= 1) {
+    return absl::OkStatus();
+  }
+
+  // Flatten projections to CSR.
+  std::vector<int> col_offsets(num_proj + 1, 0);
+  int total_nz = 0;
+  std::vector<int> flat_col_indices;
+  std::vector<float> flat_weights;
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuCsrFlatten);
+    for (int p = 0; p < num_proj; p++) {
+      total_nz += projections[p].size();
+      col_offsets[p + 1] = total_nz;
+    }
+    flat_col_indices.resize(total_nz);
+    flat_weights.resize(total_nz);
+    for (int p = 0; p < num_proj; p++) {
+      int offset = col_offsets[p];
+      for (int j = 0; j < static_cast<int>(projections[p].size()); j++) {
+        flat_col_indices[offset + j] =
+            feature_col_to_flat_offset_[projections[p][j].attribute_idx];
+        flat_weights[offset + j] = projections[p][j].weight;
+      }
+    }
+  }
+
+  int best_proj = -1, best_bin = -1, num_pos = 0;
+  float best_gain = -1.0f, best_threshold = 0.0f;
+  double ms_apply = 0, ms_hist = 0, ms_split = 0;
+
+  // Draw a 64-bit seed from the caller's RNG so RandomHistogram's internal
+  // std::mt19937 produces reproducible split candidates.
+  std::uniform_int_distribution<unsigned long long> seed_dist;
+  const unsigned long long seed = seed_dist(*random);
+
+  int cuda_err;
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuKernelCall);
+    cuda_err = oblique_gpu_find_best_split_nodewise(
+        d_global_flat_data_, d_global_labels_, num_total_rows_,
+        selected_examples.data(), num_examples,
+        num_proj,
+        flat_col_indices.data(), flat_weights.data(),
+        col_offsets.data(), total_nz,
+        num_bins, comp_method, seed,
+        &best_proj, &best_bin, &best_gain, &best_threshold, &num_pos,
+        &ms_apply, &ms_hist, &ms_split);
+  }
+
+  if (cuda_err != 0) {
+    return absl::InternalError(absl::StrCat(
+        "GPU FindBestSplitNodewise failed: CUDA error ", cuda_err));
+  }
+
+#ifdef CHRONO_ENABLED
+  // Attribute sub-stages. ms_apply is already counted inside kGpuKernelCall /
+  // kGpuApplyProjection, so we only add the new histogram / split timers.
+  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuHistogram,
+      static_cast<uint64_t>(ms_hist * 1e6));
+  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuHistogramSplit,
+      static_cast<uint64_t>(ms_split * 1e6));
+#endif
+
+  result->best_proj_idx = best_proj;
+  result->best_bin_idx = best_bin;
+  result->best_gain = best_gain;
+  result->best_threshold = best_threshold;
+  result->num_pos_training_examples = num_pos;
+  return absl::OkStatus();
+}
+
+absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseGPU(
+    absl::Span<const NodeBatch> node_batches,
+    int num_bins, int comp_method,
+    utils::RandomEngine* random,
+    absl::Span<BestSplitResult> results) {
+  // First cut: loop per-node using FindBestSplitNodewiseGPU. The kernels in
+  // randomprojection.cu (RandomHistogram, HistogramSplit) are per-node; a true
+  // multi-node histogram + split kernel can be added later.
+  //
+  // NOTE: gpu_mutex_ is already held by the caller
+  // (FindBestSplitDepthwise).
+  const int num_nodes = node_batches.size();
+  for (int n = 0; n < num_nodes; n++) {
+    results[n] = BestSplitResult{};
+    if (node_batches[n].projections.empty() ||
+        node_batches[n].selected_examples.size() <= 1) {
+      continue;
+    }
+
+    const int num_proj = node_batches[n].projections.size();
+    const int num_examples = node_batches[n].selected_examples.size();
+
+    std::vector<int> col_offsets(num_proj + 1, 0);
+    int total_nz = 0;
+    std::vector<int> flat_col_indices;
+    std::vector<float> flat_weights;
+    {
+      CHRONO_SCOPE(
+          ::yggdrasil_decision_forests::chrono_prof::kGpuCsrFlatten);
+      for (int p = 0; p < num_proj; p++) {
+        total_nz += node_batches[n].projections[p].size();
+        col_offsets[p + 1] = total_nz;
+      }
+      flat_col_indices.resize(total_nz);
+      flat_weights.resize(total_nz);
+      for (int p = 0; p < num_proj; p++) {
+        int offset = col_offsets[p];
+        const auto& proj = node_batches[n].projections[p];
+        for (int j = 0; j < static_cast<int>(proj.size()); j++) {
+          flat_col_indices[offset + j] =
+              feature_col_to_flat_offset_[proj[j].attribute_idx];
+          flat_weights[offset + j] = proj[j].weight;
+        }
+      }
+    }
+
+    int best_proj = -1, best_bin = -1, num_pos = 0;
+    float best_gain = -1.0f, best_threshold = 0.0f;
+    double ms_apply = 0, ms_hist = 0, ms_split = 0;
+
+    std::uniform_int_distribution<unsigned long long> seed_dist;
+    const unsigned long long seed = seed_dist(*random);
+
+    int cuda_err;
+    {
+      CHRONO_SCOPE(
+          ::yggdrasil_decision_forests::chrono_prof::kGpuKernelCall);
+      cuda_err = oblique_gpu_find_best_split_nodewise(
+          d_global_flat_data_, d_global_labels_, num_total_rows_,
+          node_batches[n].selected_examples.data(), num_examples,
+          num_proj,
+          flat_col_indices.data(), flat_weights.data(),
+          col_offsets.data(), total_nz,
+          num_bins, comp_method, seed,
+          &best_proj, &best_bin, &best_gain, &best_threshold, &num_pos,
+          &ms_apply, &ms_hist, &ms_split);
+    }
+
+    if (cuda_err != 0) {
+      return absl::InternalError(absl::StrCat(
+          "GPU FindBestSplitDepthwise node ", n,
+          " failed: CUDA error ", cuda_err));
+    }
+
+#ifdef CHRONO_ENABLED
+    chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+        chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuHistogram,
+        static_cast<uint64_t>(ms_hist * 1e6));
+    chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+        chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuHistogramSplit,
+        static_cast<uint64_t>(ms_split * 1e6));
+#endif
+
+    results[n].best_proj_idx = best_proj;
+    results[n].best_bin_idx = best_bin;
+    results[n].best_gain = best_gain;
+    results[n].best_threshold = best_threshold;
+    results[n].num_pos_training_examples = num_pos;
+  }
   return absl::OkStatus();
 }
 
