@@ -273,7 +273,9 @@ if __name__ == "__main__":
     if a.tree_depth is not None:
         cmd.append(f"--tree_depth={a.tree_depth}")
 
-    cmd.append(f"--use_gpu={'true' if a.use_gpu else 'false'}")
+    # C++ --use_gpu flag is commented out until hybrid CPU-GPU offloading is
+    # added; GPU vs CPU is chosen at compile time via --config=oblique_gpu.
+    # cmd.append(f"--use_gpu={'true' if a.use_gpu else 'false'}")
 
     if (a.numerical_split_type == "Dynamic Random Histogramming" or a.numerical_split_type == "Dynamic Equal Width Histogramming"):
         cmd.append("--numerical_split_type=Exact")

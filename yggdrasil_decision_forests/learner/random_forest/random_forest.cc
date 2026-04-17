@@ -525,14 +525,19 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
 
         /* #region Oblique GPU */
         std::unique_ptr<decision_tree::ObliqueGpuComputer> oblique_gpu_computer;
+#ifdef OBLIQUE_GPU_ENABLED
+        // use_gpu is hardcoded to true until hybrid CPU-GPU offloading is
+        // added. GPU vs CPU is chosen at compile time via --config=oblique_gpu.
+        // Previously: /*use_gpu=*/deployment_.use_gpu()
         if (rf_config.decision_tree().has_sparse_oblique_split()) {
           ASSIGN_OR_RETURN(
               oblique_gpu_computer,
               decision_tree::ObliqueGpuComputer::Create(
                   train_dataset, config_link.features(),
                   /*label_col_idx=*/config_link.label(),
-                  /*use_gpu=*/deployment_.use_gpu()));
+                  /*use_gpu=*/true));
         }
+#endif
         /* #endregion */
 
 

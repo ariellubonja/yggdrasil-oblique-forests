@@ -90,8 +90,10 @@ ABSL_FLAG(std::string, numerical_split_type, "Exact",
           "Type of histogram splitting: 'Exact (no histogramming)', 'Random', 'Equal Width', 'Subsample Points', 'Subsample Histogram', 'Dynamic Random Histogram' or 'Dynamic Equal Width Histogram.");
 ABSL_FLAG(int, histogram_num_bins, 64,
           "Number of bins for histogram splitting.");
-ABSL_FLAG(bool, use_gpu, false,
-          "Use GPU for oblique projection computation.");
+// Commented out until hybrid CPU-GPU offloading is added. For now, GPU vs CPU
+// is chosen purely at compile time via --config=oblique_gpu.
+// ABSL_FLAG(bool, use_gpu, false,
+//           "Use GPU for oblique projection computation.");
 
 using namespace yggdrasil_decision_forests;
 
@@ -303,7 +305,9 @@ int main(int argc, char** argv) {
   train_config.set_label(label_col);
 
   model::proto::DeploymentConfig deploy_config;
-  deploy_config.set_use_gpu(absl::GetFlag(FLAGS_use_gpu));
+  // GPU vs CPU is chosen at compile time via --config=oblique_gpu; the runtime
+  // toggle is commented out until hybrid CPU-GPU offloading is added.
+  // deploy_config.set_use_gpu(absl::GetFlag(FLAGS_use_gpu));
 
   /* #region Handle num_threads */
   int num_threads_flag = absl::GetFlag(FLAGS_num_threads);
