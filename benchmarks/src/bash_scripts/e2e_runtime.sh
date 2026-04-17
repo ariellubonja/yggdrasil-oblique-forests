@@ -3,21 +3,33 @@ set -euo pipefail
 
 ###### Parameters
 
-NUM_TREES=240 # Good number for 48-core AWS machine to prevent skewness
+NUM_TREES=30 # Good number for 48-core AWS machine to prevent skewness
 NUM_THREADS=-1
 COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
 # Ariel - ENSURE compute_oob_performances===== - it has an equal sign, not a blank space
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_performances=$COMPUTE_OOB_PERFORMANCES"
 
-# histogram_num_bins=64
-histogram_num_bins=256   # Uncomment to switch; AVX512 will be used on Vectorized method
+histogram_num_bins=64  # NOTE! AVX512 will be used on Vectorized method
 
+RUN_CPU=false          # set false to skip the normal (CPU) experiments section
 RUN_VECTORIZED=false  # set true to run AVX2/AVX512 vectorized experiments
+
+# GPU experiments. Only applies to Oblique + HISTOGRAM_RANDOM-style splits.
+# The Oblique path requires --config=oblique_gpu (compiles in the GPU
+# dispatch). Nodewise mode additionally requires --config=dfs_node_queue so
+# each node is processed individually by the BFS driver (one GPU kernel per
+# node). Depthwise mode uses the default BFS driver which batches sibling
+# nodes into one kernel per BFS depth level.
+RUN_GPU=true
+GPU_MODES=(
+  "depthwise"   # BFS; one kernel launch per depth level, batching siblings
+  # "nodewise"    # DFS; one kernel launch per node
+)
 
 # Which feature split types to run (comment out any you don't want)
 SPLIT_TYPES=(
   "Oblique"
-  "Axis Aligned"
+  # "Axis Aligned"
 )
 
 # Numerical split methods (comment out any you don't want)
@@ -94,21 +106,31 @@ VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
 # Vectorization applies only to these methods (Oblique only)
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
 
-# Always: enable -> build -> disable -> run -> re-enable at end
-sudo benchmarks/src/utils/set_cpu_e_features.sh --enable
+# Always: enable -> build -> disable -> run -> re-enable at end.
+# All bazel builds are wrapped by bazel_build() so CPU E features are only
+# enabled during the build itself, and disabled for every experiment run.
 trap 'sudo benchmarks/src/utils/set_cpu_e_features.sh --enable' EXIT
+
+bazel_build() {
+  sudo benchmarks/src/utils/set_cpu_e_features.sh --enable
+  bazel build "$@"
+  sudo benchmarks/src/utils/set_cpu_e_features.sh --disable
+}
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
 ts=$(date +%Y%m%d_%H%M%S)
 logfile="${logdir}/e2e_runtime_${ts}.log"
 
-# Normal build
-bazel build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
+# Normal build (plain CPU binary). Skipped when only GPU experiments will
+# run, since the GPU section does its own builds with --config=oblique_gpu.
+if [[ "$RUN_CPU" == "true" || "$RUN_VECTORIZED" == "true" ]]; then
+  bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
+else
+  # Ensure features are disabled for experiments even when no initial build runs.
+  sudo benchmarks/src/utils/set_cpu_e_features.sh --disable
+fi
 BINARY="./bazel-bin/examples/train_oblique_forest"
-
-# Disable for experiments
-sudo benchmarks/src/utils/set_cpu_e_features.sh --disable
 
 run_cmd() {
   echo "$*" | tee -a "$logfile"
@@ -126,9 +148,21 @@ is_dynamic_method() {
 # -------------------------
 # Normal experiments (Oblique and/or Axis Aligned per SPLIT_TYPES)
 # -------------------------
+oblique_selected=false
+if [[ "$RUN_CPU" != "true" ]]; then
+  banner "Skipping CPU experiments (RUN_CPU=false)"
+  # We still need `oblique_selected` for the GPU/Vectorized gates below, so
+  # pre-compute it from SPLIT_TYPES without running any CPU experiments.
+  for split in "${SPLIT_TYPES[@]}"; do
+    if [[ "$split" != "Axis Aligned" ]]; then
+      oblique_selected=true
+    fi
+  done
+fi
+
+if [[ "$RUN_CPU" == "true" ]]; then
 banner "NORMAL EXPERIMENTS (no explicit vector ISA) histogram_num_bins=${histogram_num_bins}"
 
-oblique_selected=false
 for split in "${SPLIT_TYPES[@]}"; do
   # Select compatible methods for this split type
   methods_to_run=()
@@ -199,6 +233,82 @@ for split in "${SPLIT_TYPES[@]}"; do
     done
   done
 done
+fi  # RUN_CPU
+
+# -------------------------
+# GPU experiments (Oblique only). One build per GPU mode because `nodewise`
+# requires --config=dfs_node_queue while `depthwise` uses the default BFS
+# driver. Only HISTOGRAM_RANDOM / DYNAMIC_RANDOM_HISTOGRAM exercise the full
+# GPU split pipeline; other methods fall back to GPU-apply + CPU-split.
+# -------------------------
+
+if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
+  for gpu_mode in "${GPU_MODES[@]}"; do
+    case "$gpu_mode" in
+      depthwise)
+        gpu_extra_configs=(--config=oblique_gpu)
+        ;;
+      nodewise)
+        gpu_extra_configs=(--config=oblique_gpu --config=dfs_node_queue)
+        ;;
+      *)
+        banner "Unknown GPU mode '$gpu_mode'. Skipping."
+        continue
+        ;;
+    esac
+
+    bazel_build "${BAZEL_FLAGS[@]}" "${gpu_extra_configs[@]}" "$BUILD_TARGET"
+
+    banner "GPU EXPERIMENTS [$gpu_mode] (Oblique only) histogram_num_bins=${histogram_num_bins}"
+    echo "GPU MODE: $gpu_mode" | tee -a "$logfile"
+
+    for method in "${METHODS[@]}"; do
+      extra="${METHOD_EXTRA_ARGS[$method]:-}"
+
+      # Build list of threshold values to iterate over
+      if is_dynamic_method "$method"; then
+        if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
+          thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
+        else
+          thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
+        fi
+      else
+        thresholds=("")
+      fi
+
+      for thresh in "${thresholds[@]}"; do
+        thresh_arg=""
+        thresh_label=""
+        if [[ -n "$thresh" ]]; then
+          thresh_arg="--dynamic_split_threshold=$thresh"
+          thresh_label=" threshold=$thresh"
+        fi
+
+        banner "Running $method [GPU: $gpu_mode] with $histogram_num_bins bins${thresh_label}"
+
+        # CSV datasets
+        for entry in "${CSV_DATASETS[@]}"; do
+          IFS='|' read -r path label <<<"$entry"
+          cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg"
+          run_cmd "$cmd"
+        done
+
+        # Trunk rows
+        for rows in "${TRUNK_ROWS[@]}"; do
+          cmd="$BINARY --input_mode trunk --rows $rows --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg"
+          run_cmd "$cmd"
+        done
+      done
+    done
+  done
+
+  # Rebuild the CPU binary so any subsequent non-GPU sections run with the
+  # pure-CPU binary (otherwise BINARY still points at the last GPU build).
+  # Only needed if the Vectorized section will run after this.
+  if [[ "$RUN_VECTORIZED" == "true" ]]; then
+    bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
+  fi
+fi
 
 # -------------------------
 # Vectorized experiments (Oblique only; Random, Dynamic Random Histogram)
@@ -236,7 +346,7 @@ else
   exit 0
 fi
 
-bazel build "${BAZEL_FLAGS[@]}" "$vec_cfg" "$BUILD_TARGET"
+bazel_build "${BAZEL_FLAGS[@]}" "$vec_cfg" "$BUILD_TARGET"
 
 banner "VECTORIZED EXPERIMENTS [${vec_name}] (Oblique only) histogram_num_bins=${histogram_num_bins}"
 echo "USING INSTRUCTION SET: ${vec_name}" | tee -a "$logfile"

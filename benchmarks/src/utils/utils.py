@@ -112,6 +112,12 @@ def build_binary(args, chrono_mode):
     if chrono_mode:
         finished_cmd.append('--config=multithreaded_chrono_profile')
 
+    # --use_gpu=true requires the GPU code paths to be compiled in. Without
+    # --config=oblique_gpu the OBLIQUE_GPU_ENABLED macro is undefined and
+    # nodewise/depthwise-gpu dispatch is compiled out (binary defaults to CPU).
+    if getattr(args, 'use_gpu', False):
+        finished_cmd.append('--config=oblique_gpu')
+
     if getattr(args, 'gpu_mode', None) == 'per_node':
         finished_cmd.append('--config=dfs_node_queue')
 

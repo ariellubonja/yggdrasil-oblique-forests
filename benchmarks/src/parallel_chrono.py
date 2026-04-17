@@ -57,6 +57,8 @@ TIMING_RX_SORT = re.compile(
     r"(?:\s+GpuMutex\s+([0-9.eE+-]+)s)?"
     r"(?:\s+GpuSampleBatch\s+([0-9.eE+-]+)s)?"
     r"(?:\s+GpuApplyProj\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuHistogram\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuHistogramSplit\s+([0-9.eE+-]+)s)?"
 )
 
 # Extended with the 4 histogram phases
@@ -82,6 +84,8 @@ TIMING_RX_HISTO = re.compile(
     r"(?:\s+GpuMutex\s+([0-9.eE+-]+)s)?"
     r"(?:\s+GpuSampleBatch\s+([0-9.eE+-]+)s)?"
     r"(?:\s+GpuApplyProj\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuHistogram\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuHistogramSplit\s+([0-9.eE+-]+)s)?"
 )
 
 
@@ -102,7 +106,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              sp, pe, ep,
              fsh, chk, fmm, ghb, hsnc, ast, udh, ce, sbt,
              gpu_init, gpu_csr, gpu_kernel, gpu_unpack, gpu_mutex, gpu_sample,
-             gpu_apply) = g
+             gpu_apply, gpu_hist, gpu_hist_split) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -129,6 +133,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 GpuMutex                     = opt_float(gpu_mutex),
                 GpuSampleBatch               = opt_float(gpu_sample),
                 GpuApplyProj                 = opt_float(gpu_apply),
+                GpuHistogram                 = opt_float(gpu_hist),
+                GpuHistogramSplit            = opt_float(gpu_hist_split),
             ))
         else:
             (tid, tree, depth, nodes, samples,
@@ -137,7 +143,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              init_buckets, fill_buckets, finalize_buckets,
              features, labels,
              gpu_init, gpu_csr, gpu_kernel, gpu_unpack, gpu_mutex, gpu_sample,
-             gpu_apply) = g
+             gpu_apply, gpu_hist, gpu_hist_split) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -162,6 +168,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 GpuMutex                     = opt_float(gpu_mutex),
                 GpuSampleBatch               = opt_float(gpu_sample),
                 GpuApplyProj                 = opt_float(gpu_apply),
+                GpuHistogram                 = opt_float(gpu_hist),
+                GpuHistogramSplit            = opt_float(gpu_hist_split),
             ))
 
     if not rows:
