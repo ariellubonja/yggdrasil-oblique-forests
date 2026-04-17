@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "absl/container/btree_set.h"
+#include "absl/container/inlined_vector.h"
 #include "absl/random/random.h"
 #include "absl/base/optimization.h"
 #include "absl/log/log.h"
@@ -5241,6 +5242,22 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     return absl::OkStatus();
   }
 
+  // Forward declaration: shared split-finding logic used by both the BFS
+  // NodeTrain (queue-based) and the DFS NodeTrainRecursive. Returns the
+  // children that need further processing (empty => leaf).
+  static absl::StatusOr<absl::InlinedVector<internal::NodeAndExamples, 2>>
+  ProcessOneNode(
+      const dataset::VerticalDataset &train_dataset,
+      const model::proto::TrainingConfig &config,
+      const model::proto::TrainingConfigLinking &config_link,
+      const proto::DecisionTreeTrainingConfig &dt_config,
+      const model::proto::DeploymentConfig &deployment,
+      const SplitterConcurrencySetup &splitter_concurrency_setup,
+      const std::vector<float> &weights,
+      const InternalTrainConfig &internal_config,
+      utils::RandomEngine *random, PerThreadCache *cache,
+      internal::NodeAndExamples node_and_examples);
+
   // Forward declaration: NodeTrain is defined below but called by GrowTreeLocalBFS.
   ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
       const dataset::VerticalDataset &train_dataset,
@@ -5254,6 +5271,21 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       utils::RandomEngine *random, PerThreadCache *cache,
       internal::NodeAndExamples node_and_examples,
       std::deque<internal::NodeAndExamples> &node_queue);
+
+  // Forward declaration: recursive DFS alternative to GrowTreeLocalBFS.
+  // Selected via #ifdef OBLIQUE_GPU_ENABLED at the DecisionTreeCoreTrain
+  // dispatch site.
+  static absl::Status NodeTrainRecursive(
+      const dataset::VerticalDataset &train_dataset,
+      const model::proto::TrainingConfig &config,
+      const model::proto::TrainingConfigLinking &config_link,
+      const proto::DecisionTreeTrainingConfig &dt_config,
+      const model::proto::DeploymentConfig &deployment,
+      const SplitterConcurrencySetup &splitter_concurrency_setup,
+      const std::vector<float> &weights,
+      const InternalTrainConfig &internal_config,
+      utils::RandomEngine *random, PerThreadCache *cache,
+      internal::NodeAndExamples node_and_examples);
 
   absl::Status GrowTreeLocalBFS(
       const dataset::VerticalDataset &train_dataset,
@@ -5297,16 +5329,16 @@ return found_split ? SplitSearchResult::kBetterSplitFound
         node_queue.pop_front();
       }
 
-      const bool use_multi_node_gpu =
+      const bool use_depthwise_gpu =
           internal_config.oblique_gpu_computer != nullptr &&
           internal_config.oblique_gpu_computer->use_gpu() &&
           dt_config.has_sparse_oblique_split() &&
           depth_batch.size() > 1;
 
-      if (use_multi_node_gpu) {
-        // Mode B: pre-compute projections for all nodes at this depth
-        // via a single multi-node GPU kernel, then call NodeTrain per-node
-        // with pre-computed data (skips per-node GPU call in oblique.cc).
+      if (use_depthwise_gpu) {
+        // depthwise-gpu: pre-compute projections for all nodes at this depth
+        // via a single GPU kernel, then call NodeTrain per-node with the
+        // precomputed values (skips per-node GPU call in oblique.cc).
         const int num_proj = GetNumProjections(
             dt_config, config_link.numerical_features_size());
         const float projection_density =
@@ -5352,15 +5384,15 @@ return found_split ? SplitSearchResult::kBetterSplitFound
         // c) ONE GPU kernel launch for all nodes at this depth.
         RETURN_IF_ERROR(
             internal_config.oblique_gpu_computer
-                ->ApplyProjectionsBatchedMultiNode(node_batches));
+                ->ApplyProjectionsDepthwise(node_batches));
 
-        // d) Call NodeTrain per-node with pre-computed projections.
+        // d) Call NodeTrain per-node with the depthwise projections handed off.
         for (int n = 0; n < num_nodes; n++) {
           auto node_config = internal_config;
-          node_config.precomputed_projections = proj_buffers[n].data();
-          node_config.precomputed_num_proj = num_proj;
-          node_config.precomputed_projection_defs = &all_node_projs[n];
-          node_config.precomputed_monotonic = &all_node_mono[n];
+          node_config.depthwise_projections = proj_buffers[n].data();
+          node_config.depthwise_num_proj = num_proj;
+          node_config.depthwise_projection_defs = &all_node_projs[n];
+          node_config.depthwise_monotonic = &all_node_mono[n];
 
           RETURN_IF_ERROR(NodeTrain(
               train_dataset, config, config_link, dt_config,
@@ -5369,7 +5401,7 @@ return found_split ? SplitSearchResult::kBetterSplitFound
               std::move(depth_batch[n]), node_queue));
         }
       } else {
-        // Per-node fallback (Mode A GPU or CPU).
+        // Per-node fallback (nodewise-gpu or CPU).
         for (auto& nae : depth_batch) {
           RETURN_IF_ERROR(NodeTrain(
               train_dataset, config, config_link, dt_config,
@@ -5416,11 +5448,28 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       {
         const auto constraints = NodeConstraints::CreateNodeConstraints();
 
-        // BFS: iterative breadth-first tree growth
+#ifdef OBLIQUE_GPU_ENABLED
+        // BFS: iterative breadth-first tree growth (supports depthwise-gpu
+        // projection batching across sibling nodes at each depth level).
         return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                         deployment, splitter_concurrency_setup, weights, 1,
                         internal_config, constraints, false, dt->mutable_root(),
                         random, &cache, selected_examples_rb, leaf_examples_rb);
+#else
+        // DFS: recursive depth-first tree growth (faster on CPU; no queue /
+        // per-depth allocation overhead).
+        internal::NodeAndExamples root_nae{
+            dt->mutable_root(),
+            selected_examples_rb,
+            leaf_examples_rb,
+            /*depth=*/1,
+            constraints,
+            /*set_leaf_already_set=*/false};
+        return NodeTrainRecursive(train_dataset, config, config_link, dt_config,
+                                  deployment, splitter_concurrency_setup, weights,
+                                  internal_config, random, &cache,
+                                  std::move(root_nae));
+#endif
       }
       break;
       case proto::DecisionTreeTrainingConfig::kGrowingStrategyBestFirstGlobal:
@@ -5434,9 +5483,12 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     }
   }
 
-  // Processes a single node: finds best split, partitions examples,
-  // and enqueues children onto node_queue for BFS traversal.
-  ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
+  // Shared "process one node" logic used by both the BFS NodeTrain and the
+  // DFS NodeTrainRecursive drivers. Finds the best split, partitions examples,
+  // applies constraints, and returns the children that need further processing
+  // (empty InlinedVector => leaf).
+  static absl::StatusOr<absl::InlinedVector<internal::NodeAndExamples, 2>>
+  ProcessOneNode(
       const dataset::VerticalDataset &train_dataset,
       const model::proto::TrainingConfig &config,
       const model::proto::TrainingConfigLinking &config_link,
@@ -5446,8 +5498,7 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       const std::vector<float> &weights,
       const InternalTrainConfig &internal_config,
       utils::RandomEngine *random, PerThreadCache *cache,
-      internal::NodeAndExamples node_and_examples,
-      std::deque<internal::NodeAndExamples> &node_queue)
+      internal::NodeAndExamples node_and_examples)
   {
     auto &selected_examples = node_and_examples.selected_examples;
     auto &leaf_examples = node_and_examples.leaf_examples;
@@ -5457,7 +5508,8 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     auto *node = node_and_examples.node;
     #ifdef CHRONO_ENABLED
       using namespace yggdrasil_decision_forests::chrono_prof;
-      // Iterative BFS: set depth explicitly from the struct instead of RAII DepthScope.
+      // Set depth explicitly from the struct. Works for both BFS (flat
+      // iteration) and DFS (recursion overwrites depth on each entry).
       tls_ctx.cur_depth = depth;
 
       const int t = tls_ctx.cur_tree;
@@ -5475,7 +5527,7 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     /* #region Exit Conditions */
     if (selected_examples.empty())
       { return absl::InternalError("No examples fed to the node trainer"); }
-    
+
     // Where is it decided whether samples are weighed?
     node->mutable_node()->set_num_pos_training_examples_without_weight(
         selected_examples.size());
@@ -5508,7 +5560,7 @@ return found_split ? SplitSearchResult::kBetterSplitFound
 
       // Stop the growth of the branch.
       node->FinalizeAsLeaf(dt_config.store_detailed_label_distribution());
-      return absl::OkStatus();
+      return absl::InlinedVector<internal::NodeAndExamples, 2>{};
     }
     /* #endregion */
 
@@ -5578,7 +5630,7 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       if constexpr (PRINT_PROJECTION_MATRICES) { std::cout << "Leaf Node! Exiting.." << std::endl; }
       // No good condition found. Close the branch.
       node->FinalizeAsLeaf(dt_config.store_detailed_label_distribution());
-      return absl::OkStatus();
+      return absl::InlinedVector<internal::NodeAndExamples, 2>{};
     }
 
     /*********** ELSE: BETTER CONDITION FOUND - SEARCH DEEPER **********/
@@ -5633,7 +5685,7 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       // one of the children is pure.
       node->ClearChildren();
       node->FinalizeAsLeaf(dt_config.store_detailed_label_distribution());
-      return absl::OkStatus();
+      return absl::InlinedVector<internal::NodeAndExamples, 2>{};
     }
 
     // Separate the positive and negative examples used only to determine the node value.
@@ -5683,13 +5735,15 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     }
     /* #endregion */
 
-    /**************** ENQUEUE CHILDREN (BFS) ****************/
+    /**************** BUILD CHILDREN ****************/
+
+    absl::InlinedVector<internal::NodeAndExamples, 2> children;
 
     // +
     if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::cout << "\nEnqueuing Positive child" << std::endl;
+      std::cout << "\nBuilding Positive child" << std::endl;
     }
-    node_queue.push_back(
+    children.push_back(
         {node->mutable_pos_child(),
          std::move(example_split.positive_examples),
          node_only_example_split.has_value()
@@ -5700,9 +5754,9 @@ return found_split ? SplitSearchResult::kBetterSplitFound
 
     // -
     if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::cout << "Enqueuing Negative child" << std::endl;
+      std::cout << "Building Negative child" << std::endl;
     }
-    node_queue.push_back(
+    children.push_back(
         {node->mutable_neg_child(),
          std::move(example_split.negative_examples),
          node_only_example_split.has_value()
@@ -5711,6 +5765,61 @@ return found_split ? SplitSearchResult::kBetterSplitFound
              : std::nullopt,
          depth + 1, neg_constraints, true});
 
+    return children;
+  }
+
+  // BFS driver helper: processes one node via ProcessOneNode, then enqueues
+  // any returned children onto node_queue. Called from GrowTreeLocalBFS.
+  ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
+      const dataset::VerticalDataset &train_dataset,
+      const model::proto::TrainingConfig &config,
+      const model::proto::TrainingConfigLinking &config_link,
+      const proto::DecisionTreeTrainingConfig &dt_config,
+      const model::proto::DeploymentConfig &deployment,
+      const SplitterConcurrencySetup &splitter_concurrency_setup,
+      const std::vector<float> &weights,
+      const InternalTrainConfig &internal_config,
+      utils::RandomEngine *random, PerThreadCache *cache,
+      internal::NodeAndExamples node_and_examples,
+      std::deque<internal::NodeAndExamples> &node_queue)
+  {
+    ASSIGN_OR_RETURN(
+        auto children,
+        ProcessOneNode(train_dataset, config, config_link, dt_config, deployment,
+                       splitter_concurrency_setup, weights, internal_config,
+                       random, cache, std::move(node_and_examples)));
+    for (auto &child : children) {
+      node_queue.push_back(std::move(child));
+    }
+    return absl::OkStatus();
+  }
+
+  // DFS driver: processes one node via ProcessOneNode, then recursively
+  // trains each returned child. Selected at the DecisionTreeCoreTrain dispatch
+  // site when OBLIQUE_GPU_ENABLED is not defined.
+  static absl::Status NodeTrainRecursive(
+      const dataset::VerticalDataset &train_dataset,
+      const model::proto::TrainingConfig &config,
+      const model::proto::TrainingConfigLinking &config_link,
+      const proto::DecisionTreeTrainingConfig &dt_config,
+      const model::proto::DeploymentConfig &deployment,
+      const SplitterConcurrencySetup &splitter_concurrency_setup,
+      const std::vector<float> &weights,
+      const InternalTrainConfig &internal_config,
+      utils::RandomEngine *random, PerThreadCache *cache,
+      internal::NodeAndExamples node_and_examples)
+  {
+    ASSIGN_OR_RETURN(
+        auto children,
+        ProcessOneNode(train_dataset, config, config_link, dt_config, deployment,
+                       splitter_concurrency_setup, weights, internal_config,
+                       random, cache, std::move(node_and_examples)));
+    for (auto &child : children) {
+      RETURN_IF_ERROR(NodeTrainRecursive(
+          train_dataset, config, config_link, dt_config, deployment,
+          splitter_concurrency_setup, weights, internal_config,
+          random, cache, std::move(child)));
+    }
     return absl::OkStatus();
   }
 

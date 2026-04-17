@@ -239,16 +239,31 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
   /* #region ----------  MAIN LOOP  ------------------ */
 
-  // 2. ApplyProjection: pre-computed (Mode B), GPU-batched (Mode A), or CPU.
+  // 2. ApplyProjection dispatch:
+  //    - depthwise-gpu: projections already computed by the BFS driver
+  //      (one GPU kernel per BFS depth, batching across sibling nodes).
+  //    - nodewise-gpu: per-node GPU kernel, batching across this node's
+  //      projections only.
+  //    - CPU: no GPU.
 #ifdef OBLIQUE_GPU_ENABLED
-  const bool use_gpu = internal_config.oblique_gpu_computer != nullptr &&
-                       internal_config.oblique_gpu_computer->use_gpu();
-  const bool has_precomputed = internal_config.precomputed_projections != nullptr;
+  const bool use_nodewise_gpu =
+      internal_config.oblique_gpu_computer != nullptr &&
+      internal_config.oblique_gpu_computer->use_gpu();
+  const bool has_depthwise_projections =
+      internal_config.depthwise_projections != nullptr;
 #endif
 
-#ifdef MERGED_CPU_PROJECTIONS
-  // 1. Sample ALL projections up-front (needed for GPU Mode A; also used by
-  //    CPU path in this configuration).
+// CPU layout selection:
+//   NODEWISE_CPU defined  -> nodewise-cpu: sample all projections for this
+//                            node into a vector, then evaluate. Same memory
+//                            layout as nodewise-gpu (Mode A), run on CPU.
+//   NODEWISE_CPU undefined -> projection-wise CPU (default): sample and
+//                            evaluate one projection at a time, reusing a
+//                            single buffer. Baseline-equivalent; no per-node
+//                            N-vector allocation overhead.
+#ifdef NODEWISE_CPU
+  // 1. Sample ALL projections up-front (also used by nodewise-gpu when
+  //    OBLIQUE_GPU_ENABLED is defined).
   std::vector<internal::Projection> all_projections(num_projections);
   std::vector<int8_t> all_monotonic(num_projections, 0);
 
@@ -266,12 +281,12 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     }
   }
 #elif defined(OBLIQUE_GPU_ENABLED)
-  // Only pre-sample when GPU Mode A needs a batched apply call. The CPU path
+  // Only pre-sample when nodewise-gpu needs a batched apply call. The CPU path
   // samples one projection at a time (fused loop below) to avoid N-vector
   // allocation overhead per node.
   std::vector<internal::Projection> all_projections;
   std::vector<int8_t> all_monotonic;
-  if (use_gpu && !has_precomputed) {
+  if (use_nodewise_gpu && !has_depthwise_projections) {
     all_projections.resize(num_projections);
     all_monotonic.assign(num_projections, 0);
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
@@ -291,12 +306,13 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 #endif
 
 #ifdef OBLIQUE_GPU_ENABLED
-  if (has_precomputed) {
-    // Mode B: projections already computed by multi-node GPU kernel in BFS loop.
-    const auto& all_projections_ref = *internal_config.precomputed_projection_defs;
-    const auto& all_monotonic_ref = *internal_config.precomputed_monotonic;
-    num_projections = internal_config.precomputed_num_proj;
-    const float* all_projected_ptr = internal_config.precomputed_projections;
+  if (has_depthwise_projections) {
+    // depthwise-gpu: projections already computed by the BFS driver's
+    // per-depth GPU kernel; we only evaluate splits here.
+    const auto& all_projections_ref = *internal_config.depthwise_projection_defs;
+    const auto& all_monotonic_ref = *internal_config.depthwise_monotonic;
+    num_projections = internal_config.depthwise_num_proj;
+    const float* all_projected_ptr = internal_config.depthwise_projections;
     const size_t n = selected_examples.size();
 
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
@@ -322,15 +338,16 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
         best_threshold = best_condition->condition().higher_condition().threshold();
       }
     }
-  } else if (use_gpu) {
-    // Mode A: per-node GPU — batch all projections into a single kernel launch.
+  } else if (use_nodewise_gpu) {
+    // nodewise-gpu: one GPU kernel launch for this node, batching across its
+    // projections.
     const size_t n = selected_examples.size();
     std::vector<float> all_projected(num_projections * n);
     std::vector<float> all_min(num_projections);
     std::vector<float> all_max(num_projections);
 
     RETURN_IF_ERROR(
-        internal_config.oblique_gpu_computer->ApplyProjectionsBatched(
+        internal_config.oblique_gpu_computer->ApplyProjectionsNodewise(
             all_projections, selected_examples,
             absl::MakeSpan(all_projected),
             absl::MakeSpan(all_min), absl::MakeSpan(all_max)));
@@ -363,8 +380,8 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   } else
 #endif
   {
-#ifdef MERGED_CPU_PROJECTIONS
-    // Merged CPU path: evaluate from the pre-sampled all_projections array.
+#ifdef NODEWISE_CPU
+    // nodewise-cpu: evaluate from the pre-sampled all_projections array.
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
       if constexpr (ALLOW_EMPTY_PROJECTIONS) {
         if (all_projections[proj_idx].empty()) continue;
@@ -392,8 +409,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       }
     }
 #else
-    // Original CPU path: sample and evaluate one projection at a time, reusing a
-    // single buffer across iterations to avoid per-node allocation overhead.
+    // projection-wise CPU (default): sample and evaluate one projection at a
+    // time, reusing a single buffer across iterations to avoid per-node
+    // N-vector allocation overhead. Baseline-equivalent.
     internal::Projection current_projection;
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
       int8_t monotonic = 0;

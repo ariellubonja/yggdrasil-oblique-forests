@@ -97,7 +97,7 @@ absl::Status ObliqueGpuComputer::Release() {
 
 // ---- CPU fallback ----
 
-absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedCPU(
+absl::Status ObliqueGpuComputer::ApplyProjectionsNodewiseCPU(
     absl::Span<const internal::Projection> projections,
     absl::Span<const UnsignedExampleIdx> selected_examples,
     absl::Span<float> projected_values,
@@ -107,14 +107,14 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedCPU(
       "CPU fallback not needed — use ProjectionEvaluator::Evaluate");
 }
 
-absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNodeCPU(
+absl::Status ObliqueGpuComputer::ApplyProjectionsDepthwiseCPU(
     absl::Span<const NodeBatch> node_batches) {
   return absl::UnimplementedError("CPU fallback not needed");
 }
 
 // ---- Public dispatch ----
 
-absl::Status ObliqueGpuComputer::ApplyProjectionsBatched(
+absl::Status ObliqueGpuComputer::ApplyProjectionsNodewise(
     absl::Span<const internal::Projection> projections,
     absl::Span<const UnsignedExampleIdx> selected_examples,
     absl::Span<float> projected_values,
@@ -132,14 +132,14 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatched(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now() - wait_start).count());
 #endif
-    return ApplyProjectionsBatchedGPU(projections, selected_examples,
+    return ApplyProjectionsNodewiseGPU(projections, selected_examples,
                                        projected_values, min_vals, max_vals);
   }
-  return ApplyProjectionsBatchedCPU(projections, selected_examples,
+  return ApplyProjectionsNodewiseCPU(projections, selected_examples,
                                      projected_values, min_vals, max_vals);
 }
 
-absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNode(
+absl::Status ObliqueGpuComputer::ApplyProjectionsDepthwise(
     absl::Span<const NodeBatch> node_batches) {
   if (use_gpu_) {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuApplyProjection);
@@ -153,9 +153,9 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNode(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now() - wait_start).count());
 #endif
-    return ApplyProjectionsBatchedMultiNodeGPU(node_batches);
+    return ApplyProjectionsDepthwiseGPU(node_batches);
   }
-  return ApplyProjectionsBatchedMultiNodeCPU(node_batches);
+  return ApplyProjectionsDepthwiseCPU(node_batches);
 }
 
 // ---- GPU implementations via extern "C" bridge ----
@@ -211,7 +211,7 @@ absl::Status ObliqueGpuComputer::ReleaseGPU() {
   return absl::OkStatus();
 }
 
-absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedGPU(
+absl::Status ObliqueGpuComputer::ApplyProjectionsNodewiseGPU(
     absl::Span<const internal::Projection> projections,
     absl::Span<const UnsignedExampleIdx> selected_examples,
     absl::Span<float> projected_values,
@@ -262,14 +262,14 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedGPU(
   return absl::OkStatus();
 }
 
-absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNodeGPU(
+absl::Status ObliqueGpuComputer::ApplyProjectionsDepthwiseGPU(
     absl::Span<const NodeBatch> node_batches) {
   const int num_nodes = node_batches.size();
   if (num_nodes == 0) return absl::OkStatus();
 
-  // Single-node fast path: avoid multi-node overhead.
+  // Single-node fast path: fall back to the nodewise kernel path.
   if (num_nodes == 1) {
-    return ApplyProjectionsBatchedGPU(
+    return ApplyProjectionsNodewiseGPU(
         node_batches[0].projections, node_batches[0].selected_examples,
         node_batches[0].projected_values,
         node_batches[0].min_vals, node_batches[0].max_vals);
@@ -344,7 +344,7 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsBatchedMultiNodeGPU(
 
   if (cuda_err != 0) {
     return absl::InternalError(
-        absl::StrCat("GPU MultiNode ApplyProjections failed: CUDA error ", cuda_err));
+        absl::StrCat("GPU depthwise ApplyProjections failed: CUDA error ", cuda_err));
   }
 
   // 5. Unpack results back to per-node output buffers.

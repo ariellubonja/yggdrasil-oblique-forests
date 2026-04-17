@@ -26,10 +26,17 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 
 // Accelerates the ApplyProjection step of oblique split-finding on GPU.
 //
+// Two batching strategies are offered:
+//   * nodewise-gpu: one GPU kernel per node, batching across the node's
+//     projections. Use when nodes are processed independently (recursive DFS
+//     or single-node-at-a-time BFS).
+//   * depthwise-gpu: one GPU kernel per BFS depth level, batching across both
+//     projections and nodes. Use with the BFS driver when multiple sibling
+//     nodes are ready at the same depth.
+//
 // Usage:
 //   1. Create once per training run (uploads dataset to GPU).
-//   2. Call ApplyProjectionsBatched per node (Mode A) or
-//      ApplyProjectionsBatchedMultiNode per BFS depth level (Mode B).
+//   2. Call ApplyProjectionsNodewise or ApplyProjectionsDepthwise as needed.
 //   3. Release() when training is done.
 //
 // Thread safety: multiple tree-training threads may share one instance.
@@ -52,19 +59,19 @@ class ObliqueGpuComputer {
   // Is GPU actually being used?
   bool use_gpu() const { return use_gpu_; }
 
-  // ---- Mode A: batch all projections for a single node ----
+  // ---- nodewise-gpu: batch all projections for a single node ----
 
   // Computes projected_values[p * num_examples + e] =
   //   sum_over_attrs(dataset[selected_examples[e], attr] * projection[p][attr].weight)
   // Also computes per-projection min and max values.
-  absl::Status ApplyProjectionsBatched(
+  absl::Status ApplyProjectionsNodewise(
       absl::Span<const internal::Projection> projections,
       absl::Span<const UnsignedExampleIdx> selected_examples,
       absl::Span<float> projected_values,  // [num_projections * num_examples]
       absl::Span<float> min_vals,          // [num_projections]
       absl::Span<float> max_vals);         // [num_projections]
 
-  // ---- Mode B: batch projections across multiple same-depth nodes ----
+  // ---- depthwise-gpu: batch projections across multiple same-depth nodes ----
 
   struct NodeBatch {
     absl::Span<const UnsignedExampleIdx> selected_examples;
@@ -75,21 +82,21 @@ class ObliqueGpuComputer {
     absl::Span<float> max_vals;          // [num_projections]
   };
 
-  absl::Status ApplyProjectionsBatchedMultiNode(
+  absl::Status ApplyProjectionsDepthwise(
       absl::Span<const NodeBatch> node_batches);
 
  private:
   ObliqueGpuComputer() = default;
 
   // CPU fallback implementations.
-  absl::Status ApplyProjectionsBatchedCPU(
+  absl::Status ApplyProjectionsNodewiseCPU(
       absl::Span<const internal::Projection> projections,
       absl::Span<const UnsignedExampleIdx> selected_examples,
       absl::Span<float> projected_values,
       absl::Span<float> min_vals,
       absl::Span<float> max_vals);
 
-  absl::Status ApplyProjectionsBatchedMultiNodeCPU(
+  absl::Status ApplyProjectionsDepthwiseCPU(
       absl::Span<const NodeBatch> node_batches);
 
   // GPU implementations (defined in oblique_gpu.cu.cc).
@@ -98,14 +105,14 @@ class ObliqueGpuComputer {
       absl::Span<const int32_t> numerical_features);
   absl::Status ReleaseGPU();
 
-  absl::Status ApplyProjectionsBatchedGPU(
+  absl::Status ApplyProjectionsNodewiseGPU(
       absl::Span<const internal::Projection> projections,
       absl::Span<const UnsignedExampleIdx> selected_examples,
       absl::Span<float> projected_values,
       absl::Span<float> min_vals,
       absl::Span<float> max_vals);
 
-  absl::Status ApplyProjectionsBatchedMultiNodeGPU(
+  absl::Status ApplyProjectionsDepthwiseGPU(
       absl::Span<const NodeBatch> node_batches);
 
   bool use_gpu_ = false;
