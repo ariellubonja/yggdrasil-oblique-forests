@@ -36,7 +36,25 @@ def get_args():
     return p.parse_args()
 
 
-# “Classic” (no histogram)
+# Tail of the per-depth LOG line: flat per-stage GPU timings (measured via
+# cudaEvent_t bridging in oblique_gpu_kernels.cu.cc). Every capture group is
+# optional so lines from CPU-only or older GPU builds still parse.
+_GPU_TAIL_RX = (
+    r"(?:\s+GpuInit\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuCsrFlatten\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuUnpack\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuMutex\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuSampleBatch\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+ApplyColumnADD\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+ApplyColumnADDMultiNode\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+RandomHistogram\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+SplitHistogram\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+SortIndices\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+ExactSplit\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+GpuOther\s+([0-9.eE+-]+)s)?"
+)
+
+# "Classic" (Exact / sort-based CPU split)
 TIMING_RX_SORT = re.compile(
     r"thread\s+(\d+)\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
@@ -50,18 +68,10 @@ TIMING_RX_SORT = re.compile(
     r"kSortFinalizeBuckets\s+([0-9.eE+-]+)s\s+"         # 13
     r"kSortFeatures\s+([0-9.eE+-]+)s\s+"                # 14
     r"kSortLabels\s+([0-9.eE+-]+)s"                     # 15
-    r"(?:\s+GpuInit\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuCsrFlatten\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuKernel\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuUnpack\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuMutex\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuSampleBatch\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuApplyProj\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuHistogram\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuHistogramSplit\s+([0-9.eE+-]+)s)?"
+    + _GPU_TAIL_RX
 )
 
-# Extended with the 4 histogram phases
+# Extended with the histogram-based CPU split phases
 TIMING_RX_HISTO = re.compile(
     r"thread\s+(\d+)\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
@@ -77,15 +87,7 @@ TIMING_RX_HISTO = re.compile(
     r"kUpdateDistributionsHistogram\s+([0-9.eE+-]+)s\s+"
     r"kComputeEntropy\s+([0-9.eE+-]+)s\s+"
     r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s"
-    r"(?:\s+GpuInit\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuCsrFlatten\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuKernel\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuUnpack\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuMutex\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuSampleBatch\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuApplyProj\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuHistogram\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuHistogramSplit\s+([0-9.eE+-]+)s)?"
+    + _GPU_TAIL_RX
 )
 
 
@@ -105,8 +107,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             (tid, tree, depth, nodes, samples,
              sp, pe, ep,
              fsh, chk, fmm, ghb, hsnc, ast, udh, ce, sbt,
-             gpu_init, gpu_csr, gpu_kernel, gpu_unpack, gpu_mutex, gpu_sample,
-             gpu_apply, gpu_hist, gpu_hist_split) = g
+             gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
+             gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
+             gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -128,13 +131,16 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SelectBestThresholdHistogram = float(sbt),
                 GpuInit                      = opt_float(gpu_init),
                 GpuCsrFlatten                = opt_float(gpu_csr),
-                GpuKernel                    = opt_float(gpu_kernel),
                 GpuUnpack                    = opt_float(gpu_unpack),
                 GpuMutex                     = opt_float(gpu_mutex),
                 GpuSampleBatch               = opt_float(gpu_sample),
-                GpuApplyProj                 = opt_float(gpu_apply),
-                GpuHistogram                 = opt_float(gpu_hist),
-                GpuHistogramSplit            = opt_float(gpu_hist_split),
+                ApplyColumnADD               = opt_float(gpu_apply_cad),
+                ApplyColumnADDMultiNode      = opt_float(gpu_apply_cad_mn),
+                RandomHistogram              = opt_float(gpu_random_hist),
+                SplitHistogram               = opt_float(gpu_split_hist),
+                SortIndices                  = opt_float(gpu_sort_idx),
+                ExactSplit                   = opt_float(gpu_exact_split),
+                GpuOther                     = opt_float(gpu_other),
             ))
         else:
             (tid, tree, depth, nodes, samples,
@@ -142,8 +148,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              fill_example, scan_splits,
              init_buckets, fill_buckets, finalize_buckets,
              features, labels,
-             gpu_init, gpu_csr, gpu_kernel, gpu_unpack, gpu_mutex, gpu_sample,
-             gpu_apply, gpu_hist, gpu_hist_split) = g
+             gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
+             gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
+             gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -163,13 +170,16 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SortLabels                   = float(labels),
                 GpuInit                      = opt_float(gpu_init),
                 GpuCsrFlatten                = opt_float(gpu_csr),
-                GpuKernel                    = opt_float(gpu_kernel),
                 GpuUnpack                    = opt_float(gpu_unpack),
                 GpuMutex                     = opt_float(gpu_mutex),
                 GpuSampleBatch               = opt_float(gpu_sample),
-                GpuApplyProj                 = opt_float(gpu_apply),
-                GpuHistogram                 = opt_float(gpu_hist),
-                GpuHistogramSplit            = opt_float(gpu_hist_split),
+                ApplyColumnADD               = opt_float(gpu_apply_cad),
+                ApplyColumnADDMultiNode      = opt_float(gpu_apply_cad_mn),
+                RandomHistogram              = opt_float(gpu_random_hist),
+                SplitHistogram               = opt_float(gpu_split_hist),
+                SortIndices                  = opt_float(gpu_sort_idx),
+                ExactSplit                   = opt_float(gpu_exact_split),
+                GpuOther                     = opt_float(gpu_other),
             ))
 
     if not rows:
@@ -193,12 +203,13 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
     for tid, g in df.groupby("thread", sort=True):
         g = g.sort_values(["tree", "depth"]).reset_index(drop=True)
 
-        # Friendlier column names + dashes to show scope nesting.
-        # One dash per level below the nearest top-level (unprefixed) parent.
+        # Friendlier column names + dashes to show scope nesting. GPU
+        # columns are flat (one column per helper stage) — no dashes. CPU
+        # split-finder columns retain their nested dashes.
         g = g.rename(columns={
             "samples": "Active Samples",
             "ProjectionEvaluate": "ApplyProjection",
-            # Inside EvaluateProjection → FindSplitHistogram
+            # Inside EvaluateProjection → FindSplitHistogram (CPU histogram)
             "FindSplitHistogram":           "-FindSplitHistogram",
             "ChecksHistogram":              "--ChecksHistogram",
             "FindMinMaxHistogram":          "--FindMinMaxHistogram",
@@ -208,7 +219,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "UpdateDistributionsHistogram": "--UpdateDistributionsHistogram",
             "ComputeEntropy":               "--ComputeEntropy",
             "SelectBestThresholdHistogram": "--SelectBestThresholdHistogram",
-            # Inside EvaluateProjection (Exact/Sort splitter)
+            # Inside EvaluateProjection (CPU Exact/Sort splitter)
             "SortFillExampleBucketSet":     "-SortFillExampleBucketSet",
             "SortInitBuckets":              "--SortInitBuckets",
             "SortFillBuckets":              "--SortFillBuckets",
@@ -216,39 +227,39 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "SortFeatures":                 "--SortFeatures",
             "SortLabels":                   "--SortLabels",
             "SortScanSplits":               "-SortScanSplits",
-            # Inside GpuApplyProj (outer wrapper around every GPU dispatch)
-            "GpuMutex":                     "-GpuMutex",
-            "GpuCsrFlatten":                "-GpuCsrFlatten",
-            "GpuKernel":                    "-GpuKernel",
-            "GpuHistogram":                 "--GpuHistogram",
-            "GpuHistogramSplit":            "--GpuHistogramSplit",
-            "GpuUnpack":                    "-GpuUnpack",
         })
 
         g = g.drop(columns=["thread"])
 
-        # Reorder columns high-level → low-level. GpuApplyProj sits right
-        # after SampleProjection because it contains everything beneath it;
-        # EvaluateProjection and its split-finder children follow. Columns
-        # from whichever mode isn't present are silently skipped.
+        # Reorder columns. SampleProjection first, then the flat per-stage
+        # GPU kernel columns + GpuOther residual, then the CPU split-finder
+        # subtree. Columns missing for the current mode are filtered out
+        # below.
         desired_order = [
             "tree", "depth", "nodes", "Active Samples",
             "SampleProjection",
             "GpuSampleBatch",
             "GpuInit",
-            "GpuApplyProj",
-            "-GpuMutex", "-GpuCsrFlatten",
-            "-GpuKernel", "--GpuHistogram", "--GpuHistogramSplit",
-            "-GpuUnpack",
+            "GpuMutex",
+            "GpuCsrFlatten",
+            # Flat per-stage GPU kernel timings — one column per helper.
+            # Zero-drop hides the ones not fired by the current mode.
+            "ApplyColumnADD",
+            "ApplyColumnADDMultiNode",
+            "RandomHistogram",
+            "SplitHistogram",
+            "SortIndices",
+            "ExactSplit",
+            "GpuOther",
+            "GpuUnpack",
+            # CPU split-finder subtree follows.
             "ApplyProjection",
             "EvaluateProjection",
-            # histogram-splitter children of EvaluateProjection
             "-FindSplitHistogram",
             "--ChecksHistogram", "--FindMinMaxHistogram",
             "--GenHistogramBins", "--HistogramSetNumClasses",
             "--AssignSamplesToHist", "--UpdateDistributionsHistogram",
             "--ComputeEntropy", "--SelectBestThresholdHistogram",
-            # sort-splitter children of EvaluateProjection
             "-SortFillExampleBucketSet",
             "--SortInitBuckets", "--SortFillBuckets",
             "--SortFinalizeBuckets", "--SortFeatures", "--SortLabels",

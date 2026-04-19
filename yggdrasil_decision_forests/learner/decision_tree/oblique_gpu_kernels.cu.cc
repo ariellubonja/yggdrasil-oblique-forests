@@ -72,7 +72,10 @@ int oblique_gpu_apply_projections(
     // Outputs (host memory, caller-allocated)
     float* h_projected_values,  // [num_proj * num_examples]
     float* h_min_vals,          // [num_proj]
-    float* h_max_vals           // [num_proj]
+    float* h_max_vals,          // [num_proj]
+    // Sub-timings (ms): ApplyProjectionColumnADD stage and residual.
+    double* out_ms_apply,
+    double* out_ms_other
 ) {
   // Clear any sticky CUDA error from a previous call so cudaPeekAtLastError
   // downstream only reports errors produced by THIS invocation. Mirrors the
@@ -84,52 +87,63 @@ int oblique_gpu_apply_projections(
   // Allocate device buffers.
   unsigned int* d_selected_examples = nullptr;
   float* d_projected = nullptr;
-
-  err = cudaMalloc(&d_selected_examples, num_examples * sizeof(unsigned int));
-  if (err != cudaSuccess) return (int)err;
-
-  err = cudaMalloc(&d_projected, num_proj * num_examples * sizeof(float));
-  if (err != cudaSuccess) { cudaFree(d_selected_examples); return (int)err; }
-
-  err = cudaMemcpy(d_selected_examples, h_selected_examples,
-                   num_examples * sizeof(unsigned int), cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cudaFree(d_selected_examples); cudaFree(d_projected); return (int)err; }
-
-  // Convert CSR to labmate's vector<vector<>> format.
-  std::vector<std::vector<int>> projection_col_idx(num_proj);
-  std::vector<std::vector<float>> projection_weights(num_proj);
-  for (int p = 0; p < num_proj; p++) {
-    int start = h_col_offsets[p];
-    int end = h_col_offsets[p + 1];
-    projection_col_idx[p].assign(h_flat_col_indices + start,
-                                  h_flat_col_indices + end);
-    projection_weights[p].assign(h_flat_weights + start,
-                                  h_flat_weights + end);
-  }
-
-  // Call labmate's kernel wrapper.
   float* d_min_vals = nullptr;
   float* d_max_vals = nullptr;
   float* d_bin_widths = nullptr;
-  double elapsed_ms = 0;
 
-  ApplyProjectionColumnADD(
-      d_global_flat_data,
-      d_selected_examples,
-      d_projected,
-      &d_min_vals,
-      &d_max_vals,
-      &d_bin_widths,
-      projection_col_idx,
-      projection_weights,
-      num_examples,
-      num_proj,
-      num_total_rows,
-      &elapsed_ms,
-      0,      // gpu_mode: 0 = Exact (just compute projections + min/max)
-      false,  // verbose
-      0       // default stream
-  );
+  cudaEvent_t ev_bridge_begin = nullptr, ev_bridge_end = nullptr;
+  cudaEvent_t ev_apply_begin = nullptr, ev_apply_end = nullptr;
+  cudaEventCreate(&ev_bridge_begin);
+  cudaEventCreate(&ev_bridge_end);
+  cudaEventCreate(&ev_apply_begin);
+  cudaEventCreate(&ev_apply_end);
+
+  cudaEventRecord(ev_bridge_begin, /*stream=*/0);
+
+  err = cudaMalloc(&d_selected_examples, num_examples * sizeof(unsigned int));
+  if (err != cudaSuccess) goto cleanup;
+
+  err = cudaMalloc(&d_projected, num_proj * num_examples * sizeof(float));
+  if (err != cudaSuccess) goto cleanup;
+
+  err = cudaMemcpy(d_selected_examples, h_selected_examples,
+                   num_examples * sizeof(unsigned int), cudaMemcpyHostToDevice);
+  if (err != cudaSuccess) goto cleanup;
+
+  {
+    // Convert CSR to labmate's vector<vector<>> format.
+    std::vector<std::vector<int>> projection_col_idx(num_proj);
+    std::vector<std::vector<float>> projection_weights(num_proj);
+    for (int p = 0; p < num_proj; p++) {
+      int start = h_col_offsets[p];
+      int end = h_col_offsets[p + 1];
+      projection_col_idx[p].assign(h_flat_col_indices + start,
+                                    h_flat_col_indices + end);
+      projection_weights[p].assign(h_flat_weights + start,
+                                    h_flat_weights + end);
+    }
+
+    double elapsed_ms = 0;
+    cudaEventRecord(ev_apply_begin, /*stream=*/0);
+    ApplyProjectionColumnADD(
+        d_global_flat_data,
+        d_selected_examples,
+        d_projected,
+        &d_min_vals,
+        &d_max_vals,
+        &d_bin_widths,
+        projection_col_idx,
+        projection_weights,
+        num_examples,
+        num_proj,
+        num_total_rows,
+        &elapsed_ms,
+        0,      // gpu_mode: 0 = Exact (just compute projections + min/max)
+        false,  // verbose
+        0       // default stream
+    );
+    cudaEventRecord(ev_apply_end, /*stream=*/0);
+  }
 
   // Copy results back.
   err = cudaMemcpy(h_projected_values, d_projected,
@@ -148,9 +162,28 @@ int oblique_gpu_apply_projections(
     if (err != cudaSuccess) goto cleanup;
   }
 
+  cudaEventRecord(ev_bridge_end, /*stream=*/0);
+  cudaEventSynchronize(ev_bridge_end);
+
+  {
+    float ms_apply = 0, ms_total = 0;
+    cudaEventElapsedTime(&ms_apply, ev_apply_begin, ev_apply_end);
+    cudaEventElapsedTime(&ms_total, ev_bridge_begin, ev_bridge_end);
+    if (out_ms_apply) *out_ms_apply = ms_apply;
+    if (out_ms_other) {
+      double other = (double)ms_total - (double)ms_apply;
+      *out_ms_other = other < 0 ? 0 : other;
+    }
+  }
+
 cleanup:
-  cudaFree(d_selected_examples);
-  cudaFree(d_projected);
+  cudaEventDestroy(ev_bridge_begin);
+  cudaEventDestroy(ev_bridge_end);
+  cudaEventDestroy(ev_apply_begin);
+  cudaEventDestroy(ev_apply_end);
+
+  if (d_selected_examples) cudaFree(d_selected_examples);
+  if (d_projected) cudaFree(d_projected);
   if (d_min_vals) cudaFree(d_min_vals);
   if (d_max_vals) cudaFree(d_max_vals);
   if (d_bin_widths) cudaFree(d_bin_widths);
@@ -171,7 +204,10 @@ int oblique_gpu_apply_projections_multi_node(
     const int* h_col_offsets,
     int total_nonzeros,
     float* h_projected_values,
-    int max_examples_per_node)
+    int max_examples_per_node,
+    // Sub-timings (ms): ApplyProjectionColumnADDMultiNode stage and residual.
+    double* out_ms_apply,
+    double* out_ms_other)
 {
   cudaError_t err;
 
@@ -183,10 +219,19 @@ int oblique_gpu_apply_projections_multi_node(
   int* d_flat_col_indices = nullptr;
   float* d_flat_weights = nullptr;
 
+  cudaEvent_t ev_bridge_begin = nullptr, ev_bridge_end = nullptr;
+  cudaEvent_t ev_apply_begin = nullptr, ev_apply_end = nullptr;
+  cudaEventCreate(&ev_bridge_begin);
+  cudaEventCreate(&ev_bridge_end);
+  cudaEventCreate(&ev_apply_begin);
+  cudaEventCreate(&ev_apply_end);
+
   const int num_segments = num_nodes * num_proj;
 
+  cudaEventRecord(ev_bridge_begin, /*stream=*/0);
+
   err = cudaMalloc(&d_selected_examples, total_examples * sizeof(unsigned int));
-  if (err != cudaSuccess) return (int)err;
+  if (err != cudaSuccess) goto cleanup;
   err = cudaMalloc(&d_projected, (size_t)total_examples * num_proj * sizeof(float));
   if (err != cudaSuccess) goto cleanup;
   err = cudaMalloc(&d_node_row_off, (num_nodes + 1) * sizeof(int));
@@ -210,18 +255,39 @@ int oblique_gpu_apply_projections_multi_node(
   cudaMemcpy(d_flat_weights, h_flat_weights,
              total_nonzeros * sizeof(float), cudaMemcpyHostToDevice);
 
+  cudaEventRecord(ev_apply_begin, /*stream=*/0);
   // Launch single 3D kernel for all nodes.
   ApplyProjectionColumnADDMultiNode(
       d_global_flat_data, d_selected_examples, d_projected,
       d_node_row_off, d_col_offsets, d_flat_col_indices, d_flat_weights,
       max_examples_per_node, num_nodes, num_proj, num_total_rows, 0);
+  cudaEventRecord(ev_apply_end, /*stream=*/0);
 
   // Copy results back.
   err = cudaMemcpy(h_projected_values, d_projected,
                    (size_t)total_examples * num_proj * sizeof(float),
                    cudaMemcpyDeviceToHost);
 
+  cudaEventRecord(ev_bridge_end, /*stream=*/0);
+  cudaEventSynchronize(ev_bridge_end);
+
+  {
+    float ms_apply = 0, ms_total = 0;
+    cudaEventElapsedTime(&ms_apply, ev_apply_begin, ev_apply_end);
+    cudaEventElapsedTime(&ms_total, ev_bridge_begin, ev_bridge_end);
+    if (out_ms_apply) *out_ms_apply = ms_apply;
+    if (out_ms_other) {
+      double other = (double)ms_total - (double)ms_apply;
+      *out_ms_other = other < 0 ? 0 : other;
+    }
+  }
+
 cleanup:
+  cudaEventDestroy(ev_bridge_begin);
+  cudaEventDestroy(ev_bridge_end);
+  cudaEventDestroy(ev_apply_begin);
+  cudaEventDestroy(ev_apply_end);
+
   if (d_selected_examples) cudaFree(d_selected_examples);
   if (d_projected) cudaFree(d_projected);
   if (d_node_row_off) cudaFree(d_node_row_off);
@@ -251,10 +317,14 @@ cleanup:
 // Scalar outputs (host):
 //   best_proj / best_bin / best_gain / best_threshold / num_pos_examples.
 //
-// Sub-timings output (host, milliseconds):
-//   out_ms_apply - time in ApplyProjectionColumnADD.
-//   out_ms_hist  - time in RandomHistogram.
-//   out_ms_split - time in HistogramSplit.
+// Sub-timings output (host, milliseconds). Measured via cudaEvent_t pairs
+// bracketing each helper call — no per-stage cudaDeviceSynchronize so the
+// stream keeps pipelining. A single cudaEventSynchronize at the end of the
+// bridge reads all four numbers at once.
+//   out_ms_apply - ApplyProjectionColumnADD stage.
+//   out_ms_hist  - RandomHistogram stage.
+//   out_ms_split - HistogramSplit stage.
+//   out_ms_other - residual = bridge total − (apply + hist + split).
 int oblique_gpu_find_best_split_nodewise(
     const float* d_global_flat_data,
     const unsigned int* d_global_labels,
@@ -276,7 +346,8 @@ int oblique_gpu_find_best_split_nodewise(
     int* num_pos_examples,
     double* out_ms_apply,
     double* out_ms_hist,
-    double* out_ms_split) {
+    double* out_ms_split,
+    double* out_ms_other) {
   // Clear any sticky CUDA error from a previous call so cudaPeekAtLastError
   // downstream only reports errors produced by THIS invocation.
   (void)cudaGetLastError();
@@ -294,7 +365,24 @@ int oblique_gpu_find_best_split_nodewise(
   int* d_hist2 = nullptr;
   float* d_candidate_splits = nullptr;
 
+  // cuEvents for stage timings. One pair per stage plus an outer pair
+  // around the whole bridge (used to compute the "other" residual).
+  cudaEvent_t ev_bridge_begin = nullptr, ev_bridge_end = nullptr;
+  cudaEvent_t ev_apply_begin = nullptr, ev_apply_end = nullptr;
+  cudaEvent_t ev_hist_begin  = nullptr, ev_hist_end  = nullptr;
+  cudaEvent_t ev_split_begin = nullptr, ev_split_end = nullptr;
+  cudaEventCreate(&ev_bridge_begin);
+  cudaEventCreate(&ev_bridge_end);
+  cudaEventCreate(&ev_apply_begin);
+  cudaEventCreate(&ev_apply_end);
+  cudaEventCreate(&ev_hist_begin);
+  cudaEventCreate(&ev_hist_end);
+  cudaEventCreate(&ev_split_begin);
+  cudaEventCreate(&ev_split_end);
+
   int return_err = 0;
+
+  cudaEventRecord(ev_bridge_begin, /*stream=*/0);
 
   err = cudaMalloc(&d_selected_examples,
                    num_examples * sizeof(unsigned int));
@@ -324,7 +412,7 @@ int oblique_gpu_find_best_split_nodewise(
 
     // --- Stage 1: Apply projections + min/max + bin widths ---
     {
-      auto t0 = std::chrono::steady_clock::now();
+      cudaEventRecord(ev_apply_begin, /*stream=*/0);
       double internal_ms = 0;
       ApplyProjectionColumnADD(
           d_global_flat_data, d_selected_examples, d_projected,
@@ -333,12 +421,7 @@ int oblique_gpu_find_best_split_nodewise(
           num_examples, num_proj, num_total_rows,
           &internal_ms,
           /*gpu_mode=*/1 /*Random*/, /*verbose=*/false, /*stream=*/0);
-      cudaDeviceSynchronize();
-      auto t1 = std::chrono::steady_clock::now();
-      if (out_ms_apply) {
-        *out_ms_apply =
-            std::chrono::duration<double, std::milli>(t1 - t0).count();
-      }
+      cudaEventRecord(ev_apply_end, /*stream=*/0);
     }
 
     // Copy min/max to host for RandomHistogram / HistogramSplit.
@@ -354,23 +437,18 @@ int oblique_gpu_find_best_split_nodewise(
     // --- Stage 2: Build class histograms + random split boundaries ---
     {
       std::mt19937 rng(random_seed);
-      auto t0 = std::chrono::steady_clock::now();
+      cudaEventRecord(ev_hist_begin, /*stream=*/0);
       RandomHistogram(
           d_projected, d_selected_examples, d_global_labels,
           h_min_vals.data(), h_max_vals.data(),
           &d_hist0, &d_hist1, &d_hist2, &d_candidate_splits,
           num_examples, num_bins, num_proj, rng, /*stream=*/0);
-      cudaDeviceSynchronize();
-      auto t1 = std::chrono::steady_clock::now();
-      if (out_ms_hist) {
-        *out_ms_hist =
-            std::chrono::duration<double, std::milli>(t1 - t0).count();
-      }
+      cudaEventRecord(ev_hist_end, /*stream=*/0);
     }
 
     // --- Stage 3: Best-split argmax ---
     {
-      auto t0 = std::chrono::steady_clock::now();
+      cudaEventRecord(ev_split_begin, /*stream=*/0);
       double internal_ms = 0;
       HistogramSplit(
           d_hist0, d_hist1, d_hist2, d_candidate_splits,
@@ -379,16 +457,39 @@ int oblique_gpu_find_best_split_nodewise(
           best_proj, best_bin, best_gain, best_threshold, num_pos_examples,
           &internal_ms, /*verbose=*/false,
           comp_method, /*gpu_mode=*/1 /*Random*/, /*stream=*/0);
-      cudaDeviceSynchronize();
-      auto t1 = std::chrono::steady_clock::now();
-      if (out_ms_split) {
-        *out_ms_split =
-            std::chrono::duration<double, std::milli>(t1 - t0).count();
-      }
+      cudaEventRecord(ev_split_end, /*stream=*/0);
+    }
+  }
+
+  cudaEventRecord(ev_bridge_end, /*stream=*/0);
+  cudaEventSynchronize(ev_bridge_end);
+
+  {
+    float ms_apply = 0, ms_hist = 0, ms_split = 0, ms_total = 0;
+    cudaEventElapsedTime(&ms_apply, ev_apply_begin, ev_apply_end);
+    cudaEventElapsedTime(&ms_hist,  ev_hist_begin,  ev_hist_end);
+    cudaEventElapsedTime(&ms_split, ev_split_begin, ev_split_end);
+    cudaEventElapsedTime(&ms_total, ev_bridge_begin, ev_bridge_end);
+    if (out_ms_apply) *out_ms_apply = ms_apply;
+    if (out_ms_hist)  *out_ms_hist  = ms_hist;
+    if (out_ms_split) *out_ms_split = ms_split;
+    if (out_ms_other) {
+      double other = (double)ms_total - ((double)ms_apply + (double)ms_hist
+                                         + (double)ms_split);
+      *out_ms_other = other < 0 ? 0 : other;
     }
   }
 
 cleanup:
+  cudaEventDestroy(ev_bridge_begin);
+  cudaEventDestroy(ev_bridge_end);
+  cudaEventDestroy(ev_apply_begin);
+  cudaEventDestroy(ev_apply_end);
+  cudaEventDestroy(ev_hist_begin);
+  cudaEventDestroy(ev_hist_end);
+  cudaEventDestroy(ev_split_begin);
+  cudaEventDestroy(ev_split_end);
+
   if (d_selected_examples) cudaFree(d_selected_examples);
   if (d_projected)          cudaFree(d_projected);
   if (d_min_vals)           cudaFree(d_min_vals);
@@ -426,7 +527,8 @@ int oblique_gpu_find_best_split_nodewise_exact(
     int* num_pos_examples,
     double* out_ms_apply,
     double* out_ms_sort,
-    double* out_ms_split) {
+    double* out_ms_split,
+    double* out_ms_other) {
   (void)cudaGetLastError();  // clear sticky errors
 
   cudaError_t err;
@@ -439,6 +541,20 @@ int oblique_gpu_find_best_split_nodewise_exact(
   float* d_bin_widths = nullptr;
   unsigned int* d_sorted_indices = nullptr;
 
+  // cuEvents for stage timings. See Random bridge for rationale.
+  cudaEvent_t ev_bridge_begin = nullptr, ev_bridge_end = nullptr;
+  cudaEvent_t ev_apply_begin  = nullptr, ev_apply_end  = nullptr;
+  cudaEvent_t ev_sort_begin   = nullptr, ev_sort_end   = nullptr;
+  cudaEvent_t ev_split_begin  = nullptr, ev_split_end  = nullptr;
+  cudaEventCreate(&ev_bridge_begin);
+  cudaEventCreate(&ev_bridge_end);
+  cudaEventCreate(&ev_apply_begin);
+  cudaEventCreate(&ev_apply_end);
+  cudaEventCreate(&ev_sort_begin);
+  cudaEventCreate(&ev_sort_end);
+  cudaEventCreate(&ev_split_begin);
+  cudaEventCreate(&ev_split_end);
+
   int return_err = 0;
 
   // Initialize scalar outputs to "no split" defaults. ExactSplit only writes
@@ -448,6 +564,8 @@ int oblique_gpu_find_best_split_nodewise_exact(
   if (best_gain)        *best_gain = -1.0f;
   if (best_threshold)   *best_threshold = 0.0f;
   if (num_pos_examples) *num_pos_examples = 0;
+
+  cudaEventRecord(ev_bridge_begin, /*stream=*/0);
 
   err = cudaMalloc(&d_selected_examples,
                    num_examples * sizeof(unsigned int));
@@ -476,7 +594,7 @@ int oblique_gpu_find_best_split_nodewise_exact(
 
     // --- Stage 1: Apply projections (Exact mode, no min/max) ---
     {
-      auto t0 = std::chrono::steady_clock::now();
+      cudaEventRecord(ev_apply_begin, /*stream=*/0);
       double internal_ms = 0;
       ApplyProjectionColumnADD(
           d_global_flat_data, d_selected_examples, d_projected,
@@ -485,12 +603,7 @@ int oblique_gpu_find_best_split_nodewise_exact(
           num_examples, num_proj, num_total_rows,
           &internal_ms,
           /*gpu_mode=*/0 /*Exact*/, /*verbose=*/false, /*stream=*/0);
-      cudaDeviceSynchronize();
-      if (out_ms_apply) {
-        *out_ms_apply =
-            std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - t0).count();
-      }
+      cudaEventRecord(ev_apply_end, /*stream=*/0);
     }
 
     // --- Stage 2: Sort example indices per projection ---
@@ -498,23 +611,18 @@ int oblique_gpu_find_best_split_nodewise_exact(
                      (size_t)num_proj * num_examples * sizeof(unsigned int));
     if (err != cudaSuccess) { return_err = (int)err; goto cleanup; }
     {
-      auto t0 = std::chrono::steady_clock::now();
+      cudaEventRecord(ev_sort_begin, /*stream=*/0);
       ThrustSortIndicesOnly(d_projected, d_sorted_indices,
                              d_selected_examples,
                              num_examples, num_proj, /*stream=*/0);
       // ThrustSortIndicesOnly frees d_selected_examples internally.
       d_selected_examples = nullptr;
-      cudaDeviceSynchronize();
-      if (out_ms_sort) {
-        *out_ms_sort =
-            std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - t0).count();
-      }
+      cudaEventRecord(ev_sort_end, /*stream=*/0);
     }
 
     // --- Stage 3: Exact split-finding ---
     {
-      auto t0 = std::chrono::steady_clock::now();
+      cudaEventRecord(ev_split_begin, /*stream=*/0);
       double internal_ms = 0;
       ExactSplit(
           d_sorted_indices, d_global_labels,
@@ -524,12 +632,7 @@ int oblique_gpu_find_best_split_nodewise_exact(
       // ExactSplit frees d_projected and d_sorted_indices internally.
       d_projected = nullptr;
       d_sorted_indices = nullptr;
-      cudaDeviceSynchronize();
-      if (out_ms_split) {
-        *out_ms_split =
-            std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - t0).count();
-      }
+      cudaEventRecord(ev_split_end, /*stream=*/0);
     }
 
     // Derive right-side count from the chosen split index.
@@ -538,7 +641,35 @@ int oblique_gpu_find_best_split_nodewise_exact(
     }
   }
 
+  cudaEventRecord(ev_bridge_end, /*stream=*/0);
+  cudaEventSynchronize(ev_bridge_end);
+
+  {
+    float ms_apply = 0, ms_sort = 0, ms_split = 0, ms_total = 0;
+    cudaEventElapsedTime(&ms_apply, ev_apply_begin, ev_apply_end);
+    cudaEventElapsedTime(&ms_sort,  ev_sort_begin,  ev_sort_end);
+    cudaEventElapsedTime(&ms_split, ev_split_begin, ev_split_end);
+    cudaEventElapsedTime(&ms_total, ev_bridge_begin, ev_bridge_end);
+    if (out_ms_apply) *out_ms_apply = ms_apply;
+    if (out_ms_sort)  *out_ms_sort  = ms_sort;
+    if (out_ms_split) *out_ms_split = ms_split;
+    if (out_ms_other) {
+      double other = (double)ms_total - ((double)ms_apply + (double)ms_sort
+                                         + (double)ms_split);
+      *out_ms_other = other < 0 ? 0 : other;
+    }
+  }
+
 cleanup:
+  cudaEventDestroy(ev_bridge_begin);
+  cudaEventDestroy(ev_bridge_end);
+  cudaEventDestroy(ev_apply_begin);
+  cudaEventDestroy(ev_apply_end);
+  cudaEventDestroy(ev_sort_begin);
+  cudaEventDestroy(ev_sort_end);
+  cudaEventDestroy(ev_split_begin);
+  cudaEventDestroy(ev_split_end);
+
   if (d_selected_examples) cudaFree(d_selected_examples);
   if (d_projected)          cudaFree(d_projected);
   if (d_min_vals)           cudaFree(d_min_vals);

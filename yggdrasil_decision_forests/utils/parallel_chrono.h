@@ -34,15 +34,23 @@ enum FuncId {
   kComputeEntropy,
   kSelectBestThresholdHistogram,
 
+  // CPU-side scopes around GPU dispatch. Kept as-is.
   kGpuInit,
   kGpuCsrFlatten,
-  kGpuKernelCall,
   kGpuResultUnpack,
   kGpuMutexWait,
   kGpuSampleProjectionsBatch,
-  kGpuApplyProjection,
-  kGpuHistogram,
-  kGpuHistogramSplit,
+
+  // Per-stage GPU timings, measured via cudaEvent_t inside each bridge.
+  // Named after the helper function bracketing the stage. Mutually
+  // exclusive by mode (zero-drop hides the unused ones per run).
+  kGpuApplyColumnADD,           // ApplyProjectionColumnADD (Random + Exact apply)
+  kGpuApplyColumnADDMultiNode,  // ApplyProjectionColumnADDMultiNode (apply-only depthwise)
+  kGpuRandomHistogram,          // RandomHistogram (Random hist stage)
+  kGpuSplitHistogram,           // HistogramSplit (Random split stage)
+  kGpuSortIndices,              // ThrustSortIndicesOnly (Exact sort stage)
+  kGpuExactSplit,               // ExactSplit (Exact gain/argmax stage)
+  kGpuOther,                    // Residual = bridge total − Σ tracked stages
   kNumFuncs
 };
 
