@@ -1198,6 +1198,15 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
             }
           }
         }
+
+        // Session-level (non-per-depth) chrono stats. GpuInit fires during
+        // ObliqueGpuComputer::Create, before any TreeScope — so its time
+        // lands in global_stats via the tree<0 fallback in add_time().
+        LOG(INFO) << "session GpuInit "
+                  << global_stats[kGpuInit].load(std::memory_order_relaxed)
+                     * 1e-9
+                  << "s";
+
         LOG(INFO) << "\n==========================================\n\n";
         #endif
 

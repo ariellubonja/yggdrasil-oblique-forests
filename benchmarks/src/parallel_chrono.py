@@ -177,6 +177,15 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
 
     df = pd.DataFrame(rows)
 
+    # Session-level GpuInit is emitted once by random_forest.cc after the
+    # per-tree loop. It's not per-depth (fires before any TreeScope), so
+    # we park its value in the otherwise-unused tree=0, depth=0
+    # placeholder row — the one with nodes=0 and all timings zero.
+    m_session = re.search(r"session\s+GpuInit\s+([0-9.eE+-]+)s", raw_log)
+    if m_session:
+        placeholder = (df["tree"] == 0) & (df["depth"] == 0)
+        df.loc[placeholder, "GpuInit"] = float(m_session.group(1))
+
     # ──────────────────────────────────────────────────────────────────────
     # Build one block per thread (unchanged logic)
     # ──────────────────────────────────────────────────────────────────────
@@ -430,13 +439,6 @@ if __name__ == "__main__":
             ("Bazel build", utils.last_build_cmd if utils.last_build_cmd else "(build skipped)"),
             ("Binary command", binary_cmd_str),
         ]
-
-        # Session-level (non-per-depth) chrono stats emitted by
-        # random_forest.cc after the per-tree loop. Surface as metadata so
-        # the per-depth CSV stays a pure per-tree-per-depth table.
-        session_rx = re.compile(r"session\s+GpuInit\s+([0-9.eE+-]+)s")
-        for m in session_rx.finditer(log_plain):
-            cmd_lines.append(("GpuInit (session)", f"{float(m.group(1)):.6f} s"))
 
         write_csv(table, cmd_lines, out_fp)
 
