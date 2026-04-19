@@ -128,6 +128,21 @@ class ObliqueGpuComputer {
       utils::RandomEngine* random,
       absl::Span<BestSplitResult> results);
 
+  // EXACT-split variants: same contract as FindBestSplit{Nodewise,Depthwise}
+  // but sort-based (no histogram). Uses ThrustSortIndicesOnly + ExactSplit.
+  // Only supports unweighted binary classification (<=3 unique label values)
+  // — same constraint as the histogram variants.
+  absl::Status FindBestSplitNodewiseExact(
+      absl::Span<const internal::Projection> projections,
+      absl::Span<const UnsignedExampleIdx> selected_examples,
+      int comp_method,
+      BestSplitResult* result);
+
+  absl::Status FindBestSplitDepthwiseExact(
+      absl::Span<const NodeBatch> node_batches,
+      int comp_method,
+      absl::Span<BestSplitResult> results);
+
  private:
   ObliqueGpuComputer() = default;
 
@@ -169,6 +184,16 @@ class ObliqueGpuComputer {
       absl::Span<const NodeBatch> node_batches,
       int num_bins, int comp_method,
       utils::RandomEngine* random,
+      absl::Span<BestSplitResult> results);
+
+  absl::Status FindBestSplitNodewiseExactGPU(
+      absl::Span<const internal::Projection> projections,
+      absl::Span<const UnsignedExampleIdx> selected_examples,
+      int comp_method, BestSplitResult* result);
+
+  absl::Status FindBestSplitDepthwiseExactGPU(
+      absl::Span<const NodeBatch> node_batches,
+      int comp_method,
       absl::Span<BestSplitResult> results);
 
   bool use_gpu_ = false;

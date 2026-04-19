@@ -5336,15 +5336,24 @@ return found_split ? SplitSearchResult::kBetterSplitFound
           depth_batch.size() > 1;
 
       const auto nsplit_type_for_full_gpu = dt_config.numerical_split().type();
-      const bool depthwise_full_split_type_ok =
+      const bool depthwise_full_split_histogram_ok =
           nsplit_type_for_full_gpu ==
               proto::NumericalSplit_Type_HISTOGRAM_RANDOM ||
           nsplit_type_for_full_gpu ==
               proto::NumericalSplit_Type_DYNAMIC_RANDOM_HISTOGRAM;
-      const bool use_depthwise_full_split =
+      const bool depthwise_full_split_exact_ok =
+          nsplit_type_for_full_gpu == proto::NumericalSplit_Type_EXACT;
+      const bool can_use_depthwise_full_split =
           use_depthwise_gpu &&
-          internal_config.oblique_gpu_computer->supports_full_gpu_split() &&
-          depthwise_full_split_type_ok;
+          internal_config.oblique_gpu_computer->supports_full_gpu_split();
+      const bool use_depthwise_full_split =
+          can_use_depthwise_full_split &&
+          (depthwise_full_split_histogram_ok ||
+           depthwise_full_split_exact_ok);
+      // 0 = histogram-random, 1 = exact
+      const int depthwise_full_split_mode =
+          depthwise_full_split_histogram_ok ? 0
+              : (depthwise_full_split_exact_ok ? 1 : -1);
 
       if (use_depthwise_full_split) {
         // depthwise full-GPU: sample projections, run Apply+Histogram+Split
@@ -5388,12 +5397,20 @@ return found_split ? SplitSearchResult::kBetterSplitFound
         }
 
         std::vector<BestSplitResult> split_results(num_nodes);
-        const int num_bins_cfg = dt_config.numerical_split().num_candidates();
-        const int num_bins = num_bins_cfg > 0 ? num_bins_cfg : 64;
-        RETURN_IF_ERROR(
-            internal_config.oblique_gpu_computer->FindBestSplitDepthwise(
-                node_batches, num_bins, /*comp_method=*/0 /*entropy*/,
-                random, absl::MakeSpan(split_results)));
+        if (depthwise_full_split_mode == 0) {
+          const int num_bins_cfg =
+              dt_config.numerical_split().num_candidates();
+          const int num_bins = num_bins_cfg > 0 ? num_bins_cfg : 64;
+          RETURN_IF_ERROR(
+              internal_config.oblique_gpu_computer->FindBestSplitDepthwise(
+                  node_batches, num_bins, /*comp_method=*/0 /*entropy*/,
+                  random, absl::MakeSpan(split_results)));
+        } else {
+          RETURN_IF_ERROR(
+              internal_config.oblique_gpu_computer->FindBestSplitDepthwiseExact(
+                  node_batches, /*comp_method=*/0 /*entropy*/,
+                  absl::MakeSpan(split_results)));
+        }
 
         // Per-node NodeTrain with best-split descriptor handed down.
         for (int n = 0; n < num_nodes; n++) {

@@ -402,6 +402,153 @@ cleanup:
   return return_err;
 }
 
+// Full-GPU nodewise split for EXACT mode: Apply + ThrustSortIndicesOnly +
+// ExactSplit in one bridge call. Keeps projected values on device between
+// stages. `ThrustSortIndicesOnly` takes ownership of `d_selected_examples`
+// and `ExactSplit` takes ownership of `d_projected` / `d_sorted_indices`
+// (they free internally), so we null those locals after the call.
+int oblique_gpu_find_best_split_nodewise_exact(
+    const float* d_global_flat_data,
+    const unsigned int* d_global_labels,
+    int num_total_rows,
+    const unsigned int* h_selected_examples,
+    int num_examples,
+    int num_proj,
+    const int* h_flat_col_indices,
+    const float* h_flat_weights,
+    const int* h_col_offsets,
+    int total_nonzeros,
+    int comp_method,
+    int* best_proj,
+    int* best_split,
+    float* best_gain,
+    float* best_threshold,
+    int* num_pos_examples,
+    double* out_ms_apply,
+    double* out_ms_sort,
+    double* out_ms_split) {
+  (void)cudaGetLastError();  // clear sticky errors
+
+  cudaError_t err;
+
+  // Device buffers.
+  unsigned int* d_selected_examples = nullptr;
+  float* d_projected = nullptr;
+  float* d_min_vals = nullptr;
+  float* d_max_vals = nullptr;
+  float* d_bin_widths = nullptr;
+  unsigned int* d_sorted_indices = nullptr;
+
+  int return_err = 0;
+
+  // Initialize scalar outputs to "no split" defaults. ExactSplit only writes
+  // them when a positive-gain split is found.
+  if (best_proj)        *best_proj = -1;
+  if (best_split)       *best_split = -1;
+  if (best_gain)        *best_gain = -1.0f;
+  if (best_threshold)   *best_threshold = 0.0f;
+  if (num_pos_examples) *num_pos_examples = 0;
+
+  err = cudaMalloc(&d_selected_examples,
+                   num_examples * sizeof(unsigned int));
+  if (err != cudaSuccess) { return_err = (int)err; goto cleanup; }
+
+  err = cudaMalloc(&d_projected,
+                   (size_t)num_proj * num_examples * sizeof(float));
+  if (err != cudaSuccess) { return_err = (int)err; goto cleanup; }
+
+  err = cudaMemcpy(d_selected_examples, h_selected_examples,
+                   num_examples * sizeof(unsigned int),
+                   cudaMemcpyHostToDevice);
+  if (err != cudaSuccess) { return_err = (int)err; goto cleanup; }
+
+  {
+    std::vector<std::vector<int>> proj_col_idx(num_proj);
+    std::vector<std::vector<float>> proj_weights(num_proj);
+    for (int p = 0; p < num_proj; p++) {
+      int start = h_col_offsets[p];
+      int end = h_col_offsets[p + 1];
+      proj_col_idx[p].assign(h_flat_col_indices + start,
+                              h_flat_col_indices + end);
+      proj_weights[p].assign(h_flat_weights + start,
+                              h_flat_weights + end);
+    }
+
+    // --- Stage 1: Apply projections (Exact mode, no min/max) ---
+    {
+      auto t0 = std::chrono::steady_clock::now();
+      double internal_ms = 0;
+      ApplyProjectionColumnADD(
+          d_global_flat_data, d_selected_examples, d_projected,
+          &d_min_vals, &d_max_vals, &d_bin_widths,
+          proj_col_idx, proj_weights,
+          num_examples, num_proj, num_total_rows,
+          &internal_ms,
+          /*gpu_mode=*/0 /*Exact*/, /*verbose=*/false, /*stream=*/0);
+      cudaDeviceSynchronize();
+      if (out_ms_apply) {
+        *out_ms_apply =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - t0).count();
+      }
+    }
+
+    // --- Stage 2: Sort example indices per projection ---
+    err = cudaMalloc(&d_sorted_indices,
+                     (size_t)num_proj * num_examples * sizeof(unsigned int));
+    if (err != cudaSuccess) { return_err = (int)err; goto cleanup; }
+    {
+      auto t0 = std::chrono::steady_clock::now();
+      ThrustSortIndicesOnly(d_projected, d_sorted_indices,
+                             d_selected_examples,
+                             num_examples, num_proj, /*stream=*/0);
+      // ThrustSortIndicesOnly frees d_selected_examples internally.
+      d_selected_examples = nullptr;
+      cudaDeviceSynchronize();
+      if (out_ms_sort) {
+        *out_ms_sort =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - t0).count();
+      }
+    }
+
+    // --- Stage 3: Exact split-finding ---
+    {
+      auto t0 = std::chrono::steady_clock::now();
+      double internal_ms = 0;
+      ExactSplit(
+          d_sorted_indices, d_global_labels,
+          best_gain, best_split, best_threshold, best_proj,
+          num_examples, num_proj, d_projected,
+          &internal_ms, /*verbose=*/false, comp_method, /*stream=*/0);
+      // ExactSplit frees d_projected and d_sorted_indices internally.
+      d_projected = nullptr;
+      d_sorted_indices = nullptr;
+      cudaDeviceSynchronize();
+      if (out_ms_split) {
+        *out_ms_split =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - t0).count();
+      }
+    }
+
+    // Derive right-side count from the chosen split index.
+    if (num_pos_examples && best_split && *best_split >= 0) {
+      *num_pos_examples = num_examples - *best_split;
+    }
+  }
+
+cleanup:
+  if (d_selected_examples) cudaFree(d_selected_examples);
+  if (d_projected)          cudaFree(d_projected);
+  if (d_min_vals)           cudaFree(d_min_vals);
+  if (d_max_vals)           cudaFree(d_max_vals);
+  if (d_bin_widths)         cudaFree(d_bin_widths);
+  if (d_sorted_indices)     cudaFree(d_sorted_indices);
+
+  return return_err;
+}
+
 bool oblique_gpu_check_available() {
   int count = 0;
   if (cudaGetDeviceCount(&count) != cudaSuccess || count == 0) return false;

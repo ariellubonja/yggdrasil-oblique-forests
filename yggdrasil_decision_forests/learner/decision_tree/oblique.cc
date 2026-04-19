@@ -261,18 +261,28 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   // entirely on device. Requires classification task, GPU labels uploaded,
   // a histogram-random-style split, and no weights.
   bool use_full_gpu_split = false;
+  // 0 = HISTOGRAM_RANDOM / DYNAMIC_RANDOM_HISTOGRAM, 1 = EXACT.
+  int full_gpu_split_mode = -1;
   if constexpr (std::is_same<LabelStats, ClassificationLabelStats>::value) {
     const auto split_type = dynamic_dt_config.numerical_split().type();
-    const bool split_type_ok =
+    const bool histogram_ok =
         split_type == proto::NumericalSplit_Type_HISTOGRAM_RANDOM ||
         split_type == proto::NumericalSplit_Type_DYNAMIC_RANDOM_HISTOGRAM;
-    use_full_gpu_split =
+    const bool exact_ok =
+        split_type == proto::NumericalSplit_Type_EXACT;
+    const bool can_use_gpu_split =
         !has_depthwise_best_split &&
         !has_depthwise_projections &&
         use_nodewise_gpu &&
         internal_config.oblique_gpu_computer->supports_full_gpu_split() &&
-        split_type_ok &&
         selected_weights.empty();
+    if (can_use_gpu_split && histogram_ok) {
+      use_full_gpu_split = true;
+      full_gpu_split_mode = 0;
+    } else if (can_use_gpu_split && exact_ok) {
+      use_full_gpu_split = true;
+      full_gpu_split_mode = 1;
+    }
   }
 #endif
 
@@ -352,15 +362,24 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
           ->set_threshold(descriptor->best_threshold);
     }
   } else if (use_full_gpu_split) {
-    // Nodewise full-GPU: run Apply + RandomHistogram + HistogramSplit on
-    // device and get back a single best-split descriptor.
+    // Nodewise full-GPU: run Apply + (Histogram|Sort) + Split on device and
+    // get back a single best-split descriptor. Which pipeline runs depends
+    // on the configured numerical-split type (histogram-random vs exact).
     BestSplitResult result;
-    const int num_bins_cfg = dynamic_dt_config.numerical_split().num_candidates();
-    const int num_bins = num_bins_cfg > 0 ? num_bins_cfg : 64;
-    RETURN_IF_ERROR(
-        internal_config.oblique_gpu_computer->FindBestSplitNodewise(
-            all_projections, selected_examples, num_bins,
-            /*comp_method=*/0 /*entropy*/, random, &result));
+    if (full_gpu_split_mode == 0) {
+      const int num_bins_cfg =
+          dynamic_dt_config.numerical_split().num_candidates();
+      const int num_bins = num_bins_cfg > 0 ? num_bins_cfg : 64;
+      RETURN_IF_ERROR(
+          internal_config.oblique_gpu_computer->FindBestSplitNodewise(
+              all_projections, selected_examples, num_bins,
+              /*comp_method=*/0 /*entropy*/, random, &result));
+    } else {
+      RETURN_IF_ERROR(
+          internal_config.oblique_gpu_computer->FindBestSplitNodewiseExact(
+              all_projections, selected_examples,
+              /*comp_method=*/0 /*entropy*/, &result));
+    }
     if (result.best_gain > 0.0f && result.best_proj_idx >= 0 &&
         result.best_proj_idx < static_cast<int>(all_projections.size()) &&
         !all_projections[result.best_proj_idx].empty()) {
