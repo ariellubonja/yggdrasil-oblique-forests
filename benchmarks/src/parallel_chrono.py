@@ -184,13 +184,78 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
     for tid, g in df.groupby("thread", sort=True):
         g = g.sort_values(["tree", "depth"]).reset_index(drop=True)
 
-        # Friendlier column names
+        # Friendlier column names + dashes to show scope nesting.
+        # One dash per level below the nearest top-level (unprefixed) parent.
         g = g.rename(columns={
             "samples": "Active Samples",
-            "ProjectionEvaluate": "ApplyProjection"
+            "ProjectionEvaluate": "ApplyProjection",
+            # Inside EvaluateProjection → FindSplitHistogram
+            "FindSplitHistogram":           "-FindSplitHistogram",
+            "ChecksHistogram":              "--ChecksHistogram",
+            "FindMinMaxHistogram":          "--FindMinMaxHistogram",
+            "GenHistogramBins":             "--GenHistogramBins",
+            "HistogramSetNumClasses":       "--HistogramSetNumClasses",
+            "AssignSamplesToHist":          "--AssignSamplesToHist",
+            "UpdateDistributionsHistogram": "--UpdateDistributionsHistogram",
+            "ComputeEntropy":               "--ComputeEntropy",
+            "SelectBestThresholdHistogram": "--SelectBestThresholdHistogram",
+            # Inside EvaluateProjection (Exact/Sort splitter)
+            "SortFillExampleBucketSet":     "-SortFillExampleBucketSet",
+            "SortInitBuckets":              "--SortInitBuckets",
+            "SortFillBuckets":              "--SortFillBuckets",
+            "SortFinalizeBuckets":          "--SortFinalizeBuckets",
+            "SortFeatures":                 "--SortFeatures",
+            "SortLabels":                   "--SortLabels",
+            "SortScanSplits":               "-SortScanSplits",
+            # Inside GpuApplyProj (outer wrapper around every GPU dispatch)
+            "GpuMutex":                     "-GpuMutex",
+            "GpuCsrFlatten":                "-GpuCsrFlatten",
+            "GpuKernel":                    "-GpuKernel",
+            "GpuHistogram":                 "--GpuHistogram",
+            "GpuHistogramSplit":            "--GpuHistogramSplit",
+            "GpuUnpack":                    "-GpuUnpack",
         })
 
         g = g.drop(columns=["thread"])
+
+        # Reorder columns high-level → low-level. GpuApplyProj sits right
+        # after SampleProjection because it contains everything beneath it;
+        # EvaluateProjection and its split-finder children follow. Columns
+        # from whichever mode isn't present are silently skipped.
+        desired_order = [
+            "tree", "depth", "nodes", "Active Samples",
+            "SampleProjection",
+            "GpuSampleBatch",
+            "GpuInit",
+            "GpuApplyProj",
+            "-GpuMutex", "-GpuCsrFlatten",
+            "-GpuKernel", "--GpuHistogram", "--GpuHistogramSplit",
+            "-GpuUnpack",
+            "ApplyProjection",
+            "EvaluateProjection",
+            # histogram-splitter children of EvaluateProjection
+            "-FindSplitHistogram",
+            "--ChecksHistogram", "--FindMinMaxHistogram",
+            "--GenHistogramBins", "--HistogramSetNumClasses",
+            "--AssignSamplesToHist", "--UpdateDistributionsHistogram",
+            "--ComputeEntropy", "--SelectBestThresholdHistogram",
+            # sort-splitter children of EvaluateProjection
+            "-SortFillExampleBucketSet",
+            "--SortInitBuckets", "--SortFillBuckets",
+            "--SortFinalizeBuckets", "--SortFeatures", "--SortLabels",
+            "-SortScanSplits",
+        ]
+        ordered = [c for c in desired_order if c in g.columns]
+        remaining = [c for c in g.columns if c not in desired_order]
+        g = g[ordered + remaining]
+
+        # Drop timing columns that are all-zero for this run (e.g. GPU
+        # columns in a CPU run, Histogram columns in an Exact run). Keep
+        # preamble columns even if zero.
+        preamble = {"tree", "depth", "nodes", "Active Samples"}
+        zero_cols = [c for c in g.columns
+                     if c not in preamble and (g[c] == 0.0).all()]
+        g = g.drop(columns=zero_cols)
 
         # Header rows
         thread_header = pd.DataFrame(
@@ -365,6 +430,13 @@ if __name__ == "__main__":
             ("Bazel build", utils.last_build_cmd if utils.last_build_cmd else "(build skipped)"),
             ("Binary command", binary_cmd_str),
         ]
+
+        # Session-level (non-per-depth) chrono stats emitted by
+        # random_forest.cc after the per-tree loop. Surface as metadata so
+        # the per-depth CSV stays a pure per-tree-per-depth table.
+        session_rx = re.compile(r"session\s+GpuInit\s+([0-9.eE+-]+)s")
+        for m in session_rx.finditer(log_plain):
+            cmd_lines.append(("GpuInit (session)", f"{float(m.group(1)):.6f} s"))
 
         write_csv(table, cmd_lines, out_fp)
 

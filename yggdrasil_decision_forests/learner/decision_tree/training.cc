@@ -5323,6 +5323,8 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       const int32_t current_depth = node_queue.front().depth;
 
       std::vector<internal::NodeAndExamples> depth_batch;
+
+      // populate queue
       while (!node_queue.empty() &&
              node_queue.front().depth == current_depth) {
         depth_batch.push_back(std::move(node_queue.front()));
@@ -5405,7 +5407,7 @@ return found_split ? SplitSearchResult::kBetterSplitFound
               internal_config.oblique_gpu_computer->FindBestSplitDepthwise(
                   node_batches, num_bins, /*comp_method=*/0 /*entropy*/,
                   random, absl::MakeSpan(split_results)));
-        } else {
+        } else { 
           RETURN_IF_ERROR(
               internal_config.oblique_gpu_computer->FindBestSplitDepthwiseExact(
                   node_batches, /*comp_method=*/0 /*entropy*/,
