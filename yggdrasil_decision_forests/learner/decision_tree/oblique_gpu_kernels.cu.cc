@@ -74,6 +74,11 @@ int oblique_gpu_apply_projections(
     float* h_min_vals,          // [num_proj]
     float* h_max_vals           // [num_proj]
 ) {
+  // Clear any sticky CUDA error from a previous call so cudaPeekAtLastError
+  // downstream only reports errors produced by THIS invocation. Mirrors the
+  // same guard in oblique_gpu_find_best_split_nodewise.
+  (void)cudaGetLastError();
+
   cudaError_t err;
 
   // Allocate device buffers.

@@ -37,7 +37,7 @@ def get_base_parser():
     parser.add_argument("--fixed_1000_projections", action="store_true")
     # parser.add_argument("--enable_fast_equal_width_binning", action="store_true") # This is on by default now
     parser.add_argument("--use_gpu", type=lambda x: x.lower() in ("true", "1", "yes"),
-                       default=True, help="Use GPU for oblique projections (default: true)")
+                       default=False, help="Use GPU for oblique projections (default: false)")
 
     return parser
 
