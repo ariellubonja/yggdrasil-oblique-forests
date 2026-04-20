@@ -11,6 +11,10 @@ build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-DENABLE_STD_
 build:dfs_node_queue --cxxopt="-DNODE_QUEUE_DFS_FLAG=1"
 build:nodewise_cpu --cxxopt="-DNODEWISE_CPU=1"
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1"
+# Default: Highway hwy::VQSort for numerical-feature splitters (Exact Oblique hot path).
+# Opt-in to fall back to std::sort baseline for A/B timing:
+#   bazel build -c opt --config=use_std_sort //...
+build:use_std_sort --cxxopt="-DYDF_USE_STD_SORT=1"
 
 # Compile *all* C++ code (target and host) in C++17 mode.
 build --cxxopt=-std=c++17
