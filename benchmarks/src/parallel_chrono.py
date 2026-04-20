@@ -27,8 +27,8 @@ def get_args():
     p.add_argument("--cols", type=int, default=4096)
     p.add_argument("--save_log", action="store_true")
     p.add_argument("--skip_build", help="Skip building target. Use whatever's in .bazel-bin", action="store_true")
-    p.add_argument("--disable_ecores", action="store_true",
-                   help="Disable Intel E-cores for stable measurements (default: leave E-cores on)")
+    p.add_argument("--disable_ecores", action=argparse.BooleanOptionalAction, default=True,
+                   help="Disable Intel E-cores for stable measurements (default: disabled; pass --no-disable_ecores to keep them on)")
     p.add_argument("--gpu_mode", choices=["per_depth", "per_node"], default="per_depth",
                    help="GPU batching mode: per_depth (BFS, one kernel per depth level) "
                         "or per_node (DFS, one kernel per node). Only relevant when --use_gpu=true")
@@ -398,9 +398,9 @@ if __name__ == "__main__":
     try:
         if a.disable_ecores:
             utils.configure_cpu_for_benchmarks(True)
-            print("E-cores: DISABLED")
+            print("E-cores: DISABLED (default — use --no-disable_ecores to keep on)")
         else:
-            print("E-cores: ON (default — use --disable_ecores to disable)")
+            print("E-cores: ON")
         t0 = time.perf_counter()
         proc = subprocess.run(
                 cmd,
