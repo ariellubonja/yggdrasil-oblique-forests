@@ -250,6 +250,10 @@ cuda_library(
         "-ccbin=/usr/bin/g++-13",
         "-Xcompiler", "-B/usr/bin",
     ],
+    # "manual" keeps these targets out of //... wildcard analysis on hosts
+    # without a CUDA toolkit — rules_cuda would otherwise force resolution of
+    # @local_cuda//:cuda_runtime, which does not exist there.
+    tags = ["manual", "cuda_dep"],
     deps = [
         ":randomprojection",
     ],
@@ -268,6 +272,7 @@ cuda_library(
         "-Xcompiler", "-B/usr/bin",
         "-Xcompiler", "-DGOOGLE_PROTOBUF_NO_ARENA=1",
     ],
+    tags = ["manual", "cuda_dep"],
     deps = [
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/log",
@@ -281,10 +286,12 @@ cc_library_ydf(
     name = "oblique_gpu",
     srcs = ["oblique_gpu.cc"],
     hdrs = ["oblique_gpu.h"],
+    defines = [] + select({
+        "//yggdrasil_decision_forests:enable_cuda": [],
+        "//conditions:default": ["CUDA_DISABLED"],
+    }),
     deps = [
-        ":oblique_gpu_kernels",
         ":oblique_types",
-        ":randomprojection",
         "//yggdrasil_decision_forests/dataset:types",
         "//yggdrasil_decision_forests/dataset:vertical_dataset",
         "//yggdrasil_decision_forests/utils:parallel_chrono",
@@ -297,7 +304,13 @@ cc_library_ydf(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
-    ],
+    ] + select({
+        "//yggdrasil_decision_forests:enable_cuda": [
+            ":oblique_gpu_kernels",
+            ":randomprojection",
+        ],
+        "//conditions:default": [],
+    }),
 )
 
 # Proto

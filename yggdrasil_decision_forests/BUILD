@@ -43,6 +43,13 @@ config_setting(
     values = {"define": "use_ydf_tensorflow_proto=1"},
 )
 
+# Opt-in to CUDA-backed oblique GPU kernels. Off by default so that builds on
+# hosts without a CUDA toolkit succeed.
+config_setting(
+    name = "enable_cuda",
+    values = {"define": "enable_cuda=1"},
+)
+
 # RECOMMENDED VALUE: not set
 #
 # Compile with "--define=ydf_use_tensorflow_io=1" to use TensorFlow IO FileSystem for all file IO

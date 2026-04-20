@@ -285,6 +285,9 @@ absl::Status ObliqueGpuComputer::InitializeGPU(
     const dataset::VerticalDataset& dataset,
     absl::Span<const int32_t> numerical_features,
     int label_col_idx) {
+#ifdef CUDA_DISABLED
+  return absl::UnavailableError("Not compiled with CUDA support");
+#else
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuInit);
   const auto init_start = absl::Now();
   if (!oblique_gpu_check_available()) {
@@ -370,9 +373,13 @@ absl::Status ObliqueGpuComputer::InitializeGPU(
             << (flat_data.size() * sizeof(float)) / (1024 * 1024) << " MB) in "
             << absl::ToDoubleSeconds(absl::Now() - init_start) << " s";
   return absl::OkStatus();
+#endif  // CUDA_DISABLED
 }
 
 absl::Status ObliqueGpuComputer::ReleaseGPU() {
+#ifdef CUDA_DISABLED
+  return absl::UnavailableError("Not compiled with CUDA support");
+#else
   int cuda_err = oblique_gpu_release(d_global_flat_data_);
   d_global_flat_data_ = nullptr;
   if (d_global_labels_ != nullptr) {
@@ -388,6 +395,7 @@ absl::Status ObliqueGpuComputer::ReleaseGPU() {
         absl::StrCat("CUDA release failed with error code ", cuda_err));
   }
   return absl::OkStatus();
+#endif  // CUDA_DISABLED
 }
 
 absl::Status ObliqueGpuComputer::ApplyProjectionsNodewiseGPU(
@@ -396,6 +404,9 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsNodewiseGPU(
     absl::Span<float> projected_values,
     absl::Span<float> min_vals,
     absl::Span<float> max_vals) {
+#ifdef CUDA_DISABLED
+  return absl::UnavailableError("Not compiled with CUDA support");
+#else
   const int num_proj = projections.size();
   const int num_examples = selected_examples.size();
 
@@ -448,6 +459,7 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsNodewiseGPU(
 #endif
 
   return absl::OkStatus();
+#endif  // CUDA_DISABLED
 }
 
 absl::Status ObliqueGpuComputer::FindBestSplitNodewiseGPU(
@@ -455,6 +467,9 @@ absl::Status ObliqueGpuComputer::FindBestSplitNodewiseGPU(
     absl::Span<const UnsignedExampleIdx> selected_examples,
     int num_bins, int comp_method,
     utils::RandomEngine* random, BestSplitResult* result) {
+#ifdef CUDA_DISABLED
+  return absl::UnavailableError("Not compiled with CUDA support");
+#else
   const int num_proj = projections.size();
   const int num_examples = selected_examples.size();
 
@@ -535,6 +550,7 @@ absl::Status ObliqueGpuComputer::FindBestSplitNodewiseGPU(
   result->best_threshold = best_threshold;
   result->num_pos_training_examples = num_pos;
   return absl::OkStatus();
+#endif  // CUDA_DISABLED
 }
 
 absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseGPU(
@@ -542,6 +558,9 @@ absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseGPU(
     int num_bins, int comp_method,
     utils::RandomEngine* random,
     absl::Span<BestSplitResult> results) {
+#ifdef CUDA_DISABLED
+  return absl::UnavailableError("Not compiled with CUDA support");
+#else
   // Full-GPU depthwise Random-histogram split: one fused multi-node apply
   // for all sibling nodes, segmented min/max on device, per-node
   // RandomHistogram + HistogramSplit over pointer-offset slabs of the
@@ -676,6 +695,7 @@ absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseGPU(
     results[n].num_pos_training_examples = num_pos[n];
   }
   return absl::OkStatus();
+#endif  // CUDA_DISABLED
 }
 
 // Helper: CSR-flatten a single node's projections.
@@ -708,6 +728,9 @@ absl::Status ObliqueGpuComputer::FindBestSplitNodewiseExactGPU(
     absl::Span<const internal::Projection> projections,
     absl::Span<const UnsignedExampleIdx> selected_examples,
     int comp_method, BestSplitResult* result) {
+#ifdef CUDA_DISABLED
+  return absl::UnavailableError("Not compiled with CUDA support");
+#else
   const int num_proj = projections.size();
   const int num_examples = selected_examples.size();
 
@@ -765,11 +788,15 @@ absl::Status ObliqueGpuComputer::FindBestSplitNodewiseExactGPU(
   result->best_threshold = best_threshold;
   result->num_pos_training_examples = num_pos;
   return absl::OkStatus();
+#endif  // CUDA_DISABLED
 }
 
 absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseExactGPU(
     absl::Span<const NodeBatch> node_batches,
     int comp_method, absl::Span<BestSplitResult> results) {
+#ifdef CUDA_DISABLED
+  return absl::UnavailableError("Not compiled with CUDA support");
+#else
   // First cut: loop per-node. Same structure as FindBestSplitDepthwiseGPU.
   const int num_nodes = node_batches.size();
   for (int n = 0; n < num_nodes; n++) {
@@ -835,6 +862,7 @@ absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseExactGPU(
     results[n].num_pos_training_examples = num_pos;
   }
   return absl::OkStatus();
+#endif  // CUDA_DISABLED
 }
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
