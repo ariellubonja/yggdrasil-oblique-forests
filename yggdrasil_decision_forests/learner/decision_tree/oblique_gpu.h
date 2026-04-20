@@ -37,7 +37,7 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 //
 // Usage:
 //   1. Create once per training run (uploads dataset to GPU).
-//   2. Call ApplyProjectionsNodewise or ApplyProjectionsDepthwise as needed.
+//   2. Call ApplyProjectionsNodewise or FindBestSplitDepthwise as needed.
 //   3. Release() when training is done.
 //
 // Thread safety: multiple tree-training threads may share one instance.
@@ -99,9 +99,6 @@ class ObliqueGpuComputer {
     absl::Span<float> max_vals;          // [num_projections]
   };
 
-  absl::Status ApplyProjectionsDepthwise(
-      absl::Span<const NodeBatch> node_batches);
-
   // ---- Full-GPU split (Apply + Histogram + BestSplit on device) ----
 
   // Runs the full split-finding pipeline on GPU for a single node. Requires
@@ -154,9 +151,6 @@ class ObliqueGpuComputer {
       absl::Span<float> min_vals,
       absl::Span<float> max_vals);
 
-  absl::Status ApplyProjectionsDepthwiseCPU(
-      absl::Span<const NodeBatch> node_batches);
-
   // GPU implementations (defined in oblique_gpu.cu.cc).
   absl::Status InitializeGPU(
       const dataset::VerticalDataset& dataset,
@@ -170,9 +164,6 @@ class ObliqueGpuComputer {
       absl::Span<float> projected_values,
       absl::Span<float> min_vals,
       absl::Span<float> max_vals);
-
-  absl::Status ApplyProjectionsDepthwiseGPU(
-      absl::Span<const NodeBatch> node_batches);
 
   absl::Status FindBestSplitNodewiseGPU(
       absl::Span<const internal::Projection> projections,

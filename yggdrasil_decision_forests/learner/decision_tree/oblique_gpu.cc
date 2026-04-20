@@ -2,8 +2,10 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <memory>
+#include <random>
 #include <vector>
 
 #include "absl/log/log.h"
@@ -35,15 +37,6 @@ int oblique_gpu_apply_projections(
     const int* h_col_offsets, int total_nonzeros,
     float* h_projected_values, float* h_min_vals, float* h_max_vals,
     double* out_ms_apply, double* out_ms_other);
-int oblique_gpu_apply_projections_multi_node(
-    const float* d_global_flat_data,
-    const unsigned int* h_selected_examples, int total_examples,
-    const int* h_node_row_off, int num_nodes,
-    int num_proj, int num_total_rows,
-    const int* h_flat_col_indices, const float* h_flat_weights,
-    const int* h_col_offsets, int total_nonzeros,
-    float* h_projected_values, int max_examples_per_node,
-    double* out_ms_apply, double* out_ms_other);
 int oblique_gpu_find_best_split_nodewise(
     const float* d_global_flat_data,
     const unsigned int* d_global_labels,
@@ -73,6 +66,27 @@ int oblique_gpu_find_best_split_nodewise_exact(
     float* best_threshold, int* num_pos_examples,
     double* out_ms_apply, double* out_ms_sort, double* out_ms_split,
     double* out_ms_other);
+int oblique_gpu_find_best_split_depthwise(
+    const float* d_global_flat_data,
+    const unsigned int* d_global_labels,
+    int num_total_rows,
+    const unsigned int* h_all_selected_examples,
+    int total_examples,
+    const int* h_node_row_off,
+    int num_nodes,
+    int num_proj,
+    const int* h_flat_col_indices,
+    const float* h_flat_weights,
+    const int* h_col_offsets,
+    int total_nonzeros,
+    int max_examples_per_node,
+    int num_bins,
+    int comp_method,
+    const unsigned long long* h_node_seeds,
+    int* best_proj, int* best_bin,
+    float* best_gain, float* best_threshold, int* num_pos_examples,
+    double* out_ms_apply, double* out_ms_hist,
+    double* out_ms_split, double* out_ms_other);
 }
 
 namespace yggdrasil_decision_forests::model::decision_tree {
@@ -143,11 +157,6 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsNodewiseCPU(
       "CPU fallback not needed — use ProjectionEvaluator::Evaluate");
 }
 
-absl::Status ObliqueGpuComputer::ApplyProjectionsDepthwiseCPU(
-    absl::Span<const NodeBatch> node_batches) {
-  return absl::UnimplementedError("CPU fallback not needed");
-}
-
 // ---- Public dispatch ----
 
 absl::Status ObliqueGpuComputer::ApplyProjectionsNodewise(
@@ -172,24 +181,6 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsNodewise(
   }
   return ApplyProjectionsNodewiseCPU(projections, selected_examples,
                                      projected_values, min_vals, max_vals);
-}
-
-absl::Status ObliqueGpuComputer::ApplyProjectionsDepthwise(
-    absl::Span<const NodeBatch> node_batches) {
-  if (use_gpu_) {
-#ifdef CHRONO_ENABLED
-    auto wait_start = std::chrono::steady_clock::now();
-#endif
-    utils::concurrency::MutexLock l(&gpu_mutex_);
-#ifdef CHRONO_ENABLED
-    chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
-        chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now() - wait_start).count());
-#endif
-    return ApplyProjectionsDepthwiseGPU(node_batches);
-  }
-  return ApplyProjectionsDepthwiseCPU(node_batches);
 }
 
 absl::Status ObliqueGpuComputer::FindBestSplitNodewise(
@@ -459,117 +450,6 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsNodewiseGPU(
   return absl::OkStatus();
 }
 
-absl::Status ObliqueGpuComputer::ApplyProjectionsDepthwiseGPU(
-    absl::Span<const NodeBatch> node_batches) {
-  const int num_nodes = node_batches.size();
-  if (num_nodes == 0) return absl::OkStatus();
-
-  // Single-node fast path: fall back to the nodewise kernel path.
-  if (num_nodes == 1) {
-    return ApplyProjectionsNodewiseGPU(
-        node_batches[0].projections, node_batches[0].selected_examples,
-        node_batches[0].projected_values,
-        node_batches[0].min_vals, node_batches[0].max_vals);
-  }
-
-  // All nodes share the same num_proj.
-  const int num_proj = node_batches[0].projections.size();
-
-  // 1-3. Build prefix sums, concatenate examples, flatten projections.
-  std::vector<int> node_row_off(num_nodes + 1, 0);
-  int max_examples_per_node = 0;
-  int total_examples;
-  std::vector<unsigned int> all_selected;
-  std::vector<int> col_offsets;
-  std::vector<int> flat_col_indices;
-  std::vector<float> flat_weights;
-  int total_nz = 0;
-  {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuCsrFlatten);
-    for (int n = 0; n < num_nodes; n++) {
-      const int rows_n = node_batches[n].selected_examples.size();
-      node_row_off[n + 1] = node_row_off[n] + rows_n;
-      if (rows_n > max_examples_per_node) max_examples_per_node = rows_n;
-    }
-    total_examples = node_row_off[num_nodes];
-
-    all_selected.resize(total_examples);
-    for (int n = 0; n < num_nodes; n++) {
-      std::memcpy(all_selected.data() + node_row_off[n],
-                  node_batches[n].selected_examples.data(),
-                  node_batches[n].selected_examples.size() * sizeof(unsigned int));
-    }
-
-    const int num_segments = num_nodes * num_proj;
-    col_offsets.resize(num_segments + 1, 0);
-    for (int n = 0; n < num_nodes; n++) {
-      for (int p = 0; p < num_proj; p++) {
-        total_nz += node_batches[n].projections[p].size();
-        col_offsets[n * num_proj + p + 1] = total_nz;
-      }
-    }
-
-    flat_col_indices.resize(total_nz);
-    flat_weights.resize(total_nz);
-    for (int n = 0; n < num_nodes; n++) {
-      for (int p = 0; p < num_proj; p++) {
-        const int seg = n * num_proj + p;
-        int offset = col_offsets[seg];
-        for (int j = 0; j < static_cast<int>(node_batches[n].projections[p].size()); j++) {
-          flat_col_indices[offset + j] =
-              feature_col_to_flat_offset_[node_batches[n].projections[p][j].attribute_idx];
-          flat_weights[offset + j] = node_batches[n].projections[p][j].weight;
-        }
-      }
-    }
-  }
-
-  // 4. Single GPU kernel launch for all nodes.
-  std::vector<float> all_projected(static_cast<size_t>(total_examples) * num_proj);
-  int cuda_err;
-  double ms_apply = 0, ms_other = 0;
-  cuda_err = oblique_gpu_apply_projections_multi_node(
-      d_global_flat_data_,
-      all_selected.data(), total_examples,
-      node_row_off.data(), num_nodes,
-      num_proj, num_total_rows_,
-      flat_col_indices.data(), flat_weights.data(),
-      col_offsets.data(), total_nz,
-      all_projected.data(), max_examples_per_node,
-      &ms_apply, &ms_other);
-
-  if (cuda_err != 0) {
-    return absl::InternalError(
-        absl::StrCat("GPU depthwise ApplyProjections failed: CUDA error ", cuda_err));
-  }
-
-#ifdef CHRONO_ENABLED
-  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
-      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuApplyColumnADDMultiNode,
-      static_cast<uint64_t>(ms_apply * 1e6));
-  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
-      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuOther,
-      static_cast<uint64_t>(ms_other * 1e6));
-#endif
-
-  // 5. Unpack results back to per-node output buffers.
-  {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuResultUnpack);
-    for (int n = 0; n < num_nodes; n++) {
-      const int rows_n = node_row_off[n + 1] - node_row_off[n];
-      const size_t src_offset = static_cast<size_t>(node_row_off[n]) * num_proj;
-      const size_t block_size = static_cast<size_t>(rows_n) * num_proj;
-      std::memcpy(node_batches[n].projected_values.data(),
-                  all_projected.data() + src_offset,
-                  block_size * sizeof(float));
-      std::memset(node_batches[n].min_vals.data(), 0, num_proj * sizeof(float));
-      std::memset(node_batches[n].max_vals.data(), 0, num_proj * sizeof(float));
-    }
-  }
-
-  return absl::OkStatus();
-}
-
 absl::Status ObliqueGpuComputer::FindBestSplitNodewiseGPU(
     absl::Span<const internal::Projection> projections,
     absl::Span<const UnsignedExampleIdx> selected_examples,
@@ -662,38 +542,65 @@ absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseGPU(
     int num_bins, int comp_method,
     utils::RandomEngine* random,
     absl::Span<BestSplitResult> results) {
-  // First cut: loop per-node using FindBestSplitNodewiseGPU. The kernels in
-  // randomprojection.cu (RandomHistogram, HistogramSplit) are per-node; a true
-  // multi-node histogram + split kernel can be added later.
+  // Full-GPU depthwise Random-histogram split: one fused multi-node apply
+  // for all sibling nodes, segmented min/max on device, per-node
+  // RandomHistogram + HistogramSplit over pointer-offset slabs of the
+  // shared projected buffer.
   //
-  // NOTE: gpu_mutex_ is already held by the caller
-  // (FindBestSplitDepthwise).
+  // NOTE: gpu_mutex_ is already held by the caller (FindBestSplitDepthwise).
   const int num_nodes = node_batches.size();
+  if (num_nodes == 0) return absl::OkStatus();
+
+  // All nodes share the same num_proj within a BFS depth level.
+  const int num_proj = node_batches[0].projections.size();
+
   for (int n = 0; n < num_nodes; n++) {
     results[n] = BestSplitResult{};
-    if (node_batches[n].projections.empty() ||
-        node_batches[n].selected_examples.size() <= 1) {
-      continue;
+  }
+
+  // Flatten: concatenate selected_examples across nodes, build node_row_off,
+  // flatten CSR across (node * num_proj + p) segments.
+  std::vector<int> node_row_off(num_nodes + 1, 0);
+  std::vector<unsigned int> all_selected;
+  std::vector<int> col_offsets;
+  std::vector<int> flat_col_indices;
+  std::vector<float> flat_weights;
+  int total_examples = 0;
+  int max_examples_per_node = 0;
+  int total_nz = 0;
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGpuCsrFlatten);
+    for (int n = 0; n < num_nodes; n++) {
+      const int rows_n = node_batches[n].selected_examples.size();
+      node_row_off[n + 1] = node_row_off[n] + rows_n;
+      if (rows_n > max_examples_per_node) max_examples_per_node = rows_n;
+    }
+    total_examples = node_row_off[num_nodes];
+
+    all_selected.resize(total_examples);
+    for (int n = 0; n < num_nodes; n++) {
+      const int rows_n = node_batches[n].selected_examples.size();
+      if (rows_n == 0) continue;
+      std::memcpy(all_selected.data() + node_row_off[n],
+                  node_batches[n].selected_examples.data(),
+                  rows_n * sizeof(unsigned int));
     }
 
-    const int num_proj = node_batches[n].projections.size();
-    const int num_examples = node_batches[n].selected_examples.size();
-
-    std::vector<int> col_offsets(num_proj + 1, 0);
-    int total_nz = 0;
-    std::vector<int> flat_col_indices;
-    std::vector<float> flat_weights;
-    {
-      CHRONO_SCOPE(
-          ::yggdrasil_decision_forests::chrono_prof::kGpuCsrFlatten);
+    const int num_segments = num_nodes * num_proj;
+    col_offsets.resize(num_segments + 1, 0);
+    for (int n = 0; n < num_nodes; n++) {
       for (int p = 0; p < num_proj; p++) {
         total_nz += node_batches[n].projections[p].size();
-        col_offsets[p + 1] = total_nz;
+        col_offsets[n * num_proj + p + 1] = total_nz;
       }
-      flat_col_indices.resize(total_nz);
-      flat_weights.resize(total_nz);
+    }
+
+    flat_col_indices.resize(total_nz);
+    flat_weights.resize(total_nz);
+    for (int n = 0; n < num_nodes; n++) {
       for (int p = 0; p < num_proj; p++) {
-        int offset = col_offsets[p];
+        const int seg = n * num_proj + p;
+        const int offset = col_offsets[seg];
         const auto& proj = node_batches[n].projections[p];
         for (int j = 0; j < static_cast<int>(proj.size()); j++) {
           flat_col_indices[offset + j] =
@@ -702,50 +609,71 @@ absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseGPU(
         }
       }
     }
+  }
 
-    int best_proj = -1, best_bin = -1, num_pos = 0;
-    float best_gain = -1.0f, best_threshold = 0.0f;
-    double ms_apply = 0, ms_hist = 0, ms_split = 0, ms_other = 0;
+  if (total_examples == 0 || total_nz == 0) {
+    // Nothing for the GPU to do; results already sentinel-initialized.
+    return absl::OkStatus();
+  }
 
+  // Draw one seed per node in ascending node order. Matches the per-node
+  // loop's RNG consumption order in the old implementation, preserving
+  // reproducibility for fixed training seeds.
+  std::vector<unsigned long long> node_seeds(num_nodes);
+  {
     std::uniform_int_distribution<unsigned long long> seed_dist;
-    const unsigned long long seed = seed_dist(*random);
-
-    int cuda_err = oblique_gpu_find_best_split_nodewise(
-        d_global_flat_data_, d_global_labels_, num_total_rows_,
-        node_batches[n].selected_examples.data(), num_examples,
-        num_proj,
-        flat_col_indices.data(), flat_weights.data(),
-        col_offsets.data(), total_nz,
-        num_bins, comp_method, seed,
-        &best_proj, &best_bin, &best_gain, &best_threshold, &num_pos,
-        &ms_apply, &ms_hist, &ms_split, &ms_other);
-
-    if (cuda_err != 0) {
-      return absl::InternalError(absl::StrCat(
-          "GPU FindBestSplitDepthwise node ", n,
-          " failed: CUDA error ", cuda_err));
+    for (int n = 0; n < num_nodes; n++) {
+      node_seeds[n] = seed_dist(*random);
     }
+  }
+
+  std::vector<int> best_proj(num_nodes, -1);
+  std::vector<int> best_bin(num_nodes, -1);
+  std::vector<float> best_gain(num_nodes, -1.0f);
+  std::vector<float> best_threshold(num_nodes, 0.0f);
+  std::vector<int> num_pos(num_nodes, 0);
+
+  double ms_apply = 0, ms_hist = 0, ms_split = 0, ms_other = 0;
+
+  int cuda_err = oblique_gpu_find_best_split_depthwise(
+      d_global_flat_data_, d_global_labels_, num_total_rows_,
+      all_selected.data(), total_examples,
+      node_row_off.data(), num_nodes, num_proj,
+      flat_col_indices.data(), flat_weights.data(),
+      col_offsets.data(), total_nz,
+      max_examples_per_node,
+      num_bins, comp_method,
+      node_seeds.data(),
+      best_proj.data(), best_bin.data(),
+      best_gain.data(), best_threshold.data(), num_pos.data(),
+      &ms_apply, &ms_hist, &ms_split, &ms_other);
+
+  if (cuda_err != 0) {
+    return absl::InternalError(absl::StrCat(
+        "GPU FindBestSplitDepthwise failed: CUDA error ", cuda_err));
+  }
 
 #ifdef CHRONO_ENABLED
-    chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
-        chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuApplyColumnADD,
-        static_cast<uint64_t>(ms_apply * 1e6));
-    chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
-        chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuRandomHistogram,
-        static_cast<uint64_t>(ms_hist * 1e6));
-    chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
-        chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuSplitHistogram,
-        static_cast<uint64_t>(ms_split * 1e6));
-    chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
-        chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuOther,
-        static_cast<uint64_t>(ms_other * 1e6));
+  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuApplyColumnADDMultiNode,
+      static_cast<uint64_t>(ms_apply * 1e6));
+  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuRandomHistogram,
+      static_cast<uint64_t>(ms_hist * 1e6));
+  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuSplitHistogram,
+      static_cast<uint64_t>(ms_split * 1e6));
+  chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
+      chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuOther,
+      static_cast<uint64_t>(ms_other * 1e6));
 #endif
 
-    results[n].best_proj_idx = best_proj;
-    results[n].best_bin_idx = best_bin;
-    results[n].best_gain = best_gain;
-    results[n].best_threshold = best_threshold;
-    results[n].num_pos_training_examples = num_pos;
+  for (int n = 0; n < num_nodes; n++) {
+    results[n].best_proj_idx = best_proj[n];
+    results[n].best_bin_idx = best_bin[n];
+    results[n].best_gain = best_gain[n];
+    results[n].best_threshold = best_threshold[n];
+    results[n].num_pos_training_examples = num_pos[n];
   }
   return absl::OkStatus();
 }

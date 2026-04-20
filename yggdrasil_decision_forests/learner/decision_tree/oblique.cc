@@ -249,8 +249,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   const bool use_nodewise_gpu =
       internal_config.oblique_gpu_computer != nullptr &&
       internal_config.oblique_gpu_computer->use_gpu();
-  const bool has_depthwise_projections =
-      internal_config.depthwise_projections != nullptr;
   // Best-split descriptor pre-computed by the full-GPU depthwise split
   // pipeline. When present, oblique.cc skips projection evaluation entirely
   // and materializes NodeCondition from the descriptor.
@@ -272,7 +270,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
         split_type == proto::NumericalSplit_Type_EXACT;
     const bool can_use_gpu_split =
         !has_depthwise_best_split &&
-        !has_depthwise_projections &&
         use_nodewise_gpu &&
         internal_config.oblique_gpu_computer->supports_full_gpu_split() &&
         selected_weights.empty();
@@ -319,7 +316,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   // allocation overhead per node.
   std::vector<internal::Projection> all_projections;
   std::vector<int8_t> all_monotonic;
-  if (use_nodewise_gpu && !has_depthwise_projections) {
+  if (use_nodewise_gpu) {
     all_projections.resize(num_projections);
     all_monotonic.assign(num_projections, 0);
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
@@ -396,38 +393,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       best_condition->mutable_condition()
           ->mutable_higher_condition()
           ->set_threshold(result.best_threshold);
-    }
-  } else if (has_depthwise_projections) {
-    // depthwise-gpu: projections already computed by the BFS driver's
-    // per-depth GPU kernel; we only evaluate splits here.
-    const auto& all_projections_ref = *internal_config.depthwise_projection_defs;
-    const auto& all_monotonic_ref = *internal_config.depthwise_monotonic;
-    num_projections = internal_config.depthwise_num_proj;
-    const float* all_projected_ptr = internal_config.depthwise_projections;
-    const size_t n = selected_examples.size();
-
-    for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
-      if constexpr (ALLOW_EMPTY_PROJECTIONS) {
-        if (all_projections_ref[proj_idx].empty()) continue;
-      }
-
-      projection_values.assign(
-          all_projected_ptr + proj_idx * n,
-          all_projected_ptr + (proj_idx + 1) * n);
-
-      ASSIGN_OR_RETURN(
-          const auto split_result,
-          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
-                            selected_weights, selected_labels,
-                            projection_values, internal_config,
-                            all_projections_ref[proj_idx].front().attribute_idx,
-                            constraints, all_monotonic_ref[proj_idx],
-                            best_condition, cache, random));
-
-      if (split_result == SplitSearchResult::kBetterSplitFound) {
-        best_projection = all_projections_ref[proj_idx];
-        best_threshold = best_condition->condition().higher_condition().threshold();
-      }
     }
   } else if (use_nodewise_gpu) {
     // nodewise-gpu: one GPU kernel launch for this node, batching across its

@@ -194,13 +194,9 @@ struct InternalTrainConfig {
   // Created once per training run, shared across tree threads.
   ObliqueGpuComputer* oblique_gpu_computer = nullptr;
 
-  // Projected values pre-computed by a depthwise-GPU kernel (one kernel per
-  // BFS depth level, batching across both projections and sibling nodes).
-  // When non-null, oblique.cc skips its own ApplyProjections call and uses
-  // these directly. Layout: [num_proj * num_examples], projection-major.
+  // Projection definitions produced by the full-GPU depthwise split pipeline
+  // and handed down to per-node NodeTrain alongside `depthwise_best_split`.
   // Set per-node by GrowTreeLocalBFS before calling NodeTrain.
-  const float* depthwise_projections = nullptr;
-  int depthwise_num_proj = 0;
   const std::vector<std::vector<internal::AttributeAndWeight>>* depthwise_projection_defs = nullptr;
   const std::vector<int8_t>* depthwise_monotonic = nullptr;
 

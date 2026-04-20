@@ -37,15 +37,14 @@ enum FuncId {
   // CPU-side scopes around GPU dispatch. Kept as-is.
   kGpuInit,
   kGpuCsrFlatten,
-  kGpuResultUnpack,
   kGpuMutexWait,
   kGpuSampleProjectionsBatch,
 
   // Per-stage GPU timings, measured via cudaEvent_t inside each bridge.
   // Named after the helper function bracketing the stage. Mutually
   // exclusive by mode (zero-drop hides the unused ones per run).
-  kGpuApplyColumnADD,           // ApplyProjectionColumnADD (Random + Exact apply)
-  kGpuApplyColumnADDMultiNode,  // ApplyProjectionColumnADDMultiNode (apply-only depthwise)
+  kGpuApplyColumnADD,           // ApplyProjectionColumnADD (nodewise apply)
+  kGpuApplyColumnADDMultiNode,  // ApplyProjectionColumnADDMultiNode (fused depthwise apply + segmented min/max)
   kGpuRandomHistogram,          // RandomHistogram (Random hist stage)
   kGpuSplitHistogram,           // HistogramSplit (Random split stage)
   kGpuSortIndices,              // ThrustSortIndicesOnly (Exact sort stage)
