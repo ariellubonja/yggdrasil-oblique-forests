@@ -76,6 +76,7 @@
 #include "yggdrasil_decision_forests/utils/status_macros.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 
 
@@ -5426,7 +5427,67 @@ return found_split ? SplitSearchResult::kBetterSplitFound
               node_config, random, cache,
               std::move(depth_batch[n]), node_queue));
         }
-      } else {
+      }
+#ifdef DEPTHWISE_CPU
+      else if (dt_config.has_sparse_oblique_split() &&
+               depth_batch.size() > 1) {
+        // depthwise-cpu: level-fused projection Apply on CPU. Sample
+        // projections per node (matching the GPU depthwise sampling order so
+        // trees line up for cross-mode comparison), run one fused sweep over
+        // the level's rows to fill per-node projected-value slabs, then
+        // hand each slab into the existing per-node NodeTrain pipeline via
+        // InternalTrainConfig::depthwise_cpu_projected_values. The
+        // consumer branch in oblique.cc skips SampleProjection + Apply and
+        // runs split-finding directly over the pre-computed slab.
+        const int num_proj = GetNumProjections(
+            dt_config, config_link.numerical_features_size());
+        const float projection_density =
+            dt_config.sparse_oblique_split().projection_density_factor() /
+            config_link.numerical_features_size();
+        const int num_nodes = depth_batch.size();
+
+        std::vector<std::vector<internal::Projection>> all_node_projs(num_nodes);
+        std::vector<std::vector<int8_t>> all_node_mono(num_nodes);
+        for (int n = 0; n < num_nodes; n++) {
+          all_node_projs[n].resize(num_proj);
+          all_node_mono[n].resize(num_proj, 0);
+          for (int p = 0; p < num_proj; p++) {
+            internal::SampleProjection(
+                config_link.numerical_features(), dt_config,
+                train_dataset.data_spec(), config_link, projection_density,
+                &all_node_projs[n][p], &all_node_mono[n][p], random);
+          }
+        }
+
+        std::vector<absl::Span<const UnsignedExampleIdx>> sel_spans(num_nodes);
+        for (int n = 0; n < num_nodes; n++) {
+          sel_spans[n] = depth_batch[n].selected_examples.active;
+        }
+
+        std::vector<std::vector<float>> projected(num_nodes);
+        RETURN_IF_ERROR(ApplyProjectionsFusedLevel(
+            train_dataset, config_link.numerical_features(),
+            absl::MakeConstSpan(sel_spans),
+            absl::MakeConstSpan(all_node_projs),
+            absl::MakeSpan(projected)));
+
+        for (int n = 0; n < num_nodes; n++) {
+          auto node_config = internal_config;
+          node_config.depthwise_cpu_projected_values =
+              absl::MakeConstSpan(projected[n]);
+          node_config.depthwise_projection_defs = &all_node_projs[n];
+          node_config.depthwise_monotonic = &all_node_mono[n];
+          RETURN_IF_ERROR(NodeTrain(
+              train_dataset, config, config_link, dt_config, deployment,
+              splitter_concurrency_setup, weights, node_config, random, cache,
+              std::move(depth_batch[n]), node_queue));
+          // Free early: split-finding for node n is done; its slab won't be
+          // read again.
+          std::vector<float>().swap(projected[n]);
+        }
+      }
+#endif
+      else {
         // Per-node fallback (nodewise-gpu or CPU).
         for (auto& nae : depth_batch) {
           RETURN_IF_ERROR(NodeTrain(
@@ -5474,9 +5535,11 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       {
         const auto constraints = NodeConstraints::CreateNodeConstraints();
 
-#ifdef OBLIQUE_GPU_ENABLED
-        // BFS: iterative breadth-first tree growth (supports depthwise-gpu
-        // projection batching across sibling nodes at each depth level).
+#if defined(OBLIQUE_GPU_ENABLED) || defined(DEPTHWISE_CPU)
+        // BFS: iterative breadth-first tree growth. Required by the
+        // depthwise-GPU projection-batching pipeline and by the CPU fused
+        // depthwise Apply, both of which need the full level's sibling nodes
+        // materialized at once so projections can be batched across them.
         return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                         deployment, splitter_concurrency_setup, weights, 1,
                         internal_config, constraints, false, dt->mutable_root(),

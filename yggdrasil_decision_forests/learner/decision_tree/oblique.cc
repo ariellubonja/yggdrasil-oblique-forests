@@ -335,6 +335,17 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   }
 #endif
 
+#ifdef DEPTHWISE_CPU
+  // Fused CPU depthwise: GrowTreeLocalBFS pre-computed a per-node projected-
+  // values slab via ApplyProjectionsFusedLevel. When the slab is present, skip
+  // SampleProjection + ProjectionEvaluator::Evaluate and run split-finding
+  // directly over slices of it (one slice per projection, length rows_n).
+  const bool has_depthwise_cpu_projected =
+      !internal_config.depthwise_cpu_projected_values.empty() &&
+      internal_config.depthwise_projection_defs != nullptr &&
+      internal_config.depthwise_monotonic != nullptr;
+#endif
+
 #ifdef OBLIQUE_GPU_ENABLED
   if (has_depthwise_best_split) {
     // depthwise full-GPU: best-split descriptor already computed by the BFS
@@ -436,6 +447,37 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   } else
 #endif
   {
+#ifdef DEPTHWISE_CPU
+    if (has_depthwise_cpu_projected) {
+      // depthwise-cpu: consume the per-node slab filled by
+      // ApplyProjectionsFusedLevel. Skip SampleProjection and Apply; just run
+      // the existing per-projection split-finder over pre-computed values.
+      const auto& depth_projs = *internal_config.depthwise_projection_defs;
+      const auto& depth_mono = *internal_config.depthwise_monotonic;
+      const size_t rows_n = selected_examples.size();
+      const size_t num_projs = depth_projs.size();
+      const float* slab = internal_config.depthwise_cpu_projected_values.data();
+      for (size_t proj_idx = 0; proj_idx < num_projs; ++proj_idx) {
+        if constexpr (ALLOW_EMPTY_PROJECTIONS) {
+          if (depth_projs[proj_idx].empty()) continue;
+        }
+        const absl::Span<const float> values_span =
+            absl::MakeConstSpan(slab + proj_idx * rows_n, rows_n);
+        ASSIGN_OR_RETURN(
+            const auto split_result,
+            EvaluateProjection(
+                dynamic_dt_config, label_stats, dense_example_idxs,
+                selected_weights, selected_labels, values_span, internal_config,
+                depth_projs[proj_idx].front().attribute_idx, constraints,
+                depth_mono[proj_idx], best_condition, cache, random));
+        if (split_result == SplitSearchResult::kBetterSplitFound) {
+          best_projection = depth_projs[proj_idx];
+          best_threshold =
+              best_condition->condition().higher_condition().threshold();
+        }
+      }
+    } else {
+#endif
 #ifdef NODEWISE_CPU
     // nodewise-cpu: evaluate from the pre-sampled all_projections array.
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
@@ -509,6 +551,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
         best_threshold = best_condition->condition().higher_condition().threshold();
       }
     }
+#endif
+#ifdef DEPTHWISE_CPU
+    }  // close `else` of `if (has_depthwise_cpu_projected)`
 #endif
   }
   /* #endregion */

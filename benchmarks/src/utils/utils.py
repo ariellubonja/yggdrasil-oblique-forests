@@ -35,6 +35,10 @@ def get_base_parser():
     parser.add_argument("--max_num_projections", type=int)
     parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast")
     parser.add_argument("--fixed_1000_projections", action="store_true")
+    parser.add_argument("--depthwise_cpu", action="store_true",
+                        help="Build with -DDEPTHWISE_CPU=1: fused per-level "
+                             "CPU ApplyProjection (level-wise BFS driver; "
+                             "cache-friendly row-outer, projection-inner).")
     # parser.add_argument("--enable_fast_equal_width_binning", action="store_true") # This is on by default now
     parser.add_argument("--use_gpu", type=lambda x: x.lower() in ("true", "1", "yes"),
                        default=False, help="Use GPU for oblique projections (default: false)")
@@ -74,7 +78,7 @@ def _is_pcore_only_state():
 def configure_cpu_for_benchmarks(enable_pcore_only=True):
     """
     Configure CPU for benchmarking.
-    
+
     Args:
         enable_pcore_only: If True, disable HT/E-cores/turbo. If False, restore all.
 
@@ -93,25 +97,24 @@ def configure_cpu_for_benchmarks(enable_pcore_only=True):
               "skipping sudo. State will be left unchanged on exit.")
         return True
 
-        action = "--disable" if enable_pcore_only else "--enable"
-        cmd = ["sudo", "./benchmarks/src/utils/set_cpu_e_features.sh", action]
-        
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            print(result.stdout)
-            if result.stderr:
-                print(result.stderr)
-            
-            # Update global flag based on action
-            cpu_modified = enable_pcore_only
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to configure CPU: {e}")
-            if e.stdout:
-                print(e.stdout)
-            if e.stderr:
-                print(e.stderr)
-            sys.exit(1)
+    action = "--disable" if enable_pcore_only else "--enable"
+    cmd = ["sudo", "./benchmarks/src/utils/set_cpu_e_features.sh", action]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        print(result.stdout)
+        if result.stderr:
+            print(result.stderr)
+
+        cpu_modified = enable_pcore_only
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to configure CPU: {e}")
+        if e.stdout:
+            print(e.stdout)
+        if e.stderr:
+            print(e.stderr)
+        sys.exit(1)
 
 def cleanup_and_exit(signum=None, frame=None):
     """Cleanup function to restore CPU configuration before exiting"""
