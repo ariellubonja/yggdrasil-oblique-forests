@@ -42,16 +42,57 @@ def get_base_parser():
     return parser
 
 
+# CPUs that set_cpu_e_features.sh --disable takes offline on the 185H.
+_HT_SIBLING_CPUS = [2, 4, 5, 7, 9, 11]
+_E_CORE_CPUS = list(range(12, 22))
+_NO_TURBO_PATH = "/sys/devices/system/cpu/intel_pstate/no_turbo"
+
+
+def _read_sys_file(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def _is_pcore_only_state():
+    """Whether the CPU is already in the state set_cpu_e_features.sh --disable
+    produces. Missing /sys files are ignored, matching the shell script."""
+    for cpu in _HT_SIBLING_CPUS + _E_CORE_CPUS:
+        state = _read_sys_file(f"/sys/devices/system/cpu/cpu{cpu}/online")
+        if state is not None and state != "0":
+            return False
+
+    turbo = _read_sys_file(_NO_TURBO_PATH)
+    if turbo is not None and turbo != "1":
+        return False
+
+    return True
+
+
 def configure_cpu_for_benchmarks(enable_pcore_only=True):
     """
     Configure CPU for benchmarking.
     
     Args:
         enable_pcore_only: If True, disable HT/E-cores/turbo. If False, restore all.
+
+    If --disable is requested and the machine is already in that state, skip
+    the sudo call entirely and leave cpu_modified=False so cleanup won't
+    re-enable what the user pre-staged.
     """
     global cpu_modified
 
-    if get_cpu_model_proc() == "Intel(R) Core(TM) Ultra 9 185H":
+    if get_cpu_model_proc() != "Intel(R) Core(TM) Ultra 9 185H":
+        print("Skipping changing CPU E-features. CPU not Intel Core Ultra 9 185H")
+        return
+
+    if enable_pcore_only and _is_pcore_only_state():
+        print("CPU already in P-cores-only state (HT/E-cores offline, turbo off); "
+              "skipping sudo. State will be left unchanged on exit.")
+        return True
+
         action = "--disable" if enable_pcore_only else "--enable"
         cmd = ["sudo", "./benchmarks/src/utils/set_cpu_e_features.sh", action]
         
@@ -71,8 +112,6 @@ def configure_cpu_for_benchmarks(enable_pcore_only=True):
             if e.stderr:
                 print(e.stderr)
             sys.exit(1)
-    else:
-        print("Skipping changing CPU E-features. CPU not Intel Core Ultra 9 185H")
 
 def cleanup_and_exit(signum=None, frame=None):
     """Cleanup function to restore CPU configuration before exiting"""
@@ -117,6 +156,9 @@ def build_binary(args, chrono_mode):
     # nodewise/depthwise-gpu dispatch is compiled out (binary defaults to CPU).
     if getattr(args, 'use_gpu', False):
         finished_cmd.append('--config=oblique_gpu')
+
+    if getattr(args, 'depthwise_cpu', False):
+        finished_cmd.append('--config=depthwise_cpu')
 
     if getattr(args, 'gpu_mode', None) == 'per_node':
         finished_cmd.append('--config=dfs_node_queue')
