@@ -5,6 +5,12 @@ build:slow_sample_projections --cxxopt="-DSLOW_SAMPLE_PROJECTIONS_FLAG=true"
 build:print_projection_matrices --cxxopt="-DPRINT_PROJECTION_MATRICES_FLAG=1"
 build:fixed_1000_projections --cxxopt="-DHARD_CODE_1000_PROJECTIONS_FLAG=true"
 
+# Default: skip the std::isnan branch in ProjectionEvaluator::Evaluate for A/B timing.
+# Opt back in (i.e. restore correct NaN handling) with:
+#   bazel build --config=with_isnan //...
+build --cxxopt="-DYDF_BENCH_SKIP_ISNAN"
+build:with_isnan --cxxopt="-UYDF_BENCH_SKIP_ISNAN"
+
 # Optimizations
 build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
 build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
