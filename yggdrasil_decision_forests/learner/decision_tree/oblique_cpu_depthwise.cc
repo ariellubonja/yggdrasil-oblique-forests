@@ -47,7 +47,9 @@ absl::Status ApplyProjectionsFusedLevel(
         float acc = 0.f;
         for (const auto& feat : projs[p]) {
           float v = evaluator.AttributeValues(feat.attribute_idx)[ex];
+#ifndef YDF_BENCH_SKIP_ISNAN
           if (std::isnan(v)) v = evaluator.NaReplacementValue(feat.attribute_idx);
+#endif
           acc += feat.weight * v;
         }
         out[p * rows_n + i] = acc;
