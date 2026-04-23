@@ -42,6 +42,10 @@ def get_base_parser():
     # parser.add_argument("--enable_fast_equal_width_binning", action="store_true") # This is on by default now
     parser.add_argument("--use_gpu", type=lambda x: x.lower() in ("true", "1", "yes"),
                        default=False, help="Use GPU for oblique projections (default: false)")
+    parser.add_argument("--bazel_config", action="append", default=[], metavar="NAME",
+                       help="Extra --config=NAME to pass to the bazel build. Repeatable: "
+                            "--bazel_config=with_isnan --bazel_config=use_std_sort. "
+                            "Applied after the flag-driven configs (avx2, depthwise_cpu, ...).")
 
     return parser
 
@@ -168,7 +172,10 @@ def build_binary(args, chrono_mode):
 
     # if args.enable_fast_equal_width_binning:
     #     finished_cmd.append('--config=enable_fast_equal_width_binning')
-        
+
+    for extra_config in getattr(args, 'bazel_config', []) or []:
+        finished_cmd.append(f'--config={extra_config}')
+
     finished_cmd.append("--ui_event_filters=-warning")
     finished_cmd.append('//examples:train_oblique_forest')
 
