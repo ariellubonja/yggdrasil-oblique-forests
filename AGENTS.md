@@ -7,6 +7,33 @@
 
 A research fork of [Yggdrasil Decision Forests](https://github.com/google/yggdrasil-decision-forests) focused on **speeding up oblique (sparse) random forests**. The upstream repo supports many learners; this fork modifies only the oblique RF training path.
 
+## Current Research Goals
+
+Two concurrent workstreams:
+
+1. **Reduce `ApplyProjection` time on CPU.** `ProjectionEvaluator::Evaluate`
+   (`oblique.cc`) takes ~12% of multicore runtime on 4096-column synthetic data
+   and is the top CPU hotspot in oblique split finding. Current experiments:
+   a one-pass "fused" variant `ApplyProjectionsFusedLevel`
+   (`oblique_cpu_depthwise.cc`) that sweeps each node's row range once and
+   accumulates all P projections in the same pass, materializing a
+   `P × rows_n` slab per node. Built via `--config=depthwise_cpu`; the
+   baseline projection-wise path (single reused scratch buffer) is the default.
+   Also in flight: Highway-SIMD sort for exact-split threshold scanning
+   (`--config=use_std_sort` toggles back to `std::sort` for A/B timing), and
+   a branchless/gated `std::isnan` path (`YDF_BENCH_SKIP_ISNAN`, default on
+   via `.bazelrc`; flip back with `--config=with_isnan`).
+
+2. **Offload entire tops of trees to GPU.** For the shallow levels of each
+   tree, node row ranges are large, projection counts are high, and the work
+   maps cleanly onto CUDA. `oblique_gpu.cc` + `oblique_gpu_kernels.cu.cc`
+   expose `ApplyProjectionsNodewise`, `FindBestSplitNodewise`, and
+   `FindBestSplitDepthwise` (plus `*Exact` variants) — each takes a whole
+   level's (or node's) worth of work, does it on the GPU, returns the best
+   split back to CPU. Builds with `--config=oblique_gpu` (requires CUDA).
+   The CPU/GPU crossover depth is workload-dependent; once node row counts
+   drop below the GPU's effective batch size, the CPU path takes over.
+
 ## Build System
 
 Bazel. All commands run from the repo root.
@@ -134,6 +161,19 @@ benchmarks/
 ```
 
 ### Running Benchmarks
+
+> **IMPORTANT — CPU E-features must be disabled for any timing.** Before running
+> `perf stat`, `perf record`, `parallel_chrono.py`, `e2e_runtime.sh`, or any other
+> benchmark/profiler command, you **must** run:
+> ```bash
+> sudo benchmarks/src/utils/set_cpu_e_features.sh --disable
+> ```
+> This is a hybrid Intel CPU (P-cores + E-cores). With E-cores / HT / turbo enabled,
+> measurements are noisy and `perf` splits counters across `cpu_atom/*` and
+> `cpu_core/*` PMUs (many events become `<not supported>` on the atom side), making
+> A/B comparisons meaningless. The `parallel_chrono.py` driver and `e2e_runtime.sh`
+> call this automatically (`disable_ecores=True` default); standalone `perf`
+> invocations do not — run the script manually before profiling.
 
 ```bash
 # Full end-to-end runtime suite (builds, disables E-cores, runs all methods/datasets)
