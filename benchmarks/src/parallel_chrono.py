@@ -341,7 +341,7 @@ if __name__ == "__main__":
     if a.use_gpu:
         gpu_mode_label = f"GPU {a.gpu_mode} | "
         print(f"GPU mode: {a.gpu_mode}")
-    exp = f"{gpu_mode_label}{a.sample_projection_mode} projections | {a.feature_split_type} | {a.numerical_split_type} | {a.experiment_name}"
+    exp = f"{gpu_mode_label}{a.feature_split_type} | {a.numerical_split_type} | {a.experiment_name}"
     
     cmd = ["./bazel-bin/examples/train_oblique_forest",
            f"--num_trees={a.num_trees}",
@@ -438,9 +438,6 @@ if __name__ == "__main__":
 
         table = parse_parallel_chrono(log_plain)
 
-        # ------------------------------------------------------------------
-        #  >>>  NEW: build file name from arguments instead of wall-time
-        # ------------------------------------------------------------------
         d = -1 if a.tree_depth is None else a.tree_depth
         fname  = f"{d}Depth-{a.num_threads}Threads.csv"
         out_fp = out_dir / fname
