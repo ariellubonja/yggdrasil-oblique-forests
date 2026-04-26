@@ -1,221 +1,193 @@
 # AGENTS.md — Oblique Random Forest Performance Research
 
-> **Scope**: This file covers only the oblique split methods in this YDF fork.
-> Ignore all other learners (gradient boosted trees, CART, etc.) unless explicitly asked.
+> **Scope**: oblique split methods only. Ignore other learners
+> (gradient boosted trees, CART, etc.) unless explicitly asked.
 
-## What This Fork Is
-
-A research fork of [Yggdrasil Decision Forests](https://github.com/google/yggdrasil-decision-forests) focused on **speeding up oblique (sparse) random forests**. The upstream repo supports many learners; this fork modifies only the oblique RF training path.
-
-## Current Research Goals
-
-Two concurrent workstreams:
+A research fork of [Yggdrasil Decision Forests](https://github.com/google/yggdrasil-decision-forests)
+focused on **speeding up oblique (sparse) random forests**. Two concurrent workstreams:
 
 1. **Reduce `ApplyProjection` time on CPU.** `ProjectionEvaluator::Evaluate`
-   (`oblique.cc`) takes ~12% of multicore runtime on 4096-column synthetic data
-   and is the top CPU hotspot in oblique split finding. Current experiments:
-   a one-pass "fused" variant `ApplyProjectionsFusedLevel`
-   (`oblique_cpu_depthwise.cc`) that sweeps each node's row range once and
-   accumulates all P projections in the same pass, materializing a
-   `P × rows_n` slab per node. Built via `--config=depthwise_cpu`; the
-   baseline projection-wise path (single reused scratch buffer) is the default.
-   Also in flight: Highway-SIMD sort for exact-split threshold scanning
-   (`--config=use_std_sort` toggles back to `std::sort` for A/B timing), and
-   a branchless/gated `std::isnan` path (`YDF_BENCH_SKIP_ISNAN`, default on
-   via `.bazelrc`; flip back with `--config=with_isnan`).
+   (`oblique.cc`) is the top CPU hotspot in oblique split finding.
+   In flight: `--config=depthwise_1_pass` (V2-rev3, 4-row inner unroll
+   exposing load-level parallelism — see
+   `benchmarks/results/1pass_apply_projection_experiments.md`),
+   `--config=nodewise_proj_matrix` (V1, per-node fused matrix fill,
+   kept as A/B baseline for narrow datasets where projection sharing
+   may matter), Highway-SIMD `upper_bound`
+   (`--config=enable_std_upper_bound_avx2|avx512`), gated `std::isnan`
+   (`YDF_BENCH_SKIP_ISNAN` default-on; `--config=with_isnan` to flip back).
 
-2. **Offload entire tops of trees to GPU.** For the shallow levels of each
-   tree, node row ranges are large, projection counts are high, and the work
-   maps cleanly onto CUDA. `oblique_gpu.cc` + `oblique_gpu_kernels.cu.cc`
-   expose `ApplyProjectionsNodewise`, `FindBestSplitNodewise`, and
-   `FindBestSplitDepthwise` (plus `*Exact` variants) — each takes a whole
-   level's (or node's) worth of work, does it on the GPU, returns the best
-   split back to CPU. Builds with `--config=oblique_gpu` (requires CUDA).
-   The CPU/GPU crossover depth is workload-dependent; once node row counts
-   drop below the GPU's effective batch size, the CPU path takes over.
+2. **Offload tree tops to GPU.** Shallow levels have large rows / many
+   projections — maps cleanly onto CUDA. `oblique_gpu.cc` +
+   `oblique_gpu_kernels.cu.cc` expose `ApplyProjectionsNodewise`,
+   `FindBestSplitNodewise`, `FindBestSplitDepthwise` (plus `*Exact`).
+   Build: `--config=oblique_gpu`.
 
-## Build System
+## Experiment workflow (mandatory pattern)
 
-Bazel. All commands run from the repo root.
+Empiricism is foundational here — if this loop isn't followed, the work
+is wasted. Run sessions can be many hours; do not worry about token
+budget. Run the loop **as long as possible, ideally indefinitely**.
+
+### Branch convention
+- Each experiment lives on its own branch named after the method/idea
+  being optimized (e.g. `1-pass-AP-CPU`, `gpu-bfs-trunk-offload`,
+  `simd-isnan-gate`).
+- Never modify other branches from inside an experiment branch.
+- `git rebase` to land on `main` only when results are confirmed.
+
+### Per-experiment loop
+1. **Baseline first — but reuse existing baselines when possible.** Check
+   `benchmarks/results/per_function_timing/<CPU>/<projection_mode> | <split_type> | <numerical_split> | /<dataset>/`
+   for an existing baseline CSV (e.g. `no-isnan-baseline.csv` for the
+   default Oblique+Exact path on trunk 3M × 4096). If one matches the
+   config you're varying against, **use it** — don't re-run. If you have
+   to create a new baseline (different split type, different dataset
+   shape, etc.), name it descriptively
+   (e.g. `oblique_random_histogram_baseline.csv`) and **commit it**, so
+   the next experiment can reuse it. Coverage grows monotonically; over
+   time most experiments should not need to produce a fresh baseline.
+   Methodology when you do produce one: `parallel_chrono.py` +
+   `n_trees=5`, `rows=3000000`, `num_threads=1`, E-cores disabled.
+2. **Hypothesis + change.** Implement one change. Keep the diff small.
+3. **Measure.** Same methodology as baseline. **Median of 5 trees** via
+   `--num_trees=5`, never 5 separate process invocations (cold-cache cost
+   inflates each run).
+4. **Significance gate.** If median speedup over baseline (on the
+   targeted chrono scope) is **< 20%**, this experiment is a **failed
+   experiment** for the purpose of step 6.
+5. **Log result.** Append to the branch's `*_experiments.md` (see
+   `benchmarks/results/1pass_apply_projection_experiments.md` for the
+   shape). Every experiment — failed or successful — gets a row. **Mark
+   successful experiments (≥ 20% speedup) prominently** (★, bold table,
+   etc.) so they're easy to spot.
+6. **5 consecutive failures → enter full plan mode.** Stop the loop, list
+   what was tried and what was learned (cache pattern, FMA serialization,
+   load-buffer occupancy, …), and design fundamentally different
+   approaches before resuming. Do not just keep trying small variations.
+7. **Iterate.** Loop back to step 2.
+
+### Hardware + measurement rules
+- Intel Core Ultra 9 185H is hybrid (P-cores + E-cores). E-cores must be
+  off for stable timing — `parallel_chrono.py` and `e2e_runtime.sh`
+  toggle this automatically; for standalone `perf` runs, manually:
+  `sudo benchmarks/src/utils/set_cpu_e_features.sh --disable`. Restore
+  with `--enable` when done. With E-cores on, `perf` splits counters
+  across `cpu_atom/*` and `cpu_core/*` PMUs and many events become
+  `<not supported>` — A/B comparisons become meaningless.
+- Sudo is available on request; just ask.
+- Default workload: `rows=3000000`, `num_threads=1`. Never run
+  simultaneous experiments (timing noise).
+- **Never use sep5 / VTune / Advisor** — freezes this system. `perf` is fine.
+
+### `perf` discipline
+- `perf record -F 999 -e cycles:u` for top-down attribution. Build the
+  binary with `--copt=-g --strip=never` so source-line annotation works.
+- `perf annotate` to find the actual hot instructions inside the
+  function. Watch for load-use stalls attributed to the dependent FMA
+  (the load is the cost, not the addss).
+- `perf stat -e cycles:u,instructions:u,cache-misses,LLC-load-misses,...`
+  for memory-bandwidth vs. compute attribution.
+- `taskset -c 0` for stable single-thread measurement when running the
+  binary outside `parallel_chrono.py`. The script doesn't pin; numbers
+  produced via the script will trail pinned numbers by a few percentage
+  points and that's fine — the baseline-comparison methodology is what
+  matters, not the absolute number.
+
+### Artifacts
+- **Tracked**: the `.md` log, structured CSVs from `parallel_chrono.py`,
+  small text excerpts of `perf annotate` inside the `.md`.
+- **Not tracked**: `*.perfdata` (large binary), raw `.log` files
+  (verbose, redundant). These live under
+  `benchmarks/experiments/<branch-name>/perf_runs/` and
+  `benchmarks/experiments/<branch-name>/iteration_logs/` — both
+  gitignored. Regeneratable from the binary on demand.
+
+### After completing a successful experiment
+- Remind the user to describe how they want times-per-depth plotted
+  from `parallel_chrono.py` outputs.
+
+## Build commands
 
 ```bash
-# Optimized build (default via .bazelrc)
-bazel build -c opt //yggdrasil_decision_forests/learner/decision_tree:training
-
-# Debug build (Intel icx compiler)
-bazel build --config=intel_debug //...
-
-# Profiling build (VTune-friendly, -O2 + symbols)
-bazel build -c opt --config=intel_profiler //...
-
-# With custom CHRONO per-function timing
-bazel build -c opt --config=multithreaded_chrono_profile //...
-
-# Print oblique projection matrices (debug)
-bazel build -c opt --config=print_projection_matrices //...
+bazel build -c opt //yggdrasil_decision_forests/learner/decision_tree:training        # Default opt build
+bazel build -c opt --config=multithreaded_chrono_profile //...                        # CHRONO timing per tree/depth
+bazel build -c opt --config=intel_profiler //...                                       # -O2 + DWARF, perf-annotate-friendly
+bazel build --config=intel_debug //...                                                  # icx debug build
 ```
 
-## Key Bazel Configs (.bazelrc)
-
+### Key configs (`.bazelrc`)
 | Config | Purpose |
 |--------|---------|
-| `multithreaded_chrono_profile` | Enables `CHRONO_ENABLED` — per-function timing by tree/depth |
-| `print_projection_matrices` | Enables `PRINT_PROJECTION_MATRICES` — prints splits at each node |
-| `enable_std_upper_bound_avx2` | AVX2 vectorized upper_bound |
-| `enable_std_upper_bound_avx512` | AVX512 vectorized upper_bound |
-| `disable_empty_projections` | Disallows zero-weight projections |
+| `multithreaded_chrono_profile` | `CHRONO_ENABLED` — per-function timing by tree/depth |
+| `nodewise_proj_matrix` | V1 fused Apply (per-node rows-outer/projs-inner matrix fill) |
+| `depthwise_1_pass` | V2-rev3 fused Apply (4-row inner unroll, load-level parallelism) |
+| `with_isnan` | Re-enables `std::isnan` check (off by default; `YDF_BENCH_SKIP_ISNAN` is on) |
+| `enable_std_upper_bound_avx2` / `avx512` | Vectorized `upper_bound` |
+| `print_projection_matrices` | Prints projection matrix at each node (debug) |
 
-## Critical Files (Oblique Training Path)
+## Critical files
 
-### Decision Tree Core
 | File | Role |
 |------|------|
-| `yggdrasil_decision_forests/learner/decision_tree/training.cc` | Tree growth loop (`GrowTreeLocalBFS`), node processing (`NodeTrain`), split finding dispatch |
-| `yggdrasil_decision_forests/learner/decision_tree/training.h` | Public API, `NodeAndExamples` struct, `PerThreadCache`, `InternalTrainConfig` |
-| `yggdrasil_decision_forests/learner/decision_tree/oblique.cc` | Oblique split finding — projection sampling, evaluation, scoring |
-| `yggdrasil_decision_forests/learner/decision_tree/oblique.h` | Oblique split API |
+| `learner/decision_tree/training.{cc,h}` | Tree growth (`GrowTreeLocalBFS`), node processing (`NodeTrain`), split dispatch |
+| `learner/decision_tree/oblique.{cc,h}` | Oblique split finding — projection sampling, evaluation, scoring; `ProjectionEvaluator::Evaluate` is the baseline hot loop |
+| `learner/decision_tree/oblique_cpu_nodewise_proj_matrix.{cc,h}` | V1 — gated by `NODEWISE_PROJ_MATRIX` |
+| `learner/decision_tree/oblique_cpu_depthwise_1pass.{cc,h}` | V2-rev3 — gated by `DEPTHWISE_1_PASS` |
+| `learner/decision_tree/label.h` | `InternalTrainConfig`, umbrella macro `OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS` |
+| `learner/random_forest/random_forest.cc` | RF training loop, bagging, OOB |
+| `utils/parallel_chrono.h` | `CHRONO_SCOPE`, per-function timing enums |
+| `model/decision_tree/decision_tree.h` | `NodeWithChildren`, `SelectedExamplesRollingBuffer` |
+| `learner/decision_tree/decision_tree.proto` | Config proto |
 
-### Random Forest Learner
-| File | Role |
-|------|------|
-| `yggdrasil_decision_forests/learner/random_forest/random_forest.cc` | RF training loop — bagging, tree dispatch, OOB evaluation |
+Tree growth is BFS via a `std::deque<NodeAndExamples>` queue: `NodeTrain`
+checks exit conditions, calls `FindBestCondition` → oblique splitter,
+calls `SplitExamplesInPlace`, enqueues both children.
 
-### Profiling Infrastructure
-| File | Role |
-|------|------|
-| `yggdrasil_decision_forests/utils/parallel_chrono.h` | `CHRONO_SCOPE`, `TreeScope`, `DepthScope`, per-function timing enums |
-
-### Model / Data Structures
-| File | Role |
-|------|------|
-| `yggdrasil_decision_forests/model/decision_tree/decision_tree.h` | `NodeWithChildren`, `SelectedExamplesRollingBuffer`, tree structure |
-| `yggdrasil_decision_forests/learner/decision_tree/decision_tree.proto` | Config proto: `sparse_oblique_split`, `mhld_oblique_split`, `growing_strategy`, `max_depth`, etc. |
-
-## Tree Growth Architecture
-
-The tree is grown **breadth-first** (BFS) via an iterative queue:
-
-1. `DecisionTreeCoreTrain` → `GrowTreeLocalBFS` (for `kGrowingStrategyLocal`)
-2. `GrowTreeLocalBFS` maintains a `std::deque<NodeAndExamples>` — push_back/pop_front = FIFO
-3. Each iteration calls `NodeTrain` which:
-   - Checks exit conditions (min_examples, max_depth, timeout)
-   - Calls `FindBestCondition` → dispatches to oblique splitter
-   - Calls `SplitExamplesInPlace` to partition examples
-   - Enqueues both children onto the back of the queue
-
-## Running Tests
+## Tests
 
 ```bash
-# Oblique-specific tests
-bazel test -c opt //yggdrasil_decision_forests/learner/random_forest:random_forest_test \
-  --test_filter="*SparseOblique*"
-
-bazel test -c opt //yggdrasil_decision_forests/learner/decision_tree:training_test \
-  --test_filter="*Oblique*"
-
-# Run binary directly for LOG output visibility
-./bazel-bin/yggdrasil_decision_forests/learner/random_forest/random_forest_test \
-  --gtest_filter="*SparseOblique*"
+bazel test -c opt //yggdrasil_decision_forests/learner/random_forest:random_forest_test --test_filter="*SparseOblique*"
+bazel test -c opt //yggdrasil_decision_forests/learner/decision_tree:training_test --test_filter="*Oblique*"
 ```
 
-## Benchmarks (`benchmarks/`)
+## Benchmarks layout
 
-The `benchmarks/` directory is the experimental instrumentation for this research.
-
-### Structure
 ```
 benchmarks/
-├── src/                            # Benchmark scripts and tooling
-│   ├── bash_scripts/
-│   │   ├── e2e_runtime.sh          # Main end-to-end runtime benchmark suite
-│   │   ├── parallel_chrono_many_threads.sh  # CHRONO profiling across thread counts
-│   │   └── exact_histogram_breakeven/       # Exact-vs-histogram breakeven experiments
-│   │       ├── heatmaps/           # Row-scaling heatmap scripts (varying rows, threads)
-│   │       └── chrono/             # CHRONO-enabled breakeven scripts
-│   ├── parallel_chrono.py          # Python driver: runs CHRONO builds, parses per-tree-depth
-│   │                               #   timing output into CSVs (thread-pivoted)
-│   ├── plot_ydf_projection_matrix.ipynb  # Visualize oblique projection matrices
-│   ├── microbenchmarks/            # Standalone C++ microbenchmarks (e.g. sampling algorithms)
+├── src/
+│   ├── parallel_chrono.py          # Main driver: CHRONO build + per-tree-depth CSV
+│   ├── bash_scripts/e2e_runtime.sh # End-to-end runtime suite
 │   └── utils/
-│       ├── utils.py                # Shared CLI arg parser, E-core toggle, build helpers
-│       ├── make_trunk_dataset.py   # Generate synthetic "trunk" datasets (rows x cols)
-│       ├── set_cpu_e_features.sh   # Disable/enable Intel E-cores for stable benchmarking
-│       └── download_cc18_datasets.ipynb  # Download OpenML CC18 benchmark suite
-├── data/                           # Datasets
-│   ├── cc18_binary_csv/            # 35 OpenML CC18 binary classification tasks (10-fold CV)
-│   │   └── task_<id>_<name>/       # Each: repeat0_fold{0..9}_sample0_{train,test}.csv
-│   ├── HIGGS_with_header.csv       # Large physics dataset (~11M rows)
-│   ├── SUSY_with_header.csv        # Large physics dataset (~5M rows)
-│   ├── epsilon_normalized_train.csv  # Large dense dataset (400K rows x 2000 features)
-│   ├── haberman.csv                # Small dataset
-│   └── jovo_50m/                   # Pickle-format dataset (50M?)
-└── results/                        # Experimental output (committed for reference)
-    ├── e2e_runtime/                # Wall-clock runtime logs (per method, dataset, ISA)
-    ├── e2e_accuracy/               # OOB accuracy logs
-    ├── per_function_timing/        # CHRONO CSVs organized by CPU
-    │   ├── Intel(R) Core(TM) Ultra 9 185H/   # Laptop results
-    │   │   └── <projection_mode> | Oblique | <split_method> | /
-    │   │       └── <dataset>/<depth>Depth-<threads>Threads.csv
-    │   └── Intel(R) Xeon(R) Platinum 8488C/   # AWS server results
-    └── ydf_projection_matrices/    # Saved projection matrix visualizations
+│       ├── utils.py                # Shared CLI parser, E-core toggle, build helpers
+│       ├── make_trunk_dataset.py   # Synthetic trunk datasets
+│       └── set_cpu_e_features.sh   # E-core/turbo toggle
+├── data/                           # HIGGS, SUSY, epsilon, CC18 tasks, synthetic trunk
+├── results/                        # Tracked: per-method CSVs + experiment .md logs
+│   └── per_function_timing/<CPU>/<exp>/<dataset>/<depth>Depth-<threads>Threads.csv
+└── experiments/<branch-name>/      # Gitignored: perf_runs/ + iteration_logs/
 ```
 
-### Running Benchmarks
-
-> **IMPORTANT — CPU E-features must be disabled for any timing.** Before running
-> `perf stat`, `perf record`, `parallel_chrono.py`, `e2e_runtime.sh`, or any other
-> benchmark/profiler command, you **must** run:
-> ```bash
-> sudo benchmarks/src/utils/set_cpu_e_features.sh --disable
-> ```
-> This is a hybrid Intel CPU (P-cores + E-cores). With E-cores / HT / turbo enabled,
-> measurements are noisy and `perf` splits counters across `cpu_atom/*` and
-> `cpu_core/*` PMUs (many events become `<not supported>` on the atom side), making
-> A/B comparisons meaningless. The `parallel_chrono.py` driver and `e2e_runtime.sh`
-> call this automatically (`disable_ecores=True` default); standalone `perf`
-> invocations do not — run the script manually before profiling.
+Common invocations:
 
 ```bash
-# Full end-to-end runtime suite (builds, disables E-cores, runs all methods/datasets)
-bash benchmarks/src/bash_scripts/e2e_runtime.sh
-
-# CHRONO per-function profiling (requires --config=multithreaded_chrono_profile build)
 python benchmarks/src/parallel_chrono.py \
-  --num_threads=48 --train_csv=benchmarks/data/trunk_data/100000x4096.csv \
-  --label_col=target --tree_depth=-1 --num_trees=512
+  --input_mode=trunk --rows=3000000 --tree_depth=-1 --num_trees=5 \
+  --num_threads=1 --feature_split_type=Oblique --numerical_split_type=Exact \
+  --depthwise_1_pass
 
-# Breakeven heatmaps (exact vs histogram across dataset sizes)
-bash benchmarks/src/bash_scripts/exact_histogram_breakeven/heatmaps/oblique_multithr_-1_depth.sh
-
-# Single run with the training binary
-bazel build -c opt //examples:train_oblique_forest
-./bazel-bin/examples/train_oblique_forest \
-  --input_mode csv \
-  --train_csv benchmarks/data/cc18_binary_csv/<dataset>/repeat0_fold0_sample0_train.csv \
-  --label_col <label> \
-  --feature_split_type "Oblique" \
-  --num_trees 240 --num_threads -1
+bash benchmarks/src/bash_scripts/e2e_runtime.sh
 ```
 
-### Key Benchmark Parameters
-
-The `e2e_runtime.sh` script sweeps over:
-- **Split types**: Oblique, Axis Aligned
-- **Numerical split methods**: Exact, Random, Dynamic Random Histogram
-- **Vectorization**: None, AVX2, AVX512 (for Random/Dynamic methods)
-- **Datasets**: HIGGS, SUSY, epsilon, CC18 tasks, synthetic trunk data
-- **Dynamic split thresholds**: configurable sweep or fixed defaults
-
-The `parallel_chrono.py` script:
-- Builds with `--config=multithreaded_chrono_profile`
-- Parses per-tree per-depth timing lines from stdout
-- Outputs CSV with columns: thread, tree, depth, nodes, samples, then per-function times
-- Functions timed: SampleProj, ProjEval, EvalProj, sort phases, histogram phases
+`parallel_chrono.py` outputs CSV columns: `thread, tree, depth, nodes,
+samples, SampleProj, ApplyProjection, EvalProj, sort phases, histogram
+phases`. Sweeps in `e2e_runtime.sh`: split types (Oblique / Axis
+Aligned), numerical methods (Exact / Random / Dynamic Random Histogram),
+vectorization (None / AVX2 / AVX512), datasets.
 
 ## Conventions
-
-- Data is **column-major** (`VerticalDataset`)
-- Example indices use `UnsignedExampleIdx` (uint32)
-- `SelectedExamplesRollingBuffer` is a non-owning span pair (active/inactive) for in-place partitioning
-- Protobuf configs are the source of truth for hyperparameters
-- Custom annotations in code: comments starting with `// Ariel:` are the fork author's notes
+- Data is **column-major** (`VerticalDataset`).
+- Example indices: `UnsignedExampleIdx` (uint32).
+- `SelectedExamplesRollingBuffer` is a non-owning span pair for in-place partitioning.
+- Protobuf configs are the source of truth for hyperparameters.
+- `// Ariel:` comments are the fork author's notes.
