@@ -16,6 +16,19 @@
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_CONFIG_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_CONFIG_H_
 
+// Fused-per-level CPU Apply variants. V1 (NODEWISE_PROJ_MATRIX, per-node
+// matrix fill) and V2 (DEPTHWISE_1_PASS, single-pass kernel across all
+// (row,proj) tasks at the level) produce the same per-node slab layout, so
+// variant-agnostic consumer sites key on the umbrella macro
+// OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS. The two variants are mutually
+// exclusive at build time.
+#if defined(NODEWISE_PROJ_MATRIX) && defined(DEPTHWISE_1_PASS)
+#error "NODEWISE_PROJ_MATRIX and DEPTHWISE_1_PASS are mutually exclusive"
+#endif
+#if defined(NODEWISE_PROJ_MATRIX) || defined(DEPTHWISE_1_PASS)
+#define OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS 1
+#endif
+
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -206,13 +219,14 @@ struct InternalTrainConfig {
   // projection definition at depthwise_projection_defs[best_proj_idx].
   const BestSplitResult* depthwise_best_split = nullptr;
 
-  // Pre-computed projected values from the fused CPU depthwise Apply
-  // (ApplyProjectionsFusedLevel). Layout: row-minor within projection, size
-  // num_projections * rows_in_node. When non-empty and
+  // Pre-computed projected values from either fused-per-level CPU Apply
+  // variant (V1 ApplyProjectionsNodewiseProjMatrix or V2
+  // ApplyProjectionsDepthwise1Pass). Layout: row-minor within projection,
+  // size num_projections * rows_in_node. When non-empty and
   // depthwise_projection_defs is set, oblique.cc skips SampleProjection +
   // ProjectionEvaluator::Evaluate and runs per-projection split-finding
   // directly over slices of this span.
-  absl::Span<const float> depthwise_cpu_projected_values;
+  absl::Span<const float> precomputed_projected_values;
 
   // If true, the list of selected example index ("selected_examples") can
   // contain duplicated values. If false, all selected examples are expected to

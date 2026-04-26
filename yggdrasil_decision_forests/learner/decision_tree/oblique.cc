@@ -335,13 +335,14 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   }
 #endif
 
-#ifdef DEPTHWISE_CPU
-  // Fused CPU depthwise: GrowTreeLocalBFS pre-computed a per-node projected-
-  // values slab via ApplyProjectionsFusedLevel. When the slab is present, skip
-  // SampleProjection + ProjectionEvaluator::Evaluate and run split-finding
-  // directly over slices of it (one slice per projection, length rows_n).
-  const bool has_depthwise_cpu_projected =
-      !internal_config.depthwise_cpu_projected_values.empty() &&
+#ifdef OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS
+  // Fused CPU Apply (V1 nodewise-proj-matrix or V2 depthwise-1-pass):
+  // GrowTreeLocalBFS pre-computed a per-node projected-values slab. When the
+  // slab is present, skip SampleProjection + ProjectionEvaluator::Evaluate
+  // and run split-finding directly over slices of it (one slice per
+  // projection, length rows_n).
+  const bool has_precomputed_projected =
+      !internal_config.precomputed_projected_values.empty() &&
       internal_config.depthwise_projection_defs != nullptr &&
       internal_config.depthwise_monotonic != nullptr;
 #endif
@@ -447,16 +448,18 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   } else
 #endif
   {
-#ifdef DEPTHWISE_CPU
-    if (has_depthwise_cpu_projected) {
-      // depthwise-cpu: consume the per-node slab filled by
-      // ApplyProjectionsFusedLevel. Skip SampleProjection and Apply; just run
-      // the existing per-projection split-finder over pre-computed values.
+#ifdef OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS
+    if (has_precomputed_projected) {
+      // Consume the per-node slab filled by the selected fused-level Apply
+      // (V1 ApplyProjectionsNodewiseProjMatrix or V2
+      // ApplyProjectionsDepthwise1Pass). Skip SampleProjection and Apply;
+      // just run the existing per-projection split-finder over the pre-
+      // computed values.
       const auto& depth_projs = *internal_config.depthwise_projection_defs;
       const auto& depth_mono = *internal_config.depthwise_monotonic;
       const size_t rows_n = selected_examples.size();
       const size_t num_projs = depth_projs.size();
-      const float* slab = internal_config.depthwise_cpu_projected_values.data();
+      const float* slab = internal_config.precomputed_projected_values.data();
       for (size_t proj_idx = 0; proj_idx < num_projs; ++proj_idx) {
         if constexpr (ALLOW_EMPTY_PROJECTIONS) {
           if (depth_projs[proj_idx].empty()) continue;
@@ -552,8 +555,8 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       }
     }
 #endif
-#ifdef DEPTHWISE_CPU
-    }  // close `else` of `if (has_depthwise_cpu_projected)`
+#ifdef OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS
+    }  // close `else` of `if (has_precomputed_projected)`
 #endif
   }
   /* #endregion */

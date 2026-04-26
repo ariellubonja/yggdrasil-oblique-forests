@@ -35,17 +35,24 @@ def get_base_parser():
     parser.add_argument("--max_num_projections", type=int)
     parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast")
     parser.add_argument("--fixed_1000_projections", action="store_true")
-    parser.add_argument("--depthwise_cpu", action="store_true",
-                        help="Build with -DDEPTHWISE_CPU=1: fused per-level "
-                             "CPU ApplyProjection (level-wise BFS driver; "
-                             "cache-friendly row-outer, projection-inner).")
+    parser.add_argument("--nodewise_proj_matrix", action="store_true",
+                        help="Build with -DNODEWISE_PROJ_MATRIX=1: V1 fused "
+                             "per-level CPU ApplyProjection (per-node rows-"
+                             "outer / projections-inner matrix fill; serial "
+                             "across nodes).")
+    parser.add_argument("--depthwise_1_pass", action="store_true",
+                        help="Build with -DDEPTHWISE_1_PASS=1: V2 fused "
+                             "per-level CPU ApplyProjection (single-pass "
+                             "kernel across all (row, projection) tasks at "
+                             "the level; thread-parallel, contention-free).")
     # parser.add_argument("--enable_fast_equal_width_binning", action="store_true") # This is on by default now
     parser.add_argument("--use_gpu", type=lambda x: x.lower() in ("true", "1", "yes"),
                        default=False, help="Use GPU for oblique projections (default: false)")
     parser.add_argument("--bazel_config", action="append", default=[], metavar="NAME",
                        help="Extra --config=NAME to pass to the bazel build. Repeatable: "
                             "--bazel_config=with_isnan --bazel_config=use_std_sort. "
-                            "Applied after the flag-driven configs (avx2, depthwise_cpu, ...).")
+                            "Applied after the flag-driven configs (avx2, "
+                            "nodewise_proj_matrix, depthwise_1_pass, ...).")
 
     return parser
 
@@ -164,8 +171,14 @@ def build_binary(args, chrono_mode):
     if getattr(args, 'use_gpu', False):
         finished_cmd.append('--config=oblique_gpu')
 
-    if getattr(args, 'depthwise_cpu', False):
-        finished_cmd.append('--config=depthwise_cpu')
+    if getattr(args, 'nodewise_proj_matrix', False) and getattr(args, 'depthwise_1_pass', False):
+        raise ValueError(
+            "--nodewise_proj_matrix and --depthwise_1_pass are mutually "
+            "exclusive (matches the C++ #error in label.h).")
+    if getattr(args, 'nodewise_proj_matrix', False):
+        finished_cmd.append('--config=nodewise_proj_matrix')
+    if getattr(args, 'depthwise_1_pass', False):
+        finished_cmd.append('--config=depthwise_1_pass')
 
     if getattr(args, 'gpu_mode', None) == 'per_node':
         finished_cmd.append('--config=dfs_node_queue')

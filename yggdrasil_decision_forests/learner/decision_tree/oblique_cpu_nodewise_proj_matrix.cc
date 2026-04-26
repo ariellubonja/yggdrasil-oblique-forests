@@ -1,4 +1,6 @@
-#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_nodewise_proj_matrix.h"
+
+#ifdef NODEWISE_PROJ_MATRIX
 
 #include <cmath>
 #include <cstddef>
@@ -12,7 +14,7 @@
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
-absl::Status ApplyProjectionsFusedLevel(
+absl::Status ApplyProjectionsNodewiseProjMatrix(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
@@ -23,8 +25,8 @@ absl::Status ApplyProjectionsFusedLevel(
   DCHECK_EQ(N, projections_per_node.size());
   DCHECK_EQ(N, out_projected.size());
 
-  // Tagged with kProjectionEvaluate so benchmark CSVs can diff this directly
-  // against the baseline per-node projection loop at the same tag.
+  // Tagged with kProjectionEvaluate so benchmark CSVs can diff V1 vs. V2 and
+  // the baseline per-node projection loop directly at the same tag.
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
 
   internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
@@ -61,3 +63,5 @@ absl::Status ApplyProjectionsFusedLevel(
 }
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
+
+#endif  // NODEWISE_PROJ_MATRIX
