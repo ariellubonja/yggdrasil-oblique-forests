@@ -270,14 +270,80 @@ Result: 218 s → 65 s, closing 70% of the gap to V1. Remaining ~14% gap is pres
 
 Quick reasoning, not measured: the OOO load buffer on this core can hold ~10-12 outstanding misses; with density ≈ 3 items per projection, 4 rows × 3 items = 12 in-flight loads — saturating without overshooting. Tried with 4 because it matched the existing SIMD body the compiler generates (4-wide SSE) and lets the compiler vectorize the FMA cleanly. Higher unroll factors might help on AVX-512 hardware or denser projections; not pursued here since 4 already cleared the bar.
 
-### Next questions / not done
+## Phase C — Next experiments (planned)
 
-- **Does V2-rev3 still win at higher row counts (10M, 20M)?** Cache-eviction patterns are different at scale. Likely still wins given DRAM dominates either way, but unverified.
-- **Multi-thread.** Untested. The design has ConcurrentForLoop wired up; the at-task partitioning is now (node, projection) granularity, which may load-balance worse than fine-grained (n,i,p) chunking when one node dominates a level.
-- **Higher-density oblique** (density factor ≥ 8). The 4-row unroll's gain comes from saturating load parallelism *within* one item; at density ≥ 4 the compiler-emitted 4-wide SIMD body in the original baseline kernel is already issuing 4 parallel loads, so V2-rev3's gain narrows.
-- **VTune / `perf annotate` on V2-rev3.** Confirming the compiler actually generates 4 independent load slots in the assembly (vs. compiler folding them together) is a one-command check that hasn't been run.
+V2-rev3 is the new floor on this branch and has been merged. Subsequent
+experiments will branch from `main` per AGENTS.md (one branch per
+method/idea, named after it). Existing baseline reused:
+`benchmarks/results/per_function_timing/Intel(R) Core(TM) Ultra 9 185H/Oblique | Exact | /trunk_3000000_x_4096/no-isnan-baseline.csv`
+plus `v2_rev3_5trees.csv` as the new beat-bar. No new baseline run needed
+unless the workload shape changes (different dataset, split type, density).
+
+**Significance gate** — same 20% rule on the targeted scope
+(`kProjectionEvaluate`). Baseline = best version landed on `main` (V2-rev3
+today). No experiment "stacks" against an unmerged predecessor.
+
+### Why 4-row unroll? — the specific question
+
+Picked 4 because it matched the 4-wide SSE register the compiler was already
+emitting for the inner FMA, and density ≈ 3 features × 4 rows = 12 in-flight
+loads, which approximates the OOO load-buffer occupancy on this core
+(Redwood Cove ≈ 12 fill buffers per core, 16 LDQ entries). That was a
+*hand-wavy* fit — never measured against 8 or 16. Concrete reasons it might
+be sub-optimal:
+
+1. **Register pressure.** 4 acc regs + 4 ex indices + 4 v values = 12 xmm
+   live ≈ half the SSE register file. Going to 8 might still fit (16 SSE
+   regs on x86_64). Going to 16 would spill.
+2. **Load-buffer saturation point depends on density.** At density d, an
+   M-row unroll issues M·d concurrent loads. For density 1, 4 → 4 loads,
+   under-saturating. For density 8, 4 → 32 loads, way over OOO capacity →
+   loads serialize through fill buffers anyway, gain disappears.
+3. **AVX2 8-wide.** The compiler stayed in SSE because it had a clean
+   4-row unroll with 4 explicit acc regs. An 8-row unroll with 8 acc regs
+   could let it emit YMM (`vmulps`/`vaddps`) — same code, twice the lane
+   count per FMA. Risk: compiler still emits 2× SSE blocks instead of one
+   AVX2.
+4. **Explicit `_mm256_i32gather_ps`.** Currently the 4 loads are 4 separate
+   `movss` packed via `unpcklps`. AVX2 can do `vgatherdps ymm` — 8 indexed
+   loads per instruction, at the cost of microcode dispatch (~20 µops on
+   this core). On gather-heavy kernels VGATHER is a wash to a slight loss
+   on Intel; needs measurement before it's chosen.
+
+### Planned branches (priority order)
+
+Each branch follows the per-experiment loop in AGENTS.md: hypothesis →
+small change → median of 5 trees via `--num_trees=5` → 20% gate → log
+result here, regardless of pass/fail. Stop and enter plan mode after 5
+consecutive failures.
+
+| # | Branch | Hypothesis | Change | Expected outcome |
+|---|---|---|---|---|
+| 1 | `unroll-factor-AP-CPU` | M=4 was a lucky default. M=8 or M=16 may saturate load buffer better at density 3-5. Beyond that, register spill or fill-buffer overflow regresses. | Templatize `EvaluateProjectionRowBlocks<M>` over the row-block factor; sweep M ∈ {2, 4, 6, 8, 12, 16}. Tail handling stays scalar. | Either confirms 4 is local optimum (fail) or unlocks another 5-15% on top of V2-rev3 (pass). High odds of *some* signal. |
+| 2 | `avx2-gather-AP-CPU` | Compiler-emitted 4× `movss + unpcklps` is sub-optimal. Explicit `_mm256_i32gather_ps` issues 8 loads in one instruction; could halve front-end pressure if back-end is the bottleneck. | Replace inner load+pack with `_mm256_i32gather_ps` on `attribute_idx` column, 8 ex indices. Build under `--config=enable_std_upper_bound_avx2` umbrella. | Likely fail on Intel (VGATHER is microcoded, ≈ 1 load/cycle aggregate, which is what 8 scalar loads already get). Worth one shot to falsify. |
+| 3 | `prefetch-projection-AP-CPU` | V2-rev2 prefetch failed because it recomputed the indirect address per item. A coarser prefetch — issue `__builtin_prefetch(&attr_col[ex_kPF])` once per row block, not per item — amortizes the recompute. | Add a single 4-row-ahead prefetch at the top of each (n, p) call's first inner-loop iteration, computed once per block. | Promising on read-bound kernels; needs care that prefetch distance ≥ DRAM latency × issue rate. |
+| 4 | `permute-selected-AP-CPU` | `selected_examples` is partition-order, semi-random within a node. Sorting sel_ptr ascending before the kernel makes attr[ex] reads ~sequential within a column — L1/L2 hit rate could jump from 1.35% miss to 0.x%. | Sort `selected_examples_per_node[n]` once per kernel call; cost is O(R log R) per node, savings is per-projection. Wins iff R log R << P_n × DRAM-saved cycles. | High potential. The 91.5% LLC-load-miss rate is the entire bottleneck — if even a fraction of those become L2 hits, this is a step-function gain. Needs careful CHRONO accounting (sort is a new line item). |
+| 5 | `feature-share-AP-CPU` | When two projections share an attribute (likely on narrow datasets), V2-rev3 loads attr[ex] twice. Pre-gather each *touched* attribute once into a dense `[rows × num_unique_features]` staging buffer, then dot-product per projection. | New kernel path under `--config=feature_share`. Build the unique-feature set per node, allocate staging, gather, then matmul-style multiply by sparse projection rows. | Trade DRAM reads for compute. Worth it when projection-overlap > ~2×; less interesting on default dense oblique with random features. **This is V1's natural turf** — design should target the same narrow-dataset regime V1 was kept for. |
+| 6 | `multi-thread-AP-CPU` | The ConcurrentForLoop path in V2-rev3 is wired but never measured. Per-(n, p) task granularity may load-balance poorly when one node has most rows. | Run `--num_threads=4` and `--num_threads=8` on 3M; compare against `num_threads=1`. If load-imbalance shows, refine to (n, p, row-block) granularity. | Methodology note: AGENTS.md says default workload is `num_threads=1` to avoid timing noise. Running multi-thread is a separate experiment dimension; don't conflate with the 1-thread regression baseline. |
+| 7 | `scale-rows-AP-CPU` | DRAM-latency bottleneck should hold at 10M / 20M rows; V2-rev3's 4-way ILP advantage may grow (more rows per attr column = more spatial reuse) or shrink (working set escapes LLC). Unknown which dominates. | Re-run V2-rev3 vs. baseline at rows ∈ {3M, 10M, 20M}. New baseline CSVs needed and committed under the appropriate dataset folder name (`trunk_10000000_x_4096/`, etc.). | Confirms generalization. Not a perf win in itself; pre-merge sanity. |
+
+### What I'll do first
+
+Branch `unroll-factor-AP-CPU` — highest information yield per hour. The
+templatized sweep is one source change, exposes whether M=4 is on the flat
+of the curve or just at one tunable inflection, and the resulting CSV is
+useful regardless of which M wins (informs experiments 2, 3, 5 below).
+
+Methodology recap (from AGENTS.md):
+- E-cores off (`sudo benchmarks/src/utils/set_cpu_e_features.sh --disable`)
+- `parallel_chrono.py --rows=3000000 --num_trees=5 --num_threads=1
+  --feature_split_type=Oblique --numerical_split_type=Exact
+  --depthwise_1_pass`
+- Pinned median (`taskset -c 0`) is the trustworthy number; un-pinned via
+  the script is the public-headline number. Report both.
+- One M per branch commit; log every M's result here even if it loses.
 
 ---
 
 *Log started 2026-04-25 during /loop-style autonomous iteration on the
-1-pass design. V2-rev3 commit at `1-pass-AP-CPU` HEAD.*
+1-pass design. V2-rev3 landed on `main` at 98ed1c66 / f1b102f4 / 9d38f22d.*
