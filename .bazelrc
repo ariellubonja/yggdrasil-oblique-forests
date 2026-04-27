@@ -20,6 +20,12 @@ build:nodewise_cpu --cxxopt="-DNODEWISE_CPU=1"
 build:nodewise_proj_matrix --cxxopt="-DNODEWISE_PROJ_MATRIX=1"
 # V2 fused Apply (single-pass kernel across all (row,proj) tasks at the level).
 build:depthwise_1_pass     --cxxopt="-DDEPTHWISE_1_PASS=1"
+# Row-block unroll factor for the V2 inner kernel. Defaults to 4 if unset
+# (matches the V2-rev3 baseline). Sweep configs for the unroll-factor experiment:
+build:depthwise_1pass_M2  --cxxopt="-DDEPTHWISE_1PASS_UNROLL_M=2"
+build:depthwise_1pass_M4  --cxxopt="-DDEPTHWISE_1PASS_UNROLL_M=4"
+build:depthwise_1pass_M8  --cxxopt="-DDEPTHWISE_1PASS_UNROLL_M=8"
+build:depthwise_1pass_M16 --cxxopt="-DDEPTHWISE_1PASS_UNROLL_M=16"
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 # Default: Highway hwy::VQSort for numerical-feature splitters (Exact Oblique hot path).
 # Opt-in to fall back to std::sort baseline for A/B timing:
@@ -33,21 +39,18 @@ build --ui_event_filters=-warning
 
 # Breakpoints don't get hit without this!
 # Can't seem to add to bazel dbg using build:dbg!! Have to Define separate config
-build:intel_debug --strip=never          # keep symbols, don’t fiddle with fission
-build:intel_debug --cxxopt=-g --linkopt=-g
-build:intel_debug --cxxopt=-O0 --linkopt=-O0 --cxxopt=-fno-inline
-build:intel_debug --copt=-D_GLIBCXX_DEBUG # vector range checks
+build:debug --strip=never          # keep symbols, don’t fiddle with fission
+build:debug --cxxopt=-g --linkopt=-g
+build:debug --cxxopt=-O0 --linkopt=-O0 --cxxopt=-fno-inline
+build:debug --copt=-D_GLIBCXX_DEBUG # vector range checks
 
 
-###### INTEL VTUNE PROFILING ######
-# 2. VTune profiling (-O2 + DWARF symbols)
-#  USE: bazel build -c opt --config=intel_profiler //foo:bar
-build:intel_profiler --strip=never   # keep symbols
-build:intel_profiler --cxxopt=-g --linkopt=-g
-build:intel_profiler --cxxopt=-O2 --linkopt=-O2
+build:profiler --strip=never   # keep symbols
+build:profiler --cxxopt=-g --linkopt=-g
+build:profiler --cxxopt=-O2 --linkopt=-O2
 # Make sure split-DWARF is off – VTune hates .dwo/.dwp
-build:intel_profiler --features=-fission
-build:intel_profiler --cxxopt=-gno-split-dwarf
+build:profiler --features=-fission
+build:profiler --cxxopt=-gno-split-dwarf
 # Disable debug checks - pretty expensive
 # build:intel_base --copt=-DNDEBUG --cxxopt=-DNDEBUG
 

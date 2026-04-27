@@ -49,23 +49,24 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
    time most experiments should not need to produce a fresh baseline.
    Methodology when you do produce one: `parallel_chrono.py` +
    `n_trees=5`, `rows=3000000`, `num_threads=1`, E-cores disabled.
-2. **Hypothesis + change.** Implement one change. Keep the diff small.
-3. **Measure.** Same methodology as baseline. **Median of 5 trees** via
-   `--num_trees=5`, never 5 separate process invocations (cold-cache cost
+2. **Diagnosis.** Profile the code using perf (don't use Intel advisor or vtune), or parallel_chrono.py to gain insights. If necessary, split big functions into smaller ones to diagnose bottlenecks. These can be computational (i.e. heavy mathematics in a certain function), or memory access pattern-related. If the user asks you to optimize a certain function, and it takes only a small amount of the overall runtime, push back, and continue trying to optimize the big chunk of the runtime.
+3. **Hypothesis + change.** Implement one change. Keep the diff small.
+4. **Measure.** Same methodology as baseline. **Median of 3 trees** via
+   `--num_trees=3`, never 3 separate process invocations (cold-cache cost
    inflates each run).
-4. **Significance gate.** If median speedup over baseline (on the
+5. **Significance gate.** If median speedup over baseline (on the
    targeted chrono scope) is **< 20%**, this experiment is a **failed
    experiment** for the purpose of step 6.
-5. **Log result.** Append to the branch's `*_experiments.md` (see
+6. **Log result.** Append to the branch's `*_experiments.md` (see
    `benchmarks/results/1pass_apply_projection_experiments.md` for the
    shape). Every experiment — failed or successful — gets a row. **Mark
    successful experiments (≥ 20% speedup) prominently** (★, bold table,
    etc.) so they're easy to spot.
-6. **5 consecutive failures → enter full plan mode.** Stop the loop, list
+7. **5 consecutive failures → enter full plan mode.** Stop the loop, list
    what was tried and what was learned (cache pattern, FMA serialization,
    load-buffer occupancy, …), and design fundamentally different
    approaches before resuming. Do not just keep trying small variations.
-7. **Iterate.** Loop back to step 2.
+8. **Iterate.** Loop back to step 2.
 
 ### Hardware + measurement rules
 - Intel Core Ultra 9 185H is hybrid (P-cores + E-cores). E-cores must be
@@ -74,7 +75,7 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
   `sudo benchmarks/src/utils/set_cpu_e_features.sh --disable`. Restore
   with `--enable` when done. With E-cores on, `perf` splits counters
   across `cpu_atom/*` and `cpu_core/*` PMUs and many events become
-  `<not supported>` — A/B comparisons become meaningless.
+  `<not supported>` — A/B comparisons become meaningless. However, leave E-cores on for bazel builds to speed them up 3x. Note that parallel_chrono.py automatically manages this for per-function timings.
 - Sudo is available on request; just ask.
 - Default workload: `rows=3000000`, `num_threads=1`. Never run
   simultaneous experiments (timing noise).
