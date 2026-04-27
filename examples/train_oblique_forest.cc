@@ -258,9 +258,9 @@ int main(int argc, char** argv) {
         &data_spec);
   }
   else if (mode == "uniform" || mode == "trunk") {
-    std::cout << "\nGenerating " << mode << " synthetic dataset: rows="
+    LOG(INFO) << "Generating " << mode << " synthetic dataset: rows="
               << absl::GetFlag(FLAGS_rows)
-              << ", cols=" << absl::GetFlag(FLAGS_cols) << "\n";
+              << ", cols=" << absl::GetFlag(FLAGS_cols);
 
     label_col = "y";
     data_spec = MakeSyntheticSpec(absl::GetFlag(FLAGS_cols),
@@ -312,7 +312,7 @@ int main(int argc, char** argv) {
   /* #region Handle num_threads */
   int num_threads_flag = absl::GetFlag(FLAGS_num_threads);
   if (num_threads_flag > 0) {
-    std::cout << "\nRunning with " << num_threads_flag << " threads, as requested.\n";
+    LOG(INFO) << "Running with " << num_threads_flag << " threads, as requested.";
     deploy_config.set_num_threads(num_threads_flag);
 
   } else if (num_threads_flag == -1) {
@@ -388,7 +388,7 @@ int main(int argc, char** argv) {
       std::cerr << "Oblique splits are not supported with Boosting.\n";
       return 1;
     }
-    std::cout << "Configuring oblique splits\n";
+    LOG(INFO) << "Configuring oblique splits";
     auto* sos = dt_config->mutable_sparse_oblique_split();
     sos->set_max_num_projections(
         absl::GetFlag(FLAGS_max_num_projections));
@@ -436,7 +436,7 @@ int main(int argc, char** argv) {
   if (hist_type == "Exact") {
     numerical_split->set_type(
         model::decision_tree::proto::NumericalSplit::EXACT);
-    std::cout << "Using exact splitting\n";
+    LOG(INFO) << "Using exact splitting";
   } else if (hist_type == "Random") {
     numerical_split->set_type(
         model::decision_tree::proto::NumericalSplit::HISTOGRAM_RANDOM);
