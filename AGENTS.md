@@ -23,6 +23,8 @@ focused on **speeding up oblique (sparse) random forests**. Two concurrent works
    `FindBestSplitNodewise`, `FindBestSplitDepthwise` (plus `*Exact`).
    Build: `--config=oblique_gpu`.
 
+**Crucial: All contributions need to be research grade - therefore only publishable speedup methods count. E.g. you cannot just turn off logging for example to get the speedup**
+
 ## Experiment workflow (mandatory pattern)
 
 Empiricism is foundational here — if this loop isn't followed, the work
