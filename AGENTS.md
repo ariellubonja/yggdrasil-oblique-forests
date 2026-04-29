@@ -70,6 +70,16 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
    approaches before resuming. Do not just keep trying small variations.
 8. **Iterate.** Loop back to step 2.
 
+### On guessing vs. measuring
+Avoid speculative "why" stories about a result. A small autonomous-mode
+guess is fine to keep moving, but if a result doesn't match the
+hypothesis — or lands inside the noise floor — stop guessing and dig
+deeper instead of trying another variation. Concretely: add `taskset`
+pinning, run repeats with σ, take a per-depth breakdown, capture
+`perf stat` (LLC misses, IPC, stall counters) and `perf annotate`
+deltas between A and B, or strip the kernel into a microbench. Evidence
+beats narrative.
+
 ### Hardware + measurement rules
 - Intel Core Ultra 9 185H is hybrid (P-cores + E-cores). E-cores must be
   off for stable timing — `parallel_chrono.py` and `e2e_runtime.sh`
@@ -78,6 +88,7 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
   with `--enable` when done. With E-cores on, `perf` splits counters
   across `cpu_atom/*` and `cpu_core/*` PMUs and many events become
   `<not supported>` — A/B comparisons become meaningless. However, leave E-cores on for bazel builds to speed them up 3x. Note that parallel_chrono.py automatically manages this for per-function timings.
+- For per-function timing runs, invoke `parallel_chrono.py` directly — it handles the bazel build (pass extra `--config=…` via `--bazel_config=NAME`) and the E-core toggle for you; don't run `bazel build` or `set_cpu_e_features.sh` separately.
 - Sudo is available on request; just ask.
 - Default workload: `rows=3000000`, `num_threads=1`. Never run
   simultaneous experiments (timing noise).
