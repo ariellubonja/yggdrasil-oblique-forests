@@ -384,10 +384,6 @@ int main(int argc, char** argv) {
   const std::string feature_split_type = absl::GetFlag(FLAGS_feature_split_type);
 
   if (feature_split_type == "Oblique") {
-    if (ensemble_method == "Boosting") {
-      std::cerr << "Oblique splits are not supported with Boosting.\n";
-      return 1;
-    }
     LOG(INFO) << "Configuring oblique splits";
     auto* sos = dt_config->mutable_sparse_oblique_split();
     sos->set_max_num_projections(
