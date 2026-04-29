@@ -70,6 +70,25 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
    approaches before resuming. Do not just keep trying small variations.
 8. **Iterate.** Loop back to step 2.
 
+### A/B evaluation
+Two tools, two jobs:
+
+- **Verdict (end-of-experiment, deployable build):**
+  `benchmarks/src/eval_ab_e2e.py --variant_b=NAME --bazel_config_b=FLAG --size={quick,full}`
+  (`quick`=500k×4096, `full`=3M×4096). Builds A and B with
+  `-c opt --cxxopt=-O3 --cxxopt=-march=native`, runs trunk e2e (30 trees,
+  `--num_threads=-1`) for wall time and 4 CC18 datasets with
+  `--compute_oob_performances=true` for accuracy. No chrono overhead — the
+  binary is the one you'd deploy. Writes `summary.md` + `raw.json` under
+  `benchmarks/results/eval_ab/<ts>_<variant>_<size>/`. Variant A defaults
+  to vanilla; pass `--bazel_config_a=…` for non-default A.
+- **Insight (during the iteration loop, per-depth signal):** run
+  `benchmarks/src/parallel_chrono.py` directly with `--bazel_config=NAME`
+  for both A and B. Cheaper than `eval_ab_e2e.py`; gives you per-tree-depth
+  ΣApplyProj / SortFillBuckets / etc., which is what you need to *understand*
+  why a change moves a number. Don't treat its wall numbers as headline —
+  the chrono build adds overhead; that's what `eval_ab_e2e.py` is for.
+
 ### On guessing vs. measuring
 Avoid speculative "why" stories about a result. A small autonomous-mode
 guess is fine to keep moving, but if a result doesn't match the
