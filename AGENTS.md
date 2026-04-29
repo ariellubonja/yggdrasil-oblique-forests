@@ -10,7 +10,7 @@ focused on **speeding up oblique (sparse) random forests**. Two concurrent works
    (`oblique.cc`) is the top CPU hotspot in oblique split finding.
    In flight: `--config=depthwise_1_pass` (V2-rev3, 4-row inner unroll
    exposing load-level parallelism — see
-   `benchmarks/results/1pass_apply_projection_experiments.md`),
+   `benchmarks/results/apply_projection_experiments.md`),
    `--config=nodewise_proj_matrix` (V1, per-node fused matrix fill,
    kept as A/B baseline for narrow datasets where projection sharing
    may matter), Highway-SIMD `upper_bound`
@@ -60,7 +60,7 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
    targeted chrono scope) is **< 20%**, this experiment is a **failed
    experiment** for the purpose of step 6.
 6. **Log result.** Append to the branch's `*_experiments.md` (see
-   `benchmarks/results/1pass_apply_projection_experiments.md` for the
+   `benchmarks/results/apply_projection_experiments.md` for the
    shape). Every experiment — failed or successful — gets a row. **Mark
    successful experiments (≥ 20% speedup) prominently** (★, bold table,
    etc.) so they're easy to spot.
@@ -74,14 +74,15 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
 Two tools, two jobs:
 
 - **Verdict (end-of-experiment, deployable build):**
-  `benchmarks/src/eval_ab_e2e.py --variant_b=NAME --bazel_config_b=FLAG --size={quick,full}`
-  (`quick`=500k×4096, `full`=3M×4096). Builds A and B with
-  `-c opt --cxxopt=-O3 --cxxopt=-march=native`, runs trunk e2e (30 trees,
-  `--num_threads=-1`) for wall time and 4 CC18 datasets with
-  `--compute_oob_performances=true` for accuracy. No chrono overhead — the
-  binary is the one you'd deploy. Writes `summary.md` + `raw.json` under
-  `benchmarks/results/eval_ab/<ts>_<variant>_<size>/`. Variant A defaults
-  to vanilla; pass `--bazel_config_a=…` for non-default A.
+  `benchmarks/src/eval_ab_e2e.py --variant_b=NAME --bazel_config_b=FLAG --size={quick,full}`.
+  `quick` = trunk 100k × 4096 + epsilon (~30 min); `full` = trunk 3M × 4096
+  + epsilon + SUSY + HIGGS (several hours). Builds A and B with
+  `-c opt --cxxopt=-O3 --cxxopt=-march=native`, runs each trunk e2e
+  (30 trees, `--num_threads=-1`) for wall time and the natural datasets
+  with `--compute_oob_performances=true` for accuracy. No chrono overhead
+  — the binary is the one you'd deploy. Writes `summary.md` + `raw.json`
+  under `benchmarks/results/eval_ab/<ts>_<variant>_<size>/`. Variant A
+  defaults to vanilla; pass `--bazel_config_a=…` for non-default A.
 - **Insight (during the iteration loop, per-depth signal):** run
   `benchmarks/src/parallel_chrono.py` directly with `--bazel_config=NAME`
   for both A and B. Cheaper than `eval_ab_e2e.py`; gives you per-tree-depth

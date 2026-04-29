@@ -4,9 +4,15 @@
 Per variant (A = vanilla baseline by default, B = the experiment):
   1. Opt build (`-c opt --cxxopt=-O3 --cxxopt=-march=native [+config]`).
   2. Trunk e2e run (30 trees, all cores, no OOB)   -> training wall time.
-  3. Same opt binary on 4 CC18 datasets with
+  3. Same opt binary on the natural datasets for the chosen size, no OOB
+                                                   -> training wall time.
+  4. Same opt binary on a fixed set of CC18 datasets, with
      `--compute_oob_performances=true`             -> training wall time
                                                       + OOB accuracy.
+     CC18 is the only place we measure accuracy: those datasets are small
+     (run in seconds) and have a non-trivial signal-to-noise on a 30-tree
+     forest, while big synthetic/natural datasets either run too long with
+     OOB on or are too easy to discriminate variants.
 
 Result: side-by-side summary + raw JSON written to
 `benchmarks/results/eval_ab/<timestamp>_<variant_b>_<size>/`.
@@ -16,9 +22,9 @@ deploy (no `-DCHRONO_ENABLED` overhead). For per-function insight (which
 phase changed and by how much per depth), run `parallel_chrono.py`
 directly: it accepts the same `--bazel_config=NAME` flag for A/B.
 
-Modes:
-  --size=quick   trunk 500_000 × 4096   (fast turnaround)
-  --size=full    trunk 3_000_000 × 4096 (full-strength comparison)
+Modes (CC18 accuracy stage runs in both):
+  --size=quick   trunk 100_000  × 4096   + epsilon            (fast turnaround)
+  --size=full    trunk 3_000_000 × 4096   + epsilon, SUSY, HIGGS (full)
 
 Typical use (vanilla baseline vs. an experiment flag):
   python3 benchmarks/src/eval_ab_e2e.py \\
@@ -50,15 +56,32 @@ REPO = Path(__file__).resolve().parents[2]
 TARGET = "//examples:train_oblique_forest"
 BIN = REPO / "bazel-bin/examples/train_oblique_forest"
 
-SIZES = {"quick": 500_000, "full": 3_000_000}
+SIZES = {"quick": 100_000, "full": 3_000_000}
 
-# Small held-out datasets — fast to train, OOB accuracy is meaningful.
-# Mirrors the CSV_DATASETS list in benchmarks/src/bash_scripts/e2e_runtime.sh.
+# Natural datasets used to measure accuracy alongside synthetic-trunk timing.
+# Each entry is (csv_path, label_column, display_name).
+# Quick mode skips HIGGS because it's 11M rows and would dominate run time;
+# full mode adds it.
+SUSY    = ("benchmarks/data/SUSY_with_header.csv",            "class", "SUSY")
+EPSILON = ("benchmarks/data/epsilon_normalized_train.csv",    "label", "epsilon")
+HIGGS   = ("benchmarks/data/HIGGS_with_header.csv",           "class", "HIGGS")
+
+NATURAL = {
+    "quick": [EPSILON],
+    "full":  [EPSILON, SUSY, HIGGS],
+}
+
+# CC18 accuracy datasets — same set used by benchmarks/src/bash_scripts/e2e_runtime.sh.
+# Small enough to run in seconds with --compute_oob_performances=true.
 CC18 = [
-    ("benchmarks/data/cc18_binary_csv/task_14965_bank-marketing/repeat0_fold0_sample0_train.csv",          "Class"),
-    ("benchmarks/data/cc18_binary_csv/task_14952_PhishingWebsites/repeat0_fold0_sample0_train.csv",        "Result"),
-    ("benchmarks/data/cc18_binary_csv/task_29_credit-approval/repeat0_fold0_sample0_train.csv",            "class"),
-    ("benchmarks/data/cc18_binary_csv/task_167125_Internet-Advertisements/repeat0_fold0_sample0_train.csv", "class"),
+    ("benchmarks/data/cc18_binary_csv/task_14952_PhishingWebsites/repeat0_fold0_sample0_train.csv",
+     "Result", "task_14952_PhishingWebsites"),
+    ("benchmarks/data/cc18_binary_csv/task_14965_bank-marketing/repeat0_fold0_sample0_train.csv",
+     "Class",  "task_14965_bank-marketing"),
+    ("benchmarks/data/cc18_binary_csv/task_29_credit-approval/repeat0_fold0_sample0_train.csv",
+     "class",  "task_29_credit-approval"),
+    ("benchmarks/data/cc18_binary_csv/task_167125_Internet-Advertisements/repeat0_fold0_sample0_train.csv",
+     "class",  "task_167125_Internet-Advertisements"),
 ]
 
 # The research binary on this branch short-circuits via "EXITING EARLY TO
@@ -147,9 +170,26 @@ def e2e_trunk(variant: str, rows: int, num_trees: int,
     return float(m.group(1)) if m else None
 
 
-def e2e_cc18(variant: str, train_csv: str, label: str, num_trees: int,
-             out_dir: Path) -> dict:
-    name = Path(train_csv).parent.name
+def e2e_natural(variant: str, train_csv: str, label: str, name: str,
+                num_trees: int, out_dir: Path) -> dict:
+    """Wall time only on big natural datasets (no OOB — too slow / no signal)."""
+    cmd = [str(BIN),
+           "--input_mode=csv", f"--train_csv={train_csv}",
+           f"--label_col={label}",
+           f"--num_trees={num_trees}", "--num_threads=-1", "--tree_depth=-1",
+           "--feature_split_type=Oblique", "--numerical_split_type=Exact",
+           "--compute_oob_performances=false"]
+    out = capture(cmd, out_dir / f"natural_{name}_{variant}.log")
+    t = RX_TRAIN_TIME.search(out)
+    return {
+        "dataset":    name,
+        "train_time": float(t.group(1)) if t else None,
+    }
+
+
+def e2e_cc18(variant: str, train_csv: str, label: str, name: str,
+             num_trees: int, out_dir: Path) -> dict:
+    """Wall + OOB accuracy on small CC18 datasets — accuracy is measured here."""
     cmd = [str(BIN),
            "--input_mode=csv", f"--train_csv={train_csv}",
            f"--label_col={label}",
@@ -168,7 +208,7 @@ def e2e_cc18(variant: str, train_csv: str, label: str, num_trees: int,
 
 
 def evaluate_variant(variant: str, extra_config: str | None,
-                     rows: int, num_trees: int,
+                     rows: int, num_trees: int, size: str,
                      out_dir: Path) -> dict:
     print(f"\n=========== Variant: {variant!r} "
           f"(--config={extra_config or '(none)'}) ===========")
@@ -177,8 +217,10 @@ def evaluate_variant(variant: str, extra_config: str | None,
         "variant": variant,
         "config":  extra_config or "(none)",
         "trunk_train_time": e2e_trunk(variant, rows, num_trees, out_dir),
-        "cc18": [e2e_cc18(variant, csv, label, num_trees, out_dir)
-                 for csv, label in CC18],
+        "natural": [e2e_natural(variant, csv, label, name, num_trees, out_dir)
+                    for csv, label, name in NATURAL[size]],
+        "cc18":    [e2e_cc18(variant, csv, label, name, num_trees, out_dir)
+                    for csv, label, name in CC18],
     }
     return res
 
@@ -216,10 +258,22 @@ def write_summary(a: dict, b: dict, out_dir: Path,
     L.append("## Trunk: end-to-end training wall time\n")
     L.append("| Metric | A | B | Δ |")
     L.append("|---|---|---|---|")
-    L.append(f"| Train + Post-Proc (s) | "
+    L.append(f"| Train wall (s) | "
              f"{fmt_num(a.get('trunk_train_time'))} | "
              f"{fmt_num(b.get('trunk_train_time'))} | "
              f"{fmt_pct(a.get('trunk_train_time'), b.get('trunk_train_time'))} |\n")
+
+    L.append("## Natural datasets — training wall (no OOB)\n")
+    L.append("| Dataset | A train (s) | B train (s) | Δ time |")
+    L.append("|---|---|---|---|")
+    a_nat = {r['dataset']: r for r in a.get('natural', [])}
+    b_nat = {r['dataset']: r for r in b.get('natural', [])}
+    for ds in sorted(set(a_nat) | set(b_nat)):
+        ar = a_nat.get(ds, {}); br = b_nat.get(ds, {})
+        at, bt = ar.get('train_time'), br.get('train_time')
+        L.append(f"| {ds} | {fmt_num(at)} | {fmt_num(bt)} | "
+                 f"{fmt_pct(at, bt)} |")
+    L.append("")
 
     L.append("## CC18 — training wall + OOB accuracy\n")
     L.append("| Dataset | A train (s) | B train (s) | Δ time | "
@@ -269,9 +323,9 @@ def main():
     print("CPU configured: P-cores only, HT/E-cores/turbo disabled.")
     try:
         a_res = evaluate_variant(args.variant_a, args.bazel_config_a,
-                                 rows, args.num_trees, out_dir)
+                                 rows, args.num_trees, args.size, out_dir)
         b_res = evaluate_variant(args.variant_b, args.bazel_config_b,
-                                 rows, args.num_trees, out_dir)
+                                 rows, args.num_trees, args.size, out_dir)
 
         text = write_summary(a_res, b_res, out_dir,
                              args.size, rows, args.num_trees)

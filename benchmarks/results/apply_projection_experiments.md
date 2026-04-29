@@ -24,6 +24,7 @@ chrono scope, summed across all depths of tree 0.
 | **V2-rev1** | (replaced) | Drops `flat_out` (writes directly into `out_projected[n]`); drops `flat_selected` / `flat_projs`; one `DecodeTriplet` at chunk entry, stateful `(n,i,p)` walk. **1.14× V1** — close but not winning. |
 | **V2-rev2** | (replaced) | V2-rev1 + per-item software prefetch K=16 rows ahead. **1.74× V1** (regressed). Prefetch address recompute cost > latency hidden. |
 | **V2-rev3** ★ | `--config=depthwise_1_pass` (current) | Tasks at (node, projection) granularity instead of (node, row, projection); inner kernel processes all rows of one (n, p) pair in **4-row blocks** with 4 independent `acc0..acc3` accumulators and 4 parallel `attr[ex_k]` loads per item. Exposes 4-way ILP to the OOO scheduler — up to 4 random DRAM misses in flight per item. **0.66× V1 ProjEval — 34% faster.** |
+| **loop_swap** | `--config=projeval_loop_swap` | Per-call `Evaluate` with the inner loop order swapped: projection-items-outer / rows-inner. Hypothesis was that walking one `attribute_values` column at a time (column-major dataset) would let the prefetcher win on the gather stream. First-item path assigns into `out`, subsequent items accumulate; final pass computes min/max. 3M chrono A/B was −2.67%; 100k×4096 e2e A/B was +2.35% trunk wall, +0.77% on epsilon (OOB accuracy bit-identical). All within noise. **No signal — not pursued.** |
 
 ## Phase A — baseline diagnosis (perf record + perf stat)
 
