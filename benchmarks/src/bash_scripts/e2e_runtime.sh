@@ -3,6 +3,7 @@ set -euo pipefail
 
 ###### Parameters
 
+NUM_RUNS=7   # Number of repetitions per command; median runtime is reported
 NUM_TREES=30 # Good number for 48-core AWS machine to prevent skewness
 NUM_THREADS=-1
 COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
@@ -11,7 +12,7 @@ BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_perfo
 
 histogram_num_bins=64  # NOTE! AVX512 will be used on Vectorized method
 
-RUN_CPU=false          # set false to skip the normal (CPU) experiments section
+RUN_CPU=true          # set false to skip the normal (CPU) experiments section
 RUN_VECTORIZED=false  # set true to run AVX2/AVX512 vectorized experiments
 
 # GPU experiments. Only applies to Oblique + HISTOGRAM_RANDOM-style splits.
@@ -20,7 +21,7 @@ RUN_VECTORIZED=false  # set true to run AVX2/AVX512 vectorized experiments
 # each node is processed individually by the BFS driver (one GPU kernel per
 # node). Depthwise mode uses the default BFS driver which batches sibling
 # nodes into one kernel per BFS depth level.
-RUN_GPU=true
+RUN_GPU=false
 GPU_MODES=(
   "depthwise"   # BFS; one kernel launch per depth level, batching siblings
   # "nodewise"    # DFS; one kernel launch per node
@@ -36,7 +37,7 @@ SPLIT_TYPES=(
 METHODS=(
   "Exact"
   "Random"
-  "Dynamic Random Histogram"
+  # "Dynamic Random Histogram"
 # "Equal Width"
 # "Dynamic Equal Width Histogram"
 )
@@ -66,22 +67,25 @@ DYNAMIC_SPLIT_THRESHOLDS=(
 # CSV datasets as "path|label_col" (comment out lines to skip)
 CSV_DATASETS=(
   # Big
-  "benchmarks/data/HIGGS_with_header.csv|class"
-  "benchmarks/data/SUSY_with_header.csv|class"
-  "benchmarks/data/epsilon_normalized_train.csv|label"
+  # "benchmarks/data/HIGGS_with_header.csv|class"
+  # "benchmarks/data/SUSY_with_header.csv|class"
+  # "benchmarks/data/epsilon_normalized_train.csv|label"
 
-  # Small
-  "benchmarks/data/cc18_binary_csv/task_14965_bank-marketing/repeat0_fold0_sample0_train.csv|Class"
-  "benchmarks/data/cc18_binary_csv/task_14952_PhishingWebsites/repeat0_fold0_sample0_train.csv|Result"
-  "benchmarks/data/cc18_binary_csv/task_29_credit-approval/repeat0_fold0_sample0_train.csv|class"
-  "benchmarks/data/cc18_binary_csv/task_167125_Internet-Advertisements/repeat0_fold0_sample0_train.csv|class"
+  # # Small
+  # "benchmarks/data/cc18_binary_csv/task_14965_bank-marketing/repeat0_fold0_sample0_train.csv|Class"
+  # "benchmarks/data/cc18_binary_csv/task_14952_PhishingWebsites/repeat0_fold0_sample0_train.csv|Result"
+  # "benchmarks/data/cc18_binary_csv/task_29_credit-approval/repeat0_fold0_sample0_train.csv|class"
+  # "benchmarks/data/cc18_binary_csv/task_167125_Internet-Advertisements/repeat0_fold0_sample0_train.csv|class"
 )
 
 # Synthetic trunk rows (comment out values to skip)
 TRUNK_ROWS=(
   10000
+  20000
+  40000
+  80000
   100000
-  1000000
+  # 1000000
 )
 
 # =========================
@@ -134,7 +138,40 @@ BINARY="./bazel-bin/examples/train_oblique_forest"
 
 run_cmd() {
   echo "$*" | tee -a "$logfile"
-  bash -c "$*" 2>&1 | tee -a "$logfile"
+  local times=()
+  local i out t rc
+  for ((i=1; i<=NUM_RUNS; i++)); do
+    echo "----- Run $i/$NUM_RUNS -----" | tee -a "$logfile"
+    rc=0
+    out=$(bash -c "$*" 2>&1) || rc=$?
+    echo "$out" | tee -a "$logfile"
+    if (( rc != 0 )); then
+      echo "WARNING: command exited with status $rc on run $i (continuing)" | tee -a "$logfile"
+    fi
+    # Parse "random_forest.cc Training block took: <X> s"
+    t=$(echo "$out" | grep -oE 'Training block took:[[:space:]]*[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' \
+        | grep -oE '[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' | tail -1)
+    if [[ -n "$t" ]]; then
+      times+=("$t")
+    else
+      echo "WARNING: Could not parse 'Training block took' from run $i" | tee -a "$logfile"
+    fi
+  done
+  if [[ "${#times[@]}" -gt 0 ]]; then
+    local sorted
+    mapfile -t sorted < <(printf '%s\n' "${times[@]}" | sort -g)
+    local n=${#sorted[@]}
+    local mid=$(( n / 2 ))
+    local median
+    if (( n % 2 == 1 )); then
+      median="${sorted[$mid]}"
+    else
+      median=$(awk -v a="${sorted[$((mid-1))]}" -v b="${sorted[$mid]}" 'BEGIN{printf "%.6f", (a+b)/2.0}')
+    fi
+    echo "MEDIAN of ${#times[@]}/${NUM_RUNS} runs: ${median} s  (samples: ${times[*]})" | tee -a "$logfile"
+  else
+    echo "MEDIAN of 0/${NUM_RUNS} runs: N/A" | tee -a "$logfile"
+  fi
 }
 
 banner() {
