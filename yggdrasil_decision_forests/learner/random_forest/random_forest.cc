@@ -1234,9 +1234,6 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
               trees.end());
         }
 
-        LOG(INFO) << "After Random Forest Training block. RETURNING EARLY TO SPEED UP XPS!!";
-        std::exit(0);
-
         {
           // Note: At this point, there are not concurrent workers running.
           utils::concurrency::MutexLock lock(&concurrent_fields.mutex);
