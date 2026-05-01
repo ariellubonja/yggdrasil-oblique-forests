@@ -3,7 +3,7 @@ set -euo pipefail
 
 ###### Parameters
 
-SEEDS=(1 2 3 4 5 6 7 8 9 10)  # One run per seed; median accuracy is reported
+SEEDS=(1 2 3 4 5 6 7 8 9 10)
 NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
 # OOB metrics must be on for accuracy parsing; not exposed as a toggle.
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=-1 --compute_oob_performances=true"
@@ -131,8 +131,7 @@ BINARY="./bazel-bin/examples/train_oblique_forest"
 
 run_cmd() {
   echo "$*" | tee -a "$logfile"
-  local accs=()
-  local seed out a rc total=${#SEEDS[@]} i=0
+  local seed out rc total=${#SEEDS[@]} i=0
   for seed in "${SEEDS[@]}"; do
     i=$((i+1))
     echo "----- Run $i/$total (seed=$seed) -----" | tee -a "$logfile"
@@ -142,33 +141,7 @@ run_cmd() {
     if (( rc != 0 )); then
       echo "WARNING: command exited with status $rc on seed $seed (continuing)" | tee -a "$logfile"
     fi
-    # Parse the last "Train tree N/N accuracy:<a> logloss:<l>" emitted by
-    # random_forest.cc when --compute_oob_performances=true. The early-exit
-    # at random_forest.cc:1217 prevents the "Final OOB metrics" line from
-    # ever printing, so we use the per-tree line instead.
-    a=$(echo "$out" | grep -oE 'accuracy:[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' \
-        | grep -oE '[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' | tail -1)
-    if [[ -n "$a" ]]; then
-      accs+=("$a")
-    else
-      echo "WARNING: Could not parse 'accuracy:' from seed $seed" | tee -a "$logfile"
-    fi
   done
-  if [[ "${#accs[@]}" -gt 0 ]]; then
-    local sorted
-    mapfile -t sorted < <(printf '%s\n' "${accs[@]}" | sort -g)
-    local n=${#sorted[@]}
-    local mid=$(( n / 2 ))
-    local median
-    if (( n % 2 == 1 )); then
-      median="${sorted[$mid]}"
-    else
-      median=$(awk -v a="${sorted[$((mid-1))]}" -v b="${sorted[$mid]}" 'BEGIN{printf "%.6f", (a+b)/2.0}')
-    fi
-    echo "MEDIAN accuracy of ${#accs[@]}/${total} seeds: ${median}  (samples: ${accs[*]})" | tee -a "$logfile"
-  else
-    echo "MEDIAN accuracy of 0/${total} seeds: N/A" | tee -a "$logfile"
-  fi
 }
 
 banner() {
