@@ -4,7 +4,7 @@ set -euo pipefail
 ###### Parameters
 
 SEEDS=(1 2 3 4 5 6 7 8 9 10)  # One run per seed; median accuracy is reported
-NUM_TREES=30 # Good number for 48-core AWS machine to prevent skewness
+NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
 # OOB metrics must be on for accuracy parsing; not exposed as a toggle.
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=-1 --compute_oob_performances=true"
 

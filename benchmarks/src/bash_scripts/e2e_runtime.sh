@@ -4,7 +4,7 @@ set -euo pipefail
 ###### Parameters
 
 NUM_RUNS=7   # Number of repetitions per command; median runtime is reported
-NUM_TREES=30 # Good number for 48-core AWS machine to prevent skewness
+NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
 NUM_THREADS=-1
 COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
 # Ariel - ENSURE compute_oob_performances===== - it has an equal sign, not a blank space
