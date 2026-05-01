@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <suffix>" >&2
+  echo "  Suffix becomes the result filename, e.g. 'AWS_m7i' -> e2e_accuracy_aws_m7i.csv" >&2
+  exit 2
+fi
+SUFFIX="${1,,}"  # lowercase
+
 ###### Parameters
 
 SEEDS=(1 2 3 4 5 6 7 8 9 10)
@@ -65,24 +72,24 @@ DYNAMIC_SPLIT_THRESHOLDS=(
 # CSV datasets as "path|label_col" (comment out lines to skip)
 CSV_DATASETS=(
   # Big
-  "benchmarks/data/HIGGS_with_header.csv|class"
-  "benchmarks/data/SUSY_with_header.csv|class"
-  "benchmarks/data/epsilon_normalized_train.csv|label"
+  # "benchmarks/data/HIGGS_with_header.csv|class"
+  # "benchmarks/data/SUSY_with_header.csv|class"
+  # "benchmarks/data/epsilon_normalized_train.csv|label"
 
   # # Small
-  "benchmarks/data/cc18_binary_csv/task_14965_bank-marketing/repeat0_fold0_sample0_train.csv|Class"
-  "benchmarks/data/cc18_binary_csv/task_14952_PhishingWebsites/repeat0_fold0_sample0_train.csv|Result"
-  "benchmarks/data/cc18_binary_csv/task_29_credit-approval/repeat0_fold0_sample0_train.csv|class"
-  "benchmarks/data/cc18_binary_csv/task_167125_Internet-Advertisements/repeat0_fold0_sample0_train.csv|class"
+  # "benchmarks/data/cc18_binary_csv/task_14965_bank-marketing/repeat0_fold0_sample0_train.csv|Class"
+  # "benchmarks/data/cc18_binary_csv/task_14952_PhishingWebsites/repeat0_fold0_sample0_train.csv|Result"
+  # "benchmarks/data/cc18_binary_csv/task_29_credit-approval/repeat0_fold0_sample0_train.csv|class"
+  # "benchmarks/data/cc18_binary_csv/task_167125_Internet-Advertisements/repeat0_fold0_sample0_train.csv|class"
 )
 
 # Synthetic trunk rows (comment out values to skip)
 TRUNK_ROWS=(
   10000
   20000
-  40000
-  80000
-  100000
+  # 40000
+  # 80000
+  # 100000
   # 1000000
 )
 
@@ -119,8 +126,28 @@ bazel_build() {
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
-ts=$(date +%Y%m%d_%H%M%S)
-logfile="${logdir}/e2e_accuracy_${ts}.log"
+logfile="${logdir}/e2e_accuracy_${SUFFIX}.log"
+csvfile="${logdir}/e2e_accuracy_${SUFFIX}.csv"
+
+if [[ -e "$logfile" ]]; then
+  echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2
+  exit 1
+fi
+if [[ -e "$csvfile" ]]; then
+  echo "ERROR: $csvfile already exists. Use a different suffix or remove it." >&2
+  exit 1
+fi
+
+# Parse log -> CSV. Log file is preserved for debugging.
+finalize_log() {
+  echo "Parsing log -> CSV..."
+  if python3 benchmarks/src/utils/parse_log_to_csv.py "$logfile" "$csvfile"; then
+    echo "CSV: $csvfile  (log kept at $logfile)"
+  else
+    echo "ERROR: parser failed; log kept at $logfile" >&2
+    return 1
+  fi
+}
 
 # Normal build (plain CPU binary). Skipped when only GPU experiments will
 # run, since the GPU section does its own builds with --config=oblique_gpu.
@@ -336,6 +363,7 @@ fi
 
 if [[ "${#selected_vec_methods[@]}" -eq 0 ]]; then
   banner "No vectorizable Oblique methods selected; skipping vectorized experiments"
+  finalize_log
   exit 0
 fi
 
@@ -350,6 +378,7 @@ elif [[ "$histogram_num_bins" -eq 256 ]]; then
   vec_name="AVX512"
 else
   banner "Vectorized experiments require histogram_num_bins to be 64 (AVX2) or 256 (AVX512). Current: $histogram_num_bins. Skipping vectorized experiments."
+  finalize_log
   exit 0
 fi
 
@@ -396,3 +425,5 @@ for method in "${selected_vec_methods[@]}"; do
     done
   done
 done
+
+finalize_log
