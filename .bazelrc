@@ -1,15 +1,11 @@
 # Instrumentation & Information
 build:multithreaded_chrono_profile --cxxopt="-DCHRONO_ENABLED"
-build:disable_empty_projections --cxxopt="-DALLOW_EMPTY_PROJECTIONS_FLAG=0"
-build:slow_sample_projections --cxxopt="-DSLOW_SAMPLE_PROJECTIONS_FLAG=true"
-build:print_projection_matrices --cxxopt="-DPRINT_PROJECTION_MATRICES_FLAG=1"
-build:fixed_1000_projections --cxxopt="-DHARD_CODE_1000_PROJECTIONS_FLAG=true"
+build:with_isnan --cxxopt="-UYDF_BENCH_SKIP_ISNAN"
 
 # Default: skip the std::isnan branch in ProjectionEvaluator::Evaluate for A/B timing.
 # Opt back in (i.e. restore correct NaN handling) with:
 #   bazel build --config=with_isnan //...
 build --cxxopt="-DYDF_BENCH_SKIP_ISNAN"
-build:with_isnan --cxxopt="-UYDF_BENCH_SKIP_ISNAN"
 
 # Optimizations
 build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
@@ -22,10 +18,7 @@ build:nodewise_proj_matrix --cxxopt="-DNODEWISE_PROJ_MATRIX=1"
 build:depthwise_1_pass     --cxxopt="-DDEPTHWISE_1_PASS=1"
 # Row-block unroll factor for the V2 inner kernel. Defaults to 4 if unset
 # (matches the V2-rev3 baseline). Sweep configs for the unroll-factor experiment:
-build:depthwise_1pass_M2  --cxxopt="-DDEPTHWISE_1PASS_UNROLL_M=2"
 build:depthwise_1pass_M4  --cxxopt="-DDEPTHWISE_1PASS_UNROLL_M=4"
-build:depthwise_1pass_M8  --cxxopt="-DDEPTHWISE_1PASS_UNROLL_M=8"
-build:depthwise_1pass_M16 --cxxopt="-DDEPTHWISE_1PASS_UNROLL_M=16"
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 # Default: Highway hwy::VQSort for numerical-feature splitters (Exact Oblique hot path).
 # Opt-in to fall back to std::sort baseline for A/B timing:

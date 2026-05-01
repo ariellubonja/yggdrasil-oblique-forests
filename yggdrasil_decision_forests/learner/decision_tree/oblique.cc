@@ -46,29 +46,11 @@
 #include "yggdrasil_decision_forests/utils/logging.h"
 #include "yggdrasil_decision_forests/utils/random.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
-#include <fstream>
-
-
-#ifndef PRINT_PROJECTION_MATRICES_FLAG
-  #define PRINT_PROJECTION_MATRICES_FLAG 0
-#endif
-
-#ifndef ALLOW_EMPTY_PROJECTIONS_FLAG
-  #define ALLOW_EMPTY_PROJECTIONS_FLAG 1 // By default, match Treeple, which skips those projections
-#endif
-
-#ifndef SLOW_SAMPLE_PROJECTIONS_FLAG
-  #define SLOW_SAMPLE_PROJECTIONS_FLAG 0
-#endif
 
 
 namespace yggdrasil_decision_forests {
 namespace model {
 namespace decision_tree {
-
-static constexpr bool PRINT_PROJECTION_MATRICES = PRINT_PROJECTION_MATRICES_FLAG;
-static constexpr bool ALLOW_EMPTY_PROJECTIONS = ALLOW_EMPTY_PROJECTIONS_FLAG;
-static constexpr bool SLOW_SAMPLE_PROJECTIONS = SLOW_SAMPLE_PROJECTIONS_FLAG;
 
 namespace {
 using std::is_same;
@@ -207,19 +189,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   float best_threshold = 0.f;
   const int num_features = config_link.numerical_features_size();
 
-  static bool first_call = true;
-  static int node_counter = 0;
-  std::ofstream log;
-
-  // For printing Projection Matrix
-  using SparseProjection = std::vector<std::pair<int, float>>;
-  std::vector<SparseProjection> projection_buffer;
-  if constexpr (PRINT_PROJECTION_MATRICES) {
-    projection_buffer.reserve(num_projections);
-  }
-
-  if constexpr (HARD_CODE_1000_PROJECTIONS) { num_projections = 1000; }
-
   /* #endregion */
   
   proto::DecisionTreeTrainingConfig dynamic_dt_config = dt_config;
@@ -301,14 +270,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     SampleProjection(config_link.numerical_features(), dynamic_dt_config,
                     train_dataset.data_spec(), config_link, projection_density,
                     &all_projections[proj_idx], &all_monotonic[proj_idx], random);
-
-    if constexpr (PRINT_PROJECTION_MATRICES) {
-      SparseProjection& buf = projection_buffer.emplace_back();
-      buf.reserve(all_projections[proj_idx].size());
-      for (const auto& feat : all_projections[proj_idx]) {
-        buf.emplace_back(feat.attribute_idx, feat.weight);
-      }
-    }
   }
 #elif defined(OBLIQUE_GPU_ENABLED)
   // Only pre-sample when nodewise-gpu needs a batched apply call. The CPU path
@@ -323,14 +284,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       SampleProjection(config_link.numerical_features(), dynamic_dt_config,
                       train_dataset.data_spec(), config_link, projection_density,
                       &all_projections[proj_idx], &all_monotonic[proj_idx], random);
-
-      if constexpr (PRINT_PROJECTION_MATRICES) {
-        SparseProjection& buf = projection_buffer.emplace_back();
-        buf.reserve(all_projections[proj_idx].size());
-        for (const auto& feat : all_projections[proj_idx]) {
-          buf.emplace_back(feat.attribute_idx, feat.weight);
-        }
-      }
     }
   }
 #endif
@@ -422,9 +375,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
     // 3. EvaluateProjection per-projection (CPU).
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
-      if constexpr (ALLOW_EMPTY_PROJECTIONS) {
-        if (all_projections[proj_idx].empty()) continue;
-      }
+      if (all_projections[proj_idx].empty()) continue;
 
       // Point projection_values at the GPU output slice for this projection.
       projection_values.assign(
@@ -461,9 +412,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       const size_t num_projs = depth_projs.size();
       const float* slab = internal_config.precomputed_projected_values.data();
       for (size_t proj_idx = 0; proj_idx < num_projs; ++proj_idx) {
-        if constexpr (ALLOW_EMPTY_PROJECTIONS) {
-          if (depth_projs[proj_idx].empty()) continue;
-        }
+        if (depth_projs[proj_idx].empty()) continue;
         const absl::Span<const float> values_span =
             absl::MakeConstSpan(slab + proj_idx * rows_n, rows_n);
         ASSIGN_OR_RETURN(
@@ -484,9 +433,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 #ifdef NODEWISE_CPU
     // nodewise-cpu: evaluate from the pre-sampled all_projections array.
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
-      if constexpr (ALLOW_EMPTY_PROJECTIONS) {
-        if (all_projections[proj_idx].empty()) continue;
-      }
+      if (all_projections[proj_idx].empty()) continue;
 
       float min_value, max_value;
 
@@ -521,17 +468,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
                       train_dataset.data_spec(), config_link, projection_density,
                       &current_projection, &monotonic, random);
 
-      if constexpr (PRINT_PROJECTION_MATRICES) {
-        SparseProjection& buf = projection_buffer.emplace_back();
-        buf.reserve(current_projection.size());
-        for (const auto& feat : current_projection) {
-          buf.emplace_back(feat.attribute_idx, feat.weight);
-        }
-      }
-
-      if constexpr (ALLOW_EMPTY_PROJECTIONS) {
-        if (current_projection.empty()) continue;
-      }
+      if (current_projection.empty()) continue;
 
       float min_value, max_value;
 
@@ -562,23 +499,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   /* #endregion */
 
   /* #region update Best Threshold & Projection */
-
-  // Save projection matrix to file if desired
-  if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::ofstream log("benchmarks/results/ydf_projection_matrices/projection_matrices.txt",
-                        std::ios::app);
-
-      log << "Node " << node_counter++ << " | "
-          << projection_buffer.size() << " projections\n";
-
-      // “edge-list” layout :  projection_id  feature_id  weight
-      for (size_t p = 0; p < projection_buffer.size(); ++p) {
-        for (const auto& [idx, w] : projection_buffer[p]) {
-          log << p << ' ' << idx << ' ' << w << '\n';
-        }
-      }
-      log << '\n';
-    }
 
   if (!best_projection.empty()) {
     RETURN_IF_ERROR(SetCondition(best_projection, best_threshold,
@@ -1149,10 +1069,6 @@ void SampleProjection(const absl::Span<const int>& features,
     ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
   *monotonic_direction = 0;
   projection->clear();
-  if constexpr (SLOW_SAMPLE_PROJECTIONS) {
-    projection->reserve(projection_density * features.size());
-  }
-  std::uniform_real_distribution<float> unif01;
   std::uniform_real_distribution<float> unif1m1(-1.f, 1.f);
   const auto& oblique_config = dt_config.sparse_oblique_split();
 
@@ -1218,47 +1134,26 @@ void SampleProjection(const absl::Span<const int>& features,
   }
 #endif
 
-  if constexpr (SLOW_SAMPLE_PROJECTIONS) {
-    for (const auto feature : features) {
-      if (unif01(*random) < projection_density) {
-        projection->push_back({feature, gen_weight(feature)});
-      }
-    }
-  }
-  else {
-    std::binomial_distribution<size_t> binom(features.size(), projection_density);
+  std::binomial_distribution<size_t> binom(features.size(), projection_density);
 
-    // Expectation[Binomial(p,projection_density)] = num_selected_features
-    const size_t num_selected_features = binom(*random);
+  // Expectation[Binomial(p,projection_density)] = num_selected_features
+  const size_t num_selected_features = binom(*random);
 
-    // TODO: Try std::bitmap
-    absl::btree_set<size_t> picked_idx;
+  // TODO: Try std::bitmap
+  absl::btree_set<size_t> picked_idx;
 
-    // Floyd's sampler to select k indices uniformly
-    for (size_t j = features.size() - num_selected_features; j < features.size();
-        ++j) {
-      size_t t = absl::Uniform<size_t>(*random, 0, j + 1);
-      if (!picked_idx.insert(t).second) picked_idx.insert(j);
-    }
-
-    projection->reserve(projection_density * features.size());
-    // O(k) minimal pass to fill in those indices
-    for (const auto idx : picked_idx) {
-      projection->push_back({features[idx], gen_weight(features[idx])});
-    }
+  // Floyd's sampler to select k indices uniformly
+  for (size_t j = features.size() - num_selected_features; j < features.size();
+      ++j) {
+    size_t t = absl::Uniform<size_t>(*random, 0, j + 1);
+    if (!picked_idx.insert(t).second) picked_idx.insert(j);
   }
 
-  // Treeple allows empty projections, which are useless. This is for consistency checks
-  if constexpr (! ALLOW_EMPTY_PROJECTIONS) {
-  if (projection->empty()) {
-    std::uniform_int_distribution<int> unif_feature_idx(0, features.size() - 1);
-    projection->push_back(
-        {/*.attribute_idx =*/features[unif_feature_idx(*random)],
-         /*.weight =*/1.f});
-  } else if (projection->size() == 1) {
-    projection->front().weight = 1.f;
+  projection->reserve(projection_density * features.size());
+  // O(k) minimal pass to fill in those indices
+  for (const auto idx : picked_idx) {
+    projection->push_back({features[idx], gen_weight(features[idx])});
   }
-}
 
   int max_num_features = dt_config.sparse_oblique_split().max_num_features();
   int cur_num_projections = projection->size();

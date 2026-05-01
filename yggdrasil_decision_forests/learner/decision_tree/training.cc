@@ -81,10 +81,6 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 
 
-#ifndef PRINT_PROJECTION_MATRICES_FLAG
-  #define PRINT_PROJECTION_MATRICES_FLAG 0
-#endif
-
 // Node queue order: 0 = BFS (breadth-first, FIFO), 1 = DFS (depth-first, LIFO).
 // Toggle via bazel: --config=dfs_node_queue
 #ifndef NODE_QUEUE_DFS_FLAG
@@ -94,8 +90,6 @@
 
 namespace yggdrasil_decision_forests::model::decision_tree
 {
-
-  static constexpr bool PRINT_PROJECTION_MATRICES = PRINT_PROJECTION_MATRICES_FLAG;
 
   namespace
   {
@@ -5728,7 +5722,6 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     // IF better_split: split & recurse    // else: finalize as leaf
     if (!has_better_condition)
     {
-      if constexpr (PRINT_PROJECTION_MATRICES) { std::cout << "Leaf Node! Exiting.." << std::endl; }
       // No good condition found. Close the branch.
       node->FinalizeAsLeaf(dt_config.store_detailed_label_distribution());
       return absl::InlinedVector<internal::NodeAndExamples, 2>{};
@@ -5753,31 +5746,6 @@ return found_split ? SplitSearchResult::kBetterSplitFound
             *train_dataset_for_splitter, selected_examples,
             node->node().condition(), splitter_dataset_is_compact,
             dt_config.internal_error_on_wrong_splitter_statistics()));
-
-    if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::cout << "\n============================================\n";
-      std::cout << "depth          : " << depth << '\n';
-      // std::cout << "projection used to split: "
-      //           << node->node().condition().attribute() << '\n';
-      // std::cout << "threshold      : "
-      //           << node->node().condition().condition()
-      //                 .oblique_condition().threshold() << '\n';
-      node->node().condition().condition().oblique_condition().PrintDebugString();
-
-      std::cout << "positive child gets ("
-                << example_split.positive_examples.size() << ") examples: ";
-      for (const auto idx : example_split.positive_examples.active) {
-        std::cout << idx << ' ';
-      }
-      std::cout << std::endl << std::endl;
-
-      std::cout << "negative child gets ("
-                << example_split.negative_examples.size() << ") examples: ";
-      for (const auto idx : example_split.negative_examples.active) {
-        std::cout << idx << ' ';
-      }
-      std::cout << "\n============================================" << std::endl;
-    }
 
     if (example_split.positive_examples.empty() ||
         example_split.negative_examples.empty())
@@ -5841,9 +5809,6 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     absl::InlinedVector<internal::NodeAndExamples, 2> children;
 
     // +
-    if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::cout << "\nBuilding Positive child" << std::endl;
-    }
     children.push_back(
         {node->mutable_pos_child(),
          std::move(example_split.positive_examples),
@@ -5854,9 +5819,6 @@ return found_split ? SplitSearchResult::kBetterSplitFound
          depth + 1, pos_constraints, true});
 
     // -
-    if constexpr (PRINT_PROJECTION_MATRICES) {
-      std::cout << "Building Negative child" << std::endl;
-    }
     children.push_back(
         {node->mutable_neg_child(),
          std::move(example_split.negative_examples),

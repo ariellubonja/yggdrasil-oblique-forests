@@ -48,11 +48,6 @@
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_SPLITTER_SCANNER_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_SPLITTER_SCANNER_H_
 
-// If these aren't defined, go with regular/fastest setup
-#ifndef HARD_CODE_1000_PROJECTIONS_FLAG
-  #define HARD_CODE_1000_PROJECTIONS_FLAG false
-#endif
-
 #include <stddef.h>
 
 #include <algorithm>
@@ -82,9 +77,6 @@
 namespace yggdrasil_decision_forests {
 namespace model {
 namespace decision_tree {
-
-// Normally, n_projections bounded by n_features. Override it to time cache hits w.r.t n_features
-static constexpr bool HARD_CODE_1000_PROJECTIONS = HARD_CODE_1000_PROJECTIONS_FLAG;
 
 namespace internal {
 HWY_INLINE uint32_t FloatToUintForSort(float f) {
