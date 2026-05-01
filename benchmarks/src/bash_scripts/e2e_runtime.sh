@@ -80,12 +80,12 @@ CSV_DATASETS=(
 
 # Synthetic trunk rows (comment out values to skip)
 TRUNK_ROWS=(
-  10000
-  20000
-  40000
-  80000
-  100000
-  # 1000000
+  # 10000
+  # 20000
+  # 40000
+  # 80000
+  # 100000
+  1000000
 )
 
 # =========================
