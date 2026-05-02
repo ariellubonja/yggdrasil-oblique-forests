@@ -1,12 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <suffix>" >&2
-  echo "  Suffix becomes the result filename, e.g. 'AWS_m7i' -> e2e_accuracy_aws_m7i.csv" >&2
+# Quick (default) vs Full evaluation.
+#
+# Workflow: use Quick to test whether a code change impacted accuracy. When
+# Quick agrees with the runtime evaluation that a change is worth keeping
+# (e.g. >20% runtime improvement on runtime.sh's Quick), run Full to confirm.
+#
+# Quick: small dataset surface (all CC18 train folds; no trunk).
+# Full:  Quick datasets + the large CSVs (HIGGS/SUSY/epsilon) and trunk
+#        10k/20k/40k/80k/100k/1M.
+# Seeds: 10 seeds run in BOTH modes (accuracy needs the variance regardless).
+#
+# Usage:  $0 [--full] <suffix>
+#   <suffix> becomes part of the result filename, e.g. 'AWS_m7i' ->
+#   e2e_accuracy_quick_aws_m7i.csv (or e2e_accuracy_full_aws_m7i.csv).
+
+MODE="quick"
+SUFFIX=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --full)  MODE="full";  shift ;;
+    -h|--help)
+      echo "Usage: $0 [--full] <suffix>" >&2
+      exit 0 ;;
+    --*)
+      echo "ERROR: unknown flag '$1'" >&2
+      echo "Usage: $0 [--full] <suffix>" >&2
+      exit 2 ;;
+    *)
+      if [[ -n "$SUFFIX" ]]; then
+        echo "ERROR: unexpected positional argument '$1' (suffix already set to '$SUFFIX')" >&2
+        exit 2
+      fi
+      SUFFIX="${1,,}"; shift ;;
+  esac
+done
+if [[ -z "$SUFFIX" ]]; then
+  echo "Usage: $0 [--full] <suffix>" >&2
+  echo "  e.g. '$0 AWS_m7i' -> e2e_accuracy_quick_aws_m7i.csv" >&2
   exit 2
 fi
-SUFFIX="${1,,}"  # lowercase
 
 ###### Parameters
 
@@ -69,29 +103,45 @@ DYNAMIC_SPLIT_THRESHOLDS=(
   3100
 )
 
-# CSV datasets as "path|label_col" (comment out lines to skip)
-CSV_DATASETS=(
-  # Big
-  # "benchmarks/data/HIGGS_with_header.csv|class"
-  # "benchmarks/data/SUSY_with_header.csv|class"
-  # "benchmarks/data/epsilon_normalized_train.csv|label"
+# CSV datasets are built from the CC18 binary tasks (always) plus the large
+# benchmark CSVs (Full mode only). Datasets entries are "path|label_col".
+CC18_DIR="benchmarks/data/cc18_binary_csv"
+if [[ ! -d "$CC18_DIR" ]]; then
+  echo "ERROR: $CC18_DIR not found. Run from repo root." >&2
+  exit 1
+fi
 
-  # # Small
-  # "benchmarks/data/cc18_binary_csv/task_14965_bank-marketing/repeat0_fold0_sample0_train.csv|Class"
-  # "benchmarks/data/cc18_binary_csv/task_14952_PhishingWebsites/repeat0_fold0_sample0_train.csv|Result"
-  # "benchmarks/data/cc18_binary_csv/task_29_credit-approval/repeat0_fold0_sample0_train.csv|class"
-  # "benchmarks/data/cc18_binary_csv/task_167125_Internet-Advertisements/repeat0_fold0_sample0_train.csv|class"
-)
+CSV_DATASETS=()
+# Only enumerate task_*/ folders; datasets renamed to issue_<name>/ are
+# skipped (used to mark folds the binary cannot train on, e.g. an
+# all-missing column that aborts dataspec creation).
+for d in "$CC18_DIR"/task_*/; do
+  csv="${d}repeat0_fold0_sample0_train.csv"
+  [[ -f "$csv" ]] || continue
+  # Label is always the last header column; strip BOM/CR/spaces defensively.
+  label=$(head -n 1 "$csv" | awk -F',' '{print $NF}' | tr -d '\r\n ' | sed 's/^\xef\xbb\xbf//')
+  CSV_DATASETS+=("$csv|$label")
+done
+if [[ "${#CSV_DATASETS[@]}" -eq 0 ]]; then
+  echo "ERROR: found no CC18 datasets under $CC18_DIR" >&2
+  exit 1
+fi
 
-# Synthetic trunk rows (comment out values to skip)
-TRUNK_ROWS=(
-  10000
-  20000
-  # 40000
-  # 80000
-  # 100000
-  # 1000000
+# Full-mode-only large CSVs (added on top of CC18).
+FULL_EXTRA_CSV_DATASETS=(
+  "benchmarks/data/HIGGS_with_header.csv|class"
+  "benchmarks/data/SUSY_with_header.csv|class"
+  "benchmarks/data/epsilon_normalized_train.csv|label"
 )
+if [[ "$MODE" == "full" ]]; then
+  CSV_DATASETS+=("${FULL_EXTRA_CSV_DATASETS[@]}")
+fi
+
+# Synthetic trunk rows. Full mode only -- Quick is CC18-only.
+TRUNK_ROWS=()
+if [[ "$MODE" == "full" ]]; then
+  TRUNK_ROWS=(10000 20000 40000 80000 100000 1000000)
+fi
 
 # =========================
 # Main Script
@@ -126,8 +176,8 @@ bazel_build() {
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
-logfile="${logdir}/e2e_accuracy_${SUFFIX}.log"
-csvfile="${logdir}/e2e_accuracy_${SUFFIX}.csv"
+logfile="${logdir}/e2e_accuracy_${MODE}_${SUFFIX}.log"
+csvfile="${logdir}/e2e_accuracy_${MODE}_${SUFFIX}.csv"
 
 if [[ -e "$logfile" ]]; then
   echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2
@@ -138,11 +188,14 @@ if [[ -e "$csvfile" ]]; then
   exit 1
 fi
 
-# Parse log -> CSV. Log file is preserved for debugging.
+# Parse log -> CSV. On parser success the log is deleted; if the parser fails
+# the log is kept for debugging. The log is also kept implicitly when the
+# script aborts mid-sweep (set -e), since this function is never reached.
 finalize_log() {
   echo "Parsing log -> CSV..."
   if python3 benchmarks/utils/parse_log_to_csv.py "$logfile" "$csvfile"; then
-    echo "CSV: $csvfile  (log kept at $logfile)"
+    rm -f "$logfile"
+    echo "CSV: $csvfile  (log deleted on success)"
   else
     echo "ERROR: parser failed; log kept at $logfile" >&2
     return 1

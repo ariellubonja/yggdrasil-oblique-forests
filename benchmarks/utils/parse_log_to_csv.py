@@ -21,7 +21,7 @@ CMD_RE = re.compile(r'^\./bazel-bin/examples/train_oblique_forest (.+?)\s*$')
 RUN_RE = re.compile(r'^----- Run (\d+)/(\d+)(?: \(seed=(\d+)\))? -----$')
 ACC_RE = re.compile(r'Train tree \d+/\d+ accuracy:([\d.]+)')
 MEDIAN_RUN_RE = re.compile(
-    r'^MEDIAN of \d+/\d+ runs: [\d.eE+\-]+ s\s+\(samples: ([0-9. eE+\-]+)\)$'
+    r'^MEDIAN of \d+/\d+ runs: ([\d.eE+\-]+) s\s+\(samples: ([0-9. eE+\-]+)\)$'
 )
 
 
@@ -69,9 +69,10 @@ def parse_runtime(log_path):
                 continue
             m = MEDIAN_RUN_RE.match(line)
             if m and cmd is not None:
-                samples = m.group(1).split()
+                median = m.group(1)
+                samples = m.group(2).split()
                 dataset, algo = parse_cmd(cmd)
-                rows.append((dataset, algo, samples))
+                rows.append((dataset, algo, median, samples))
                 cmd = None
     return rows
 
@@ -133,9 +134,11 @@ def main():
     if 'accuracy' in basename:
         rows = parse_accuracy(log_path)
         col_prefix = 'seed'
+        is_runtime = False
     elif 'runtime' in basename:
         rows = parse_runtime(log_path)
         col_prefix = 'run'
+        is_runtime = True
     else:
         print(f"ERROR: cannot determine log type from filename '{basename}'", file=sys.stderr)
         return 1
@@ -144,13 +147,22 @@ def main():
         print(f"ERROR: no data rows parsed from {log_path}", file=sys.stderr)
         return 1
 
-    max_samples = max(len(r[2]) for r in rows)
-    header = ['dataset', 'algorithm'] + [f'{col_prefix}_{i}' for i in range(1, max_samples + 1)]
+    if is_runtime:
+        # Runtime CSV reports only the median; individual run samples stay in
+        # the log (which is itself deleted on success unless something fails).
+        header = ['dataset', 'algorithm', 'median_s']
+    else:
+        max_samples = max(len(r[2]) for r in rows)
+        header = ['dataset', 'algorithm'] + [f'{col_prefix}_{i}' for i in range(1, max_samples + 1)]
     with open(out_path, 'w', newline='') as f:
         w = csv.writer(f)
         w.writerow(header)
-        for dataset, algo, samples in rows:
-            w.writerow([dataset, algo] + samples + [''] * (max_samples - len(samples)))
+        if is_runtime:
+            for dataset, algo, median, samples in rows:
+                w.writerow([dataset, algo, median])
+        else:
+            for dataset, algo, samples in rows:
+                w.writerow([dataset, algo] + samples + [''] * (max_samples - len(samples)))
     print(f"Wrote {len(rows)} rows to {out_path}")
     return 0
 
