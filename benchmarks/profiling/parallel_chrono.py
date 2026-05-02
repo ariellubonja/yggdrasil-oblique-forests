@@ -8,7 +8,8 @@ from pathlib import Path
 import subprocess, sys, logging
 
 import pandas as pd
-import utils.utils as utils
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+import benchmarks.utils.utils as utils  # noqa: E402
 import shlex
 
 log = logging.getLogger(__name__)

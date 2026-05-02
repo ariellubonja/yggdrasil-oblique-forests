@@ -27,13 +27,13 @@ Modes (CC18 accuracy stage runs in both):
   --size=full    trunk 3_000_000 × 4096   + epsilon, SUSY, HIGGS (full)
 
 Typical use (vanilla baseline vs. an experiment flag):
-  python3 benchmarks/src/eval_ab_e2e.py \\
+  python3 benchmarks/evaluation/e2e_a-b_test.py \\
       --variant_b=loop_swap \\
       --bazel_config_b=projeval_loop_swap \\
       --size=quick
 
 Comparing two non-default variants (e.g. V1 vs V2):
-  python3 benchmarks/src/eval_ab_e2e.py \\
+  python3 benchmarks/evaluation/e2e_a-b_test.py \\
       --variant_a=v1 --bazel_config_a=nodewise_proj_matrix \\
       --variant_b=v2 --bazel_config_b=depthwise_1_pass \\
       --size=full
@@ -49,10 +49,9 @@ import time
 from pathlib import Path
 
 # Reuse the existing CPU-toggle + cleanup helpers used by parallel_chrono.py.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import utils.utils as utils  # noqa: E402
-
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO))
+import benchmarks.utils.utils as utils  # noqa: E402
 TARGET = "//examples:train_oblique_forest"
 BIN = REPO / "bazel-bin/examples/train_oblique_forest"
 
@@ -71,7 +70,7 @@ NATURAL = {
     "full":  [EPSILON, SUSY, HIGGS],
 }
 
-# CC18 accuracy datasets — same set used by benchmarks/src/bash_scripts/e2e_runtime.sh.
+# CC18 accuracy datasets — same set used by benchmarks/evaluation/runtime.sh.
 # Small enough to run in seconds with --compute_oob_performances=true.
 CC18 = [
     ("benchmarks/data/cc18_binary_csv/task_14952_PhishingWebsites/repeat0_fold0_sample0_train.csv",

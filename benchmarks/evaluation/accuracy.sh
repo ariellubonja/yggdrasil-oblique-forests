@@ -3,19 +3,17 @@ set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <suffix>" >&2
-  echo "  Suffix becomes the result filename, e.g. 'AWS_m7i' -> e2e_runtime_aws_m7i.csv" >&2
+  echo "  Suffix becomes the result filename, e.g. 'AWS_m7i' -> e2e_accuracy_aws_m7i.csv" >&2
   exit 2
 fi
 SUFFIX="${1,,}"  # lowercase
 
 ###### Parameters
 
-NUM_RUNS=7   # Number of repetitions per command; median runtime is reported
+SEEDS=(1 2 3 4 5 6 7 8 9 10)
 NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
-NUM_THREADS=-1
-COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
-# Ariel - ENSURE compute_oob_performances===== - it has an equal sign, not a blank space
-BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_performances=$COMPUTE_OOB_PERFORMANCES"
+# OOB metrics must be on for accuracy parsing; not exposed as a toggle.
+BASE_ARGS="--num_trees=$NUM_TREES --num_threads=-1 --compute_oob_performances=true"
 
 histogram_num_bins=64  # NOTE! AVX512 will be used on Vectorized method
 
@@ -117,21 +115,19 @@ VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
 # Vectorization applies only to these methods (Oblique only)
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
 
-# Always: enable -> build -> disable -> run -> re-enable at end.
-# All bazel builds are wrapped by bazel_build() so CPU E features are only
-# enabled during the build itself, and disabled for every experiment run.
-trap 'sudo benchmarks/src/utils/set_cpu_e_features.sh --enable' EXIT
+# CPU E features must stay enabled the whole time (build + run) so accuracy
+# numbers are taken under a consistent CPU configuration. No
+# enable/disable dance like runtime.sh.
+sudo benchmarks/utils/set_cpu_e_features.sh --enable
 
 bazel_build() {
-  sudo benchmarks/src/utils/set_cpu_e_features.sh --enable
   bazel build "$@"
-  sudo benchmarks/src/utils/set_cpu_e_features.sh --disable
 }
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
-logfile="${logdir}/e2e_runtime_${SUFFIX}.log"
-csvfile="${logdir}/e2e_runtime_${SUFFIX}.csv"
+logfile="${logdir}/e2e_accuracy_${SUFFIX}.log"
+csvfile="${logdir}/e2e_accuracy_${SUFFIX}.csv"
 
 if [[ -e "$logfile" ]]; then
   echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2
@@ -145,7 +141,7 @@ fi
 # Parse log -> CSV. Log file is preserved for debugging.
 finalize_log() {
   echo "Parsing log -> CSV..."
-  if python3 benchmarks/src/utils/parse_log_to_csv.py "$logfile" "$csvfile"; then
+  if python3 benchmarks/utils/parse_log_to_csv.py "$logfile" "$csvfile"; then
     echo "CSV: $csvfile  (log kept at $logfile)"
   else
     echo "ERROR: parser failed; log kept at $logfile" >&2
@@ -157,48 +153,22 @@ finalize_log() {
 # run, since the GPU section does its own builds with --config=oblique_gpu.
 if [[ "$RUN_CPU" == "true" || "$RUN_VECTORIZED" == "true" ]]; then
   bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
-else
-  # Ensure features are disabled for experiments even when no initial build runs.
-  sudo benchmarks/src/utils/set_cpu_e_features.sh --disable
 fi
 BINARY="./bazel-bin/examples/train_oblique_forest"
 
 run_cmd() {
   echo "$*" | tee -a "$logfile"
-  local times=()
-  local i out t rc
-  for ((i=1; i<=NUM_RUNS; i++)); do
-    echo "----- Run $i/$NUM_RUNS -----" | tee -a "$logfile"
+  local seed out rc total=${#SEEDS[@]} i=0
+  for seed in "${SEEDS[@]}"; do
+    i=$((i+1))
+    echo "----- Run $i/$total (seed=$seed) -----" | tee -a "$logfile"
     rc=0
-    out=$(bash -c "$*" 2>&1) || rc=$?
+    out=$(bash -c "$* --seed=$seed" 2>&1) || rc=$?
     echo "$out" | tee -a "$logfile"
     if (( rc != 0 )); then
-      echo "WARNING: command exited with status $rc on run $i (continuing)" | tee -a "$logfile"
-    fi
-    # Parse "random_forest.cc Training block took: <X> s"
-    t=$(echo "$out" | grep -oE 'Training block took:[[:space:]]*[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' \
-        | grep -oE '[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' | tail -1)
-    if [[ -n "$t" ]]; then
-      times+=("$t")
-    else
-      echo "WARNING: Could not parse 'Training block took' from run $i" | tee -a "$logfile"
+      echo "WARNING: command exited with status $rc on seed $seed (continuing)" | tee -a "$logfile"
     fi
   done
-  if [[ "${#times[@]}" -gt 0 ]]; then
-    local sorted
-    mapfile -t sorted < <(printf '%s\n' "${times[@]}" | sort -g)
-    local n=${#sorted[@]}
-    local mid=$(( n / 2 ))
-    local median
-    if (( n % 2 == 1 )); then
-      median="${sorted[$mid]}"
-    else
-      median=$(awk -v a="${sorted[$((mid-1))]}" -v b="${sorted[$mid]}" 'BEGIN{printf "%.6f", (a+b)/2.0}')
-    fi
-    echo "MEDIAN of ${#times[@]}/${NUM_RUNS} runs: ${median} s  (samples: ${times[*]})" | tee -a "$logfile"
-  else
-    echo "MEDIAN of 0/${NUM_RUNS} runs: N/A" | tee -a "$logfile"
-  fi
 }
 
 banner() {
@@ -456,5 +426,4 @@ for method in "${selected_vec_methods[@]}"; do
   done
 done
 
-# CPU features re-enabled by trap on exit
 finalize_log

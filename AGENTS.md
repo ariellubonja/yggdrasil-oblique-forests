@@ -10,7 +10,7 @@ focused on **speeding up oblique (sparse) random forests**. Two concurrent works
    (`oblique.cc`) is the top CPU hotspot in oblique split finding.
    In flight: `--config=depthwise_1_pass` (V2-rev3, 4-row inner unroll
    exposing load-level parallelism — see
-   `benchmarks/results/apply_projection_experiments.md`),
+   `benchmarks/experiments/apply_projection_experiments.md`),
    `--config=nodewise_proj_matrix` (V1, per-node fused matrix fill,
    kept as A/B baseline for narrow datasets where projection sharing
    may matter), Highway-SIMD `upper_bound`
@@ -60,7 +60,7 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
    targeted chrono scope) is **< 20%**, this experiment is a **failed
    experiment** for the purpose of step 6.
 6. **Log result.** Append to the branch's `*_experiments.md` (see
-   `benchmarks/results/apply_projection_experiments.md` for the
+   `benchmarks/experiments/apply_projection_experiments.md` for the
    shape). Every experiment — failed or successful — gets a row. **Mark
    successful experiments (≥ 20% speedup) prominently** (★, bold table,
    etc.) so they're easy to spot.
@@ -74,7 +74,7 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
 Two tools, two jobs:
 
 - **Verdict (end-of-experiment, deployable build):**
-  `benchmarks/src/eval_ab_e2e.py --variant_b=NAME --bazel_config_b=FLAG --size={quick,full}`.
+  `benchmarks/evaluation/e2e_a-b_test.py --variant_b=NAME --bazel_config_b=FLAG --size={quick,full}`.
   `quick` = trunk 100k × 4096 + epsilon (~30 min); `full` = trunk 3M × 4096
   + epsilon + SUSY + HIGGS (several hours). Builds A and B with
   `-c opt --cxxopt=-O3 --cxxopt=-march=native`, runs each trunk e2e
@@ -84,11 +84,11 @@ Two tools, two jobs:
   under `benchmarks/results/eval_ab/<ts>_<variant>_<size>/`. Variant A
   defaults to vanilla; pass `--bazel_config_a=…` for non-default A.
 - **Insight (during the iteration loop, per-depth signal):** run
-  `benchmarks/src/parallel_chrono.py` directly with `--bazel_config=NAME`
-  for both A and B. Cheaper than `eval_ab_e2e.py`; gives you per-tree-depth
+  `benchmarks/profiling/parallel_chrono.py` directly with `--bazel_config=NAME`
+  for both A and B. Cheaper than `e2e_a-b_test.py`; gives you per-tree-depth
   ΣApplyProj / SortFillBuckets / etc., which is what you need to *understand*
   why a change moves a number. Don't treat its wall numbers as headline —
-  the chrono build adds overhead; that's what `eval_ab_e2e.py` is for.
+  the chrono build adds overhead; that's what `e2e_a-b_test.py` is for.
 
 ### On guessing vs. measuring
 Avoid speculative "why" stories about a result. A small autonomous-mode
@@ -102,9 +102,9 @@ beats narrative.
 
 ### Hardware + measurement rules
 - Intel Core Ultra 9 185H is hybrid (P-cores + E-cores). E-cores must be
-  off for stable timing — `parallel_chrono.py` and `e2e_runtime.sh`
+  off for stable timing — `parallel_chrono.py` and `runtime.sh`
   toggle this automatically; for standalone `perf` runs, manually:
-  `sudo benchmarks/src/utils/set_cpu_e_features.sh --disable`. Restore
+  `sudo benchmarks/utils/set_cpu_e_features.sh --disable`. Restore
   with `--enable` when done. With E-cores on, `perf` splits counters
   across `cpu_atom/*` and `cpu_core/*` PMUs and many events become
   `<not supported>` — A/B comparisons become meaningless. However, leave E-cores on for bazel builds to speed them up 3x. Note that parallel_chrono.py automatically manages this for per-function timings.
@@ -189,33 +189,42 @@ bazel test -c opt //yggdrasil_decision_forests/learner/decision_tree:training_te
 
 ```
 benchmarks/
-├── src/
-│   ├── parallel_chrono.py          # Main driver: CHRONO build + per-tree-depth CSV
-│   ├── bash_scripts/e2e_runtime.sh # End-to-end runtime suite
-│   └── utils/
-│       ├── utils.py                # Shared CLI parser, E-core toggle, build helpers
-│       ├── make_trunk_dataset.py   # Synthetic trunk datasets
-│       └── set_cpu_e_features.sh   # E-core/turbo toggle
+├── evaluation/
+│   ├── runtime.sh                  # End-to-end runtime suite (was bash_scripts/e2e_runtime.sh)
+│   ├── accuracy.sh                 # End-to-end accuracy suite
+│   └── e2e_a-b_test.py             # A/B verdict driver across two bazel configs
+├── profiling/
+│   └── parallel_chrono.py          # Main driver: CHRONO build + per-tree-depth CSV
+├── utils/
+│   ├── utils.py                    # Shared CLI parser, E-core toggle, build helpers
+│   ├── make_trunk_dataset.py       # Synthetic trunk datasets
+│   ├── parse_log_to_csv.py         # Parse runtime/accuracy logs into CSV
+│   ├── download_cc18_datasets.py   # Download OpenML CC18 benchmark suite
+│   └── set_cpu_e_features.sh       # E-core/turbo toggle
 ├── data/                           # HIGGS, SUSY, epsilon, CC18 tasks, synthetic trunk
-├── results/                        # Tracked: per-method CSVs + experiment .md logs
-│   └── per_function_timing/<CPU>/<exp>/<dataset>/<depth>Depth-<threads>Threads.csv
-└── experiments/<branch-name>/      # Gitignored: perf_runs/ + iteration_logs/
+├── experiments/                    # Tracked: per-branch *_experiments.md design notes + logs
+│   └── <branch-name>/              # Gitignored: perf_runs/ + iteration_logs/
+└── results/                        # Tracked: per-method CSVs
+    ├── runtime/                    # Wall-clock CSVs/logs from runtime.sh
+    ├── accuracy/                   # OOB accuracy CSVs/logs from accuracy.sh
+    ├── breakeven/                  # Breakeven experiments
+    └── per_function_timing/<CPU>/<exp>/<dataset>/<depth>Depth-<threads>Threads.csv
 ```
 
 Common invocations:
 
 ```bash
-python benchmarks/src/parallel_chrono.py \
+python benchmarks/profiling/parallel_chrono.py \
   --input_mode=trunk --rows=3000000 --tree_depth=-1 --num_trees=5 \
   --num_threads=1 --feature_split_type=Oblique --numerical_split_type=Exact \
   --depthwise_1_pass
 
-bash benchmarks/src/bash_scripts/e2e_runtime.sh
+bash benchmarks/evaluation/runtime.sh <suffix>
 ```
 
 `parallel_chrono.py` outputs CSV columns: `thread, tree, depth, nodes,
 samples, SampleProj, ApplyProjection, EvalProj, sort phases, histogram
-phases`. Sweeps in `e2e_runtime.sh`: split types (Oblique / Axis
+phases`. Sweeps in `runtime.sh`: split types (Oblique / Axis
 Aligned), numerical methods (Exact / Random / Dynamic Random Histogram),
 vectorization (None / AVX2 / AVX512), datasets.
 

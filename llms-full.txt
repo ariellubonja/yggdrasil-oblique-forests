@@ -125,29 +125,27 @@ Key fields:
 examples/train_oblique_forest.cc             # Standalone training binary
 
 benchmarks/
-├── src/                                     # Scripts and tooling
-│   ├── bash_scripts/
-│   │   ├── e2e_runtime.sh                   # Main end-to-end runtime suite
-│   │   │     Sweeps: split types (Oblique/Axis Aligned), numerical methods
-│   │   │     (Exact/Random/Dynamic Random Histogram), vectorization (AVX2/512),
-│   │   │     datasets (HIGGS/SUSY/epsilon/CC18/trunk). Disables E-cores,
-│   │   │     builds with -O3 -march=native, logs wall-clock times.
-│   │   ├── parallel_chrono_many_threads.sh  # Runs CHRONO profiling at 1..48 threads
-│   │   └── exact_histogram_breakeven/       # Exact-vs-histogram breakeven experiments
-│   │       ├── heatmaps/                    # Row-scaling sweeps (2K..1M rows)
-│   │       └── chrono/                      # CHRONO-enabled variants
-│   ├── parallel_chrono.py                   # Python driver: builds with CHRONO_ENABLED,
-│   │     runs training, parses per-tree-depth timing into CSV.
-│   │     Columns: thread, tree, depth, nodes, samples, then per-function times
-│   │     (SampleProj, ProjEval, EvalProj, sort/histogram phases).
-│   ├── plot_ydf_projection_matrix.ipynb     # Visualize oblique projection matrices
-│   ├── microbenchmarks/                     # Standalone C++ microbenchmarks
-│   │   └── fisher_yates_vs_binomial_floyds.cc  # Sampling algorithm comparison
-│   └── utils/
-│       ├── utils.py                         # Shared CLI parser, E-core control, build helpers
-│       ├── make_trunk_dataset.py            # Generate synthetic trunk datasets
-│       ├── set_cpu_e_features.sh            # Toggle Intel E-cores for stable measurements
-│       └── download_cc18_datasets.ipynb     # Download OpenML CC18 benchmark suite
+├── evaluation/                              # End-to-end runners (build + measure)
+│   ├── runtime.sh                           # Main end-to-end runtime suite
+│   │     Sweeps: split types (Oblique/Axis Aligned), numerical methods
+│   │     (Exact/Random/Dynamic Random Histogram), vectorization (AVX2/512),
+│   │     datasets (HIGGS/SUSY/epsilon/CC18/trunk). Disables E-cores,
+│   │     builds with -O3 -march=native, logs wall-clock times.
+│   ├── accuracy.sh                          # End-to-end accuracy suite (OOB)
+│   └── e2e_a-b_test.py                      # A/B verdict driver: builds two configs,
+│         runs trunk + natural + CC18, writes summary.md + raw.json.
+├── profiling/
+│   └── parallel_chrono.py                   # Python driver: builds with CHRONO_ENABLED,
+│         runs training, parses per-tree-depth timing into CSV.
+│         Columns: thread, tree, depth, nodes, samples, then per-function times
+│         (SampleProj, ProjEval, EvalProj, sort/histogram phases).
+├── utils/
+│   ├── utils.py                             # Shared CLI parser, E-core control, build helpers
+│   ├── make_trunk_dataset.py                # Generate synthetic trunk datasets
+│   ├── parse_log_to_csv.py                  # Parse runtime/accuracy logs into CSV
+│   ├── set_cpu_e_features.sh                # Toggle Intel E-cores for stable measurements
+│   └── download_cc18_datasets.py            # Download OpenML CC18 benchmark suite
+├── experiments/                             # Per-branch design notes (`*_experiments.md`)
 ├── data/                                    # Datasets
 │   ├── cc18_binary_csv/                     # 35 OpenML CC18 binary classification tasks
 │   │   └── task_<id>_<name>/                #   10-fold CV: repeat0_fold{0..9}_{train,test}.csv
@@ -157,10 +155,11 @@ benchmarks/
 │   ├── haberman.csv                         # Small dataset
 │   └── jovo_50m/                            # Large pickle-format dataset
 └── results/                                 # Committed experimental output
-    ├── e2e_runtime/                         # Wall-clock logs per method/dataset/ISA
-    │   e.g. aws_all_+_AVX512.log, e2e_correct_breakeven.log
-    ├── e2e_accuracy/                        # OOB accuracy logs
-    │   e.g. aws_oblique.log, axis_aligned_240_tree.log
+    ├── runtime/                             # Wall-clock logs/CSVs per method/dataset/ISA
+    │   e.g. aws_all_+_AVX512.log, m7i_4x_baseline_runtime.csv
+    ├── accuracy/                            # OOB accuracy logs/CSVs
+    │   e.g. aws_oblique.log, axis_aligned_240_tree.csv
+    ├── breakeven/                           # Exact-vs-histogram breakeven experiments
     ├── per_function_timing/                 # CHRONO CSV results, organized by CPU
     │   ├── Intel(R) Core(TM) Ultra 9 185H/ # Laptop (6 P-cores)
     │   │   └── <proj_mode> | Oblique | <split_method> | /
