@@ -130,6 +130,7 @@ for d in "$CC18_DIR"/task_*/; do
 done
 if [[ "${#CSV_DATASETS[@]}" -eq 0 ]]; then
   echo "ERROR: found no CC18 datasets under $CC18_DIR" >&2
+  echo "Run: python3 benchmarks/utils/download_cc18_datasets.py" >&2
   exit 1
 fi
 

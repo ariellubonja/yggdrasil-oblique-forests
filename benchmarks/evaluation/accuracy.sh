@@ -14,7 +14,7 @@ set -euo pipefail
 #
 # Usage:  $0 [--full] <suffix>
 #   <suffix> becomes part of the result filename, e.g. 'AWS_m7i' ->
-#   e2e_accuracy_quick_aws_m7i.csv (or e2e_accuracy_full_aws_m7i.csv).
+#   accuracy_quick_aws_m7i.csv (or accuracy_full_aws_m7i.csv).
 
 MODE="quick"
 SUFFIX=""
@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
 done
 if [[ -z "$SUFFIX" ]]; then
   echo "Usage: $0 [--full] <suffix>" >&2
-  echo "  e.g. '$0 AWS_m7i' -> e2e_accuracy_quick_aws_m7i.csv" >&2
+  echo "  e.g. '$0 AWS_m7i' -> accuracy_quick_aws_m7i.csv" >&2
   exit 2
 fi
 
@@ -185,8 +185,8 @@ bazel_build() {
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
-logfile="${logdir}/e2e_accuracy_${MODE}_${SUFFIX}.log"
-csvfile="${logdir}/e2e_accuracy_${MODE}_${SUFFIX}.csv"
+logfile="${logdir}/accuracy_${MODE}_${SUFFIX}.log"
+csvfile="${logdir}/accuracy_${MODE}_${SUFFIX}.csv"
 
 if [[ -e "$logfile" ]]; then
   echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2

@@ -1,83 +1,89 @@
-# ------------------------------------------------------------
-# requirements
-# ------------------------------------------------------------
-#   pip install openml pandas tqdm
-# ------------------------------------------------------------
+#!/usr/bin/env python3
+"""Recreate the CC18 binary-classification train CSVs from OpenML, deterministically.
+
+Reads cc18_manifest.json (pinned task_id + dataset_id + expected row count) and
+writes one repeat0_fold0_sample0_train.csv per task into
+benchmarks/data/cc18_binary_csv/. Skips entries marked status="issue" (creates
+the issue_<folder>/ marker dir with a README explaining why).
+
+  pip install openml pandas tqdm
+  python3 benchmarks/utils/download_cc18_datasets.py
+"""
+import json
+import os
+import sys
 
 import openml
-import pandas as pd
 from tqdm import tqdm
-import os
 
-# Where the csv files should be written
-DEST_DIR = "cc18_binary_csv"
-os.makedirs(DEST_DIR, exist_ok=True)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.path.join(REPO_ROOT, "benchmarks", "data", "cc18_binary_csv")
+MANIFEST_PATH = os.path.join(REPO_ROOT, "benchmarks", "utils", "cc18_manifest.json")
 
-# ------------------------------------------------------------
-# 1. get the list of *binary* CC-18 tasks
-# ------------------------------------------------------------
-binary_tasks_df = openml.tasks.list_tasks(
-    tag="OpenML-CC18",
-    type=1,                 # 1 = classification
-    number_classes=2,       # keep only binary problems
-    output_format="dataframe"
-)
 
-binary_task_ids = binary_tasks_df.index.tolist()
-print(f"Found {len(binary_task_ids)} binary tasks in CC-18.")
-
-# ------------------------------------------------------------
-# 2. loop through the tasks and materialise the splits
-# ------------------------------------------------------------
-for tid in tqdm(binary_task_ids, desc="downloading & writing"):
-    task    = openml.tasks.get_task(tid, download_data=False)
-    dset    = task.get_dataset()
-    dname   = dset.name                    # e.g. 'banana'
-    target  = dset.default_target_attribute
-
-    # Obtain the full dataframe once
-    X, y, _, _ = dset.get_data(dataset_format="dataframe",
-                               target=target)
-                            #    handle_missing=True)   # gives NaNs where needed
+def write_train_csv(entry, out_path):
+    task = openml.tasks.get_task(entry["task_id"], download_data=False)
+    dset = openml.datasets.get_dataset(entry["dataset_id"])
+    target = entry["label_column"]
+    X, y, _, _ = dset.get_data(dataset_format="dataframe", target=target)
     df = X.copy()
     df[target] = y
+    train_idx, _ = task.get_train_test_split_indices(repeat=0, fold=0, sample=0)
+    df.iloc[train_idx].to_csv(out_path, index=False)
 
-    task_dir = os.path.join(DEST_DIR, f"task_{tid}_{dname}")
-    os.makedirs(task_dir, exist_ok=True)
 
-    # Iterate over the predefined CV splits
-    # ------------------------------------------------------------------
-    # NEW helper --------------------------------------------------------
-    # ------------------------------------------------------------------
-    def _n(param_dict, key, default=1):
-        """Return an int(parameter_dict[key]) or a default value."""
-        return int(param_dict.get(key, default))
+def main():
+    with open(MANIFEST_PATH) as f:
+        manifest = json.load(f)
 
-    # ------------------------------------------------------------------
-    # inside the main loop, *after* we created `task`  ------------------
-    # ------------------------------------------------------------------
-    est_params = task.estimation_procedure.get("parameters", {})  # note: "parameters"
-    n_repeats = int(est_params.get("number_repeats", 1))
-    n_folds = int(est_params.get("number_folds", 1))
-    n_samples = int(est_params.get("number_samples", 1))  # often 1
+    os.makedirs(DATA_DIR, exist_ok=True)
 
-    # Iterate over the predefined CV splits ----------------------------
-    for repeat in range(n_repeats):
-        for fold in range(n_folds):
-            for sample in range(n_samples):            # most tasks: sample = 0 only
-                train_idx, test_idx = task.get_train_test_split_indices(
-                    repeat=repeat, fold=fold, sample=sample
+    failures = []
+    for entry in tqdm(manifest["entries"], desc="cc18"):
+        prefix = "issue_" if entry["status"] == "issue" else ""
+        folder = f"{prefix}task_{entry['task_id']}_{entry['folder_name']}"
+        task_dir = os.path.join(DATA_DIR, folder)
+        os.makedirs(task_dir, exist_ok=True)
+
+        if entry["status"] == "issue":
+            with open(os.path.join(task_dir, "README.txt"), "w") as f:
+                f.write(
+                    f"Skipped: {entry.get('issue_reason', 'unknown')}\n"
+                    f"task_id={entry['task_id']} dataset_id={entry['dataset_id']}\n"
                 )
+            continue
 
-                train_path = os.path.join(
-                    task_dir, f"repeat{repeat}_fold{fold}_sample{sample}_train.csv"
-                )
-                test_path = os.path.join(
-                    task_dir, f"repeat{repeat}_fold{fold}_sample{sample}_test.csv"
-                )
+        train_csv = os.path.join(task_dir, "repeat0_fold0_sample0_train.csv")
+        if os.path.isfile(train_csv):
+            with open(train_csv) as f:
+                rows = sum(1 for _ in f) - 1
+            if rows == entry["expected_rows_train"]:
+                continue  # already have correct file
 
-                df.iloc[train_idx].to_csv(train_path, index=False)
-                df.iloc[test_idx].to_csv(test_path,  index=False)
+        write_train_csv(entry, train_csv)
 
-print("\nAll done.")
-print(f"CSV files are in   {os.path.abspath(DEST_DIR)}")
+        with open(train_csv) as f:
+            rows = sum(1 for _ in f) - 1
+        if rows != entry["expected_rows_train"]:
+            failures.append(
+                f"task_{entry['task_id']}: expected {entry['expected_rows_train']} "
+                f"rows, got {rows}"
+            )
+
+    if failures:
+        print("\nROW-COUNT MISMATCH (OpenML data may have changed):", file=sys.stderr)
+        for msg in failures:
+            print(f"  {msg}", file=sys.stderr)
+        print(
+            "\nIf the new counts are correct, regenerate the manifest with "
+            "build_cc18_manifest.py and review the diff.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"\nDone. CSVs in {DATA_DIR}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
