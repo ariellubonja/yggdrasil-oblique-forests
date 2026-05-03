@@ -44,8 +44,16 @@ fi
 
 ###### Parameters
 
-SEEDS=(1 2 3 4 5 6 7 8 9 10)
-NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
+if [[ "$MODE" == "quick" ]]; then
+  SEEDS=(1)
+else
+  SEEDS=(1 2 3 4 5 6 7 8 9 10)
+fi
+if grep -q "Ultra 9 185H" /proc/cpuinfo 2>/dev/null; then
+  NUM_TREES=30
+else
+  NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
+fi
 # OOB metrics must be on for accuracy parsing; not exposed as a toggle.
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=-1 --compute_oob_performances=true"
 
@@ -124,6 +132,7 @@ for d in "$CC18_DIR"/task_*/; do
 done
 if [[ "${#CSV_DATASETS[@]}" -eq 0 ]]; then
   echo "ERROR: found no CC18 datasets under $CC18_DIR" >&2
+  echo "Run: python3 benchmarks/utils/download_cc18_datasets.py" >&2
   exit 1
 fi
 
