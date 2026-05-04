@@ -3,40 +3,25 @@
 > **Scope**: oblique split methods only. Ignore other learners
 > (gradient boosted trees, CART, etc.) unless explicitly asked.
 
-A research fork of [Yggdrasil Decision Forests](https://github.com/google/yggdrasil-decision-forests)
-focused on **speeding up oblique (sparse) random forests**. Two concurrent workstreams:
+The relevant files are:
 
-1. **Reduce `ApplyProjection` time on CPU.** `ProjectionEvaluator::Evaluate`
-   (`oblique.cc`) is the top CPU hotspot in oblique split finding.
-   In flight: `--config=depthwise_1_pass` (V2-rev3, 4-row inner unroll
-   exposing load-level parallelism — see
-   `benchmarks/experiments/apply_projection_experiments.md`),
-   `--config=nodewise_proj_matrix` (V1, per-node fused matrix fill,
-   kept as A/B baseline for narrow datasets where projection sharing
-   may matter), Highway-SIMD `upper_bound`
-   (`--config=enable_std_upper_bound_avx2|avx512`), gated `std::isnan`
-   (`YDF_BENCH_SKIP_ISNAN` default-on; `--config=with_isnan` to flip back).
+- /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/decision_tree/oblique.cc . Important functions: EvaluateProjection, ProjectionEvaluator::Evaluate , FindBestConditionSparseObliqueTemplate
+- /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/decision_tree/training.cc . Important functions: FindSplitLabelClassificationFeatureNumericalHistogram, FindSplitLabelClassificationFeatureNumericalCart
+- /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h . Important function: FindBestSplit
+- /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/random_forest/random_forest.cc . Starts the whole forest training loop. Important function: TrainWithStatusImpl
 
-2. **Offload tree tops to GPU.** Shallow levels have large rows / many
-   projections — maps cleanly onto CUDA. `oblique_gpu.cc` +
-   `oblique_gpu_kernels.cu.cc` expose `ApplyProjectionsNodewise`,
-   `FindBestSplitNodewise`, `FindBestSplitDepthwise` (plus `*Exact`).
-   Build: `--config=oblique_gpu`.
+Do not pull in other files in context unless explicitly necessary. The whole math is in the above. Look at the includes of those files if you need e.g. VerticalDataset details
 
-**Crucial: All contributions need to be research grade - therefore only publishable speedup methods count. E.g. you cannot just turn off logging for example to get the speedup**
+Goal:
+
+1. **Reduce `ProjectionEvaluator::Evaluate` time (colloquially called `ApplyProjection`) .** 
+
+
+**Crucial: All contributions need to be research grade - therefore only publishable speedup methods count. E.g. achieving speedup by turning off logging is unacceptable**
 
 ## Experiment workflow (mandatory pattern)
 
-Empiricism is foundational here — if this loop isn't followed, the work
-is wasted. Run sessions can be many hours; do not worry about token
-budget. Run the loop **as long as possible, ideally indefinitely**.
-
-### Branch convention
-- Each experiment lives on its own branch named after the method/idea
-  being optimized (e.g. `1-pass-AP-CPU`, `gpu-bfs-trunk-offload`,
-  `simd-isnan-gate`).
-- Never modify other branches from inside an experiment branch.
-- `git rebase` to land on `main` only when results are confirmed.
+Empiricism is foundational here — if this loop isn't followed, the work is wasted.
 
 ### Per-experiment loop
 1. **Baseline first — but reuse existing baselines when possible.** Check
@@ -74,21 +59,12 @@ budget. Run the loop **as long as possible, ideally indefinitely**.
 Two tools, two jobs:
 
 - **Verdict (end-of-experiment, deployable build):**
-  `benchmarks/evaluation/e2e_a-b_test.py --variant_b=NAME --bazel_config_b=FLAG --size={quick,full}`.
-  `quick` = trunk 100k × 4096 + epsilon (~30 min); `full` = trunk 3M × 4096
-  + epsilon + SUSY + HIGGS (several hours). Builds A and B with
-  `-c opt --cxxopt=-O3 --cxxopt=-march=native`, runs each trunk e2e
-  (30 trees, `--num_threads=-1`) for wall time and the natural datasets
-  with `--compute_oob_performances=true` for accuracy. No chrono overhead
-  — the binary is the one you'd deploy. Writes `summary.md` + `raw.json`
-  under `benchmarks/results/eval_ab/<ts>_<variant>_<size>/`. Variant A
-  defaults to vanilla; pass `--bazel_config_a=…` for non-default A.
+  `benchmarks/evaluation/runtime.sh` - end-to-end runtime on various datasets. Use its default Quick mode initially, then the full mode when an idea's benefits seem solid, to confirm. `benchmarks/evaluation/accuracy.sh` measures accuracy. This should match exactly. Baselines are named appropriately under `/home/ariel/prog/ydf/yggdrasil-oblique-forests/benchmarks/results` depending on the machine being used.
 - **Insight (during the iteration loop, per-depth signal):** run
   `benchmarks/profiling/parallel_chrono.py` directly with `--bazel_config=NAME`
-  for both A and B. Cheaper than `e2e_a-b_test.py`; gives you per-tree-depth
+  for both A and B. gives you per-tree-depth
   ΣApplyProj / SortFillBuckets / etc., which is what you need to *understand*
-  why a change moves a number. Don't treat its wall numbers as headline —
-  the chrono build adds overhead; that's what `e2e_a-b_test.py` is for.
+  why a change moves a number.
 
 ### On guessing vs. measuring
 Avoid speculative "why" stories about a result. A small autonomous-mode
@@ -114,19 +90,6 @@ beats narrative.
   simultaneous experiments (timing noise).
 - **Never use sep5 / VTune / Advisor** — freezes this system. `perf` is fine.
 
-### `perf` discipline
-- `perf record -F 999 -e cycles:u` for top-down attribution. Build the
-  binary with `--copt=-g --strip=never` so source-line annotation works.
-- `perf annotate` to find the actual hot instructions inside the
-  function. Watch for load-use stalls attributed to the dependent FMA
-  (the load is the cost, not the addss).
-- `perf stat -e cycles:u,instructions:u,cache-misses,LLC-load-misses,...`
-  for memory-bandwidth vs. compute attribution.
-- `taskset -c 0` for stable single-thread measurement when running the
-  binary outside `parallel_chrono.py`. The script doesn't pin; numbers
-  produced via the script will trail pinned numbers by a few percentage
-  points and that's fine — the baseline-comparison methodology is what
-  matters, not the absolute number.
 
 ### Artifacts
 - **Tracked**: the `.md` log, structured CSVs from `parallel_chrono.py`,
@@ -154,79 +117,8 @@ bazel build --config=intel_debug //...                                          
 | Config | Purpose |
 |--------|---------|
 | `multithreaded_chrono_profile` | `CHRONO_ENABLED` — per-function timing by tree/depth |
-| `nodewise_proj_matrix` | V1 fused Apply (per-node rows-outer/projs-inner matrix fill) |
-| `depthwise_1_pass` | V2-rev3 fused Apply (4-row inner unroll, load-level parallelism) |
-| `with_isnan` | Re-enables `std::isnan` check (off by default; `YDF_BENCH_SKIP_ISNAN` is on) |
 | `enable_std_upper_bound_avx2` / `avx512` | Vectorized `upper_bound` |
-| `print_projection_matrices` | Prints projection matrix at each node (debug) |
 
-## Critical files
-
-| File | Role |
-|------|------|
-| `learner/decision_tree/training.{cc,h}` | Tree growth (`GrowTreeLocalBFS`), node processing (`NodeTrain`), split dispatch |
-| `learner/decision_tree/oblique.{cc,h}` | Oblique split finding — projection sampling, evaluation, scoring; `ProjectionEvaluator::Evaluate` is the baseline hot loop |
-| `learner/decision_tree/oblique_cpu_nodewise_proj_matrix.{cc,h}` | V1 — gated by `NODEWISE_PROJ_MATRIX` |
-| `learner/decision_tree/oblique_cpu_depthwise_1pass.{cc,h}` | V2-rev3 — gated by `DEPTHWISE_1_PASS` |
-| `learner/decision_tree/label.h` | `InternalTrainConfig`, umbrella macro `OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS` |
-| `learner/random_forest/random_forest.cc` | RF training loop, bagging, OOB |
-| `utils/parallel_chrono.h` | `CHRONO_SCOPE`, per-function timing enums |
-| `model/decision_tree/decision_tree.h` | `NodeWithChildren`, `SelectedExamplesRollingBuffer` |
-| `learner/decision_tree/decision_tree.proto` | Config proto |
-
-Tree growth is BFS via a `std::deque<NodeAndExamples>` queue: `NodeTrain`
-checks exit conditions, calls `FindBestCondition` → oblique splitter,
-calls `SplitExamplesInPlace`, enqueues both children.
-
-## Tests
-
-```bash
-bazel test -c opt //yggdrasil_decision_forests/learner/random_forest:random_forest_test --test_filter="*SparseOblique*"
-bazel test -c opt //yggdrasil_decision_forests/learner/decision_tree:training_test --test_filter="*Oblique*"
-```
-
-## Benchmarks layout
-
-```
-benchmarks/
-├── evaluation/
-│   ├── runtime.sh                  # End-to-end runtime suite (was bash_scripts/e2e_runtime.sh)
-│   ├── accuracy.sh                 # End-to-end accuracy suite
-│   └── e2e_a-b_test.py             # A/B verdict driver across two bazel configs
-├── profiling/
-│   └── parallel_chrono.py          # Main driver: CHRONO build + per-tree-depth CSV
-├── utils/
-│   ├── utils.py                    # Shared CLI parser, E-core toggle, build helpers
-│   ├── make_trunk_dataset.py       # Synthetic trunk datasets
-│   ├── parse_log_to_csv.py         # Parse runtime/accuracy logs into CSV
-│   ├── download_cc18_datasets.py   # Download OpenML CC18 benchmark suite
-│   └── set_cpu_e_features.sh       # E-core/turbo toggle
-├── data/                           # HIGGS, SUSY, epsilon, CC18 tasks, synthetic trunk
-├── experiments/                    # Tracked: per-branch *_experiments.md design notes + logs
-│   └── <branch-name>/              # Gitignored: perf_runs/ + iteration_logs/
-└── results/                        # Tracked: per-method CSVs
-    ├── runtime/                    # Wall-clock CSVs/logs from runtime.sh
-    ├── accuracy/                   # OOB accuracy CSVs/logs from accuracy.sh
-    ├── breakeven/                  # Breakeven experiments
-    └── per_function_timing/<CPU>/<exp>/<dataset>/<depth>Depth-<threads>Threads.csv
-```
-
-Common invocations:
-
-```bash
-python benchmarks/profiling/parallel_chrono.py \
-  --input_mode=trunk --rows=3000000 --tree_depth=-1 --num_trees=5 \
-  --num_threads=1 --feature_split_type=Oblique --numerical_split_type=Exact \
-  --depthwise_1_pass
-
-bash benchmarks/evaluation/runtime.sh <suffix>
-```
-
-`parallel_chrono.py` outputs CSV columns: `thread, tree, depth, nodes,
-samples, SampleProj, ApplyProjection, EvalProj, sort phases, histogram
-phases`. Sweeps in `runtime.sh`: split types (Oblique / Axis
-Aligned), numerical methods (Exact / Random / Dynamic Random Histogram),
-vectorization (None / AVX2 / AVX512), datasets.
 
 ## Conventions
 - Data is **column-major** (`VerticalDataset`).
