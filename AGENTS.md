@@ -5,18 +5,14 @@
 
 The relevant files are:
 
-- /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/decision_tree/oblique.cc . Important functions: EvaluateProjection, ProjectionEvaluator::Evaluate , FindBestConditionSparseObliqueTemplate
-- /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/decision_tree/training.cc . Important functions: FindSplitLabelClassificationFeatureNumericalHistogram, FindSplitLabelClassificationFeatureNumericalCart
-- /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h . Important function: FindBestSplit
-- /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/random_forest/random_forest.cc . Starts the whole forest training loop. Important function: TrainWithStatusImpl
-- /home/ariel/prog/ydf/yggdrasil-oblique-forests/benchmarks/results/Function Time by Depth - Exact HWY + Random - 3m HWY + Random.csv - contains information about the runtime of each relevant function in the tree, by level. Highly useful to decide how to improve the algorithm.
-- /home/ariel/prog/ydf/yggdrasil-oblique-forests/examples/train_oblique_forest.cc - the binary I call that decides RF vs SPO-RF, Exact vs. histogram, and many hyperparameters.
+- `yggdrasil_decision_forests/learner/decision_tree/oblique.cc` . Important functions: `EvaluateProjection`, `ProjectionEvaluator::Evaluate`, `FindBestConditionSparseObliqueTemplate`
+- `yggdrasil_decision_forests/learner/decision_tree/training.cc` . Important functions: `FindSplitLabelClassificationFeatureNumericalHistogram`, `FindSplitLabelClassificationFeatureNumericalCart`
+- `yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h` . Important function: `FindBestSplit`
+- `/home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/random_forest/random_forest.cc` . Starts the whole forest training loop. Important function: `TrainWithStatusImpl`
+- `benchmarks/results/Function Time by Depth - Exact HWY + Random - 3m HWY + Random.csv` - contains information about the runtime of each relevant function in the tree, by level. Highly useful to decide how to improve the algorithm.
+- `examples/train_oblique_forest.cc` - the binary I call that decides RF vs SPO-RF, Exact vs. histogram, and many hyperparameters.
 
 Do not pull in other files in context unless explicitly necessary. The whole math is in the above. Look at the includes of those files if you need e.g. VerticalDataset details
-
-Goal:
-
-1. **Reduce `ProjectionEvaluator::Evaluate` time (colloquially called `ApplyProjection`) .** 
 
 
 **Crucial: All contributions need to be research grade - therefore only publishable speedup methods count. E.g. achieving speedup by turning off logging is unacceptable**
