@@ -1815,23 +1815,32 @@ SplitSearchResult FindBestSplitFlatHighway(
   feature_filler.InitializeAndZero(0, &temp_bucket.feature);
   label_filler.InitializeAndZero(&temp_bucket.label);
 
-  for (size_t select_idx = 0; select_idx < num_selected_examples;
-       ++select_idx) {
-    const UnsignedExampleIdx example_idx = selected_examples[select_idx];
-    feature_filler.ConsumeExample(example_idx, &temp_bucket.feature);
-    label_filler.ConsumeExample(example_idx, &temp_bucket.label);
-    label_filler.Finalize(&temp_bucket.label);
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortFillBuckets);
+    for (size_t select_idx = 0; select_idx < num_selected_examples;
+         ++select_idx) {
+      const UnsignedExampleIdx example_idx = selected_examples[select_idx];
+      feature_filler.ConsumeExample(example_idx, &temp_bucket.feature);
+      label_filler.ConsumeExample(example_idx, &temp_bucket.label);
+      label_filler.Finalize(&temp_bucket.label);
 
-    FlatTraits::Pack(hwy_buffer[select_idx], temp_bucket);
+      FlatTraits::Pack(hwy_buffer[select_idx], temp_bucket);
+    }
   }
 
-  // Run VQSort.
-  hwy::VQSort(hwy_buffer, num_selected_examples, hwy::SortAscending());
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortFeatures);
+    // Run VQSort.
+    hwy::VQSort(hwy_buffer, num_selected_examples, hwy::SortAscending());
+  }
 
   // Call ScanSplitsFlat.
-  return ScanSplitsFlat<ExampleBucketSet, LabelBucketSet>(
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortScanSplits);
+    return ScanSplitsFlat<ExampleBucketSet, LabelBucketSet>(
       feature_filler, initializer, cache, selected_examples.size(), min_num_obs,
       attribute_idx, condition);
+  }
 }
 
 /* #region Many FindBestSplit() based on ML Task */
