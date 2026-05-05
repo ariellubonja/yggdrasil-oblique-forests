@@ -436,10 +436,14 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       if (all_projections[proj_idx].empty()) continue;
 
       float min_value, max_value;
+      const bool want_extrema = dynamic_dt_config.numerical_split().type() !=
+          proto::NumericalSplit_Type_EXACT;
 
       RETURN_IF_ERROR(
         projection_evaluator.Evaluate(all_projections[proj_idx], selected_examples,
-                                       &projection_values, &min_value, &max_value)
+                                       &projection_values,
+                                       want_extrema ? &min_value : nullptr,
+                                       want_extrema ? &max_value : nullptr)
       );
 
       ASSIGN_OR_RETURN(
@@ -471,10 +475,14 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       if (current_projection.empty()) continue;
 
       float min_value, max_value;
+      const bool want_extrema = dynamic_dt_config.numerical_split().type() !=
+          proto::NumericalSplit_Type_EXACT;
 
       RETURN_IF_ERROR(
         projection_evaluator.Evaluate(current_projection, selected_examples,
-                                       &projection_values, &min_value, &max_value)
+                                       &projection_values,
+                                       want_extrema ? &min_value : nullptr,
+                                       want_extrema ? &max_value : nullptr)
       );
 
       ASSIGN_OR_RETURN(
@@ -1436,12 +1444,12 @@ absl::Status ProjectionEvaluator::Evaluate(
     // values will be in "bootstrap" space
     (*values)[selected_idx] = value;
 
-    // Single-instruction min/max – no branches, tiny latency.
-    local_min = std::min(local_min, value);
-    local_max = std::max(local_max, value);
+    if (min_value || max_value) {
+      local_min = std::min(local_min, value);
+      local_max = std::max(local_max, value);
+    }
   }
 
-  // Store the results only if the caller asked for them and we saw data.
   if (!selected_examples.empty()) {
     if (min_value) *min_value = local_min;
     if (max_value) *max_value = local_max;

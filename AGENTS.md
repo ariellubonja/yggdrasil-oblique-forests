@@ -9,6 +9,7 @@ The relevant files are:
 - /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/decision_tree/training.cc . Important functions: FindSplitLabelClassificationFeatureNumericalHistogram, FindSplitLabelClassificationFeatureNumericalCart
 - /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h . Important function: FindBestSplit
 - /home/ariel/prog/ydf/yggdrasil-oblique-forests/yggdrasil_decision_forests/learner/random_forest/random_forest.cc . Starts the whole forest training loop. Important function: TrainWithStatusImpl
+- /home/ariel/prog/ydf/yggdrasil-oblique-forests/benchmarks/results/Function Time by Depth - Exact HWY + Random - 3m HWY + Random.csv - contains information about the runtime of each relevant function in the tree, by level. Highly useful to decide how to improve the algorithm.
 
 Do not pull in other files in context unless explicitly necessary. The whole math is in the above. Look at the includes of those files if you need e.g. VerticalDataset details
 
