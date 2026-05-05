@@ -68,7 +68,8 @@ TIMING_RX_SORT = re.compile(
     r"kSortFillBuckets\s+([0-9.eE+-]+)s\s+"             # 12
     r"kSortFinalizeBuckets\s+([0-9.eE+-]+)s\s+"         # 13
     r"kSortFeatures\s+([0-9.eE+-]+)s\s+"                # 14
-    r"kSortLabels\s+([0-9.eE+-]+)s"                     # 15
+    r"kSortLabels\s+([0-9.eE+-]+)s\s+"                  # 15
+    r"kScanPresorted\s+([0-9.eE+-]+)s"                  # 16
     + _GPU_TAIL_RX
 )
 
@@ -148,7 +149,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              sp, pe, ep,
              fill_example, scan_splits,
              init_buckets, fill_buckets, finalize_buckets,
-             features, labels,
+             features, labels, scan_presorted,
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other) = g
@@ -169,6 +170,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SortFinalizeBuckets          = float(finalize_buckets),
                 SortFeatures                 = float(features),
                 SortLabels                   = float(labels),
+                ScanPresorted                = float(scan_presorted),
                 GpuInit                      = opt_float(gpu_init),
                 GpuCsrFlatten                = opt_float(gpu_csr),
                 GpuUnpack                    = opt_float(gpu_unpack),
@@ -228,6 +230,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "SortFeatures":                 "--SortFeatures",
             "SortLabels":                   "--SortLabels",
             "SortScanSplits":               "-SortScanSplits",
+            "ScanPresorted":                "-ScanPresorted",
         })
 
         g = g.drop(columns=["thread"])
@@ -265,6 +268,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "--SortInitBuckets", "--SortFillBuckets",
             "--SortFinalizeBuckets", "--SortFeatures", "--SortLabels",
             "-SortScanSplits",
+            "-ScanPresorted",
         ]
         ordered = [c for c in desired_order if c in g.columns]
         remaining = [c for c in g.columns if c not in desired_order]

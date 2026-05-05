@@ -23,6 +23,7 @@ enum FuncId {
   kSortFinalizeBuckets,
   kSortFeatures,
   kSortLabels,
+  kScanPresorted,
 
   kFindSplitHistogram,
   kChecksHistogram,
@@ -68,6 +69,10 @@ inline std::vector<DepthVec>& time_ns() {
   static auto* p = new std::vector<DepthVec>();
   return *p;
 }
+inline std::vector<DepthVec>& call_cnt() {
+  static auto* p = new std::vector<DepthVec>();
+  return *p;
+}
 inline std::vector<std::vector<uint64_t>>& node_cnt() {
   static auto* p = new std::vector<std::vector<uint64_t>>();
   return *p;
@@ -91,6 +96,11 @@ inline void add_time(int tree, int depth, FuncId id, uint64_t dt_ns) {
   if (depth >= static_cast<int>(by_depth.size()))
     by_depth.resize(depth + 1);
   by_depth[depth][id] += dt_ns;          // single-threaded write
+
+  auto& cnt_by_depth = call_cnt()[tree];
+  if (depth >= static_cast<int>(cnt_by_depth.size()))
+    cnt_by_depth.resize(depth + 1);
+  cnt_by_depth[depth][id] += 1;
 }
 
 // ---------- ScopedTimer -------------------------------------------

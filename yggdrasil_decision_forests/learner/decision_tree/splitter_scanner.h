@@ -1472,6 +1472,7 @@ SplitSearchResult ScanSplitsPresortedSparse(
     const int min_num_obs, const int attribute_idx,
     const bool duplicate_examples, proto::NodeCondition* condition,
     PerThreadCacheV2* cache) {
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kScanPresorted);
 
   // Are these bagged samples?
   if (duplicate_examples) {

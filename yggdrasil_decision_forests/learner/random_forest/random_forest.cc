@@ -716,6 +716,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
         using namespace yggdrasil_decision_forests::chrono_prof;
 
         time_ns().resize(rf_config.num_trees());
+        call_cnt().resize(rf_config.num_trees());
         tree_thread_id().resize(rf_config.num_trees());
         node_cnt().resize(rf_config.num_trees());
         sample_cnt().resize(rf_config.num_trees());
@@ -1156,6 +1157,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                         << " kSortFinalizeBuckets "   << arr[kSortFinalizeBuckets] * 1e-9 << "s"
                         << " kSortFeatures "   << arr[kSortFeatures] * 1e-9 << "s"
                         << " kSortLabels "   << arr[kSortLabels] * 1e-9 << "s"
+                        << " kScanPresorted "   << arr[kScanPresorted] * 1e-9 << "s"
                         << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
                         << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
                         << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
