@@ -435,15 +435,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
       if (all_projections[proj_idx].empty()) continue;
 
-      float min_value, max_value;
-      const bool want_extrema = dynamic_dt_config.numerical_split().type() !=
-          proto::NumericalSplit_Type_EXACT;
-
       RETURN_IF_ERROR(
         projection_evaluator.Evaluate(all_projections[proj_idx], selected_examples,
-                                       &projection_values,
-                                       want_extrema ? &min_value : nullptr,
-                                       want_extrema ? &max_value : nullptr)
+                                       &projection_values)
       );
 
       ASSIGN_OR_RETURN(
@@ -474,15 +468,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
       if (current_projection.empty()) continue;
 
-      float min_value, max_value;
-      const bool want_extrema = dynamic_dt_config.numerical_split().type() !=
-          proto::NumericalSplit_Type_EXACT;
-
       RETURN_IF_ERROR(
         projection_evaluator.Evaluate(current_projection, selected_examples,
-                                       &projection_values,
-                                       want_extrema ? &min_value : nullptr,
-                                       want_extrema ? &max_value : nullptr)
+                                       &projection_values)
       );
 
       ASSIGN_OR_RETURN(
@@ -824,7 +812,7 @@ absl::Status EvaluateMHLDCandidates(
 
       // Compute projection
       RETURN_IF_ERROR(projection_evaluator.Evaluate(
-          projection, selected_examples, &projection_values, nullptr, nullptr));
+          projection, selected_examples, &projection_values));
 
       // Evaluate projection quality
       RETURN_IF_ERROR(EvaluateProjectionAndSetCondition(
@@ -1404,19 +1392,13 @@ ProjectionEvaluator::ProjectionEvaluator(
 absl::Status ProjectionEvaluator::Evaluate(
     const Projection& projection,
     const absl::Span<const UnsignedExampleIdx> selected_examples,
-    std::vector<float>* values,
-    float* min_value,      // nullptr -> caller is not interested
-    float* max_value) const {
+    std::vector<float>* values) const {
 
   RETURN_IF_ERROR(constructor_status_);
 
   values->resize(selected_examples.size());
   CHRONO_SCOPE(
       ::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
-
-  // Always maintain local extrema; they are updated at near-zero cost.
-  float local_min =  std::numeric_limits<float>::infinity();
-  float local_max = -std::numeric_limits<float>::infinity();
 
   // 0,1,2,3,4...
   for (size_t selected_idx = 0; selected_idx < selected_examples.size();
@@ -1443,16 +1425,6 @@ absl::Status ProjectionEvaluator::Evaluate(
     // selected_idx is doing the bootstrapping, that's why values is indexed by selected_idx and attributes by example_idx
     // values will be in "bootstrap" space
     (*values)[selected_idx] = value;
-
-    if (min_value || max_value) {
-      local_min = std::min(local_min, value);
-      local_max = std::max(local_max, value);
-    }
-  }
-
-  if (!selected_examples.empty()) {
-    if (min_value) *min_value = local_min;
-    if (max_value) *max_value = local_max;
   }
 
   return absl::OkStatus();

@@ -179,9 +179,7 @@ class ProjectionEvaluator {
   // training dataset. This is the same logic used during inference.
   absl::Status Evaluate(const Projection& projection,
                         absl::Span<const UnsignedExampleIdx> selected_examples,
-                        std::vector<float>* values,
-                          /* NEW */ float* min_value,
-    /* NEW */ float* max_value) const;
+                        std::vector<float>* values) const;
 
   absl::Status ExtractAttribute(
       int attribute_idx, absl::Span<const UnsignedExampleIdx> selected_examples,
