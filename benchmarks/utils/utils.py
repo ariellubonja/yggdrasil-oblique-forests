@@ -25,7 +25,7 @@ def get_base_parser():
     parser.add_argument("--feature_split_type", default="Oblique",
                        choices=["Axis Aligned", "Oblique"])
     parser.add_argument("--numerical_split_type", default="Exact",
-                       choices=["Exact", "Random", "Equal Width", "Subsample Points", "Subsample Histogram", 
+                       choices=["Exact", "Random", "Equal Width",
                                 "Dynamic Random Histogram", "Dynamic Equal Width Histogram"])
     parser.add_argument("--vectorized", choices=[None, "avx2", "avx512"], default=None)
     parser.add_argument("--tree_depth", type=int, default=-1)

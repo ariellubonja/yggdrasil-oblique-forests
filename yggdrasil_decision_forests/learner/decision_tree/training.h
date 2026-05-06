@@ -973,22 +973,6 @@ struct CandidateSplit
   }
 };
 
-absl::btree_set<size_t> FloydsSampling(
-      const size_t n_sampled_points,
-      const size_t n_total_points,
-      utils::RandomEngine *random
-);
-
-absl::StatusOr<std::vector<CandidateSplit>> SubsampleData(
-    const absl::Span<const UnsignedExampleIdx> selected_examples,
-    const int num_splits,
-    const absl::Span<const float> attributes,
-    const std::vector<float> &weights,
-    const std::vector<int32_t> &labels,
-    const int32_t num_label_classes,
-    utils::RandomEngine *random
-);
-
 // Create the histogram bins (i.e. candidate threshold values) for an histogram
 // based split finding on a numerical attribute.
 absl::StatusOr<std::vector<float>> GenHistogramBins(

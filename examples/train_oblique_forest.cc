@@ -87,7 +87,7 @@ ABSL_FLAG(uint32_t, seed, 1234,
 
 // Histogram-based splits - Updated to match Yggdrasil implementation
 ABSL_FLAG(std::string, numerical_split_type, "Exact",
-          "Type of histogram splitting: 'Exact (no histogramming)', 'Random', 'Equal Width', 'Subsample Points', 'Subsample Histogram', 'Dynamic Random Histogram' or 'Dynamic Equal Width Histogram.");
+          "Type of histogram splitting: 'Exact (no histogramming)', 'Random', 'Equal Width', 'Dynamic Random Histogram' or 'Dynamic Equal Width Histogram.");
 ABSL_FLAG(int, histogram_num_bins, 64,
           "Number of bins for histogram splitting.");
 // Commented out until hybrid CPU-GPU offloading is added. For now, GPU vs CPU
@@ -449,18 +449,6 @@ int main(int argc, char** argv) {
     numerical_split->set_num_candidates(absl::GetFlag(FLAGS_histogram_num_bins));
     std::cout << "Using histogram splitting: Equal Width with " 
               << absl::GetFlag(FLAGS_histogram_num_bins) << " bins\n";
-  } else if (hist_type == "Subsample Points") {
-    numerical_split->set_type(
-        model::decision_tree::proto::NumericalSplit::SUBSAMPLE_POINTS);
-    numerical_split->set_num_candidates(absl::GetFlag(FLAGS_histogram_num_bins));
-    std::cout << "Using Subsample splitting with " 
-              << absl::GetFlag(FLAGS_histogram_num_bins) << " samples\n";
-  } else if (hist_type == "Subsample Histogram") {
-    numerical_split->set_type(
-        model::decision_tree::proto::NumericalSplit::SUBSAMPLE_HISTOGRAM);
-    numerical_split->set_num_candidates(absl::GetFlag(FLAGS_histogram_num_bins));
-    std::cout << "Using Subsample splitting with " 
-              << absl::GetFlag(FLAGS_histogram_num_bins) << " samples\n";
   } else if (hist_type == "Dynamic Random Histogram") {
     numerical_split->set_type(
     model::decision_tree::proto::NumericalSplit::DYNAMIC_RANDOM_HISTOGRAM);
@@ -476,7 +464,7 @@ int main(int argc, char** argv) {
   }
    else {
     std::cerr << "Unknown histogram type: " << hist_type 
-              << ". Use 'Exact', 'Random', 'Equal Width', 'Subsample Points', 'Subsample Histogram', 'Dynamic Equal Width Histogram' or 'Dynamic Random Histogram'.\n";
+              << ". Use 'Exact', 'Random', 'Equal Width', 'Dynamic Equal Width Histogram' or 'Dynamic Random Histogram'.\n";
     return 1;
   }
 

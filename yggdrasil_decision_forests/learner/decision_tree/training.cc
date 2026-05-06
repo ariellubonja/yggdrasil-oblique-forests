@@ -2305,7 +2305,6 @@ if (min_value == max_value) { return SplitSearchResult::kInvalidAttribute; }
 
 
 std::vector<float> bins;
-std::vector<size_t> subsampled_idx;
 std::vector<internal::CandidateSplit> candidate_splits(dt_config.numerical_split().num_candidates());
 
 // Build with -mavx2 or -mavx512f as appropriate.
@@ -2419,7 +2418,6 @@ struct SIMDUpperBoundBins {
   }
 };
 
-if (dt_config.numerical_split().type() != proto::NumericalSplit::SUBSAMPLE_POINTS) {
   ASSIGN_OR_RETURN(
     bins,
         internal::GenHistogramBins(
@@ -2529,21 +2527,6 @@ if (dt_config.numerical_split().type() != proto::NumericalSplit::SUBSAMPLE_POINT
         src.num_positive_examples_without_weights;
     dst.pos_label_distribution.Add(src.pos_label_distribution);
   }
-}
-}
-// TODO Experiment: Replace w/ existing Random Histogram sampling to test Subsample Hist Acc.
-else { // Subsample data and use only those points as "bins"
-  ASSIGN_OR_RETURN(
-    candidate_splits, // Select some threshold values
-        internal::SubsampleData(
-          selected_examples,
-          dt_config.numerical_split().num_candidates(),
-          attributes,
-          weights,
-          labels,
-          num_label_classes,
-          random
-        ));
 }
 
 
@@ -6023,78 +6006,6 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       return valid_items > 0;
     }
 
-    // 1. reservoir/Floyd sampling -> indices of the k examples we keep
-    absl::btree_set<size_t> FloydsSampling(
-      const size_t n_sampled_points,
-      const size_t n_total_points,
-      utils::RandomEngine *random
-    ) {
-      
-      absl::btree_set<size_t> picked_idx;
-
-      // Floyd's sampler to select k indices uniformly
-      for (auto j = n_total_points - n_sampled_points; j < n_total_points;
-          ++j) {
-          const auto t = absl::Uniform<size_t>(*random, 0, j + 1);
-          if (!picked_idx.insert(t).second) picked_idx.insert(j);
-      }
-
-      return picked_idx;
-    }
-
-    // Can't make vector<CandidateSplit> bcs. CandidateSplit is not defined in .h
-    absl::StatusOr<std::vector<CandidateSplit>> SubsampleData(
-      const absl::Span<const UnsignedExampleIdx> selected_examples,
-      const int num_splits,
-      const absl::Span<const float> attributes,
-      const std::vector<float> &weights,
-      const std::vector<int32_t> &labels,
-      const int32_t num_label_classes,
-      utils::RandomEngine *random
-    ) {
-      STATUS_CHECK_GE(num_splits, 0);
-
-      const auto n_points = std::min(static_cast<size_t>(num_splits), selected_examples.size());
-
-      std::vector<CandidateSplit> candidate_splits(n_points);
-
-      const absl::btree_set<size_t> picked_idx = FloydsSampling(
-        n_points,
-        selected_examples.size(),
-        random
-      );
-
-      std::vector<size_t> picked(picked_idx.begin(), picked_idx.end());
-
-      absl::c_sort(picked, [&](size_t a, size_t b) {
-        return attributes[selected_examples[a]] < attributes[selected_examples[b]];
-      });
-
-      // Populate "histograms" with 1 sample per bin
-      for (int i = 0; i < n_points; ++i) {
-        const auto ex = selected_examples[picked[i]];
-
-        candidate_splits[i].threshold = attributes[ex];
-        candidate_splits[i].num_positive_examples_without_weights = 1;
-        candidate_splits[i].pos_label_distribution.SetNumClasses(num_label_classes);
-        candidate_splits[i].pos_label_distribution.Add(
-            labels[ex], weights.empty() ? 1.f : weights[ex]);
-      }
-
-      // Now accumulate from right to left so that cand[i] holds the
-      // distribution of all sampled points whose value > cand[i].threshold
-      for (int i = n_points - 2; i >= 0; --i) {
-        candidate_splits[i].num_positive_examples_without_weights +=
-            candidate_splits[i + 1].num_positive_examples_without_weights;
-        candidate_splits[i].pos_label_distribution.Add(candidate_splits[i + 1].pos_label_distribution);
-      }
-
-      // TODO here instead return Random Histogram candidate splits:
-      //    Tests 
-      
-      return candidate_splits;
-    }
-
     absl::StatusOr<std::vector<float>> GenHistogramBins(
         const int total_num_samples,
         const proto::NumericalSplit::Type type, const int num_splits,
@@ -6114,23 +6025,6 @@ return found_split ? SplitSearchResult::kBetterSplitFound
           {
             candidate_split = threshold_distribution(*random);
           }
-        // In Equal Width, these are produced already sorted
-        hwy::VQSort(candidate_splits.data(), candidate_splits.size(), hwy::SortAscending());
-      }
-      break;
-      case proto::NumericalSplit::SUBSAMPLE_HISTOGRAM: {
-        const auto picked_idxs = internal::FloydsSampling(
-          num_splits,
-          total_num_samples,
-          random
-        );
-
-        int i = 0;
-        for (const auto picked_idx : picked_idxs) {
-          // TODO why are we assigning index here??? assign attributes[picked_idx]
-          candidate_splits[i] = attributes[picked_idx];
-          i++;
-        }
         // In Equal Width, these are produced already sorted
         hwy::VQSort(candidate_splits.data(), candidate_splits.size(), hwy::SortAscending());
       }
