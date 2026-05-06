@@ -8,7 +8,7 @@ refresh_compile_commands(
 
     # If no extra flags are needed:
     targets = ["//examples:train_oblique_forest",
-            "//yggdrasil_decision_forests/learner/decision_tree:decision_tree_learner",
+            "//yggdrasil_decision_forests/learner/decision_tree:training",
 ],
 
     # ‑---- OR, if you normally build that binary with extra --config flags ‑----
