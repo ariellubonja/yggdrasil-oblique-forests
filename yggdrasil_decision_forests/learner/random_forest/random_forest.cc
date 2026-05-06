@@ -1148,7 +1148,6 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                         << " nodes "   << node_cnt()[t][d]
                         << " samples " << sample_cnt()[t][d]
                         << " ProjEval "   << arr[kProjectionEvaluate] * 1e-9 << "s"
-                        << " EvalProj "   << arr[kEvaluateProjection] * 1e-9 << "s"
                         << " kSortFillExampleBucketSet "   << arr[kSortFillExampleBucketSet] * 1e-9 << "s"
                         << " kSortScanSplits "   << arr[kSortScanSplits] * 1e-9 << "s"
                         << " kSortInitBuckets "   << arr[kSortInitBuckets] * 1e-9 << "s"
@@ -1176,10 +1175,9 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                       << " nodes "   << node_cnt()[t][d]
                       << " samples " << sample_cnt()[t][d]
                       << " ProjEval "   << arr[kProjectionEvaluate] * 1e-9 << "s"
-                      << " EvalProj "   << arr[kEvaluateProjection] * 1e-9 << "s"
+                      << " kHistogramSetup " << arr[kHistogramSetup]   * 1e-9 << "s"
                       << " kAssignSamplesToHistogram " << arr[kAssignSamplesToHistogram]   * 1e-9 << "s"
                       << " kSelectBestThresholdHistogram " << arr[kSelectBestThresholdHistogram]   * 1e-9 << "s"
-                      << " kFinalEntropy " << arr[kFinalEntropy]   * 1e-9 << "s"
                       << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
                       << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
                       << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"

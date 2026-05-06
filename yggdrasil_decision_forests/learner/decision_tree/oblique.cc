@@ -525,7 +525,6 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
     const NodeConstraints& constraints, int8_t monotonic_direction,
     proto::NodeCondition* condition, SplitterPerThreadCache* cache,
     utils::RandomEngine* random) {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kEvaluateProjection);
   InternalTrainConfig effective_internal_config = internal_config;
 
   // Choose sorting strategy
