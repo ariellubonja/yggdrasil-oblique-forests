@@ -27,7 +27,7 @@ MEDIAN_RUN_RE = re.compile(
 
 def parse_cmd(args):
     m_csv = re.search(r'--train_csv "([^"]+)"', args)
-    m_trunk = re.search(r'--input_mode trunk.*?--rows (\d+)', args)
+    m_trunk = re.search(r'--input_mode trunk.*?--rows (\d+)(?:.*?--cols (\d+))?', args)
     if m_csv:
         path = m_csv.group(1)
         parts = path.split('/')
@@ -37,7 +37,9 @@ def parse_cmd(args):
         else:
             dataset = re.sub(r'\.csv$', '', parts[-1])
     elif m_trunk:
-        dataset = f"trunk_{m_trunk.group(1)}rows"
+        rows = m_trunk.group(1)
+        cols = m_trunk.group(2)
+        dataset = f"trunk_{rows}_x_{cols}" if cols else f"trunk_{rows}rows"
     else:
         dataset = "unknown"
 

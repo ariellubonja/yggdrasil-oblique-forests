@@ -77,10 +77,9 @@ TIMING_RX_HISTO = re.compile(
     r"thread\s+(\d+)\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
     r"ProjEval\s+([0-9.eE+-]+)s\s+"
-    r"EvalProj\s+([0-9.eE+-]+)s\s+"
+    r"kHistogramSetup\s+([0-9.eE+-]+)s\s+"
     r"kAssignSamplesToHistogram\s+([0-9.eE+-]+)s\s+"
-    r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s\s+"
-    r"kFinalEntropy\s+([0-9.eE+-]+)s"
+    r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s"
     + _GPU_TAIL_RX
 )
 
@@ -99,8 +98,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
 
         if histo_mode:
             (tid, tree, depth, nodes, samples,
-             pe, ep,
-             ast, sbt, fe,
+             pe,
+             setup, ast, sbt,
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other) = g
@@ -112,10 +111,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 nodes                        = int(nodes),
                 samples                      = int(samples),
                 ProjectionEvaluate           = float(pe),
-                EvaluateProjection           = float(ep),
+                HistogramSetup               = float(setup),
                 AssignSamplesToHist          = float(ast),
                 SelectBestThresholdHistogram = float(sbt),
-                FinalEntropy                 = float(fe),
                 GpuInit                      = opt_float(gpu_init),
                 GpuCsrFlatten                = opt_float(gpu_csr),
                 GpuUnpack                    = opt_float(gpu_unpack),
@@ -197,9 +195,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "samples": "Active Samples",
             "ProjectionEvaluate": "ApplyProjection",
             # Inside EvaluateProjection → FindSplitHistogram (CPU histogram)
+            "HistogramSetup":               "--HistogramSetup",
             "AssignSamplesToHist":          "--AssignSamplesToHist",
             "SelectBestThresholdHistogram": "--SelectBestThresholdHistogram",
-            "FinalEntropy":                 "--FinalEntropy",
             # Inside EvaluateProjection (CPU Exact/Sort splitter)
             "SortFillExampleBucketSet":     "-SortFillExampleBucketSet",
             "SortInitBuckets":              "--SortInitBuckets",
@@ -236,8 +234,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # CPU split-finder subtree follows.
             "ApplyProjection",
             "EvaluateProjection",
+            "--HistogramSetup",
             "--AssignSamplesToHist",
-            "--SelectBestThresholdHistogram", "--FinalEntropy",
+            "--SelectBestThresholdHistogram",
             "-SortFillExampleBucketSet",
             "--SortInitBuckets", "--SortFillBuckets",
             "--SortFinalizeBuckets", "--SortFeatures", "--SortLabels",

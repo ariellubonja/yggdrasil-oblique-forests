@@ -2279,37 +2279,9 @@ const int32_t attribute_idx, utils::RandomEngine *random,
       proto::NodeCondition *condition
     )
 {
-  /* #region Checks */
-  {
-DCHECK(condition != nullptr);
-if (!weights.empty()) { DCHECK_EQ(weights.size(), labels.size()); }
-
-if (dt_config.missing_value_policy() ==
-    proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION)
-{
-  LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
-                                       &na_replacement);
-}
-  }
-
-  float min_value, max_value;
-  // Ariel: Doing this in ApplyProjection is no faster
-  if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
-                                &max_value)) {
-    return SplitSearchResult::kInvalidAttribute;
-  }
-
-// There should be at least two different unique values.
-if (min_value == max_value) { return SplitSearchResult::kInvalidAttribute; }
-/* #endregion */
-
-
-std::vector<float> bins;
-std::vector<internal::CandidateSplit> candidate_splits(dt_config.numerical_split().num_candidates());
-
-// Build with -mavx2 or -mavx512f as appropriate.
-// Thresholds must be sorted ascending, like your candidate_splits[].threshold.
-struct SIMDUpperBoundBins {
+  // Build with -mavx2 or -mavx512f as appropriate.
+  // Thresholds must be sorted ascending, like your candidate_splits[].threshold.
+  struct SIMDUpperBoundBins {
   // Scalar fallback data (used if not 256 or 64 thresholds).
   std::vector<float> scalar_thr;
 
@@ -2418,6 +2390,37 @@ struct SIMDUpperBoundBins {
   }
 };
 
+  float min_value, max_value;
+  std::vector<float> bins;
+  std::vector<internal::CandidateSplit> candidate_splits(dt_config.numerical_split().num_candidates());
+  SIMDUpperBoundBins bins_accel;
+
+  {
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistogramSetup);
+  /* #region Checks */
+  {
+DCHECK(condition != nullptr);
+if (!weights.empty()) { DCHECK_EQ(weights.size(), labels.size()); }
+
+if (dt_config.missing_value_policy() ==
+    proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION)
+{
+  LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
+                                       &na_replacement);
+}
+  }
+
+  // Ariel: Doing this in ApplyProjection is no faster
+  if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
+                                &max_value)) {
+    return SplitSearchResult::kInvalidAttribute;
+  }
+
+// There should be at least two different unique values.
+if (min_value == max_value) { return SplitSearchResult::kInvalidAttribute; }
+/* #endregion */
+
+
   ASSIGN_OR_RETURN(
     bins,
         internal::GenHistogramBins(
@@ -2426,9 +2429,7 @@ struct SIMDUpperBoundBins {
                                   dt_config.numerical_split().num_candidates(),
                                   attributes, min_value, max_value, random
   ));
-    
-  SIMDUpperBoundBins bins_accel;
-    
+
   {
     for (int split_idx = 0; split_idx < candidate_splits.size(); split_idx++) {
       auto &candidate_split = candidate_splits[split_idx];
@@ -2443,6 +2444,7 @@ struct SIMDUpperBoundBins {
     }
 
     bins_accel.Init(thresholds);
+  }
   }
 
 
@@ -2517,9 +2519,7 @@ struct SIMDUpperBoundBins {
       it_split.pos_label_distribution.Add(label, weight);
     }
   }
-}
 
-{
   for (int split_idx = candidate_splits.size() - 2; split_idx >= 0; split_idx--) {
     const auto &src = candidate_splits[split_idx + 1];
     auto &dst = candidate_splits[split_idx];
@@ -2533,15 +2533,15 @@ struct SIMDUpperBoundBins {
 /* #region Finalization - Select Thresholds takes a lot of time */
 double initial_entropy;
 utils::BinaryToIntegerConfusionMatrixDouble confusion;
+bool found_split = false;
+{
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSelectBestThresholdHistogram);
 {
   initial_entropy = label_distribution.Entropy();
   confusion.SetNumClassesIntDim(num_label_classes);
 }
 
 // Select the best threshold.
-bool found_split = false;
-{
-   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSelectBestThresholdHistogram);
 for (auto &candidate_split : candidate_splits)
 {
   if (selected_examples.size() -
