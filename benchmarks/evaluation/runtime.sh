@@ -6,10 +6,9 @@ set -euo pipefail
 # Workflow: use Quick to test whether a code change impacted runtime. When a
 # >20% runtime improvement is observed on Quick, run Full to confirm.
 #
-# Quick: 3 runs/cmd; small dataset surface (all CC18 train folds; no trunk).
-#        Median across runs is included in the CSV.
-# Full:  7 runs/cmd; Quick datasets + the large CSVs (HIGGS/SUSY/epsilon)
-#        and trunk 10k/20k/40k/80k/100k/1M.
+# Quick: 7 runs/cmd; trunk rows*cols sweep at constant ~2e8 cells.
+# Full:  7 runs/cmd; quick shapes plus large CSVs (HIGGS/SUSY/epsilon) and
+#        extreme-aspect trunk (50M*4, 3M*4096, 3000*4M).
 #
 # Usage:  $0 [--full] <suffix>
 #   <suffix> becomes part of the result filename, e.g. 'AWS_m7i' ->
@@ -44,11 +43,7 @@ fi
 ###### Parameters
 
 # Repetitions per command; median runtime is reported in the CSV.
-if [[ "$MODE" == "full" ]]; then
-  NUM_RUNS=7
-else
-  NUM_RUNS=3
-fi
+NUM_RUNS=7
 NUM_THREADS=-1
 COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
 # Ariel - ENSURE compute_oob_performances===== - it has an equal sign, not a blank space
@@ -109,32 +104,11 @@ DYNAMIC_SPLIT_THRESHOLDS=(
   3100
 )
 
-# CSV datasets are built from the CC18 binary tasks (always) plus the large
-# benchmark CSVs (Full mode only). Datasets entries are "path|label_col".
-CC18_DIR="benchmarks/data/cc18_binary_csv"
-if [[ ! -d "$CC18_DIR" ]]; then
-  echo "ERROR: $CC18_DIR not found. Run from repo root." >&2
-  exit 1
-fi
-
+# CSV datasets: large benchmark CSVs added in Full mode only. Entries are
+# "path|label_col".
 CSV_DATASETS=()
-# Only enumerate task_*/ folders; datasets renamed to issue_<name>/ are
-# skipped (used to mark folds the binary cannot train on, e.g. an
-# all-missing column that aborts dataspec creation).
-for d in "$CC18_DIR"/task_*/; do
-  csv="${d}repeat0_fold0_sample0_train.csv"
-  [[ -f "$csv" ]] || continue
-  # Label is always the last header column; strip BOM/CR/spaces defensively.
-  label=$(head -n 1 "$csv" | awk -F',' '{print $NF}' | tr -d '\r\n ' | sed 's/^\xef\xbb\xbf//')
-  CSV_DATASETS+=("$csv|$label")
-done
-if [[ "${#CSV_DATASETS[@]}" -eq 0 ]]; then
-  echo "ERROR: found no CC18 datasets under $CC18_DIR" >&2
-  echo "Run: python3 benchmarks/utils/download_cc18_datasets.py" >&2
-  exit 1
-fi
 
-# Full-mode-only large CSVs (added on top of CC18).
+# Full-mode-only large CSVs.
 FULL_EXTRA_CSV_DATASETS=(
   "benchmarks/data/HIGGS_with_header.csv|class"
   "benchmarks/data/SUSY_with_header.csv|class"
@@ -144,10 +118,22 @@ if [[ "$MODE" == "full" ]]; then
   CSV_DATASETS+=("${FULL_EXTRA_CSV_DATASETS[@]}")
 fi
 
-# Synthetic trunk rows. Full mode only -- Quick is CC18-only.
-TRUNK_ROWS=()
+# Synthetic trunk datasets as "rows|cols" pairs.
+# Quick: rows*cols ~ 2e8 cells, sweeping the rows/cols ratio.
+# Full: same shape sweep plus a larger row sweep at fixed cols=4096.
+TRUNK_DATASETS=(
+  "12500|16384"
+  "25000|8192"
+  "50000|4096"
+  "100000|2048"
+  "200000|1024"
+)
 if [[ "$MODE" == "full" ]]; then
-  TRUNK_ROWS=(10000 20000 40000 80000 100000 1000000)
+  TRUNK_DATASETS+=(
+    "50000000|4"
+    "3000000|4096"
+    "3000|4000000"
+  )
 fi
 
 # =========================
@@ -355,9 +341,10 @@ for split in "${SPLIT_TYPES[@]}"; do
         run_cmd "$cmd"
       done
 
-      # Trunk rows
-      for rows in "${TRUNK_ROWS[@]}"; do
-        cmd="$BINARY --input_mode trunk --rows $rows $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+      # Trunk datasets (rows|cols)
+      for entry in "${TRUNK_DATASETS[@]}"; do
+        IFS='|' read -r rows cols <<<"$entry"
+        cmd="$BINARY --input_mode trunk --rows $rows --cols $cols $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
         run_cmd "$cmd"
       done
     done
@@ -423,9 +410,10 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
           run_cmd "$cmd"
         done
 
-        # Trunk rows
-        for rows in "${TRUNK_ROWS[@]}"; do
-          cmd="$BINARY --input_mode trunk --rows $rows --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg"
+        # Trunk datasets (rows|cols)
+        for entry in "${TRUNK_DATASETS[@]}"; do
+          IFS='|' read -r rows cols <<<"$entry"
+          cmd="$BINARY --input_mode trunk --rows $rows --cols $cols --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg"
           run_cmd "$cmd"
         done
       done
@@ -514,9 +502,10 @@ for method in "${selected_vec_methods[@]}"; do
       run_cmd "$cmd"
     done
 
-    # Trunk rows
-    for rows in "${TRUNK_ROWS[@]}"; do
-      cmd="$BINARY --input_mode trunk --rows $rows --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+    # Trunk datasets (rows|cols)
+    for entry in "${TRUNK_DATASETS[@]}"; do
+      IFS='|' read -r rows cols <<<"$entry"
+      cmd="$BINARY --input_mode trunk --rows $rows --cols $cols --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
       run_cmd "$cmd"
     done
   done
