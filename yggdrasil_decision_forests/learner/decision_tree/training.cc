@@ -270,9 +270,6 @@ namespace yggdrasil_decision_forests::model::decision_tree
         const absl::Span<const float> attributes, float *min_value,
         float *max_value)
     {
-      CHRONO_SCOPE(
-      ::yggdrasil_decision_forests::chrono_prof::kFindMinMaxHistogram);
-
       float local_min_value = 0;
       float local_max_value = 0;
       bool first = true;
@@ -2282,11 +2279,8 @@ const int32_t attribute_idx, utils::RandomEngine *random,
       proto::NodeCondition *condition
     )
 {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kFindSplitHistogram);
-
   /* #region Checks */
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kChecksHistogram);
 DCHECK(condition != nullptr);
 if (!weights.empty()) { DCHECK_EQ(weights.size(), labels.size()); }
 
@@ -2305,13 +2299,6 @@ if (dt_config.missing_value_policy() ==
     return SplitSearchResult::kInvalidAttribute;
   }
 
-// Determine the minimum and maximum values of the attribute
-// TODO How expensive is this? Why not get it for free from ApplyProjection()?
-// float min_value, max_value;
-// Takes ~7% of runtime. Can be eliminated by retrieving max from ApplyProjection()
-// if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
-//                               &max_value))
-// { return SplitSearchResult::kInvalidAttribute; }
 // There should be at least two different unique values.
 if (min_value == max_value) { return SplitSearchResult::kInvalidAttribute; }
 /* #endregion */
@@ -2445,8 +2432,6 @@ if (dt_config.numerical_split().type() != proto::NumericalSplit::SUBSAMPLE_POINT
   SIMDUpperBoundBins bins_accel;
     
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistogramSetNumClasses);
-  
     for (int split_idx = 0; split_idx < candidate_splits.size(); split_idx++) {
       auto &candidate_split = candidate_splits[split_idx];
       candidate_split.pos_label_distribution.SetNumClasses(num_label_classes);
@@ -2537,8 +2522,6 @@ if (dt_config.numerical_split().type() != proto::NumericalSplit::SUBSAMPLE_POINT
 }
 
 {
-  CHRONO_SCOPE(
-      ::yggdrasil_decision_forests::chrono_prof::kUpdateDistributionsHistogram);
   for (int split_idx = candidate_splits.size() - 2; split_idx >= 0; split_idx--) {
     const auto &src = candidate_splits[split_idx + 1];
     auto &dst = candidate_splits[split_idx];
@@ -2568,7 +2551,6 @@ else { // Subsample data and use only those points as "bins"
 double initial_entropy;
 utils::BinaryToIntegerConfusionMatrixDouble confusion;
 {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kComputeEntropy);
   initial_entropy = label_distribution.Entropy();
   confusion.SetNumClassesIntDim(num_label_classes);
 }
@@ -2585,9 +2567,9 @@ for (auto &candidate_split : candidate_splits)
       candidate_split.num_positive_examples_without_weights < min_num_obs)
   { continue; }
 
-  confusion.mutable_neg()->Set(label_distribution);
-  confusion.mutable_neg()->Sub(candidate_split.pos_label_distribution);
-  confusion.mutable_pos()->Set(candidate_split.pos_label_distribution);
+    confusion.mutable_neg()->Set(label_distribution);
+    confusion.mutable_neg()->Sub(candidate_split.pos_label_distribution);
+    confusion.mutable_pos()->Set(candidate_split.pos_label_distribution);
 
   const double final_entropy = confusion.FinalEntropy();
   const double information_gain = initial_entropy - final_entropy;
@@ -6070,7 +6052,6 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       const int32_t num_label_classes,
       utils::RandomEngine *random
     ) {
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGenHistogramBins);
       STATUS_CHECK_GE(num_splits, 0);
 
       const auto n_points = std::min(static_cast<size_t>(num_splits), selected_examples.size());
@@ -6120,9 +6101,6 @@ return found_split ? SplitSearchResult::kBetterSplitFound
         const absl::Span<const float> attributes, const float min_value,
         const float max_value, utils::RandomEngine *random)
     { // TODO is max value gotten for free from ApplyProjection?
-      CHRONO_SCOPE(
-      ::yggdrasil_decision_forests::chrono_prof::kGenHistogramBins);
-
       STATUS_CHECK_GE(num_splits, 0);
       std::vector<float> candidate_splits(num_splits);
       switch (type)
@@ -6132,12 +6110,12 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       {
         std::uniform_real_distribution<float> threshold_distribution(min_value,
                                                                      max_value);
-        for (auto &candidate_split : candidate_splits)
-        {
-          candidate_split = threshold_distribution(*random);
-        }
+          for (auto &candidate_split : candidate_splits)
+          {
+            candidate_split = threshold_distribution(*random);
+          }
         // In Equal Width, these are produced already sorted
-        std::sort(candidate_splits.begin(), candidate_splits.end());
+        hwy::VQSort(candidate_splits.data(), candidate_splits.size(), hwy::SortAscending());
       }
       break;
       case proto::NumericalSplit::SUBSAMPLE_HISTOGRAM: {
@@ -6154,7 +6132,7 @@ return found_split ? SplitSearchResult::kBetterSplitFound
           i++;
         }
         // In Equal Width, these are produced already sorted
-        std::sort(candidate_splits.begin(), candidate_splits.end());
+        hwy::VQSort(candidate_splits.data(), candidate_splits.size(), hwy::SortAscending());
       }
       break;
       case proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH:

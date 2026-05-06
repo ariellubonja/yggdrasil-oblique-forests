@@ -1061,8 +1061,6 @@ void SampleProjection(const absl::Span<const int>& features,
                       internal::Projection* projection,
                       int8_t* monotonic_direction,
                       utils::RandomEngine* random) {
-  CHRONO_SCOPE(
-    ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
   *monotonic_direction = 0;
   projection->clear();
   std::uniform_real_distribution<float> unif1m1(-1.f, 1.f);

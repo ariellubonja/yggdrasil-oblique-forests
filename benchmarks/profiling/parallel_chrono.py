@@ -59,7 +59,6 @@ _GPU_TAIL_RX = (
 TIMING_RX_SORT = re.compile(
     r"thread\s+(\d+)\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
-    r"SampleProj\s+([0-9.eE+-]+)s\s+"          #  6
     r"ProjEval\s+([0-9.eE+-]+)s\s+"            #  7
     r"EvalProj\s+([0-9.eE+-]+)s\s+"            #  8
     r"kSortFillExampleBucketSet\s+([0-9.eE+-]+)s\s+"   #  9
@@ -77,18 +76,11 @@ TIMING_RX_SORT = re.compile(
 TIMING_RX_HISTO = re.compile(
     r"thread\s+(\d+)\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
-    r"SampleProj\s+([0-9.eE+-]+)s\s+"
     r"ProjEval\s+([0-9.eE+-]+)s\s+"
     r"EvalProj\s+([0-9.eE+-]+)s\s+"
-    r"kFindSplitHistogram\s+([0-9.eE+-]+)s\s+"
-    r"kChecksHistogram\s+([0-9.eE+-]+)s\s+"
-    r"kFindMinMaxHistogram\s+([0-9.eE+-]+)s\s+"
-    r"kGenHistogramBins\s+([0-9.eE+-]+)s\s+"
-    r"kHistogramSetNumClasses\s+([0-9.eE+-]+)s\s+"
     r"kAssignSamplesToHistogram\s+([0-9.eE+-]+)s\s+"
-    r"kUpdateDistributionsHistogram\s+([0-9.eE+-]+)s\s+"
-    r"kComputeEntropy\s+([0-9.eE+-]+)s\s+"
-    r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s"
+    r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s\s+"
+    r"kFinalEntropy\s+([0-9.eE+-]+)s"
     + _GPU_TAIL_RX
 )
 
@@ -107,8 +99,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
 
         if histo_mode:
             (tid, tree, depth, nodes, samples,
-             sp, pe, ep,
-             fsh, chk, fmm, ghb, hsnc, ast, udh, ce, sbt,
+             pe, ep,
+             ast, sbt, fe,
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other) = g
@@ -119,18 +111,11 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 depth                        = int(depth),
                 nodes                        = int(nodes),
                 samples                      = int(samples),
-                SampleProjection             = float(sp),
                 ProjectionEvaluate           = float(pe),
                 EvaluateProjection           = float(ep),
-                FindSplitHistogram           = float(fsh),
-                ChecksHistogram              = float(chk),
-                FindMinMaxHistogram          = float(fmm),
-                GenHistogramBins             = float(ghb),
-                HistogramSetNumClasses       = float(hsnc),
                 AssignSamplesToHist          = float(ast),
-                UpdateDistributionsHistogram = float(udh),
-                ComputeEntropy               = float(ce),
                 SelectBestThresholdHistogram = float(sbt),
+                FinalEntropy                 = float(fe),
                 GpuInit                      = opt_float(gpu_init),
                 GpuCsrFlatten                = opt_float(gpu_csr),
                 GpuUnpack                    = opt_float(gpu_unpack),
@@ -146,7 +131,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             ))
         else:
             (tid, tree, depth, nodes, samples,
-             sp, pe, ep,
+             pe, ep,
              fill_example, scan_splits,
              init_buckets, fill_buckets, finalize_buckets,
              features, labels, scan_presorted,
@@ -160,7 +145,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 depth                        = int(depth),
                 nodes                        = int(nodes),
                 samples                      = int(samples),
-                SampleProjection             = float(sp),
                 ProjectionEvaluate           = float(pe),
                 EvaluateProjection           = float(ep),
                 SortFillExampleBucketSet     = float(fill_example),
@@ -213,15 +197,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "samples": "Active Samples",
             "ProjectionEvaluate": "ApplyProjection",
             # Inside EvaluateProjection → FindSplitHistogram (CPU histogram)
-            "FindSplitHistogram":           "-FindSplitHistogram",
-            "ChecksHistogram":              "--ChecksHistogram",
-            "FindMinMaxHistogram":          "--FindMinMaxHistogram",
-            "GenHistogramBins":             "--GenHistogramBins",
-            "HistogramSetNumClasses":       "--HistogramSetNumClasses",
             "AssignSamplesToHist":          "--AssignSamplesToHist",
-            "UpdateDistributionsHistogram": "--UpdateDistributionsHistogram",
-            "ComputeEntropy":               "--ComputeEntropy",
             "SelectBestThresholdHistogram": "--SelectBestThresholdHistogram",
+            "FinalEntropy":                 "--FinalEntropy",
             # Inside EvaluateProjection (CPU Exact/Sort splitter)
             "SortFillExampleBucketSet":     "-SortFillExampleBucketSet",
             "SortInitBuckets":              "--SortInitBuckets",
@@ -235,13 +213,12 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
 
         g = g.drop(columns=["thread"])
 
-        # Reorder columns. SampleProjection first, then the flat per-stage
-        # GPU kernel columns + GpuOther residual, then the CPU split-finder
+        # Reorder columns. ProjEval first, then the flat per-stage GPU
+        # kernel columns + GpuOther residual, then the CPU split-finder
         # subtree. Columns missing for the current mode are filtered out
         # below.
         desired_order = [
             "tree", "depth", "nodes", "Active Samples",
-            "SampleProjection",
             "GpuSampleBatch",
             "GpuInit",
             "GpuMutex",
@@ -259,11 +236,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # CPU split-finder subtree follows.
             "ApplyProjection",
             "EvaluateProjection",
-            "-FindSplitHistogram",
-            "--ChecksHistogram", "--FindMinMaxHistogram",
-            "--GenHistogramBins", "--HistogramSetNumClasses",
-            "--AssignSamplesToHist", "--UpdateDistributionsHistogram",
-            "--ComputeEntropy", "--SelectBestThresholdHistogram",
+            "--AssignSamplesToHist",
+            "--SelectBestThresholdHistogram", "--FinalEntropy",
             "-SortFillExampleBucketSet",
             "--SortInitBuckets", "--SortFillBuckets",
             "--SortFinalizeBuckets", "--SortFeatures", "--SortLabels",

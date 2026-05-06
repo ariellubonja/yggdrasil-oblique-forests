@@ -12,7 +12,6 @@ namespace yggdrasil_decision_forests::chrono_prof {
 // ---------- enum + fallback global --------------------------------
 enum FuncId {
   kTreeTrain = 0,
-  kSampleProjection,
   kProjectionEvaluate,
   kEvaluateProjection,
 
@@ -25,15 +24,9 @@ enum FuncId {
   kSortLabels,
   kScanPresorted,
 
-  kFindSplitHistogram,
-  kChecksHistogram,
-  kFindMinMaxHistogram,
-  kGenHistogramBins,
-  kHistogramSetNumClasses,
   kAssignSamplesToHistogram,
-  kUpdateDistributionsHistogram,
-  kComputeEntropy,
   kSelectBestThresholdHistogram,
+  kFinalEntropy,
 
   // CPU-side scopes around GPU dispatch. Kept as-is.
   kGpuInit,
