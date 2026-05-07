@@ -2541,7 +2541,12 @@ bool found_split = false;
   confusion.SetNumClassesIntDim(num_label_classes);
 }
 
-// Select the best threshold.
+// Select the best threshold. (Opt2: inline FinalEntropy; skip the
+// confusion Set/Sub by deriving neg counts on the fly from
+// label_distribution - pos. Protobuf writes remain inside the loop.)
+const int num_classes = label_distribution.NumClasses();
+const double total_sum = label_distribution.NumObservations();
+const double inv_total = (total_sum > 0) ? 1.0 / total_sum : 0.0;
 for (auto &candidate_split : candidate_splits)
 {
   if (selected_examples.size() -
@@ -2550,11 +2555,21 @@ for (auto &candidate_split : candidate_splits)
       candidate_split.num_positive_examples_without_weights < min_num_obs)
   { continue; }
 
-    confusion.mutable_neg()->Set(label_distribution);
-    confusion.mutable_neg()->Sub(candidate_split.pos_label_distribution);
-    confusion.mutable_pos()->Set(candidate_split.pos_label_distribution);
-
-  const double final_entropy = confusion.FinalEntropy();
+  const auto &pos = candidate_split.pos_label_distribution;
+  const double pos_sum = pos.NumObservations();
+  const double neg_sum = total_sum - pos_sum;
+  double w_entropy = 0.0;
+  for (int i = 0; i < num_classes; ++i) {
+    const double pi = pos.count(i);
+    if (pi > 0 && pi < pos_sum) {
+      w_entropy -= pi * std::log(pi / pos_sum);
+    }
+    const double ni = label_distribution.count(i) - pi;
+    if (ni > 0 && ni < neg_sum) {
+      w_entropy -= ni * std::log(ni / neg_sum);
+    }
+  }
+  const double final_entropy = w_entropy * inv_total;
   const double information_gain = initial_entropy - final_entropy;
   if (information_gain > condition->split_score()) {
     condition->set_split_score(information_gain);
@@ -2563,12 +2578,10 @@ for (auto &candidate_split : candidate_splits)
     condition->set_attribute(attribute_idx);
     condition->set_num_training_examples_without_weight(
         selected_examples.size());
-    condition->set_num_training_examples_with_weight(
-        confusion.NumObservations());
+    condition->set_num_training_examples_with_weight(total_sum);
     condition->set_num_pos_training_examples_without_weight(
         candidate_split.num_positive_examples_without_weights);
-    condition->set_num_pos_training_examples_with_weight(
-        confusion.pos().NumObservations());
+    condition->set_num_pos_training_examples_with_weight(pos_sum);
     condition->set_na_value(na_replacement >= candidate_split.threshold);
     found_split = true;
   }
