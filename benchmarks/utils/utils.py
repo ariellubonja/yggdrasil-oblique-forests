@@ -109,7 +109,10 @@ def configure_cpu_for_benchmarks(enable_pcore_only=True):
         return True
 
     action = "--disable" if enable_pcore_only else "--enable"
-    cmd = ["sudo", "./benchmarks/utils/set_cpu_e_features.sh", action]
+    script_path = os.path.realpath(
+        os.path.join(os.path.dirname(__file__), "set_cpu_e_features.sh")
+    )
+    cmd = ["sudo", script_path, action]
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)

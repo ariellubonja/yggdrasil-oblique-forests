@@ -177,7 +177,9 @@ VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
 # CPU E features must stay enabled the whole time (build + run) so accuracy
 # numbers are taken under a consistent CPU configuration. No
 # enable/disable dance like runtime.sh.
-sudo benchmarks/utils/set_cpu_e_features.sh --enable
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
+sudo "$SET_CPU_E_FEATURES" --enable
 
 bazel_build() {
   bazel build "$@"

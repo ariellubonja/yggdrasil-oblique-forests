@@ -161,12 +161,14 @@ VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
 # Always: enable -> build -> disable -> run -> re-enable at end.
 # All bazel builds are wrapped by bazel_build() so CPU E features are only
 # enabled during the build itself, and disabled for every experiment run.
-trap 'sudo benchmarks/utils/set_cpu_e_features.sh --enable' EXIT
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
+trap 'sudo "$SET_CPU_E_FEATURES" --enable' EXIT
 
 bazel_build() {
-  sudo benchmarks/utils/set_cpu_e_features.sh --enable
+  sudo "$SET_CPU_E_FEATURES" --enable
   bazel build "$@"
-  sudo benchmarks/utils/set_cpu_e_features.sh --disable
+  sudo "$SET_CPU_E_FEATURES" --disable
 }
 
 logdir="benchmarks/results"
@@ -203,7 +205,7 @@ if [[ "$RUN_CPU" == "true" || "$RUN_VECTORIZED" == "true" ]]; then
   bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
 else
   # Ensure features are disabled for experiments even when no initial build runs.
-  sudo benchmarks/utils/set_cpu_e_features.sh --disable
+  sudo "$SET_CPU_E_FEATURES" --disable
 fi
 BINARY="./bazel-bin/examples/train_oblique_forest"
 
