@@ -2607,18 +2607,21 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       const int32_t attribute_idx, const InternalTrainConfig &internal_config,
       proto::NodeCondition *condition, SplitterPerThreadCache *cache)
   {
-    /* #region Deal w/ empty weights */
-    if (!weights.empty()) { DCHECK_EQ(weights.size(), labels.size()); }
-    // If Weights empty Deal w/ missing values
-    if (dt_config.missing_value_policy() == proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION)
-    { LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
-                                           &na_replacement); }
-    /* #endregion */
+    proto::DecisionTreeTrainingConfig::Internal::SortingStrategy sorting_strategy;
+    const auto feature_filler = [&]() {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartFinderSetup);
+      /* #region Deal w/ empty weights */
+      if (!weights.empty()) { DCHECK_EQ(weights.size(), labels.size()); }
+      // If Weights empty Deal w/ missing values
+      if (dt_config.missing_value_policy() == proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION)
+      { LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
+                                             &na_replacement); }
+      /* #endregion */
 
-    // TODO Ariel Optimize - possibly why this fn. takes ~13% of runtime
-    FeatureNumericalBucket::Filler feature_filler(selected_examples.size(), na_replacement, attributes);
-
-    const auto sorting_strategy = EffectiveStrategy(dt_config, selected_examples.size(), internal_config);
+      // TODO Ariel Optimize - possibly why this fn. takes ~13% of runtime
+      sorting_strategy = EffectiveStrategy(dt_config, selected_examples.size(), internal_config);
+      return FeatureNumericalBucket::Filler(selected_examples.size(), na_replacement, attributes);
+    }();
 
     // LOG(INFO) << "Sorting Strategy (0 - In Node, 1 - PreSorted, 2 - Force Presorted, 3- Auto): " << sorting_strategy;
     

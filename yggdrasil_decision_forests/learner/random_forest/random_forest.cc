@@ -1148,6 +1148,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
                         << " nodes "   << node_cnt()[t][d]
                         << " samples " << sample_cnt()[t][d]
                         << " ProjEval "   << arr[kProjectionEvaluate] * 1e-9 << "s"
+                        << " kCartFinderSetup "   << arr[kCartFinderSetup] * 1e-9 << "s"
                         << " kSortFillExampleBucketSet "   << arr[kSortFillExampleBucketSet] * 1e-9 << "s"
                         << " kSortScanSplits "   << arr[kSortScanSplits] * 1e-9 << "s"
                         << " kSortInitBuckets "   << arr[kSortInitBuckets] * 1e-9 << "s"
