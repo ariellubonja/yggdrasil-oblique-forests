@@ -78,6 +78,7 @@
 #include "yggdrasil_decision_forests/utils/filesystem.h"
 #include "yggdrasil_decision_forests/utils/hyper_parameters.h"
 #include "yggdrasil_decision_forests/utils/logging.h"
+#include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 #include "yggdrasil_decision_forests/utils/random.h"
 #include "yggdrasil_decision_forests/utils/sharded_io.h"
 #include "yggdrasil_decision_forests/utils/snapshot.h"
@@ -1179,6 +1180,10 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   //   - Each tree is trained on a random sample of the gradients (instead of
   //     all the gradients).
 
+  // kGbtStartup: pre-preprocess init (config, model, validation extract,
+  // weights, gradient dataset, initial predictions, dart, ranking,
+  // early-stopping). Closes just before PreprocessTrainingDataset.
+  CHRONO_BEGIN(gbt_startup_pre);
   const auto begin_training = absl::Now();
   RETURN_IF_ERROR(dataset::CheckNumExamples(train_dataset.nrow()));
 
@@ -1353,12 +1358,23 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
       config.gbt_config->early_stopping_initial_iteration());
   early_stopping.set_trees_per_iterations(mdl->num_trees_per_iter_);
 
+  CHRONO_END(gbt_startup_pre,
+             ::yggdrasil_decision_forests::chrono_prof::kGbtStartup);
+
+  // kGbtPreprocessDataset: presort indices + feature stats. One-shot.
+  CHRONO_BEGIN(gbt_preprocess);
   ASSIGN_OR_RETURN(
       const auto preprocessing,
       decision_tree::PreprocessTrainingDataset(
           gradient_sub_train_dataset, config.train_config,
           config.train_config_link, config.gbt_config->decision_tree(),
           deployment_.num_threads()));
+  CHRONO_END(gbt_preprocess,
+             ::yggdrasil_decision_forests::chrono_prof::kGbtPreprocessDataset);
+
+  // kGbtStartup (reopens): post-preprocess init (vector_sequence_computer,
+  // snapshot/resume setup, tree_weights / GOSS weights, begin_tree_grow).
+  CHRONO_BEGIN(gbt_startup_post);
 
   std::vector<const dataset::VerticalDataset::NumericalVectorSequenceColumn*>
       vector_sequence_columns(train_dataset.ncol(), nullptr);
@@ -1414,34 +1430,55 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
     tree_weights = &goss_weights;
   }
   const auto begin_tree_grow = absl::Now();
+  CHRONO_END(gbt_startup_post,
+             ::yggdrasil_decision_forests::chrono_prof::kGbtStartup);
   for (; iter_idx < config.gbt_config->num_trees(); iter_idx++) {
-    // The user interrupted the training.
-    if (stop_training_trigger_ != nullptr && *stop_training_trigger_) {
-      LOG(INFO) << "Training interrupted per request.";
-      break;
-    }
-
-    const auto begin_iter_training = absl::Now();
+    // No per-iter umbrella. The five scopes below partition the loop body:
+    // UpdateGradients, SampleExamples, TrainTree, UpdatePredictions,
+    // ValidationEval. Vars that escape between scopes are hoisted here.
     std::vector<int> dropout_trees_idxs;
-    if (dart_extraction) {
-      dropout_trees_idxs = dart_predictions_training.SampleIterIndices(
-          config.gbt_config->dart().dropout_rate(), &random);
-      RETURN_IF_ERROR(dart_predictions_training.GetSampledPredictions(
-          dropout_trees_idxs, &sub_train_predictions));
-    }
-
-    // Compute the gradient of the residual relative to the examples.
-    RETURN_IF_ERROR(config.loss->UpdateGradients(
-        gradient_sub_train_dataset, config.train_config_link.label(),
-        sub_train_predictions, train_ranking_index.get(), &gradients, &random));
-
     float subsample_factor = 1.f;
-    // Select a random set of examples (without replacement).
-    if (adaptive_work) {
-      subsample_factor = adaptive_work->OptimalApproximationFactor();
+    std::vector<std::unique_ptr<decision_tree::DecisionTree>> new_trees;
+    double mean_abs_prediction = 0;
+    absl::Time begin_iter_training;
+
+    {
+      // kGbtUpdateGradients: stop check + iter timestamp + dart dropout
+      // sampling + loss->UpdateGradients (residual gradient + hessians).
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtUpdateGradients);
+
+      // The user interrupted the training.
+      if (stop_training_trigger_ != nullptr && *stop_training_trigger_) {
+        LOG(INFO) << "Training interrupted per request.";
+        break;
+      }
+
+      begin_iter_training = absl::Now();
+      if (dart_extraction) {
+        dropout_trees_idxs = dart_predictions_training.SampleIterIndices(
+            config.gbt_config->dart().dropout_rate(), &random);
+        RETURN_IF_ERROR(dart_predictions_training.GetSampledPredictions(
+            dropout_trees_idxs, &sub_train_predictions));
+      }
+
+      // Compute the gradient of the residual relative to the examples.
+      RETURN_IF_ERROR(config.loss->UpdateGradients(
+          gradient_sub_train_dataset, config.train_config_link.label(),
+          sub_train_predictions, train_ranking_index.get(), &gradients,
+          &random));
     }
 
-    switch (config.gbt_config->sampling_methods_case()) {
+    {
+      // kGbtSampleExamples: subsample_factor lookup + sampling switch
+      // (GOSS / SelGB / stochastic) — fills `selected_examples`.
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtSampleExamples);
+
+      // Select a random set of examples (without replacement).
+      if (adaptive_work) {
+        subsample_factor = adaptive_work->OptimalApproximationFactor();
+      }
+
+      switch (config.gbt_config->sampling_methods_case()) {
       case proto::GradientBoostedTreesTrainingConfig::kGradientOneSideSampling:
         // Reset train weights.
         std::copy(weights.begin(), weights.end(), goss_weights.begin());
@@ -1473,78 +1510,98 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
                 subsample_factor,
             &random, &selected_examples);
         break;
+      }
+    }  // end kGbtSampleExamples
+
+    {
+      // kGbtTrainTree: GBT-side wrapper around decision_tree::Train. The
+      // delta (kGbtTrainTree − Σ kTreeTrain) exposes per-call setup
+      // (BuildWeakLearnerInternalConfig, tree alloc, push_back).
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtTrainTree);
+      // Train a tree on the gradient.
+      new_trees.reserve(gradients.size());
+      for (int grad_idx = 0; grad_idx < gradients.size(); grad_idx++) {
+        auto tree = std::make_unique<decision_tree::DecisionTree>();
+
+        auto internal_config = internal::BuildWeakLearnerInternalConfig(
+            config, deployment().num_threads(), grad_idx, gradients,
+            sub_train_predictions, begin_training);
+        internal_config.preprocessing = &preprocessing;
+        if (vector_sequence_computer) {
+          internal_config.vector_sequence_computer =
+              vector_sequence_computer.get();
+        }
+
+        RETURN_IF_ERROR(decision_tree::Train(
+            gradient_sub_train_dataset, selected_examples,
+            gradients[grad_idx].config, gradients[grad_idx].config_link,
+            config.gbt_config->decision_tree(), deployment(), *tree_weights,
+            &random, tree.get(), internal_config));
+        new_trees.push_back(std::move(tree));
+      }
     }
 
-    // Train a tree on the gradient.
-    std::vector<std::unique_ptr<decision_tree::DecisionTree>> new_trees;
-    new_trees.reserve(gradients.size());
-    for (int grad_idx = 0; grad_idx < gradients.size(); grad_idx++) {
-      auto tree = std::make_unique<decision_tree::DecisionTree>();
+    {
+      // kGbtUpdatePredictions: adaptive_work report + dart/plain prediction
+      // cache update (train + validation) + AddTree.
+      // O(N · trees_per_iter · depth) tree-walk; can rival UpdateGradients
+      // on deep trees.
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtUpdatePredictions);
 
-      auto internal_config = internal::BuildWeakLearnerInternalConfig(
-          config, deployment().num_threads(), grad_idx, gradients,
-          sub_train_predictions, begin_training);
-      internal_config.preprocessing = &preprocessing;
-      if (vector_sequence_computer) {
-        internal_config.vector_sequence_computer =
-            vector_sequence_computer.get();
+      // Note: Since the batch size is only impacting the training time
+      // (i.e. not the update prediction time), and since the adaptive
+      // work manager assumes a linear relation between work and time, we
+      // only measure the duration of the training step.
+      if (adaptive_work) {
+        adaptive_work->ReportTaskDone(
+            subsample_factor,
+            absl::ToDoubleSeconds(absl::Now() - begin_iter_training));
       }
 
-      RETURN_IF_ERROR(decision_tree::Train(
-          gradient_sub_train_dataset, selected_examples,
-          gradients[grad_idx].config, gradients[grad_idx].config_link,
-          config.gbt_config->decision_tree(), deployment(), *tree_weights,
-          &random, tree.get(), internal_config));
-      new_trees.push_back(std::move(tree));
-    }
-
-    // Note: Since the batch size is only impacting the training time (i.e.
-    // not the update prediction time), and since the adaptive work manager
-    // assumes a linear relation between work and time, we only measure the
-    // duration of the training step.
-    if (adaptive_work) {
-      adaptive_work->ReportTaskDone(
-          subsample_factor,
-          absl::ToDoubleSeconds(absl::Now() - begin_iter_training));
-    }
-
-    double mean_abs_prediction = 0;
-    if (dart_extraction) {
-      // Update the Dart cache and the predictions on the training dataset.
-      RETURN_IF_ERROR(dart_predictions_training.UpdateWithNewIteration(
-          dropout_trees_idxs, mdl->loss(), *config.loss, new_trees,
-          gradient_sub_train_dataset, gradients.size(), &mean_abs_prediction));
-      RETURN_IF_ERROR(
-          dart_predictions_training.GetAllPredictions(&sub_train_predictions));
-
-      if (has_validation_dataset) {
-        // Update the dart cache and the predictions on the validation dataset.
-        RETURN_IF_ERROR(dart_predictions_validation.UpdateWithNewIteration(
+      if (dart_extraction) {
+        // Update the Dart cache and the predictions on the training dataset.
+        RETURN_IF_ERROR(dart_predictions_training.UpdateWithNewIteration(
             dropout_trees_idxs, mdl->loss(), *config.loss, new_trees,
-            gradient_validation_dataset, gradients.size()));
-        RETURN_IF_ERROR(dart_predictions_validation.GetAllPredictions(
-            &validation_predictions));
-      }
-    } else {
-      // Update the predictions on the training dataset.
-      RETURN_IF_ERROR(UpdatePredictions(
-          internal::RemoveUniquePtr(new_trees), gradient_sub_train_dataset,
-          &sub_train_predictions, &mean_abs_prediction));
+            gradient_sub_train_dataset, gradients.size(),
+            &mean_abs_prediction));
+        RETURN_IF_ERROR(dart_predictions_training.GetAllPredictions(
+            &sub_train_predictions));
 
-      if (has_validation_dataset) {
-        // Update the predictions on the validation dataset.
-        RETURN_IF_ERROR(UpdatePredictions(internal::RemoveUniquePtr(new_trees),
-                                          gradient_validation_dataset,
-                                          &validation_predictions,
-                                          /*mean_abs_prediction=*/nullptr));
+        if (has_validation_dataset) {
+          // Update the dart cache and the predictions on the validation
+          // dataset.
+          RETURN_IF_ERROR(dart_predictions_validation.UpdateWithNewIteration(
+              dropout_trees_idxs, mdl->loss(), *config.loss, new_trees,
+              gradient_validation_dataset, gradients.size()));
+          RETURN_IF_ERROR(dart_predictions_validation.GetAllPredictions(
+              &validation_predictions));
+        }
+      } else {
+        // Update the predictions on the training dataset.
+        RETURN_IF_ERROR(UpdatePredictions(
+            internal::RemoveUniquePtr(new_trees), gradient_sub_train_dataset,
+            &sub_train_predictions, &mean_abs_prediction));
+
+        if (has_validation_dataset) {
+          // Update the predictions on the validation dataset.
+          RETURN_IF_ERROR(UpdatePredictions(
+              internal::RemoveUniquePtr(new_trees),
+              gradient_validation_dataset, &validation_predictions,
+              /*mean_abs_prediction=*/nullptr));
+        }
+      }
+
+      // Add the tree to the model.
+      for (auto& tree : new_trees) {
+        mdl->AddTree(std::move(tree));
       }
     }
 
-    // Add the tree to the model.
-    for (auto& tree : new_trees) {
-      mdl->AddTree(std::move(tree));
-    }
-
+    // kGbtValidationEval: validation-interval block (loss->Loss train+valid,
+    // training_logs entry, EarlyStopping.Update, max-duration check), plus
+    // MaybeExportTrainingLogs and per-iter CreateSnapshot. Reads ~0 most
+    // iters; spikes on validation iters.
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtValidationEval);
     if (((iter_idx + 1) % config.gbt_config->validation_interval_in_trees()) ==
         0) {
       ASSIGN_OR_RETURN(const LossResults training_loss_result,
@@ -1663,6 +1720,11 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
     }
   }  // End of training iteration.
 
+  // kGbtFinalize: post-loop wrap-up — final CreateSnapshot,
+  // FinalizeModelWithValidationDataset, dart per-tree-output scaling,
+  // FinalizeModel (writes intermediate logs), vector_sequence_computer
+  // release, decision_tree::SetLeafIndices.
+  CHRONO_BEGIN(gbt_finalize);
   // Create a final snapshot.
   if (deployment_.try_resume_training() &&
       (snapshots_idxs.empty() || snapshots_idxs.back() < iter_idx)) {
@@ -1702,6 +1764,28 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   }
 
   decision_tree::SetLeafIndices(mdl->mutable_decision_trees());
+  CHRONO_END(gbt_finalize,
+             ::yggdrasil_decision_forests::chrono_prof::kGbtFinalize);
+
+#ifdef CHRONO_ENABLED
+  // Dump GBT-level chrono accumulators (in global_stats because no
+  // TreeScope wraps GBT-side work). Format keeps each line greppable.
+  {
+    namespace cp = ::yggdrasil_decision_forests::chrono_prof;
+    const auto ms = [](cp::FuncId id) {
+      return cp::global_stats[id].load(std::memory_order_relaxed) / 1e6;
+    };
+    LOG(INFO) << "GBT chrono (ms): startup=" << ms(cp::kGbtStartup)
+              << " preprocess=" << ms(cp::kGbtPreprocessDataset)
+              << " update_gradients=" << ms(cp::kGbtUpdateGradients)
+              << " sample_examples=" << ms(cp::kGbtSampleExamples)
+              << " train_tree=" << ms(cp::kGbtTrainTree)
+              << " update_predictions=" << ms(cp::kGbtUpdatePredictions)
+              << " validation_eval=" << ms(cp::kGbtValidationEval)
+              << " finalize=" << ms(cp::kGbtFinalize);
+  }
+#endif
+
   return std::move(mdl);
 }
 

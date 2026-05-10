@@ -30,6 +30,18 @@ enum FuncId {
   kGetCandidateAttributes,
   kAxisAlignedCandidateLoop,
 
+  // GBT-level scopes (set in gradient_boosted_trees.cc). These accumulate
+  // to global_stats[id] because GBT does not open a TreeScope around its
+  // per-iter work — TreeScope is only set by random_forest.cc per tree.
+  kGbtStartup,
+  kGbtPreprocessDataset,
+  kGbtUpdateGradients,
+  kGbtSampleExamples,
+  kGbtTrainTree,
+  kGbtUpdatePredictions,
+  kGbtValidationEval,
+  kGbtFinalize,
+
   // CPU-side scopes around GPU dispatch. Kept as-is.
   kGpuInit,
   kGpuCsrFlatten,
@@ -135,8 +147,26 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
       YDF_PP_CAT(_chrono_timer_, __LINE__)(ID)
 #define CHRONO_SCOPE_TOP(ID) CHRONO_SCOPE(ID)
 
+// Manual begin/end variant for spans that can't be wrapped in `{}` because
+// variables declared inside need to outlive the scope. Lost on early
+// return paths (RAII variant fires on stack unwind; this one doesn't).
+#define CHRONO_BEGIN(name)                                              \
+  const auto YDF_PP_CAT(_chrono_begin_, name) =                         \
+      std::chrono::steady_clock::now()
+#define CHRONO_END(name, id)                                            \
+  ::yggdrasil_decision_forests::chrono_prof::add_time(                  \
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_tree,      \
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth,     \
+      (id),                                                             \
+      std::chrono::duration_cast<std::chrono::nanoseconds>(             \
+          std::chrono::steady_clock::now() -                            \
+          YDF_PP_CAT(_chrono_begin_, name))                             \
+          .count())
+
 }  // namespace yggdrasil_decision_forests::chrono_prof
 #else
 #define CHRONO_SCOPE(ID)
 #define CHRONO_SCOPE_TOP(ID)
+#define CHRONO_BEGIN(name)
+#define CHRONO_END(name, id)
 #endif
