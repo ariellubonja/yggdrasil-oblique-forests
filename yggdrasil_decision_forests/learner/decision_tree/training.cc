@@ -1560,6 +1560,7 @@ namespace yggdrasil_decision_forests::model::decision_tree
     // Was a least one good split found?
     bool found_good_condition = false;
 
+    // Sparse Oblique called in here, below is skipped I  think, unless Axis-Aligned
     switch (dt_config.split_axis_case())
     {
     case proto::DecisionTreeTrainingConfig::SPLIT_AXIS_NOT_SET:
@@ -1579,25 +1580,30 @@ namespace yggdrasil_decision_forests::model::decision_tree
     }
 
 
-    /* #region Irrelevant Code & Post-Processing */
-    
-    /***This executes after FindCondOblique, but only finalizes***/
+    /* #region Irrelevant Code to SPORF & Post-Processing */
 
+    /***This executes after FindCondOblique, but only finalizes***/
+    
     // Get the indices of the attributes to test.
     int remaining_attributes_to_test;
     std::vector<int32_t> &candidate_attributes = cache->candidate_attributes;
 
-    // Ariel: I don't understand this, but this fn. takes no runtime - can't be important
-        // I think for Oblique we use all features, but here just a subset permutation?
-    GetCandidateAttributes(config, config_link, dt_config,
-                           &remaining_attributes_to_test, &candidate_attributes,
-                           random);
+    {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
+      // Ariel: I don't understand this, but this fn. takes no runtime - can't be important
+      // I think for Oblique we use all features, but here just a subset permutation?
+      GetCandidateAttributes(config, config_link, dt_config,
+                             &remaining_attributes_to_test, &candidate_attributes,
+                             random);
+    }
 
     int candidate_attribute_idx_in_candidate_list = 0; // next attribute to be tested in "candidate_attributes".
 
-    while (remaining_attributes_to_test >= 0 &&
-           candidate_attribute_idx_in_candidate_list < candidate_attributes.size())
     {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kAxisAlignedCandidateLoop);
+      while (remaining_attributes_to_test >= 0 &&
+            candidate_attribute_idx_in_candidate_list < candidate_attributes.size())
+      {
       // Get the attribute data
       // Ariel - I think this is a single memory access. How often does the loop run?
       const int32_t attribute_idx =
@@ -1625,6 +1631,7 @@ namespace yggdrasil_decision_forests::model::decision_tree
       }
       
       break;
+      /* #region Irrelevant cases */
       case model::proto::Task::REGRESSION:
         if (internal_config.hessian_score)
         {
@@ -1684,6 +1691,7 @@ namespace yggdrasil_decision_forests::model::decision_tree
         return absl::UnimplementedError("Non implemented");
       }
       /* #endregion */
+      /* #endregion */
 
       if (result != SplitSearchResult::kInvalidAttribute)
       {
@@ -1693,6 +1701,7 @@ namespace yggdrasil_decision_forests::model::decision_tree
           found_good_condition = true;
         }
       }
+    }
     }
 
     return found_good_condition;
@@ -2607,18 +2616,21 @@ return found_split ? SplitSearchResult::kBetterSplitFound
       const int32_t attribute_idx, const InternalTrainConfig &internal_config,
       proto::NodeCondition *condition, SplitterPerThreadCache *cache)
   {
-    /* #region Deal w/ empty weights */
-    if (!weights.empty()) { DCHECK_EQ(weights.size(), labels.size()); }
-    // If Weights empty Deal w/ missing values
-    if (dt_config.missing_value_policy() == proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION)
-    { LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
-                                           &na_replacement); }
-    /* #endregion */
+    proto::DecisionTreeTrainingConfig::Internal::SortingStrategy sorting_strategy;
+    const auto feature_filler = [&]() {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartFinderSetup);
+      /* #region Deal w/ empty weights */
+      if (!weights.empty()) { DCHECK_EQ(weights.size(), labels.size()); }
+      // If Weights empty Deal w/ missing values
+      if (dt_config.missing_value_policy() == proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION)
+      { LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
+                                             &na_replacement); }
+      /* #endregion */
 
-    // TODO Ariel Optimize - possibly why this fn. takes ~13% of runtime
-    FeatureNumericalBucket::Filler feature_filler(selected_examples.size(), na_replacement, attributes);
-
-    const auto sorting_strategy = EffectiveStrategy(dt_config, selected_examples.size(), internal_config);
+      // TODO Ariel Optimize - possibly why this fn. takes ~13% of runtime
+      sorting_strategy = EffectiveStrategy(dt_config, selected_examples.size(), internal_config);
+      return FeatureNumericalBucket::Filler(selected_examples.size(), na_replacement, attributes);
+    }();
 
     // LOG(INFO) << "Sorting Strategy (0 - In Node, 1 - PreSorted, 2 - Force Presorted, 3- Auto): " << sorting_strategy;
     

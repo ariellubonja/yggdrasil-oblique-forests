@@ -26,6 +26,9 @@ enum FuncId {
   kHistogramSetup,
   kAssignSamplesToHistogram,
   kSelectBestThresholdHistogram,
+  kCartFinderSetup,
+  kGetCandidateAttributes,
+  kAxisAlignedCandidateLoop,
 
   // CPU-side scopes around GPU dispatch. Kept as-is.
   kGpuInit,
