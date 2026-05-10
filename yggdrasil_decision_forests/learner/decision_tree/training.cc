@@ -1580,9 +1580,7 @@ namespace yggdrasil_decision_forests::model::decision_tree
     }
 
 
-    /* #region Irrelevant Code to SPORF & Post-Processing */
-
-    /***This executes after FindCondOblique, but only finalizes***/
+    /***The following executes for Axis-aligned only! (+ finalization) ***/
     
     // Get the indices of the attributes to test.
     int remaining_attributes_to_test;
@@ -1619,9 +1617,6 @@ namespace yggdrasil_decision_forests::model::decision_tree
         const auto &class_label_stats =
             utils::down_cast<const ClassificationLabelStats &>(label_stats);
 
-        // This technically executes but immediately exits at this if:
-        //  if (!dt_config.has_axis_aligned_split())  { return SplitSearchResult::kNoBetterSplitFound; }
-        // This is useful for non-numerical columns, where oblique doesn't work
         ASSIGN_OR_RETURN(result, FindBestConditionClassification(
                                      train_dataset, selected_examples, weights,
                                      config, config_link, dt_config, parent,
@@ -1686,12 +1681,11 @@ namespace yggdrasil_decision_forests::model::decision_tree
                                      random, &cache->splitter_cache_list[0]));
       }
       break;
-
       default:
         return absl::UnimplementedError("Non implemented");
+      /* #endregion */
       }
-      /* #endregion */
-      /* #endregion */
+      
 
       if (result != SplitSearchResult::kInvalidAttribute)
       {

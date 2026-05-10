@@ -245,7 +245,7 @@ int main(int argc, char** argv) {
     }
 
     
-    std::cout << "\n\nInferring DataSpec from CSV: " << csv_path << "\n\n" << std::endl;
+    LOG(INFO) << "Inferring DataSpec from CSV: " << csv_path;
     dataset::proto::DataSpecificationGuide guide;
     auto* col_guide = guide.add_column_guides();
     col_guide->set_column_name_pattern(label_col);
@@ -278,14 +278,14 @@ int main(int argc, char** argv) {
     ds_ptr = tf_ds.get();
   }
   else if (mode == "tfrecord") {
-    std::cout << "\n\nReading TFRECORD\n\n";
-    
+    LOG(INFO) << "Reading TFRECORD";
+
     const std::string path = absl::GetFlag(FLAGS_ds_path);
     if (path.empty()) {
       std::cerr << "--ds_path required in tfrecord mode\n";
       return 1;
     }
-    std::cout << "Loading TFRecord dataset from: " << path << std::endl;
+    LOG(INFO) << "Loading TFRecord dataset from: " << path;
     CHECK_OK(file::GetBinaryProto(path + ".data_spec.pb", &data_spec,
                                   file::Defaults()));
     tf_ds = std::make_unique<dataset::VerticalDataset>();
@@ -321,8 +321,8 @@ int main(int argc, char** argv) {
     if (cpu_count == 0) {
       cpu_count = 1;  // fallback if detection fails
     }
-    std::cout << "-1 (automatic) threads requested. "
-              << cpu_count << " threads set.\n";
+    LOG(INFO) << "-1 (automatic) threads requested. "
+              << cpu_count << " threads set.";
     deploy_config.set_num_threads(cpu_count);
 
   } else {
@@ -399,7 +399,7 @@ int main(int argc, char** argv) {
     sos->set_dynamic_split_threshold(
         absl::GetFlag(FLAGS_dynamic_split_threshold));
   } else if (feature_split_type == "Axis Aligned") {
-    std::cout << "Using axis-aligned splits (default behavior)\n";
+    LOG(INFO) << "Using axis-aligned splits";
 
     // Configure sparse_oblique_split parameters to reuse GetNumProjections formula
     // This does NOT enable oblique splits - it just sets params for the calculation
@@ -441,26 +441,26 @@ int main(int argc, char** argv) {
     numerical_split->set_type(
         model::decision_tree::proto::NumericalSplit::HISTOGRAM_RANDOM);
     numerical_split->set_num_candidates(absl::GetFlag(FLAGS_histogram_num_bins));
-    std::cout << "Using histogram splitting: Random with " 
-              << absl::GetFlag(FLAGS_histogram_num_bins) << " bins\n";
+    LOG(INFO) << "Using histogram splitting: Random with "
+              << absl::GetFlag(FLAGS_histogram_num_bins) << " bins";
   } else if (hist_type == "Equal Width") {
     numerical_split->set_type(
         model::decision_tree::proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH);
     numerical_split->set_num_candidates(absl::GetFlag(FLAGS_histogram_num_bins));
-    std::cout << "Using histogram splitting: Equal Width with " 
-              << absl::GetFlag(FLAGS_histogram_num_bins) << " bins\n";
+    LOG(INFO) << "Using histogram splitting: Equal Width with "
+              << absl::GetFlag(FLAGS_histogram_num_bins) << " bins";
   } else if (hist_type == "Dynamic Random Histogram") {
     numerical_split->set_type(
     model::decision_tree::proto::NumericalSplit::DYNAMIC_RANDOM_HISTOGRAM);
     numerical_split->set_num_candidates(absl::GetFlag(FLAGS_histogram_num_bins));
-    std::cout << "Using " << hist_type << " with " 
-              << absl::GetFlag(FLAGS_histogram_num_bins) << " samples\n";
+    LOG(INFO) << "Using " << hist_type << " with "
+              << absl::GetFlag(FLAGS_histogram_num_bins) << " samples";
   } else if (hist_type == "Dynamic Equal Width Histogram") {
     numerical_split->set_type(
         model::decision_tree::proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
     numerical_split->set_num_candidates(absl::GetFlag(FLAGS_histogram_num_bins));
-    std::cout << "Using " << hist_type << " with " 
-              << absl::GetFlag(FLAGS_histogram_num_bins) << " samples\n";
+    LOG(INFO) << "Using " << hist_type << " with "
+              << absl::GetFlag(FLAGS_histogram_num_bins) << " samples";
   }
    else {
     std::cerr << "Unknown histogram type: " << hist_type 
@@ -494,7 +494,7 @@ int main(int argc, char** argv) {
 
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> dur = end - start;
-  std::cout << "train_oblique_forest wall-time - Training + Post-Processing: " << dur.count() << "s\n";
+  LOG(INFO) << "train_oblique_forest wall-time - Training + Post-Processing: " << dur.count() << "s";
 
   // 4) Save model if requested
   const std::string out_dir = absl::GetFlag(FLAGS_model_out_dir);
@@ -504,7 +504,7 @@ int main(int argc, char** argv) {
       std::cerr << "Could not save model: " << save_status.message() << std::endl;
       return 1;
     }
-    std::cout << "Model saved to: " << out_dir << std::endl;
+    LOG(INFO) << "Model saved to: " << out_dir;
   }
 
   return 0;
