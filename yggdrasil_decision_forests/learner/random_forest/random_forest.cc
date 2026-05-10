@@ -1210,7 +1210,7 @@ It is probably the most well-known of the Decision Forest training algorithms.)"
         LOG(INFO) << "\n==========================================\n\n";
         #endif
 
-        LOG(INFO) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
+        LOG(WARNING) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
         exit(0);
 
         /* #endregion */

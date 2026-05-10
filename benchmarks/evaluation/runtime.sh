@@ -155,7 +155,9 @@ BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native")
 VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
 VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
 
-# Vectorization applies only to these methods (Oblique only)
+# Methods that have vectorized code paths. Per-split applicability:
+#   Oblique:      Random, Dynamic Random Histogram
+#   Axis Aligned: Random  (Dynamic Random Histogram is Oblique-only)
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
 
 # Always: enable -> build -> disable -> run -> re-enable at end.
@@ -431,24 +433,47 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
 fi
 
 # -------------------------
-# Vectorized experiments (Oblique only; Random, Dynamic Random Histogram)
+# Vectorized experiments. Per-split methods:
+#   Oblique:      Random, Dynamic Random Histogram
+#   Axis Aligned: Random (Dynamic Random Histogram is Oblique-only)
 # -------------------------
 
-# Only run if Oblique was selected, vectorizable methods are present, and toggle is on
-selected_vec_methods=()
-if [[ "$RUN_VECTORIZED" == "true" && "$oblique_selected" == "true" ]]; then
+if [[ "$RUN_VECTORIZED" != "true" ]]; then
+  banner "Skipping vectorized experiments (RUN_VECTORIZED=false)"
+  finalize_log
+  exit 0
+fi
+
+# Return the subset of $METHODS that is vectorizable for the given split.
+vec_methods_for_split() {
+  local split="$1"
+  local -a allowed_for_split
+  if [[ "$split" == "Axis Aligned" ]]; then
+    allowed_for_split=("Random")
+  else
+    allowed_for_split=("${VECTORIZE_METHODS[@]}")
+  fi
+  local m a
   for m in "${METHODS[@]}"; do
-    for v in "${VECTORIZE_METHODS[@]}"; do
-      if [[ "$m" == "$v" ]]; then
-        selected_vec_methods+=("$m")
+    for a in "${allowed_for_split[@]}"; do
+      if [[ "$m" == "$a" ]]; then
+        echo "$m"
         break
       fi
     done
   done
-fi
+}
 
-if [[ "${#selected_vec_methods[@]}" -eq 0 ]]; then
-  banner "No vectorizable Oblique methods selected; skipping vectorized experiments"
+any_vec=false
+for split in "${SPLIT_TYPES[@]}"; do
+  if [[ -n "$(vec_methods_for_split "$split")" ]]; then
+    any_vec=true
+    break
+  fi
+done
+
+if [[ "$any_vec" != "true" ]]; then
+  banner "No vectorizable (split, method) combos selected; skipping vectorized experiments"
   finalize_log
   exit 0
 fi
@@ -470,45 +495,59 @@ fi
 
 bazel_build "${BAZEL_FLAGS[@]}" "$vec_cfg" "$BUILD_TARGET"
 
-banner "VECTORIZED EXPERIMENTS [${vec_name}] (Oblique only) histogram_num_bins=${histogram_num_bins}"
+banner "VECTORIZED EXPERIMENTS [${vec_name}] histogram_num_bins=${histogram_num_bins}"
 echo "USING INSTRUCTION SET: ${vec_name}" | tee -a "$logfile"
 
-for method in "${selected_vec_methods[@]}"; do
-  extra="${METHOD_EXTRA_ARGS[$method]:-}"
-
-  # Build list of threshold values to iterate over
-  if is_dynamic_method "$method"; then
-    if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-      thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-    else
-      thresholds=("$DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT")
-    fi
-  else
-    thresholds=("")  # single empty entry so the loop runs once
+for split in "${SPLIT_TYPES[@]}"; do
+  mapfile -t methods_to_run < <(vec_methods_for_split "$split")
+  if [[ "${#methods_to_run[@]}" -eq 0 ]]; then
+    banner "VECTORIZED [$split]: no vectorizable methods selected, skipping"
+    continue
   fi
 
-  for thresh in "${thresholds[@]}"; do
-    thresh_arg=""
-    thresh_label=""
-    if [[ -n "$thresh" ]]; then
-      thresh_arg="--dynamic_split_threshold=$thresh"
-      thresh_label=" threshold=$thresh"
+  if [[ "$split" == "Axis Aligned" ]]; then
+    feature_arg='--feature_split_type "Axis Aligned"'
+  else
+    feature_arg='--feature_split_type "Oblique"'
+  fi
+
+  for method in "${methods_to_run[@]}"; do
+    extra="${METHOD_EXTRA_ARGS[$method]:-}"
+
+    # Build list of threshold values to iterate over
+    if is_dynamic_method "$method"; then
+      if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
+        thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
+      else
+        thresholds=("$DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT")
+      fi
+    else
+      thresholds=("")  # single empty entry so the loop runs once
     fi
 
-    banner "Running $method [VECTORIZE: ${vec_name}] with $histogram_num_bins bins${thresh_label}"
+    for thresh in "${thresholds[@]}"; do
+      thresh_arg=""
+      thresh_label=""
+      if [[ -n "$thresh" ]]; then
+        thresh_arg="--dynamic_split_threshold=$thresh"
+        thresh_label=" threshold=$thresh"
+      fi
 
-    # CSV datasets
-    for entry in "${CSV_DATASETS[@]}"; do
-      IFS='|' read -r path label <<<"$entry"
-      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
-      run_cmd "$cmd"
-    done
+      banner "Running $method [$split] [VECTORIZE: ${vec_name}] with $histogram_num_bins bins${thresh_label}"
 
-    # Trunk datasets (rows|cols)
-    for entry in "${TRUNK_DATASETS[@]}"; do
-      IFS='|' read -r rows cols <<<"$entry"
-      cmd="$BINARY --input_mode trunk --rows $rows --cols $cols --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
-      run_cmd "$cmd"
+      # CSV datasets
+      for entry in "${CSV_DATASETS[@]}"; do
+        IFS='|' read -r path label <<<"$entry"
+        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+        run_cmd "$cmd"
+      done
+
+      # Trunk datasets (rows|cols)
+      for entry in "${TRUNK_DATASETS[@]}"; do
+        IFS='|' read -r rows cols <<<"$entry"
+        cmd="$BINARY --input_mode trunk --rows $rows --cols $cols $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+        run_cmd "$cmd"
+      done
     done
   done
 done
