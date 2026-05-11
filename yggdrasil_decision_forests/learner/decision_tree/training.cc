@@ -2416,9 +2416,12 @@ if (dt_config.missing_value_policy() ==
   }
 
   // Ariel: Doing this in ApplyProjection is no faster
-  if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
-                                &max_value)) {
-    return SplitSearchResult::kInvalidAttribute;
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
+    if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
+                                  &max_value)) {
+      return SplitSearchResult::kInvalidAttribute;
+    }
   }
 
 // There should be at least two different unique values.
@@ -2882,10 +2885,13 @@ return found_split ? SplitSearchResult::kBetterSplitFound
     }
     // Determine the minimum and maximum values of the attribute.
     float min_value, max_value;
-    if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
-                                  &max_value))
     {
-      return SplitSearchResult::kInvalidAttribute;
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
+      if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
+                                    &max_value))
+      {
+        return SplitSearchResult::kInvalidAttribute;
+      }
     }
 
     // There should be at least two different unique values.

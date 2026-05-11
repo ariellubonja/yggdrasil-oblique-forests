@@ -24,6 +24,7 @@ enum FuncId {
   kScanPresorted,
 
   kHistogramSetup,
+  kMinMaxNumerical,
   kAssignSamplesToHistogram,
   kSelectBestThresholdHistogram,
   kCartFinderSetup,

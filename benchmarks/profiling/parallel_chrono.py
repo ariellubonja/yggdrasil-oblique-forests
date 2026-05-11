@@ -84,6 +84,7 @@ TIMING_RX_HISTO = re.compile(
     r"kAxisAlignedCandidateLoop\s+([0-9.eE+-]+)s\s+"
     r"kAxisAlignedColumnFetch\s+([0-9.eE+-]+)s\s+"
     r"kHistogramSetup\s+([0-9.eE+-]+)s\s+"
+    r"kMinMaxNumerical\s+([0-9.eE+-]+)s\s+"
     r"kAssignSamplesToHistogram\s+([0-9.eE+-]+)s\s+"
     r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s"
     + _GPU_TAIL_RX
@@ -105,7 +106,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         if histo_mode:
             (tid, tree, depth, nodes, samples,
              pe, get_cand, aa_loop, aa_col_fetch,
-             setup, ast, sbt,
+             setup, minmax, ast, sbt,
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other) = g
@@ -121,6 +122,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 AxisAlignedCandidateLoop     = float(aa_loop),
                 AxisAlignedColumnFetch       = float(aa_col_fetch),
                 HistogramSetup               = float(setup),
+                MinMaxNumerical              = float(minmax),
                 AssignSamplesToHist          = float(ast),
                 SelectBestThresholdHistogram = float(sbt),
                 GpuInit                      = opt_float(gpu_init),
@@ -208,6 +210,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "ProjectionEvaluate": "ApplyProjection",
             # Inside EvaluateProjection → FindSplitHistogram (CPU histogram)
             "HistogramSetup":               "--HistogramSetup",
+            "MinMaxNumerical":              "---MinMaxNumerical",
             "AssignSamplesToHist":          "--AssignSamplesToHist",
             "SelectBestThresholdHistogram": "--SelectBestThresholdHistogram",
             # Inside EvaluateProjection (CPU Exact/Sort splitter)
@@ -250,6 +253,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "AxisAlignedCandidateLoop",
             "AxisAlignedColumnFetch",
             "--HistogramSetup",
+            "---MinMaxNumerical",
             "--AssignSamplesToHist",
             "--SelectBestThresholdHistogram",
             "-SortFillExampleBucketSet",
