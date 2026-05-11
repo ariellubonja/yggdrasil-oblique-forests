@@ -29,6 +29,7 @@ enum FuncId {
   kCartFinderSetup,
   kGetCandidateAttributes,
   kAxisAlignedCandidateLoop,
+  kAxisAlignedColumnFetch,
 
   // GBT-level scopes (set in gradient_boosted_trees.cc). These accumulate
   // to global_stats[id] because GBT does not open a TreeScope around its

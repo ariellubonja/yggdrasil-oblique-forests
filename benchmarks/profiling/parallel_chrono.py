@@ -62,6 +62,7 @@ TIMING_RX_SORT = re.compile(
     r"ProjEval\s+([0-9.eE+-]+)s\s+"            #  7
     r"kGetCandidateAttributes\s+([0-9.eE+-]+)s\s+"      #  7a
     r"kAxisAlignedCandidateLoop\s+([0-9.eE+-]+)s\s+"    #  7b
+    r"kAxisAlignedColumnFetch\s+([0-9.eE+-]+)s\s+"      #  7c
     r"kCartFinderSetup\s+([0-9.eE+-]+)s\s+"    #  8
     r"kSortFillExampleBucketSet\s+([0-9.eE+-]+)s\s+"   #  9
     r"kSortScanSplits\s+([0-9.eE+-]+)s\s+"             # 10
@@ -81,6 +82,7 @@ TIMING_RX_HISTO = re.compile(
     r"ProjEval\s+([0-9.eE+-]+)s\s+"
     r"kGetCandidateAttributes\s+([0-9.eE+-]+)s\s+"
     r"kAxisAlignedCandidateLoop\s+([0-9.eE+-]+)s\s+"
+    r"kAxisAlignedColumnFetch\s+([0-9.eE+-]+)s\s+"
     r"kHistogramSetup\s+([0-9.eE+-]+)s\s+"
     r"kAssignSamplesToHistogram\s+([0-9.eE+-]+)s\s+"
     r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s"
@@ -102,7 +104,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
 
         if histo_mode:
             (tid, tree, depth, nodes, samples,
-             pe, get_cand, aa_loop,
+             pe, get_cand, aa_loop, aa_col_fetch,
              setup, ast, sbt,
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
@@ -117,6 +119,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 ProjectionEvaluate           = float(pe),
                 GetCandidateAttributes       = float(get_cand),
                 AxisAlignedCandidateLoop     = float(aa_loop),
+                AxisAlignedColumnFetch       = float(aa_col_fetch),
                 HistogramSetup               = float(setup),
                 AssignSamplesToHist          = float(ast),
                 SelectBestThresholdHistogram = float(sbt),
@@ -135,7 +138,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             ))
         else:
             (tid, tree, depth, nodes, samples,
-             pe, get_cand, aa_loop, cart_setup,
+             pe, get_cand, aa_loop, aa_col_fetch, cart_setup,
              fill_example, scan_splits,
              init_buckets, fill_buckets, finalize_buckets,
              features, labels, scan_presorted,
@@ -152,6 +155,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 ProjectionEvaluate           = float(pe),
                 GetCandidateAttributes       = float(get_cand),
                 AxisAlignedCandidateLoop     = float(aa_loop),
+                AxisAlignedColumnFetch       = float(aa_col_fetch),
                 CartFinderSetup              = float(cart_setup),
                 SortFillExampleBucketSet     = float(fill_example),
                 SortScanSplits               = float(scan_splits),
@@ -244,6 +248,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "EvaluateProjection",
             "GetCandidateAttributes",
             "AxisAlignedCandidateLoop",
+            "AxisAlignedColumnFetch",
             "--HistogramSetup",
             "--AssignSamplesToHist",
             "--SelectBestThresholdHistogram",

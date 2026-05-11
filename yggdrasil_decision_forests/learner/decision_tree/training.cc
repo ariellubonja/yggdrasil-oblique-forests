@@ -508,12 +508,14 @@ namespace yggdrasil_decision_forests::model::decision_tree
         { return SplitSearchResult::kNoBetterSplitFound; }
 
         // Ariel - we never seem to get here if Oblique
+      CHRONO_BEGIN(col_fetch);
       ASSIGN_OR_RETURN(
           const auto &attribute_data,
           train_dataset.ColumnWithCastWithStatus<
               dataset::VerticalDataset::NumericalColumn>(attribute_idx));
 
       const auto na_replacement = attribute_column_spec.numerical().mean();
+      CHRONO_END(col_fetch, ::yggdrasil_decision_forests::chrono_prof::kAxisAlignedColumnFetch);
 
       // Ariel - parameter for exact (CART) vs. approx. (Histogram) splits
       if (dt_config.numerical_split().type() == proto::NumericalSplit::EXACT)
