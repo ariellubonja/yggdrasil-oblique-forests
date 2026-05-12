@@ -13,6 +13,7 @@ Exit codes:
   2 - bad arguments
 """
 import csv
+import math
 import os
 import re
 import sys
@@ -20,9 +21,23 @@ import sys
 CMD_RE = re.compile(r'^\./bazel-bin/examples/train_oblique_forest (.+?)\s*$')
 RUN_RE = re.compile(r'^----- Run (\d+)/(\d+)(?: \(seed=(\d+)\))? -----$')
 ACC_RE = re.compile(r'Train tree \d+/\d+ accuracy:([\d.]+)')
+# STDDEV segment is optional so logs predating it still parse.
 MEDIAN_RUN_RE = re.compile(
-    r'^MEDIAN of \d+/\d+ runs: ([\d.eE+\-]+) s\s+\(samples: ([0-9. eE+\-]+)\)$'
+    r'^MEDIAN of \d+/\d+ runs: ([\d.eE+\-]+) s'
+    r'(?:\s+STDDEV: [\d.eE+\-]+ s|\s+STDDEV: N/A)?'
+    r'\s+\(samples: ([0-9. eE+\-]+)\)$'
 )
+
+
+def sample_stddev(samples):
+    """Sample stddev (Bessel-corrected). Empty string if n<2."""
+    xs = [float(s) for s in samples]
+    n = len(xs)
+    if n < 2:
+        return ''
+    mean = sum(xs) / n
+    var = sum((x - mean) ** 2 for x in xs) / (n - 1)
+    return f"{math.sqrt(var):.6f}"
 
 
 def parse_cmd(args):
@@ -150,9 +165,9 @@ def main():
         return 1
 
     if is_runtime:
-        # Runtime CSV reports only the median; individual run samples stay in
-        # the log (which is itself deleted on success unless something fails).
-        header = ['dataset', 'algorithm', 'median_s']
+        # Runtime CSV reports median + sample stddev (n-1); raw samples stay
+        # in the log (which is itself deleted on success unless something fails).
+        header = ['dataset', 'algorithm', 'median_s', 'stddev_s']
     else:
         max_samples = max(len(r[2]) for r in rows)
         header = ['dataset', 'algorithm'] + [f'{col_prefix}_{i}' for i in range(1, max_samples + 1)]
@@ -161,7 +176,7 @@ def main():
         w.writerow(header)
         if is_runtime:
             for dataset, algo, median, samples in rows:
-                w.writerow([dataset, algo, median])
+                w.writerow([dataset, algo, median, sample_stddev(samples)])
         else:
             for dataset, algo, samples in rows:
                 w.writerow([dataset, algo] + samples + [''] * (max_samples - len(samples)))

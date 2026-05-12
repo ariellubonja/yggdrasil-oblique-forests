@@ -251,7 +251,18 @@ run_cmd() {
     else
       median=$(awk -v a="${sorted[$((mid-1))]}" -v b="${sorted[$mid]}" 'BEGIN{printf "%.6f", (a+b)/2.0}')
     fi
-    echo "MEDIAN of ${#times[@]}/${NUM_RUNS} runs: ${median} s  (samples: ${times[*]})" | tee -a "$logfile"
+    # Sample stddev (n-1). Undefined for n<2; report N/A so eyeballing the log
+    # still shows that only one run survived.
+    local stddev
+    if (( n >= 2 )); then
+      stddev=$(printf '%s\n' "${times[@]}" | awk '
+        {x[NR]=$1; s+=$1}
+        END{m=s/NR; ss=0; for(i=1;i<=NR;i++){d=x[i]-m; ss+=d*d}
+            printf "%.6f", sqrt(ss/(NR-1))}')
+    else
+      stddev="N/A"
+    fi
+    echo "MEDIAN of ${#times[@]}/${NUM_RUNS} runs: ${median} s  STDDEV: ${stddev} s  (samples: ${times[*]})" | tee -a "$logfile"
   else
     echo "MEDIAN of 0/${NUM_RUNS} runs: N/A" | tee -a "$logfile"
   fi
