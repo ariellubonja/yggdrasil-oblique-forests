@@ -19,6 +19,47 @@ cc_library_ydf(
     visibility = ["//visibility:public"],
 )
 
+# GPU-accelerated oblique split-finding. CPU-default builds get only the
+# `ObliqueGpuComputer` class declaration (header) — enough for training.cc /
+# random_forest.cc / oblique.cc to refer to it through forward declarations
+# and #ifdef OBLIQUE_GPU_ENABLED guards.
+#
+# The implementation (`oblique_gpu.cc`) calls extern "C" entry points
+# defined in the CUDA TUs (`oblique_gpu_kernels.cu.cc` and `randomprojection.cu`).
+# Those `.cu` files are *intentionally not* wired into a Bazel target here so
+# the default build stays portable across CPU-only hosts that don't have nvcc
+# or rules_cuda. To enable GPU on a CUDA host:
+#
+#   1. Add `bazel_dep(name = "rules_cuda", version = ...)` (or git_override
+#      pinned to v0.2.5) to the top-level MODULE.bazel.
+#   2. Add at the top of this file:
+#        load("@rules_cuda//cuda:defs.bzl", "cuda_library")
+#   3. Define a `cuda_library` for `oblique_gpu_kernels.cu.cc` and another for
+#      `randomprojection.cu` (the cu/hpp pair), tagged `manual,cuda_dep`.
+#   4. Below, replace the `srcs = []` with `srcs = ["oblique_gpu.cc"]` under
+#      the `:enable_cuda` select arm, and add the cuda_library targets as deps
+#      under the same arm.
+#   5. Build with `--config=oblique_gpu` (which sets `--define=enable_cuda=1`).
+cc_library_ydf(
+    name = "oblique_gpu",
+    srcs = select({
+        "//yggdrasil_decision_forests:enable_cuda": [],
+        "//conditions:default": [],
+    }),
+    hdrs = ["oblique_gpu.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":oblique_types",
+        "//yggdrasil_decision_forests/dataset:types",
+        "//yggdrasil_decision_forests/dataset:vertical_dataset",
+        "//yggdrasil_decision_forests/utils:random",
+        "//yggdrasil_decision_forests/utils:synchronization_primitives",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
 cc_library_ydf(
     name = "training",
     srcs = [

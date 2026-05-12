@@ -43,6 +43,17 @@ config_setting(
     values = {"define": "use_ydf_tensorflow_proto=1"},
 )
 
+# Enables the optional GPU oblique-split path (oblique_gpu.{cc,h}, the
+# oblique_gpu_kernels.cu.cc CUDA kernels, and randomprojection.cu). Off by
+# default; opt in with `--define=enable_cuda=1`, typically through the
+# `--config=oblique_gpu` shortcut in .bazelrc. The CUDA bits (`.cu` and
+# `.cu.cc` files) require rules_cuda + nvcc and are wired up per-host (see
+# `learner/decision_tree/BUILD` for the integration point).
+config_setting(
+    name = "enable_cuda",
+    values = {"define": "enable_cuda=1"},
+)
+
 # RECOMMENDED VALUE: not set
 #
 # Compile with "--define=ydf_use_tensorflow_io=1" to use TensorFlow IO FileSystem for all file IO
