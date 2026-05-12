@@ -49,6 +49,9 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/generic_parameters.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/gpu.h"
+#ifdef OBLIQUE_GPU_ENABLED
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
+#endif
 #include "yggdrasil_decision_forests/learner/decision_tree/preprocessing.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/training.h"
 #include "yggdrasil_decision_forests/learner/random_forest/random_forest.pb.h"
@@ -532,6 +535,18 @@ RandomForestLearner::TrainWithStatusImpl(
         decision_tree::gpu::VectorSequenceComputer::Create(
             vector_sequence_columns, /*use_gpu=*/deployment_.use_gpu()));
   }
+
+#ifdef OBLIQUE_GPU_ENABLED
+  // GPU oblique-split computer. Created once per training run and shared
+  // across tree-worker threads through `internal_config.oblique_gpu_computer`.
+  // Requires --define=enable_cuda=1 (see .bazelrc :oblique_gpu config) plus
+  // the cuda_library targets wired in learner/decision_tree/BUILD on a GPU
+  // host. The CPU-default build leaves this entire block out.
+  std::unique_ptr<decision_tree::ObliqueGpuComputer> oblique_gpu_computer;
+  ASSIGN_OR_RETURN(oblique_gpu_computer,
+                   decision_tree::ObliqueGpuComputer::Create(
+                       train_dataset, /*use_gpu=*/deployment_.use_gpu()));
+#endif
   for (int tree_idx = 0; tree_idx < rf_config.num_trees(); tree_idx++) {
     mdl->AddTree(std::make_unique<decision_tree::DecisionTree>());
   }
@@ -728,6 +743,11 @@ RandomForestLearner::TrainWithStatusImpl(
         decision_tree::InternalTrainConfig internal_config;
         internal_config.preprocessing = &preprocessing;
         internal_config.timeout = timeout;
+#ifdef OBLIQUE_GPU_ENABLED
+        if (oblique_gpu_computer) {
+          internal_config.oblique_gpu_computer = oblique_gpu_computer.get();
+        }
+#endif
         if (vector_sequence_computer) {
           internal_config.vector_sequence_computer =
               vector_sequence_computer.get();
