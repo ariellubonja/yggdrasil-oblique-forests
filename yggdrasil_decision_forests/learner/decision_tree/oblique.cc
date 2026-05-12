@@ -177,11 +177,31 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   std::vector<UnsignedExampleIdx> dense_example_idxs(selected_examples.size());
   std::iota(dense_example_idxs.begin(), dense_example_idxs.end(), 0);
 
+  // Per-node downgrade for the DYNAMIC_* histogram split types: if the node
+  // has fewer than dynamic_split_threshold examples, switch back to EXACT
+  // (sorting). Histogramming is faster on larger nodes; EXACT wins on small
+  // ones. Empirical threshold default is 350 (see decision_tree.proto).
+  proto::DecisionTreeTrainingConfig dynamic_dt_config = dt_config;
+  const auto split_type = dt_config.numerical_split().type();
+  const bool is_dynamic_histogram =
+      split_type == proto::NumericalSplit::DYNAMIC_RANDOM_HISTOGRAM ||
+      split_type == proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM;
+  if (is_dynamic_histogram) {
+    const int dynamic_split_threshold =
+        dt_config.sparse_oblique_split().dynamic_split_threshold();
+    if (dynamic_split_threshold >= 0 &&
+        dense_example_idxs.size() <
+            static_cast<size_t>(dynamic_split_threshold)) {
+      dynamic_dt_config.mutable_numerical_split()->set_type(
+          proto::NumericalSplit::EXACT);
+    }
+  }
+
   for (int projection_idx = 0; projection_idx < num_projections;
        projection_idx++) {
     // Generate a current_projection.
     int8_t monotonic_direction;
-    SampleProjection(config_link.numerical_features(), dt_config,
+    SampleProjection(config_link.numerical_features(), dynamic_dt_config,
                      train_dataset.data_spec(), config_link, projection_density,
                      &current_projection, &monotonic_direction, random);
 
@@ -192,10 +212,10 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     ASSIGN_OR_RETURN(
         const auto result,
         EvaluateProjection(
-            dt_config, label_stats, dense_example_idxs, selected_weights,
-            selected_labels, projection_values, internal_config,
-            current_projection.front().attribute_idx, constraints,
-            monotonic_direction, best_condition, cache));
+            dynamic_dt_config, label_stats, dense_example_idxs,
+            selected_weights, selected_labels, projection_values,
+            internal_config, current_projection.front().attribute_idx,
+            constraints, monotonic_direction, best_condition, cache, random));
 
     if (result == SplitSearchResult::kBetterSplitFound) {
       best_projection = current_projection;
