@@ -2074,7 +2074,9 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
 
   const bool use_equal_width_fast_path =
       (dt_config.numerical_split().type() ==
-       proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH);
+           proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH ||
+       dt_config.numerical_split().type() ==
+           proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
 
   // Compute the split score of each threshold.
   for (const auto example_idx : selected_examples) {
@@ -4371,9 +4373,11 @@ void SetDefaultHyperParameters(proto::DecisionTreeTrainingConfig* config) {
   if (!config->numerical_split().has_num_candidates()) {
     switch (config->numerical_split().type()) {
       case proto::NumericalSplit::HISTOGRAM_RANDOM:
+      case proto::NumericalSplit::DYNAMIC_RANDOM_HISTOGRAM:
         config->mutable_numerical_split()->set_num_candidates(1);
         break;
       case proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH:
+      case proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM:
         config->mutable_numerical_split()->set_num_candidates(255);
         break;
       default:
@@ -5217,14 +5221,16 @@ absl::StatusOr<std::vector<float>> GenHistogramBins(
   STATUS_CHECK_GE(num_splits, 0);
   std::vector<float> candidate_splits(num_splits);
   switch (type) {
-    case proto::NumericalSplit::HISTOGRAM_RANDOM: {
+    case proto::NumericalSplit::HISTOGRAM_RANDOM:
+    case proto::NumericalSplit::DYNAMIC_RANDOM_HISTOGRAM: {
       std::uniform_real_distribution<float> threshold_distribution(min_value,
                                                                    max_value);
       for (auto& candidate_split : candidate_splits) {
         candidate_split = threshold_distribution(*random);
       }
     } break;
-    case proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH: {
+    case proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH:
+    case proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM: {
       for (int split_idx = 0; split_idx < candidate_splits.size();
            split_idx++) {
         candidate_splits[split_idx] = min_value + (max_value - min_value) *
