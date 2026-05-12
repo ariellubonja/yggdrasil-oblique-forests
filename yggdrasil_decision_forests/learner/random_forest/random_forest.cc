@@ -1006,6 +1006,12 @@ RandomForestLearner::TrainWithStatusImpl(
   // Per-function CHRONO summary. Layout matches the FuncId enum in
   // parallel_chrono.h; downstream parsers (benchmarks/profiling/
   // parallel_chrono.py) read "[CHRONO] func[<id>] = <ns>" lines.
+  //
+  // Note: func[0] (kTreeTrain) reads 0 when combined with YDF_BENCH_EXIT_EARLY
+  // because the outer CHRONO_SCOPE_TOP only accumulates in its destructor and
+  // std::exit() skips destructors. The inner scopes (kProjectionEvaluate,
+  // kAssignSamplesToHistogram, etc.) are unaffected — they finish during
+  // per-tree training, well before the exit, so their numbers are valid.
   LOG(INFO) << "[CHRONO] Per-function timings (ns):";
   for (int i = 0;
        i < ::yggdrasil_decision_forests::chrono_prof::kNumFuncs; ++i) {
