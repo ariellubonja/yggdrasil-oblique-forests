@@ -68,6 +68,7 @@
 #include "yggdrasil_decision_forests/utils/distribution.h"
 #include "yggdrasil_decision_forests/utils/distribution.pb.h"
 #include "yggdrasil_decision_forests/utils/logging.h"
+#include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 #include "yggdrasil_decision_forests/utils/random.h"
 #include "yggdrasil_decision_forests/utils/status_macros.h"
 
@@ -2192,6 +2193,9 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
            proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
 
   // Compute the split score of each threshold.
+  {
+  CHRONO_SCOPE(
+      ::yggdrasil_decision_forests::chrono_prof::kAssignSamplesToHistogram);
   for (const auto example_idx : selected_examples) {
     const int32_t label = labels[example_idx];
     const float weight = weights.empty() ? 1.f : weights[example_idx];
@@ -2239,6 +2243,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       it_split.pos_label_distribution.Add(label, weight);
     }
   }
+  }  // CHRONO kAssignSamplesToHistogram
 
   for (int split_idx = candidate_splits.size() - 2; split_idx >= 0;
        split_idx--) {
@@ -2260,6 +2265,9 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
 
   // Select the best threshold.
   bool found_split = false;
+  {
+  CHRONO_SCOPE(
+      ::yggdrasil_decision_forests::chrono_prof::kSelectBestThresholdHistogram);
   for (auto& candidate_split : candidate_splits) {
     if (selected_examples.size() -
                 candidate_split.num_positive_examples_without_weights <
@@ -2299,6 +2307,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       found_split = true;
     }
   }
+  }  // CHRONO kSelectBestThresholdHistogram
   return found_split ? SplitSearchResult::kBetterSplitFound
                      : SplitSearchResult::kNoBetterSplitFound;
 }

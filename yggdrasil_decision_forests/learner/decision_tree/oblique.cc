@@ -45,6 +45,7 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/utils.h"
 #include "yggdrasil_decision_forests/model/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/utils/logging.h"
+#include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 #include "yggdrasil_decision_forests/utils/random.h"
 
 namespace yggdrasil_decision_forests {
@@ -1105,6 +1106,7 @@ absl::Status ProjectionEvaluator::Evaluate(
     const Projection& projection,
     const absl::Span<const UnsignedExampleIdx> selected_examples,
     std::vector<float>* values) const {
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
   RETURN_IF_ERROR(constructor_status_);
   values->resize(selected_examples.size());
   for (size_t selected_idx = 0; selected_idx < selected_examples.size();

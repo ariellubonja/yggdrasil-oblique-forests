@@ -54,6 +54,7 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 #endif
 #include "yggdrasil_decision_forests/learner/decision_tree/preprocessing.h"
+#include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/training.h"
 #include "yggdrasil_decision_forests/learner/random_forest/random_forest.pb.h"
 #include "yggdrasil_decision_forests/metric/metric.h"
@@ -416,6 +417,11 @@ RandomForestLearner::TrainWithStatusImpl(
     const dataset::VerticalDataset& train_dataset,
     std::optional<std::reference_wrapper<const dataset::VerticalDataset>>
         valid_dataset) const {
+  // CHRONO instrumentation: this scope wraps the entire RF training run and
+  // accumulates to global_stats. Per-function scopes (kHistogramSetup,
+  // kProjectionEvaluate, etc.) accumulate into the same array.
+  CHRONO_SCOPE_TOP(::yggdrasil_decision_forests::chrono_prof::kTreeTrain);
+
   // TODO: Divide function into smaller blocks.
   const auto begin_training = absl::Now();
 
@@ -989,6 +995,19 @@ RandomForestLearner::TrainWithStatusImpl(
                    "\"total_max_num_nodes\" constraint.";
     }
   }
+
+#ifdef CHRONO_ENABLED
+  // Per-function CHRONO summary. Layout matches the FuncId enum in
+  // parallel_chrono.h; downstream parsers (benchmarks/profiling/
+  // parallel_chrono.py) read "[CHRONO] func[<id>] = <ns>" lines.
+  LOG(INFO) << "[CHRONO] Per-function timings (ns):";
+  for (int i = 0;
+       i < ::yggdrasil_decision_forests::chrono_prof::kNumFuncs; ++i) {
+    LOG(INFO) << "[CHRONO] func[" << i << "] = "
+              << ::yggdrasil_decision_forests::chrono_prof::global_stats[i]
+                     .load(std::memory_order_relaxed);
+  }
+#endif
 
 #ifdef YDF_BENCH_EXIT_EARLY
   // Benchmark-only shortcut: skip OOB metric finalisation, variable-

@@ -51,6 +51,7 @@ cc_library_ydf(
         "//yggdrasil_decision_forests/utils:feature_importance",
         "//yggdrasil_decision_forests/utils:hyper_parameters",
         "//yggdrasil_decision_forests/utils:logging",
+        "//yggdrasil_decision_forests/utils:parallel_chrono",
         "//yggdrasil_decision_forests/utils:random",
         "//yggdrasil_decision_forests/utils:status_macros",
         "//yggdrasil_decision_forests/utils:synchronization_primitives",
