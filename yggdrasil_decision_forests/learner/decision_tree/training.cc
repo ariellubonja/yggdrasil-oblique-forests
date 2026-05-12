@@ -15,6 +15,12 @@
 
 #include "yggdrasil_decision_forests/learner/decision_tree/training.h"
 
+#if defined(__x86_64__) && \
+    (defined(__AVX2__) || defined(__AVX512F__)) && \
+    defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+#include <immintrin.h>
+#endif
+
 #include <stddef.h>
 
 #include <algorithm>
@@ -2019,6 +2025,105 @@ static inline int EqualWidthThresholdIndex(const float attribute,
   return idx;
 }
 
+// Drop-in replacement for std::upper_bound over the sorted threshold array
+// used by the non-equal-width histogram finder. Specialised for the two
+// common sizes: 64 thresholds (AVX2, 8x8) and 256 thresholds (AVX-512, 16x16).
+// Falls back to std::upper_bound for other sizes or when the corresponding
+// instruction set / ENABLE_STD_UPPER_BOUND_VECTORIZATION is not enabled.
+//
+// Usage in the histogram-finder per-example loop:
+//   SIMDUpperBoundBins bins_accel;
+//   bins_accel.Init(thresholds);                    // once, after Gen
+//   const int idx = bins_accel.Index(attribute);    // per example
+//   if (idx < 0) continue;
+//   candidate_splits[idx].pos_label_distribution.Add(...);
+struct SIMDUpperBoundBins {
+  std::vector<float> scalar_thr;
+#if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+  alignas(64) float thr256[256];
+  __m512 coarse16;
+  bool avx512_256 = false;
+#endif
+#if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+  alignas(32) float thr64[64];
+  __m256 coarse8;
+  bool avx2_64 = false;
+#endif
+
+  void Init(const std::vector<float>& thr) {
+#if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+    if (thr.size() == 256) {
+      for (int i = 0; i < 256; ++i) thr256[i] = thr[i];
+      alignas(64) float tmp[16];
+      for (int g = 0; g < 16; ++g) tmp[g] = thr256[(g + 1) * 16 - 1];
+      coarse16 = _mm512_load_ps(tmp);
+      avx512_256 = true;
+#if defined(__AVX2__)
+      avx2_64 = false;
+#endif
+      scalar_thr.clear();
+      return;
+    }
+#endif
+#if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+    if (thr.size() == 64) {
+      for (int i = 0; i < 64; ++i) thr64[i] = thr[i];
+      alignas(32) float tmp[8];
+      for (int g = 0; g < 8; ++g) tmp[g] = thr64[(g + 1) * 8 - 1];
+      coarse8 = _mm256_load_ps(tmp);
+      avx2_64 = true;
+#if defined(__AVX512F__)
+      avx512_256 = false;
+#endif
+      scalar_thr.clear();
+      return;
+    }
+#endif
+    scalar_thr = thr;
+#if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+    avx512_256 = false;
+#endif
+#if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+    avx2_64 = false;
+#endif
+  }
+
+  // Returns index of last threshold <= x; -1 if all thresholds > x.
+  int Index(float x) const {
+#if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+    if (avx512_256) {
+      const __m512 vx = _mm512_set1_ps(x);
+      const __mmask16 m = _mm512_cmp_ps_mask(vx, coarse16, _CMP_GE_OQ);
+      const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(m));
+      if (K >= 16) return 255;
+      const float* base = thr256 + (K << 4);
+      const __m512 vthr = _mm512_load_ps(base);
+      const __mmask16 mf = _mm512_cmp_ps_mask(vx, vthr, _CMP_GE_OQ);
+      const unsigned cnt = static_cast<unsigned>(_mm_popcnt_u32(mf));
+      return static_cast<int>((K << 4) + cnt) - 1;
+    }
+#endif
+#if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+    if (avx2_64) {
+      const __m256 vx = _mm256_set1_ps(x);
+      const unsigned mc = static_cast<unsigned>(
+          _mm256_movemask_ps(_mm256_cmp_ps(vx, coarse8, _CMP_GE_OQ)));
+      const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(mc));
+      if (K >= 8) return 63;
+      const float* base = thr64 + (K << 3);
+      const __m256 vthr = _mm256_load_ps(base);
+      const unsigned mf = static_cast<unsigned>(
+          _mm256_movemask_ps(_mm256_cmp_ps(vx, vthr, _CMP_GE_OQ)));
+      const unsigned cnt = static_cast<unsigned>(_mm_popcnt_u32(mf));
+      return static_cast<int>((K << 3) + cnt) - 1;
+    }
+#endif
+    auto it = std::upper_bound(scalar_thr.begin(), scalar_thr.end(), x);
+    if (it == scalar_thr.begin()) return -1;
+    return static_cast<int>(it - scalar_thr.begin()) - 1;
+  }
+};
+
 absl::StatusOr<SplitSearchResult>
 FindSplitLabelClassificationFeatureNumericalHistogram(
     const absl::Span<const UnsignedExampleIdx> selected_examples,
@@ -2072,6 +2177,14 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     candidate_split.threshold = bins[split_idx];
   }
 
+  // SIMD-vectorised replacement for the per-example std::upper_bound call on
+  // the non-equal-width path. When the build defines ENABLE_STD_UPPER_BOUND_
+  // VECTORIZATION (see .bazelrc :enable_std_upper_bound_avx2 / _avx512) and
+  // bins.size() matches a fast-path size (64 / 256), this skips the per-call
+  // log(N) binary search.
+  SIMDUpperBoundBins bins_accel;
+  bins_accel.Init(bins);
+
   const bool use_equal_width_fast_path =
       (dt_config.numerical_split().type() ==
            proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH ||
@@ -2117,17 +2230,13 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       it_split.num_positive_examples_without_weights++;
       it_split.pos_label_distribution.Add(label, weight);
     } else {
-      auto it_split = std::upper_bound(
-          candidate_splits.begin(), candidate_splits.end(), attribute,
-          [](const float a, const CandidateSplit& b) {
-            return a < b.threshold;
-          });
-      if (it_split == candidate_splits.begin()) {
+      const int idx = bins_accel.Index(attribute);
+      if (idx < 0) {
         continue;
       }
-      --it_split;
-      it_split->num_positive_examples_without_weights++;
-      it_split->pos_label_distribution.Add(label, weight);
+      auto& it_split = candidate_splits[idx];
+      it_split.num_positive_examples_without_weights++;
+      it_split.pos_label_distribution.Add(label, weight);
     }
   }
 
