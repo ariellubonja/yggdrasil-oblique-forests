@@ -292,7 +292,8 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
     const absl::Span<const float> projection_values,
     const InternalTrainConfig& internal_config, const int first_attribute_idx,
     const NodeConstraints& constraints, int8_t monotonic_direction,
-    proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
+    proto::NodeCondition* condition, SplitterPerThreadCache* cache,
+    utils::RandomEngine* random) {
   InternalTrainConfig effective_internal_config = internal_config;
   effective_internal_config.override_sorting_strategy =
       proto::DecisionTreeTrainingConfig::Internal::SortingStrategy::
@@ -312,13 +313,33 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
   // Find a good split in the current_projection.
   SplitSearchResult result;
   if constexpr (is_same<LabelStats, ClassificationLabelStats>::value) {
-    ASSIGN_OR_RETURN(
-        result,
-        FindSplitLabelClassificationFeatureNumericalCart(
-            dense_example_idxs, selected_weights, projection_values,
-            selected_labels, label_stats.num_label_classes, na_replacement,
-            min_num_obs, dt_config, label_stats.label_distribution,
-            first_attribute_idx, effective_internal_config, condition, cache));
+    // For oblique splits, route classification through the histogram finder
+    // when the user picked a histogram-based type, otherwise use the default
+    // sort-based Cart path. `random` must be non-null on the histogram path;
+    // callers using EXACT (e.g. vector_sequence.cc) can leave it as nullptr.
+    if (dt_config.numerical_split().type() ==
+        proto::NumericalSplit::EXACT) {
+      ASSIGN_OR_RETURN(
+          result,
+          FindSplitLabelClassificationFeatureNumericalCart(
+              dense_example_idxs, selected_weights, projection_values,
+              selected_labels, label_stats.num_label_classes, na_replacement,
+              min_num_obs, dt_config, label_stats.label_distribution,
+              first_attribute_idx, effective_internal_config, condition,
+              cache));
+    } else {
+      DCHECK(random != nullptr)
+          << "EvaluateProjection: histogram split type "
+          << dt_config.numerical_split().type()
+          << " requires a non-null RandomEngine.";
+      ASSIGN_OR_RETURN(
+          result,
+          FindSplitLabelClassificationFeatureNumericalHistogram(
+              dense_example_idxs, selected_weights, projection_values,
+              selected_labels, label_stats.num_label_classes, na_replacement,
+              min_num_obs, dt_config, label_stats.label_distribution,
+              first_attribute_idx, random, condition));
+    }
   } else if constexpr (is_same<LabelStats,
                                RegressionHessianLabelStats>::value) {
     if (!selected_weights.empty()) {
@@ -380,7 +401,8 @@ EvaluateProjection<ClassificationLabelStats, std::vector<int32_t>>(
     const absl::Span<const float> projection_values,
     const InternalTrainConfig& internal_config, const int first_attribute_idx,
     const NodeConstraints& constraints, int8_t monotonic_direction,
-    proto::NodeCondition* condition, SplitterPerThreadCache* cache);
+    proto::NodeCondition* condition, SplitterPerThreadCache* cache,
+    utils::RandomEngine* random);
 
 template absl::StatusOr<SplitSearchResult>
 EvaluateProjection<RegressionLabelStats, std::vector<float>>(
@@ -392,7 +414,8 @@ EvaluateProjection<RegressionLabelStats, std::vector<float>>(
     const absl::Span<const float> projection_values,
     const InternalTrainConfig& internal_config, const int first_attribute_idx,
     const NodeConstraints& constraints, int8_t monotonic_direction,
-    proto::NodeCondition* condition, SplitterPerThreadCache* cache);
+    proto::NodeCondition* condition, SplitterPerThreadCache* cache,
+    utils::RandomEngine* random);
 
 template absl::StatusOr<SplitSearchResult>
 EvaluateProjection<RegressionHessianLabelStats, GradientAndHessian>(
@@ -404,7 +427,8 @@ EvaluateProjection<RegressionHessianLabelStats, GradientAndHessian>(
     const absl::Span<const float> projection_values,
     const InternalTrainConfig& internal_config, const int first_attribute_idx,
     const NodeConstraints& constraints, int8_t monotonic_direction,
-    proto::NodeCondition* condition, SplitterPerThreadCache* cache);
+    proto::NodeCondition* condition, SplitterPerThreadCache* cache,
+    utils::RandomEngine* random);
 
 template <typename LabelStats, typename Labels>
 absl::Status EvaluateProjectionAndSetCondition(

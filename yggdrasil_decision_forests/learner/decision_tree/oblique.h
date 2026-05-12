@@ -140,6 +140,13 @@ std::vector<T> Extract(const std::vector<T>& values,
 
 // Runs a splitter to finds a "x >= t" condition on
 // (projection_values,selected_labels,selected_weights).
+//
+// `random` is only consumed when `dt_config.numerical_split().type()` is one
+// of the histogram variants (HISTOGRAM_RANDOM, HISTOGRAM_EQUAL_WIDTH,
+// DYNAMIC_RANDOM_HISTOGRAM, DYNAMIC_EQUAL_WIDTH_HISTOGRAM) — the histogram
+// finder uses it to seed candidate-threshold sampling. The EXACT path
+// (default) does not touch it, so vector_sequence.cc and other call sites
+// that always use EXACT can omit the argument.
 template <typename LabelStats, typename Labels>
 absl::StatusOr<SplitSearchResult> EvaluateProjection(
     const proto::DecisionTreeTrainingConfig& dt_config,
@@ -149,7 +156,8 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
     absl::Span<const float> projection_values,
     const InternalTrainConfig& internal_config, int first_attribute_idx,
     const NodeConstraints& constraints, int8_t monotonic_direction,
-    proto::NodeCondition* condition, SplitterPerThreadCache* cache);
+    proto::NodeCondition* condition, SplitterPerThreadCache* cache,
+    utils::RandomEngine* random = nullptr);
 
 namespace internal {
 
