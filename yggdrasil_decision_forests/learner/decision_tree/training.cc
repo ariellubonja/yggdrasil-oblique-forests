@@ -2026,11 +2026,16 @@ static inline int EqualWidthThresholdIndex(const float attribute,
   return idx;
 }
 
+/* #region SIMD upper_bound (research-grade microbench surface) */
 // Drop-in replacement for std::upper_bound over the sorted threshold array
 // used by the non-equal-width histogram finder. Specialised for the two
 // common sizes: 64 thresholds (AVX2, 8x8) and 256 thresholds (AVX-512, 16x16).
 // Falls back to std::upper_bound for other sizes or when the corresponding
 // instruction set / ENABLE_STD_UPPER_BOUND_VECTORIZATION is not enabled.
+//
+// Ariel: 256-bin AVX-512 was ~3-4x faster than std::upper_bound on
+// trunk_3000000_x_4096 (i9-185h). TODO Ariel: try 128-bin AVX-512 variant
+// to handle the case where someone sets num_candidates to 128.
 //
 // Usage in the histogram-finder per-example loop:
 //   SIMDUpperBoundBins bins_accel;
@@ -2124,6 +2129,7 @@ struct SIMDUpperBoundBins {
     return static_cast<int>(it - scalar_thr.begin()) - 1;
   }
 };
+/* #endregion */
 
 absl::StatusOr<SplitSearchResult>
 FindSplitLabelClassificationFeatureNumericalHistogram(

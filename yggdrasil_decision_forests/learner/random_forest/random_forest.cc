@@ -543,7 +543,12 @@ RandomForestLearner::TrainWithStatusImpl(
             vector_sequence_columns, /*use_gpu=*/deployment_.use_gpu()));
   }
 
+  /* #region GPU oblique computer */
 #ifdef OBLIQUE_GPU_ENABLED
+  // Ariel: this is the entry point for the GPU oblique path. Per-tree
+  // workers consume internal_config.oblique_gpu_computer. TODO Ariel: add a
+  // depthwise-batching wrapper around GrowTreeLocal so the GPU depthwise
+  // kernel (which expects all nodes at a depth) gets fed properly.
   // GPU oblique-split computer. Created once per training run and shared
   // across tree-worker threads through `internal_config.oblique_gpu_computer`.
   // Requires --define=enable_cuda=1 (see .bazelrc :oblique_gpu config) plus
@@ -554,6 +559,7 @@ RandomForestLearner::TrainWithStatusImpl(
                    decision_tree::ObliqueGpuComputer::Create(
                        train_dataset, /*use_gpu=*/deployment_.use_gpu()));
 #endif
+  /* #endregion */
   for (int tree_idx = 0; tree_idx < rf_config.num_trees(); tree_idx++) {
     mdl->AddTree(std::make_unique<decision_tree::DecisionTree>());
   }

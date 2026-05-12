@@ -178,10 +178,14 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   std::vector<UnsignedExampleIdx> dense_example_idxs(selected_examples.size());
   std::iota(dense_example_idxs.begin(), dense_example_idxs.end(), 0);
 
+  /* #region Dynamic histogram downgrade */
   // Per-node downgrade for the DYNAMIC_* histogram split types: if the node
   // has fewer than dynamic_split_threshold examples, switch back to EXACT
   // (sorting). Histogramming is faster on larger nodes; EXACT wins on small
   // ones. Empirical threshold default is 350 (see decision_tree.proto).
+  //
+  // Ariel: threshold tuned on the trunk_3000000_x_4096 benchmark; revisit
+  // if the histogram path gets faster (e.g. SIMD upper_bound or 1-pass).
   proto::DecisionTreeTrainingConfig dynamic_dt_config = dt_config;
   const auto split_type = dt_config.numerical_split().type();
   const bool is_dynamic_histogram =
@@ -197,6 +201,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
           proto::NumericalSplit::EXACT);
     }
   }
+  /* #endregion */
 
   for (int projection_idx = 0; projection_idx < num_projections;
        projection_idx++) {
