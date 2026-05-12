@@ -1007,7 +1007,7 @@ RandomForestLearner::TrainWithStatusImpl(
   // parallel_chrono.h; downstream parsers (benchmarks/profiling/
   // parallel_chrono.py) read "[CHRONO] func[<id>] = <ns>" lines.
   //
-  // Note: func[0] (kTreeTrain) reads 0 when combined with YDF_BENCH_EXIT_EARLY
+  // Note: func[0] (kTreeTrain) reads 0 when combined with 
   // because the outer CHRONO_SCOPE_TOP only accumulates in its destructor and
   // std::exit() skips destructors. The inner scopes (kProjectionEvaluate,
   // kAssignSamplesToHistogram, etc.) are unaffected — they finish during
@@ -1021,16 +1021,16 @@ RandomForestLearner::TrainWithStatusImpl(
   }
 #endif
 
-#ifdef YDF_BENCH_EXIT_EARLY
   // Benchmark-only shortcut: skip OOB metric finalisation, variable-
   // importance computation, and model post-processing so the timed training
   // block ends exactly when the per-tree loop is done. Used by runtime.sh /
   // parallel_chrono.py — they parse the "Training block took" line and the
   // per-tree CHRONO lines, not the post-training output. Enable with
-  // --copt=-DYDF_BENCH_EXIT_EARLY; never define this for production builds.
+  //  never define this for production builds.
+  LOG(INFO) << "Training block took: "
+            << absl::ToDoubleSeconds(absl::Now() - begin_training) << " s";
   LOG(WARNING) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
   std::exit(0);
-#endif
 
   if (compute_oob_performances &&
       !mdl->mutable_out_of_bag_evaluations()->empty()) {
