@@ -17,6 +17,7 @@ syntax = "proto2";
 
 package yggdrasil_decision_forests.model.decision_tree.proto;
 
+import "yggdrasil_decision_forests/learner/abstract_learner.proto";
 import "yggdrasil_decision_forests/utils/distribution.proto";
 
 option java_outer_classname = "DecisionTreeLearner";
@@ -285,6 +286,12 @@ message DecisionTreeTrainingConfig {
     // otherwise prefer `projection_density_factor` for controlling the number
     // of features per projection.
     optional int32 max_num_features = 11 [default = -1];
+
+    // When using a DYNAMIC histogram split type, if the number of examples at
+    // a node falls below this threshold, the algorithm switches from
+    // histogramming to exact (sorting-based) splitting, which is faster for
+    // small data. Set to -1 to disable the dynamic switch.
+    optional int32 dynamic_split_threshold = 12 [default = 350];
   }
 
   message MHLDObliqueSplit {
@@ -498,7 +505,16 @@ message NumericalSplit {
     // min and max value.
     HISTOGRAM_EQUAL_WIDTH = 2;
 
-    reserved 3;
+    reserved 3, 4;
+
+    // Random-bins histogram per node; falls back to EXACT when the node has
+    // fewer than SparseObliqueSplit.dynamic_split_threshold examples.
+    DYNAMIC_RANDOM_HISTOGRAM = 5;
+
+    // Equal-width-bins histogram per node; same EXACT fallback as above.
+    DYNAMIC_EQUAL_WIDTH_HISTOGRAM = 6;
+
+    reserved 7;
   }
 
   optional Type type = 1 [default = EXACT];
@@ -630,4 +646,12 @@ message LabelStatistics {
         labels = 1;
     optional double sum_hessian = 2;
   }
+}
+
+// Attaches DecisionTreeTrainingConfig directly to the abstract TrainingConfig
+// as a proto extension, so callers can configure DT hyperparameters without
+// going through a specific learner's config message (e.g. RF/GBT). Used by
+// examples/train_oblique_forest.cc and the benchmark drivers.
+extend yggdrasil_decision_forests.model.proto.TrainingConfig {
+  optional DecisionTreeTrainingConfig decision_tree_config = 9347;
 }

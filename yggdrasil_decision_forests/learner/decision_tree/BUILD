@@ -246,7 +246,10 @@ cc_library_ydf(
 all_proto_library(
     name = "decision_tree_proto",
     srcs = ["decision_tree.proto"],
-    deps = ["//yggdrasil_decision_forests/utils:distribution_proto"],
+    deps = [
+        "//yggdrasil_decision_forests/learner:abstract_learner_proto",
+        "//yggdrasil_decision_forests/utils:distribution_proto",
+    ],
 )
 
 # Test
