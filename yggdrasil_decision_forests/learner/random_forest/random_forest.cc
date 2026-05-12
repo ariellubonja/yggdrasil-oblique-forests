@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <numeric>
@@ -988,6 +989,17 @@ RandomForestLearner::TrainWithStatusImpl(
                    "\"total_max_num_nodes\" constraint.";
     }
   }
+
+#ifdef YDF_BENCH_EXIT_EARLY
+  // Benchmark-only shortcut: skip OOB metric finalisation, variable-
+  // importance computation, and model post-processing so the timed training
+  // block ends exactly when the per-tree loop is done. Used by runtime.sh /
+  // parallel_chrono.py — they parse the "Training block took" line and the
+  // per-tree CHRONO lines, not the post-training output. Enable with
+  // --copt=-DYDF_BENCH_EXIT_EARLY; never define this for production builds.
+  LOG(WARNING) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
+  std::exit(0);
+#endif
 
   if (compute_oob_performances &&
       !mdl->mutable_out_of_bag_evaluations()->empty()) {
