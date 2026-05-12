@@ -1,3 +1,50 @@
+# Instrumentation & Information
+build:multithreaded_chrono_profile --cxxopt="-DCHRONO_ENABLED"
+build:with_isnan --cxxopt="-UYDF_BENCH_SKIP_ISNAN"
+
+# Default: skip the std::isnan branch in ProjectionEvaluator::Evaluate for A/B timing.
+# Opt back in (i.e. restore correct NaN handling) with:
+#   bazel build --config=with_isnan //...
+build --cxxopt="-DYDF_BENCH_SKIP_ISNAN"
+
+# Optimizations
+build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
+build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
+build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
+# Default: Highway hwy::VQSort for numerical-feature splitters (Exact Oblique hot path).
+# Opt-in to fall back to std::sort baseline for A/B timing:
+#   bazel build -c opt --config=use_std_sort //...
+build:use_std_sort --cxxopt="-DYDF_USE_STD_SORT=1"
+
+# Compile *all* C++ code (target and host) in C++17 mode.
+build --cxxopt=-std=c++17
+build --host_cxxopt=-std=c++17
+build --ui_event_filters=-warning,-debug
+
+# Breakpoints don't get hit without this!
+# Can't seem to add to bazel dbg using build:dbg!! Have to Define separate config
+build:debug --strip=never          # keep symbols, don’t fiddle with fission
+build:debug --cxxopt=-g --linkopt=-g
+build:debug --cxxopt=-O0 --linkopt=-O0 --cxxopt=-fno-inline
+build:debug --copt=-D_GLIBCXX_DEBUG # vector range checks
+
+
+build:profiler --strip=never   # keep symbols
+build:profiler --cxxopt=-g --linkopt=-g
+build:profiler --cxxopt=-O2 --linkopt=-O2
+# Make sure split-DWARF is off – VTune hates .dwo/.dwp
+build:profiler --features=-fission
+build:profiler --cxxopt=-gno-split-dwarf
+# Disable debug checks - pretty expensive
+# build:intel_base --copt=-DNDEBUG --cxxopt=-DNDEBUG
+
+
+# CUDA: use GCC-13 as nvcc host compiler (ICX not officially supported by NVIDIA)
+build --action_env=CUDA_PATH=/usr/local/cuda
+build --repo_env=CUDA_HOME=/usr/local/cuda
+build --action_env=NVCC_PREPEND_FLAGS="-ccbin=/usr/bin/g++-13"
+
+
 # Bazel configuration for Yggdrasil Decision Forests
 #
 # OPTIONS
@@ -29,11 +76,9 @@
 #   tensorflow_with_header_lib=1: Uses tensorflow header only library. Useful to
 #     use tensorflow dynamic linking. Otherwise, links tensorflow statically (if
 #     tensorflow is used).
-#
 
-# Common flags.
-common --experimental_repo_remote_exec
-common --enable_platform_specific_config
+
+build --incompatible_enable_cc_toolchain_resolution
 
 # Avoid long path issues on Windows
 # startup --output_user_root=C:/tmpbld
@@ -48,7 +93,7 @@ build --announce_rc
 build --noincompatible_strict_action_env
 
 # Enable after adding python headers to protobuf.
-# build --define=use_fast_cpp_protos=true
+build --define=use_fast_cpp_protos=true
 build --define=allow_oversize_protos=true
 build --define=grpc_no_ares=true
 
@@ -68,8 +113,8 @@ build:wasm --copt=-w
 build:wasm --host_copt=-w
 
 # Build mode.
-build:linux --cxxopt=-std=c++17
-build:linux --host_cxxopt=-std=c++17
+build:linux_cpp17 --cxxopt=-std=c++17
+build:linux_cpp17 --host_cxxopt=-std=c++17
 build:linux_cpp17 --config=linux
 
 build:macos --cxxopt=-std=c++17
@@ -112,9 +157,9 @@ build:windows --copt=/GL
 build:windows --host_copt=/GL
 
 # Wasm
-build:wasm --crosstool_top=@emsdk//emscripten_toolchain:everything
+# build:wasm --crosstool_top=@emsdk//emscripten_toolchain:everything
 build:wasm --cpu=wasm
-build:wasm --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
+# build:wasm --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
 build:wasm --copt="-Wno-deprecated-non-prototype"
 build:wasm --copt="-Wno-unused-value"
 build:wasm --copt="-Wno-unused-function"

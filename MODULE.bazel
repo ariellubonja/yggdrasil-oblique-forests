@@ -24,6 +24,14 @@ bazel_dep(name = "zlib", version = "1.3.1.bcr.7")
 
 bazel_dep(name = "emsdk", version = "4.0.13", dev_dependency = True)
 
+# Hedron compile-commands extractor (for clangd / compile_commands.json — dev-only).
+bazel_dep(name = "hedron_compile_commands", dev_dependency = True)
+git_override(
+    module_name = "hedron_compile_commands",
+    remote = "https://github.com/hedronvision/bazel-compile-commands-extractor.git",
+    commit = "abb61a688167623088f8768cc9264798df6a9d10",
+)
+
 # Dependencies that are not available in BCR
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
@@ -89,3 +97,7 @@ register_toolchains(
     "@local_toolchains//:all",
     dev_dependency = True,
 )
+
+# Intel oneAPI / icx toolchain (//toolchains:intel_toolchain) is NOT registered
+# here because it hard-codes /opt/intel/oneapi/... paths. Opt in per-machine
+# with: bazel build --extra_toolchains=//toolchains:intel_toolchain ...
