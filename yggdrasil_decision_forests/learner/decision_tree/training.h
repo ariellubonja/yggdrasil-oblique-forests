@@ -38,6 +38,7 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/gpu.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/label.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_types.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/preprocessing.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_accumulator.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h"
@@ -293,6 +294,10 @@ typedef std::function<absl::Status(const decision_tree::proto::LabelStatistics&,
                                    decision_tree::proto::Node*)>
     SetLeafValueFromLabelStatsFunctor;
 
+// Forward declaration to keep oblique_gpu.h out of this header (avoids pulling
+// CUDA-adjacent transitive deps into every TU that includes training.h).
+class ObliqueGpuComputer;
+
 // Training configuration for internal parameters not available to the user
 // directly.
 struct InternalTrainConfig {
@@ -329,6 +334,25 @@ struct InternalTrainConfig {
 
   decision_tree::gpu::VectorSequenceComputer* vector_sequence_computer =
       nullptr;
+
+  // Non-owning pointer to the GPU-accelerated oblique projection computer.
+  // Created once per training run (in random_forest.cc / gradient_boosted_
+  // trees.cc behind #ifdef OBLIQUE_GPU_ENABLED) and shared across tree-worker
+  // threads. When null, all oblique training paths run on CPU.
+  ObliqueGpuComputer* oblique_gpu_computer = nullptr;
+
+  // Projection definitions produced by the full-GPU depthwise split pipeline
+  // and handed down to per-node split-finding alongside `depthwise_best_split`.
+  // Set per-node at depth-batch time before descending into the node.
+  const std::vector<std::vector<internal::AttributeAndWeight>>*
+      depthwise_projection_defs = nullptr;
+  const std::vector<int8_t>* depthwise_monotonic = nullptr;
+
+  // Pre-computed best-split descriptor from the full-GPU depthwise split path.
+  // When non-null, oblique.cc skips projection evaluation entirely and
+  // materializes the NodeCondition directly from this descriptor +
+  // depthwise_projection_defs[best_proj_idx].
+  const BestSplitResult* depthwise_best_split = nullptr;
 
   // If true, the list of selected example index ("selected_examples") can
   // contain duplicated values. If false, all selected examples are expected to

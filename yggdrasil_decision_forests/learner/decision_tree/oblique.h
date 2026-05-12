@@ -54,6 +54,7 @@
 #include "yggdrasil_decision_forests/learner/abstract_learner.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/label.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_types.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/training.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/utils.h"
 #include "yggdrasil_decision_forests/model/decision_tree/decision_tree.pb.h"
@@ -152,13 +153,10 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
 
 namespace internal {
 
-// A projection is defined as \sum features[projection[i].index] *
-// projection[i].weight;
-struct AttributeAndWeight {
-  int attribute_idx;
-  float weight;
-};
-typedef std::vector<AttributeAndWeight> Projection;
+// `AttributeAndWeight` and `Projection` (the per-node sparse projection type)
+// are defined in `oblique_types.h` so they can be shared with the CUDA
+// translation units in oblique_gpu_kernels.cu.cc / randomprojection.cu without
+// pulling in the absl/protobuf-heavy transitive includes of this header.
 
 // Utility to evaluate projections.
 //

@@ -14,6 +14,12 @@ package(
 # =========================================================
 
 cc_library_ydf(
+    name = "oblique_types",
+    hdrs = ["oblique_types.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library_ydf(
     name = "training",
     srcs = [
         "oblique.cc",
@@ -29,6 +35,7 @@ cc_library_ydf(
         ":decision_tree_cc_proto",
         ":gpu",
         ":label",
+        ":oblique_types",
         ":preprocessing",
         ":splitter",
         ":uplift",
