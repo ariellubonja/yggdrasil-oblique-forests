@@ -13,11 +13,11 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 // fields are set if a valid split was found; best_gain < 0 signals
 // "no split found" (e.g. all examples fell on one side).
 struct BestSplitResult {
-  int   best_proj_idx = -1;              // index into the node's projection span
-  int   best_bin_idx = -1;               // right-side bin index
-  float best_gain = -1.0f;                // Gini / entropy gain
-  float best_threshold = 0.0f;           // materialized split threshold
-  int   num_pos_training_examples = 0;   // right-side example count
+  int best_proj_idx = -1;             // index into the node's projection span
+  int best_bin_idx = -1;              // right-side bin index
+  float best_gain = -1.0f;            // Gini / entropy gain
+  float best_threshold = 0.0f;        // materialized split threshold
+  int num_pos_training_examples = 0;  // right-side example count
 };
 
 namespace internal {

@@ -14,7 +14,6 @@
  */
 
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
-#include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 
 #include <algorithm>
 #include <cmath>
@@ -27,26 +26,26 @@
 #include <utility>
 #include <vector>
 
+#include "Eigen/Dense"
 #include "absl/container/btree_set.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
-#include "Eigen/Dense"
 #include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
 #include "yggdrasil_decision_forests/dataset/types.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
 #include "yggdrasil_decision_forests/learner/abstract_learner.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/label.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_gpu.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/training.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/utils.h"
 #include "yggdrasil_decision_forests/model/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/utils/logging.h"
-#include "yggdrasil_decision_forests/utils/random.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
-
+#include "yggdrasil_decision_forests/utils/random.h"
 
 namespace yggdrasil_decision_forests {
 namespace model {
@@ -58,8 +57,7 @@ using std::is_same;
 using Projection = internal::Projection;
 using ProjectionEvaluator = internal::ProjectionEvaluator;
 using LDACache = internal::LDACache;
-}
-
+}  // namespace
 
 // Already in splitter_scanner.h . Apparently it carries from all the way there
 // static constexpr bool MEASURE_CHRONO_TIMES = true;
@@ -110,7 +108,6 @@ GradientAndHessian ExtractLabels(
 
 /* #endregion */
 
-
 int GetNumProjections(const proto::DecisionTreeTrainingConfig& dt_config,
                       const int num_numerical_features) {
   if (num_numerical_features <= 1) {
@@ -142,15 +139,11 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     const model::proto::TrainingConfig& config,
     const model::proto::TrainingConfigLinking& config_link,
     const proto::DecisionTreeTrainingConfig& dt_config,
-    const proto::Node& parent,
-    const InternalTrainConfig& internal_config,
+    const proto::Node& parent, const InternalTrainConfig& internal_config,
     const LabelStats& label_stats,
     const std::optional<int>& override_num_projections,
-    const NodeConstraints& constraints,
-    proto::NodeCondition* best_condition,
-    utils::RandomEngine* random,
-    SplitterPerThreadCache* cache) {
-
+    const NodeConstraints& constraints, proto::NodeCondition* best_condition,
+    utils::RandomEngine* random, SplitterPerThreadCache* cache) {
   /* #region Initializations */
 
   // ---------- basic sanity‑checks --------------------
@@ -162,9 +155,10 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   }
 
   // Decide Num Projections
-  int num_projections = override_num_projections.has_value()
-      ? override_num_projections.value()
-      : GetNumProjections(dt_config, config_link.numerical_features_size());
+  int num_projections =
+      override_num_projections.has_value()
+          ? override_num_projections.value()
+          : GetNumProjections(dt_config, config_link.numerical_features_size());
 
   const float projection_density =
       dt_config.sparse_oblique_split().projection_density_factor() /
@@ -190,18 +184,26 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   const int num_features = config_link.numerical_features_size();
 
   /* #endregion */
-  
+
   proto::DecisionTreeTrainingConfig dynamic_dt_config = dt_config;
 
-  // Automatically swap betw. Histogramming and Sorting based on which is faster for given amount of data
-  // Default threshold chosen empirically https://docs.google.com/spreadsheets/d/1k0Td119py6Z_crJPdpt6iggWten86KRtYqSrQmcHhJM/edit?usp=sharing
-  const int dynamic_split_threshold = dt_config.sparse_oblique_split().dynamic_split_threshold();
-  if (dense_example_idxs.size() < static_cast<size_t>(dynamic_split_threshold)
-    && (dt_config.numerical_split().type() == yggdrasil_decision_forests::model::decision_tree::proto::NumericalSplit_Type_DYNAMIC_RANDOM_HISTOGRAM
-  || dt_config.numerical_split().type() == yggdrasil_decision_forests::model::decision_tree::proto::NumericalSplit_Type_DYNAMIC_EQUAL_WIDTH_HISTOGRAM)
-) {
+  // Automatically swap betw. Histogramming and Sorting based on which is faster
+  // for given amount of data Default threshold chosen empirically
+  // https://docs.google.com/spreadsheets/d/1k0Td119py6Z_crJPdpt6iggWten86KRtYqSrQmcHhJM/edit?usp=sharing
+  const int dynamic_split_threshold =
+      dt_config.sparse_oblique_split().dynamic_split_threshold();
+  if (dense_example_idxs.size() <
+          static_cast<size_t>(dynamic_split_threshold) &&
+      (dt_config.numerical_split().type() ==
+           yggdrasil_decision_forests::model::decision_tree::proto::
+               NumericalSplit_Type_DYNAMIC_RANDOM_HISTOGRAM ||
+       dt_config.numerical_split().type() ==
+           yggdrasil_decision_forests::model::decision_tree::proto::
+               NumericalSplit_Type_DYNAMIC_EQUAL_WIDTH_HISTOGRAM)) {
     // Data is too small, making Histogramming inefficient. Switch to Exact
-    dynamic_dt_config.mutable_numerical_split()->set_type(yggdrasil_decision_forests::model::decision_tree::proto::NumericalSplit_Type_EXACT);
+    dynamic_dt_config.mutable_numerical_split()->set_type(
+        yggdrasil_decision_forests::model::decision_tree::proto::
+            NumericalSplit_Type_EXACT);
   }
 
   // std::cout << "Num Projections: " << num_projections << std::endl;
@@ -235,11 +237,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     const bool histogram_ok =
         split_type == proto::NumericalSplit_Type_HISTOGRAM_RANDOM ||
         split_type == proto::NumericalSplit_Type_DYNAMIC_RANDOM_HISTOGRAM;
-    const bool exact_ok =
-        split_type == proto::NumericalSplit_Type_EXACT;
+    const bool exact_ok = split_type == proto::NumericalSplit_Type_EXACT;
     const bool can_use_gpu_split =
-        !has_depthwise_best_split &&
-        use_nodewise_gpu &&
+        !has_depthwise_best_split && use_nodewise_gpu &&
         internal_config.oblique_gpu_computer->supports_full_gpu_split() &&
         selected_weights.empty();
     if (can_use_gpu_split && histogram_ok) {
@@ -268,8 +268,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
   for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
     SampleProjection(config_link.numerical_features(), dynamic_dt_config,
-                    train_dataset.data_spec(), config_link, projection_density,
-                    &all_projections[proj_idx], &all_monotonic[proj_idx], random);
+                     train_dataset.data_spec(), config_link, projection_density,
+                     &all_projections[proj_idx], &all_monotonic[proj_idx],
+                     random);
   }
 #elif defined(OBLIQUE_GPU_ENABLED)
   // Only pre-sample when nodewise-gpu needs a batched apply call. The CPU path
@@ -282,8 +283,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     all_monotonic.assign(num_projections, 0);
     for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
       SampleProjection(config_link.numerical_features(), dynamic_dt_config,
-                      train_dataset.data_spec(), config_link, projection_density,
-                      &all_projections[proj_idx], &all_monotonic[proj_idx], random);
+                       train_dataset.data_spec(), config_link,
+                       projection_density, &all_projections[proj_idx],
+                       &all_monotonic[proj_idx], random);
     }
   }
 #endif
@@ -369,8 +371,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
     RETURN_IF_ERROR(
         internal_config.oblique_gpu_computer->ApplyProjectionsNodewise(
-            all_projections, selected_examples,
-            absl::MakeSpan(all_projected),
+            all_projections, selected_examples, absl::MakeSpan(all_projected),
             absl::MakeSpan(all_min), absl::MakeSpan(all_max)));
 
     // 3. EvaluateProjection per-projection (CPU).
@@ -378,22 +379,22 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       if (all_projections[proj_idx].empty()) continue;
 
       // Point projection_values at the GPU output slice for this projection.
-      projection_values.assign(
-          all_projected.begin() + proj_idx * n,
-          all_projected.begin() + (proj_idx + 1) * n);
+      projection_values.assign(all_projected.begin() + proj_idx * n,
+                               all_projected.begin() + (proj_idx + 1) * n);
 
       ASSIGN_OR_RETURN(
           const auto split_result,
           EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
-                            selected_weights, selected_labels,
-                            projection_values, internal_config,
-                            all_projections[proj_idx].front().attribute_idx,
-                            constraints, all_monotonic[proj_idx],
-                            best_condition, cache, random));
+                             selected_weights, selected_labels,
+                             projection_values, internal_config,
+                             all_projections[proj_idx].front().attribute_idx,
+                             constraints, all_monotonic[proj_idx],
+                             best_condition, cache, random));
 
       if (split_result == SplitSearchResult::kBetterSplitFound) {
         best_projection = all_projections[proj_idx];
-        best_threshold = best_condition->condition().higher_condition().threshold();
+        best_threshold =
+            best_condition->condition().higher_condition().threshold();
       }
     }
   } else
@@ -431,29 +432,28 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     } else {
 #endif
 #ifdef NODEWISE_CPU
-    // nodewise-cpu: evaluate from the pre-sampled all_projections array.
-    for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
-      if (all_projections[proj_idx].empty()) continue;
+      // nodewise-cpu: evaluate from the pre-sampled all_projections array.
+      for (int proj_idx = 0; proj_idx < num_projections; ++proj_idx) {
+        if (all_projections[proj_idx].empty()) continue;
 
-      RETURN_IF_ERROR(
-        projection_evaluator.Evaluate(all_projections[proj_idx], selected_examples,
-                                       &projection_values)
-      );
+        RETURN_IF_ERROR(projection_evaluator.Evaluate(
+            all_projections[proj_idx], selected_examples, &projection_values));
 
-      ASSIGN_OR_RETURN(
-          const auto split_result,
-          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
-                            selected_weights, selected_labels,
-                            projection_values, internal_config,
-                            all_projections[proj_idx].front().attribute_idx,
-                            constraints, all_monotonic[proj_idx],
-                            best_condition, cache, random));
+        ASSIGN_OR_RETURN(
+            const auto split_result,
+            EvaluateProjection(
+                dynamic_dt_config, label_stats, dense_example_idxs,
+                selected_weights, selected_labels, projection_values,
+                internal_config,
+                all_projections[proj_idx].front().attribute_idx, constraints,
+                all_monotonic[proj_idx], best_condition, cache, random));
 
-      if (split_result == SplitSearchResult::kBetterSplitFound) {
-        best_projection = all_projections[proj_idx];
-        best_threshold = best_condition->condition().higher_condition().threshold();
+        if (split_result == SplitSearchResult::kBetterSplitFound) {
+          best_projection = all_projections[proj_idx];
+          best_threshold =
+              best_condition->condition().higher_condition().threshold();
+        }
       }
-    }
 #else
     // projection-wise CPU (default): sample and evaluate one projection at a
     // time, reusing a single buffer across iterations to avoid per-node
@@ -463,28 +463,27 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       int8_t monotonic = 0;
 
       SampleProjection(config_link.numerical_features(), dynamic_dt_config,
-                      train_dataset.data_spec(), config_link, projection_density,
-                      &current_projection, &monotonic, random);
+                       train_dataset.data_spec(), config_link,
+                       projection_density, &current_projection, &monotonic,
+                       random);
 
       if (current_projection.empty()) continue;
 
-      RETURN_IF_ERROR(
-        projection_evaluator.Evaluate(current_projection, selected_examples,
-                                       &projection_values)
-      );
+      RETURN_IF_ERROR(projection_evaluator.Evaluate(
+          current_projection, selected_examples, &projection_values));
 
       ASSIGN_OR_RETURN(
           const auto split_result,
-          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
-                            selected_weights, selected_labels,
-                            projection_values, internal_config,
-                            current_projection.front().attribute_idx,
-                            constraints, monotonic,
-                            best_condition, cache, random));
+          EvaluateProjection(
+              dynamic_dt_config, label_stats, dense_example_idxs,
+              selected_weights, selected_labels, projection_values,
+              internal_config, current_projection.front().attribute_idx,
+              constraints, monotonic, best_condition, cache, random));
 
       if (split_result == SplitSearchResult::kBetterSplitFound) {
         best_projection = current_projection;
-        best_threshold = best_condition->condition().higher_condition().threshold();
+        best_threshold =
+            best_condition->condition().higher_condition().threshold();
       }
     }
 #endif
@@ -502,7 +501,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
     return true;
   }
-  
+
   return false;
 
   /* #endregion */
@@ -512,7 +511,6 @@ struct ScoreAndThreshold {
   float score;
   float threhsold;
 };
-
 
 template <typename LabelStats, typename Labels>
 absl::StatusOr<SplitSearchResult> EvaluateProjection(
@@ -537,25 +535,23 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
 
   // Projection are never missing.
   const float na_replacement = 0;
-  
-  // Ariel - don't need to check for isnan here. Was already done in ApplyProjection
-  
+
+  // Ariel - don't need to check for isnan here. Was already done in
+  // ApplyProjection
+
   // Find a good split in the current_projection.
   SplitSearchResult result;
   if constexpr (is_same<LabelStats, ClassificationLabelStats>::value) {
-
     // Histogram for big data, otherwise do Exact Splits
     if (dt_config.numerical_split().type() == proto::NumericalSplit::EXACT) {
-    ASSIGN_OR_RETURN(
-        result,
-        FindSplitLabelClassificationFeatureNumericalCart(
-            dense_example_idxs, selected_weights,
-            projection_values,
-            selected_labels, label_stats.num_label_classes, na_replacement,
-            min_num_obs, dt_config, label_stats.label_distribution,
-            first_attribute_idx, effective_internal_config, condition, cache));
-    }
-    else {
+      ASSIGN_OR_RETURN(
+          result, FindSplitLabelClassificationFeatureNumericalCart(
+                      dense_example_idxs, selected_weights, projection_values,
+                      selected_labels, label_stats.num_label_classes,
+                      na_replacement, min_num_obs, dt_config,
+                      label_stats.label_distribution, first_attribute_idx,
+                      effective_internal_config, condition, cache));
+    } else {
       ASSIGN_OR_RETURN(
           result,
           FindSplitLabelClassificationFeatureNumericalHistogram(
@@ -567,9 +563,7 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
   }
 
   /* #region Non-Numerical Methods */
-  else if constexpr (is_same<LabelStats,
-                               RegressionHessianLabelStats>::value)
-    {
+  else if constexpr (is_same<LabelStats, RegressionHessianLabelStats>::value) {
     if (!selected_weights.empty()) {
       ASSIGN_OR_RETURN(
           result,
@@ -621,7 +615,6 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
   return result;
 }
 
-
 /* #region EvaluateProjection Irrelevant Alternatives */
 
 template absl::StatusOr<SplitSearchResult>
@@ -663,7 +656,6 @@ EvaluateProjection<RegressionHessianLabelStats, GradientAndHessian>(
     proto::NodeCondition* condition, SplitterPerThreadCache* cache,
     utils::RandomEngine* random);
 
-
 template <typename LabelStats, typename Labels>
 absl::Status EvaluateProjectionAndSetCondition(
     const dataset::proto::DataSpecification& dataspec,
@@ -674,8 +666,7 @@ absl::Status EvaluateProjectionAndSetCondition(
     const absl::Span<const float> projection_values,
     const Projection& projection, const InternalTrainConfig& internal_config,
     const int first_attribute_idx, proto::NodeCondition* condition,
-    SplitterPerThreadCache* cache,
-    utils::RandomEngine* random) {
+    SplitterPerThreadCache* cache, utils::RandomEngine* random) {
   ASSIGN_OR_RETURN(
       const auto result,
       EvaluateProjection(dt_config, label_stats, dense_example_idxs,
@@ -824,17 +815,17 @@ absl::Status EvaluateMHLDCandidates(
   return absl::OkStatus();
 }
 
-
 /* #endregion */
 
-/* #region NonInteresting semaphore functions for choosing MHLD or Regular Oblique, based on user call */
+/* #region NonInteresting semaphore functions for choosing MHLD or Regular
+ * Oblique, based on user call */
 
 absl::StatusOr<std::vector<int>> SampleAttributes(
     const model::proto::TrainingConfigLinking& config_link,
     const model::proto::TrainingConfig& config,
     const proto::DecisionTreeTrainingConfig& dt_config,
     utils::RandomEngine* random) {
-      // Is this the Bootstrapped data per-feature access? Or MHLD specific?
+  // Is this the Bootstrapped data per-feature access? Or MHLD specific?
   std::vector<int> candidate_attributes{
       config_link.numerical_features().begin(),
       config_link.numerical_features().end()};
@@ -956,8 +947,6 @@ absl::StatusOr<bool> FindBestConditionMHLDObliqueTemplate(
 
   return found_better_global;
 }
-
-
 
 absl::StatusOr<bool> FindBestConditionOblique(
     const dataset::VerticalDataset& train_dataset,
@@ -1137,7 +1126,7 @@ void SampleProjection(const absl::Span<const int>& features,
 
   // Floyd's sampler to select k indices uniformly
   for (size_t j = features.size() - num_selected_features; j < features.size();
-      ++j) {
+       ++j) {
     size_t t = absl::Uniform<size_t>(*random, 0, j + 1);
     if (!picked_idx.insert(t).second) picked_idx.insert(j);
   }
@@ -1196,7 +1185,6 @@ absl::Status SetCondition(const Projection& projection, const float threshold,
   condition->set_na_value(false);
   return absl::OkStatus();
 }
-
 
 /* #region LDA-Specific f() */
 
@@ -1358,7 +1346,6 @@ absl::Status LDACache::GetSW(const std::vector<int>& selected_features,
 
 /* #endregion */
 
-
 ProjectionEvaluator::ProjectionEvaluator(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features) {
@@ -1375,7 +1362,9 @@ ProjectionEvaluator::ProjectionEvaluator(
     const auto column_or = train_dataset.ColumnWithCastWithStatus<
         dataset::VerticalDataset::NumericalColumn>(attribute_idx);
     constructor_status_.Update(column_or.status());
-    if (!constructor_status_.ok()) { break; }
+    if (!constructor_status_.ok()) {
+      break;
+    }
 
     numerical_attributes_[attribute_idx] = &column_or.value()->values();
     na_replacement_value_[attribute_idx] =
@@ -1383,24 +1372,20 @@ ProjectionEvaluator::ProjectionEvaluator(
   }
 }
 
-
 // Takes ~12% of multicore runtime | 4096 x various synthetic n_cols
 // Skip optimizing for now - bigger fish to fry
 absl::Status ProjectionEvaluator::Evaluate(
     const Projection& projection,
     const absl::Span<const UnsignedExampleIdx> selected_examples,
     std::vector<float>* values) const {
-
   RETURN_IF_ERROR(constructor_status_);
 
   values->resize(selected_examples.size());
-  CHRONO_SCOPE(
-      ::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
 
   // 0,1,2,3,4...
   for (size_t selected_idx = 0; selected_idx < selected_examples.size();
        ++selected_idx) {
-
     float value = 0.f;
 
     // selected_examples = bag := 0,2,2,5
@@ -1419,8 +1404,9 @@ absl::Status ProjectionEvaluator::Evaluate(
       value += attribute_value * item.weight;
     }
 
-    // selected_idx is doing the bootstrapping, that's why values is indexed by selected_idx and attributes by example_idx
-    // values will be in "bootstrap" space
+    // selected_idx is doing the bootstrapping, that's why values is indexed by
+    // selected_idx and attributes by example_idx values will be in "bootstrap"
+    // space
     (*values)[selected_idx] = value;
   }
 
@@ -1447,7 +1433,6 @@ absl::Status ProjectionEvaluator::ExtractAttribute(
   }
   return absl::OkStatus();
 }
-
 
 /* #region SubtractTransposeMultiplyAdd Interesting Kernels! */
 void SubtractTransposeMultiplyAdd(double weight, absl::Span<double> a,
