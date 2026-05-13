@@ -1111,9 +1111,10 @@ absl::Status ProjectionEvaluator::Evaluate(
     const Projection& projection,
     const absl::Span<const UnsignedExampleIdx> selected_examples,
     std::vector<float>* values) const {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
   RETURN_IF_ERROR(constructor_status_);
+
   values->resize(selected_examples.size());
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
   for (size_t selected_idx = 0; selected_idx < selected_examples.size();
        selected_idx++) {
     float value = 0;

@@ -417,11 +417,6 @@ RandomForestLearner::TrainWithStatusImpl(
     const dataset::VerticalDataset& train_dataset,
     std::optional<std::reference_wrapper<const dataset::VerticalDataset>>
         valid_dataset) const {
-  // CHRONO instrumentation: this scope wraps the entire RF training run and
-  // accumulates to global_stats. Per-function scopes (kHistogramSetup,
-  // kProjectionEvaluate, etc.) accumulate into the same array.
-  CHRONO_SCOPE_TOP(::yggdrasil_decision_forests::chrono_prof::kTreeTrain);
-
   // TODO: Divide function into smaller blocks.
   const auto begin_training = absl::Now();
 
@@ -668,12 +663,31 @@ RandomForestLearner::TrainWithStatusImpl(
   // to make use it is not released before "pool".
   std::atomic<int> num_trained_trees{0};
   const absl::Time begin_tree_grow = absl::Now();
+
+  LOG(INFO) << "num_threads being used: " << deployment().num_threads();
+
+#ifdef CHRONO_ENABLED
+  using namespace yggdrasil_decision_forests::chrono_prof;
+
+  time_ns().resize(rf_config.num_trees());
+  call_cnt().resize(rf_config.num_trees());
+  tree_thread_id().resize(rf_config.num_trees());
+  node_cnt().resize(rf_config.num_trees());
+  sample_cnt().resize(rf_config.num_trees());
+#endif
+
   {
     yggdrasil_decision_forests::utils::concurrency::ThreadPool pool(
         deployment().num_threads(), {.name_prefix = std::string("TrainRF")});
 
     for (int tree_idx = 0; tree_idx < rf_config.num_trees(); tree_idx++) {
       pool.Schedule([&, tree_idx]() {
+#ifdef CHRONO_ENABLED
+        yggdrasil_decision_forests::chrono_prof::TreeScope tree_guard(tree_idx);
+        CHRONO_SCOPE_TOP(
+            yggdrasil_decision_forests::chrono_prof::kTreeTrain);
+#endif
+
         // The user interrupted the training.
         if (stop_training_trigger_ != nullptr && *stop_training_trigger_) {
           if (!training_stopped_early) {
@@ -952,6 +966,105 @@ RandomForestLearner::TrainWithStatusImpl(
     }
   }
 
+  LOG(INFO) << "random_forest.cc Training block took: "
+            << absl::ToDoubleSeconds(absl::Now() - begin_training) << " s";
+
+// Print all Timing info after done MultiThreading (must run BEFORE the
+// early-exit below so chrono logs reach stdout before process exits).
+#ifdef CHRONO_ENABLED
+  using namespace yggdrasil_decision_forests::chrono_prof;
+
+  for (int t = 0; t < static_cast<int>(time_ns().size()); ++t) {
+    for (int d = 0; d < static_cast<int>(time_ns()[t].size()); ++d) {
+      auto& arr = time_ns()[t][d];
+
+      // Non-Histogram
+      if (rf_config.mutable_decision_tree()->numerical_split().type() ==
+          yggdrasil_decision_forests::model::decision_tree::proto::
+              NumericalSplit_Type_EXACT) {
+        LOG(INFO) << "thread " << tree_thread_id()[t] << " tree " << t
+                  << " depth " << d << " nodes " << node_cnt()[t][d]
+                  << " samples " << sample_cnt()[t][d] << " ProjEval "
+                  << arr[kProjectionEvaluate] * 1e-9 << "s"
+                  << " kGetCandidateAttributes "
+                  << arr[kGetCandidateAttributes] * 1e-9 << "s"
+                  << " kAxisAlignedCandidateLoop "
+                  << arr[kAxisAlignedCandidateLoop] * 1e-9 << "s"
+                  << " kAxisAlignedColumnFetch "
+                  << arr[kAxisAlignedColumnFetch] * 1e-9 << "s"
+                  << " kCartFinderSetup " << arr[kCartFinderSetup] * 1e-9 << "s"
+                  << " kSortFillExampleBucketSet "
+                  << arr[kSortFillExampleBucketSet] * 1e-9 << "s"
+                  << " kSortScanSplits " << arr[kSortScanSplits] * 1e-9 << "s"
+                  << " kSortInitBuckets " << arr[kSortInitBuckets] * 1e-9 << "s"
+                  << " kSortFillBuckets " << arr[kSortFillBuckets] * 1e-9 << "s"
+                  << " kSortFinalizeBuckets "
+                  << arr[kSortFinalizeBuckets] * 1e-9 << "s"
+                  << " kSortFeatures " << arr[kSortFeatures] * 1e-9 << "s"
+                  << " kSortLabels " << arr[kSortLabels] * 1e-9 << "s"
+                  << " kScanPresorted " << arr[kScanPresorted] * 1e-9 << "s"
+                  << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
+                  << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
+                  << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
+                  << " GpuSampleBatch "
+                  << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
+                  << " ApplyColumnADD " << arr[kGpuApplyColumnADD] * 1e-9 << "s"
+                  << " ApplyColumnADDMultiNode "
+                  << arr[kGpuApplyColumnADDMultiNode] * 1e-9 << "s"
+                  << " RandomHistogram " << arr[kGpuRandomHistogram] * 1e-9
+                  << "s"
+                  << " SplitHistogram " << arr[kGpuSplitHistogram] * 1e-9 << "s"
+                  << " SortIndices " << arr[kGpuSortIndices] * 1e-9 << "s"
+                  << " ExactSplit " << arr[kGpuExactSplit] * 1e-9 << "s"
+                  << " GpuOther " << arr[kGpuOther] * 1e-9 << "s";
+      } else {
+        LOG(INFO) << "thread " << tree_thread_id()[t] << " tree " << t
+                  << " depth " << d << " nodes " << node_cnt()[t][d]
+                  << " samples " << sample_cnt()[t][d] << " ProjEval "
+                  << arr[kProjectionEvaluate] * 1e-9 << "s"
+                  << " kGetCandidateAttributes "
+                  << arr[kGetCandidateAttributes] * 1e-9 << "s"
+                  << " kAxisAlignedCandidateLoop "
+                  << arr[kAxisAlignedCandidateLoop] * 1e-9 << "s"
+                  << " kAxisAlignedColumnFetch "
+                  << arr[kAxisAlignedColumnFetch] * 1e-9 << "s"
+                  << " kHistogramSetup " << arr[kHistogramSetup] * 1e-9 << "s"
+                  << " kMinMaxNumerical " << arr[kMinMaxNumerical] * 1e-9 << "s"
+                  << " kAssignSamplesToHistogram "
+                  << arr[kAssignSamplesToHistogram] * 1e-9 << "s"
+                  << " kSelectBestThresholdHistogram "
+                  << arr[kSelectBestThresholdHistogram] * 1e-9 << "s"
+                  << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
+                  << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
+                  << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
+                  << " GpuSampleBatch "
+                  << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
+                  << " ApplyColumnADD " << arr[kGpuApplyColumnADD] * 1e-9 << "s"
+                  << " ApplyColumnADDMultiNode "
+                  << arr[kGpuApplyColumnADDMultiNode] * 1e-9 << "s"
+                  << " RandomHistogram " << arr[kGpuRandomHistogram] * 1e-9
+                  << "s"
+                  << " SplitHistogram " << arr[kGpuSplitHistogram] * 1e-9 << "s"
+                  << " SortIndices " << arr[kGpuSortIndices] * 1e-9 << "s"
+                  << " ExactSplit " << arr[kGpuExactSplit] * 1e-9 << "s"
+                  << " GpuOther " << arr[kGpuOther] * 1e-9 << "s";
+      }
+    }
+  }
+
+  // Session-level (non-per-depth) chrono stats. GpuInit fires during
+  // ObliqueGpuComputer::Create, before any TreeScope — so its time
+  // lands in global_stats via the tree<0 fallback in add_time().
+  LOG(INFO) << "session GpuInit "
+            << global_stats[kGpuInit].load(std::memory_order_relaxed) * 1e-9
+            << "s";
+
+  LOG(INFO) << "\n==========================================\n\n";
+#endif
+
+  LOG(WARNING) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
+  exit(0);
+
   if (training_stopped_early) {
     // Remove the non-trained trees.
     auto& trees = *mdl->mutable_decision_trees();
@@ -1001,36 +1114,6 @@ RandomForestLearner::TrainWithStatusImpl(
                    "\"total_max_num_nodes\" constraint.";
     }
   }
-
-#ifdef CHRONO_ENABLED
-  // Per-function CHRONO summary. Layout matches the FuncId enum in
-  // parallel_chrono.h; downstream parsers (benchmarks/profiling/
-  // parallel_chrono.py) read "[CHRONO] func[<id>] = <ns>" lines.
-  //
-  // Note: func[0] (kTreeTrain) reads 0 when combined with 
-  // because the outer CHRONO_SCOPE_TOP only accumulates in its destructor and
-  // std::exit() skips destructors. The inner scopes (kProjectionEvaluate,
-  // kAssignSamplesToHistogram, etc.) are unaffected — they finish during
-  // per-tree training, well before the exit, so their numbers are valid.
-  LOG(INFO) << "[CHRONO] Per-function timings (ns):";
-  for (int i = 0;
-       i < ::yggdrasil_decision_forests::chrono_prof::kNumFuncs; ++i) {
-    LOG(INFO) << "[CHRONO] func[" << i << "] = "
-              << ::yggdrasil_decision_forests::chrono_prof::global_stats[i]
-                     .load(std::memory_order_relaxed);
-  }
-#endif
-
-  // Benchmark-only shortcut: skip OOB metric finalisation, variable-
-  // importance computation, and model post-processing so the timed training
-  // block ends exactly when the per-tree loop is done. Used by runtime.sh /
-  // parallel_chrono.py — they parse the "Training block took" line and the
-  // per-tree CHRONO lines, not the post-training output. Enable with
-  //  never define this for production builds.
-  LOG(INFO) << "Training block took: "
-            << absl::ToDoubleSeconds(absl::Now() - begin_training) << " s";
-  LOG(WARNING) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
-  std::exit(0);
 
   if (compute_oob_performances &&
       !mdl->mutable_out_of_bag_evaluations()->empty()) {

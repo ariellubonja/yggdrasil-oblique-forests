@@ -441,12 +441,17 @@ absl::StatusOr<SplitSearchResult> FindBestConditionClassification(
         return SplitSearchResult::kNoBetterSplitFound;
       }
 
+      CHRONO_BEGIN(col_fetch);
       ASSIGN_OR_RETURN(
           const auto& attribute_data,
           train_dataset.ColumnWithCastWithStatus<
               dataset::VerticalDataset::NumericalColumn>(attribute_idx));
 
       const auto na_replacement = attribute_column_spec.numerical().mean();
+      CHRONO_END(
+          col_fetch,
+          ::yggdrasil_decision_forests::chrono_prof::kAxisAlignedColumnFetch);
+
       if (dt_config.numerical_split().type() == proto::NumericalSplit::EXACT) {
         ASSIGN_OR_RETURN(
             result, FindSplitLabelClassificationFeatureNumericalCart(
@@ -1404,89 +1409,102 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
   // Get the indices of the attributes to test.
   int remaining_attributes_to_test;
   std::vector<int32_t>& candidate_attributes = cache->candidate_attributes;
-  GetCandidateAttributes(config, config_link, dt_config,
-                         &remaining_attributes_to_test, &candidate_attributes,
-                         random);
+
+  {
+    CHRONO_SCOPE(
+        ::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
+    GetCandidateAttributes(config, config_link, dt_config,
+                           &remaining_attributes_to_test, &candidate_attributes,
+                           random);
+  }
 
   // Index of the next attribute to be tested in "candidate_attributes".
   int candidate_attribute_idx_in_candidate_list = 0;
 
-  while (remaining_attributes_to_test >= 0 &&
-         candidate_attribute_idx_in_candidate_list <
-             candidate_attributes.size()) {
-    // Get the attribute data.
-    const int32_t attribute_idx =
-        candidate_attributes[candidate_attribute_idx_in_candidate_list++];
-    SplitSearchResult result;
+  {
+    CHRONO_SCOPE(
+        ::yggdrasil_decision_forests::chrono_prof::kAxisAlignedCandidateLoop);
+    while (remaining_attributes_to_test >= 0 &&
+           candidate_attribute_idx_in_candidate_list <
+               candidate_attributes.size()) {
+      // Get the attribute data.
+      const int32_t attribute_idx =
+          candidate_attributes[candidate_attribute_idx_in_candidate_list++];
+      SplitSearchResult result;
 
-    switch (config.task()) {
-      case model::proto::Task::CLASSIFICATION: {
-        const auto& class_label_stats =
-            utils::down_cast<const ClassificationLabelStats&>(label_stats);
-
-        ASSIGN_OR_RETURN(result, FindBestConditionClassification(
-                                     train_dataset, selected_examples, weights,
-                                     config, config_link, dt_config, parent,
-                                     internal_config, class_label_stats,
-                                     attribute_idx, constraints, best_condition,
-                                     random, &cache->splitter_cache_list[0]));
-      } break;
-      case model::proto::Task::REGRESSION:
-        if (internal_config.hessian_score) {
-          const auto& reg_label_stats =
-              utils::down_cast<const RegressionHessianLabelStats&>(label_stats);
+      switch (config.task()) {
+        case model::proto::Task::CLASSIFICATION: {
+          const auto& class_label_stats =
+              utils::down_cast<const ClassificationLabelStats&>(label_stats);
 
           ASSIGN_OR_RETURN(
-              result,
-              FindBestConditionRegressionHessianGain(
-                  train_dataset, selected_examples, weights, config,
-                  config_link, dt_config, parent, internal_config,
-                  reg_label_stats, attribute_idx, constraints, best_condition,
-                  random, &cache->splitter_cache_list[0]));
+              result, FindBestConditionClassification(
+                          train_dataset, selected_examples, weights, config,
+                          config_link, dt_config, parent, internal_config,
+                          class_label_stats, attribute_idx, constraints,
+                          best_condition, random,
+                          &cache->splitter_cache_list[0]));
+        } break;
+        case model::proto::Task::REGRESSION:
+          if (internal_config.hessian_score) {
+            const auto& reg_label_stats =
+                utils::down_cast<const RegressionHessianLabelStats&>(
+                    label_stats);
 
-        } else {
-          const auto& reg_label_stats =
-              utils::down_cast<const RegressionLabelStats&>(label_stats);
+            ASSIGN_OR_RETURN(
+                result,
+                FindBestConditionRegressionHessianGain(
+                    train_dataset, selected_examples, weights, config,
+                    config_link, dt_config, parent, internal_config,
+                    reg_label_stats, attribute_idx, constraints, best_condition,
+                    random, &cache->splitter_cache_list[0]));
 
+          } else {
+            const auto& reg_label_stats =
+                utils::down_cast<const RegressionLabelStats&>(label_stats);
+
+            ASSIGN_OR_RETURN(
+                result,
+                FindBestConditionRegression(
+                    train_dataset, selected_examples, weights, config,
+                    config_link, dt_config, parent, internal_config,
+                    reg_label_stats, attribute_idx, constraints, best_condition,
+                    random, &cache->splitter_cache_list[0]));
+          }
+          break;
+
+        case model::proto::Task::CATEGORICAL_UPLIFT: {
+          const auto& uplift_label_stats =
+              utils::down_cast<const CategoricalUpliftLabelStats&>(label_stats);
           ASSIGN_OR_RETURN(
-              result,
-              FindBestConditionRegression(
-                  train_dataset, selected_examples, weights, config,
-                  config_link, dt_config, parent, internal_config,
-                  reg_label_stats, attribute_idx, constraints, best_condition,
-                  random, &cache->splitter_cache_list[0]));
+              result, FindBestConditionUpliftCategorical(
+                          train_dataset, selected_examples, weights, config,
+                          config_link, dt_config, parent, internal_config,
+                          uplift_label_stats, attribute_idx, constraints,
+                          best_condition, random,
+                          &cache->splitter_cache_list[0]));
+        } break;
+
+        case model::proto::Task::NUMERICAL_UPLIFT: {
+          const auto& uplift_label_stats =
+              utils::down_cast<const NumericalUpliftLabelStats&>(label_stats);
+          ASSIGN_OR_RETURN(
+              result, FindBestConditionUpliftNumerical(
+                          train_dataset, selected_examples, weights, config,
+                          config_link, dt_config, parent, internal_config,
+                          uplift_label_stats, attribute_idx, constraints,
+                          best_condition, random,
+                          &cache->splitter_cache_list[0]));
+        } break;
+
+        default:
+          return absl::UnimplementedError("Non implemented");
+      }
+      if (result != SplitSearchResult::kInvalidAttribute) {
+        remaining_attributes_to_test--;
+        if (result == SplitSearchResult::kBetterSplitFound) {
+          found_good_condition = true;
         }
-        break;
-
-      case model::proto::Task::CATEGORICAL_UPLIFT: {
-        const auto& uplift_label_stats =
-            utils::down_cast<const CategoricalUpliftLabelStats&>(label_stats);
-        ASSIGN_OR_RETURN(result, FindBestConditionUpliftCategorical(
-                                     train_dataset, selected_examples, weights,
-                                     config, config_link, dt_config, parent,
-                                     internal_config, uplift_label_stats,
-                                     attribute_idx, constraints, best_condition,
-                                     random, &cache->splitter_cache_list[0]));
-      } break;
-
-      case model::proto::Task::NUMERICAL_UPLIFT: {
-        const auto& uplift_label_stats =
-            utils::down_cast<const NumericalUpliftLabelStats&>(label_stats);
-        ASSIGN_OR_RETURN(result, FindBestConditionUpliftNumerical(
-                                     train_dataset, selected_examples, weights,
-                                     config, config_link, dt_config, parent,
-                                     internal_config, uplift_label_stats,
-                                     attribute_idx, constraints, best_condition,
-                                     random, &cache->splitter_cache_list[0]));
-      } break;
-
-      default:
-        return absl::UnimplementedError("Non implemented");
-    }
-    if (result != SplitSearchResult::kInvalidAttribute) {
-      remaining_attributes_to_test--;
-      if (result == SplitSearchResult::kBetterSplitFound) {
-        found_good_condition = true;
       }
     }
   }
@@ -2141,26 +2159,6 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     const utils::IntegerDistributionDouble& label_distribution,
     const int32_t attribute_idx, utils::RandomEngine* random,
     proto::NodeCondition* condition) {
-  DCHECK(condition != nullptr);
-  if (!weights.empty()) {
-    DCHECK_EQ(weights.size(), labels.size());
-  }
-
-  if (dt_config.missing_value_policy() ==
-      proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION) {
-    LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
-                                         &na_replacement);
-  }
-  // Determine the minimum and maximum values of the attribute.
-  float min_value, max_value;
-  if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
-                                &max_value)) {
-    return SplitSearchResult::kInvalidAttribute;
-  }
-  // There should be at least two different unique values.
-  if (min_value == max_value) {
-    return SplitSearchResult::kInvalidAttribute;
-  }
   // Randomly select some threshold values.
   struct CandidateSplit {
     float threshold;
@@ -2171,37 +2169,68 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     }
   };
 
-  ASSIGN_OR_RETURN(
-      const auto bins,
-      internal::GenHistogramBins(dt_config.numerical_split().type(),
-                                 dt_config.numerical_split().num_candidates(),
-                                 attributes, min_value, max_value, random));
-
-  std::vector<CandidateSplit> candidate_splits(bins.size());
-  for (int split_idx = 0; split_idx < candidate_splits.size(); split_idx++) {
-    auto& candidate_split = candidate_splits[split_idx];
-    candidate_split.pos_label_distribution.SetNumClasses(num_label_classes);
-    candidate_split.threshold = bins[split_idx];
-  }
-
-  // SIMD-vectorised replacement for the per-example std::upper_bound call on
-  // the non-equal-width path. When the build defines ENABLE_STD_UPPER_BOUND_
-  // VECTORIZATION (see .bazelrc :enable_std_upper_bound_avx2 / _avx512) and
-  // bins.size() matches a fast-path size (64 / 256), this skips the per-call
-  // log(N) binary search.
+  float min_value, max_value;
+  std::vector<float> bins;
+  std::vector<CandidateSplit> candidate_splits;
   SIMDUpperBoundBins bins_accel;
-  bins_accel.Init(bins);
+  bool use_equal_width_fast_path;
 
-  const bool use_equal_width_fast_path =
-      (dt_config.numerical_split().type() ==
-           proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH ||
-       dt_config.numerical_split().type() ==
-           proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistogramSetup);
+    DCHECK(condition != nullptr);
+    if (!weights.empty()) {
+      DCHECK_EQ(weights.size(), labels.size());
+    }
+
+    if (dt_config.missing_value_policy() ==
+        proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION) {
+      LocalImputationForNumericalAttribute(selected_examples, weights,
+                                           attributes, &na_replacement);
+    }
+
+    {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
+      if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
+                                    &max_value)) {
+        return SplitSearchResult::kInvalidAttribute;
+      }
+    }
+    // There should be at least two different unique values.
+    if (min_value == max_value) {
+      return SplitSearchResult::kInvalidAttribute;
+    }
+
+    ASSIGN_OR_RETURN(
+        bins,
+        internal::GenHistogramBins(dt_config.numerical_split().type(),
+                                   dt_config.numerical_split().num_candidates(),
+                                   attributes, min_value, max_value, random));
+
+    candidate_splits.resize(bins.size());
+    for (int split_idx = 0; split_idx < candidate_splits.size(); split_idx++) {
+      auto& candidate_split = candidate_splits[split_idx];
+      candidate_split.pos_label_distribution.SetNumClasses(num_label_classes);
+      candidate_split.threshold = bins[split_idx];
+    }
+
+    // SIMD-vectorised replacement for the per-example std::upper_bound call on
+    // the non-equal-width path. When the build defines ENABLE_STD_UPPER_BOUND_
+    // VECTORIZATION (see .bazelrc :enable_std_upper_bound_avx2 / _avx512) and
+    // bins.size() matches a fast-path size (64 / 256), this skips the per-call
+    // log(N) binary search.
+    bins_accel.Init(bins);
+
+    use_equal_width_fast_path =
+        (dt_config.numerical_split().type() ==
+             proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH ||
+         dt_config.numerical_split().type() ==
+             proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
+  }
 
   // Compute the split score of each threshold.
   {
-  CHRONO_SCOPE(
-      ::yggdrasil_decision_forests::chrono_prof::kAssignSamplesToHistogram);
+    CHRONO_SCOPE(
+        ::yggdrasil_decision_forests::chrono_prof::kAssignSamplesToHistogram);
   for (const auto example_idx : selected_examples) {
     const int32_t label = labels[example_idx];
     const float weight = weights.empty() ? 1.f : weights[example_idx];
@@ -2249,7 +2278,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       it_split.pos_label_distribution.Add(label, weight);
     }
   }
-  }  // CHRONO kAssignSamplesToHistogram
+  }
 
   for (int split_idx = candidate_splits.size() - 2; split_idx >= 0;
        split_idx--) {
@@ -2313,7 +2342,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       found_split = true;
     }
   }
-  }  // CHRONO kSelectBestThresholdHistogram
+  }
   return found_split ? SplitSearchResult::kBetterSplitFound
                      : SplitSearchResult::kNoBetterSplitFound;
 }
@@ -2328,20 +2357,23 @@ FindSplitLabelClassificationFeatureNumericalCart(
     const utils::IntegerDistributionDouble& label_distribution,
     const int32_t attribute_idx, const InternalTrainConfig& internal_config,
     proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
-  if (!weights.empty()) {
-    DCHECK_EQ(weights.size(), labels.size());
-  }
-  if (dt_config.missing_value_policy() ==
-      proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION) {
-    LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
-                                         &na_replacement);
-  }
+  proto::DecisionTreeTrainingConfig::Internal::SortingStrategy sorting_strategy;
+  const auto feature_filler = [&]() {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartFinderSetup);
+    if (!weights.empty()) {
+      DCHECK_EQ(weights.size(), labels.size());
+    }
+    if (dt_config.missing_value_policy() ==
+        proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION) {
+      LocalImputationForNumericalAttribute(selected_examples, weights,
+                                           attributes, &na_replacement);
+    }
 
-  FeatureNumericalBucket::Filler feature_filler(selected_examples.size(),
-                                                na_replacement, attributes);
-
-  const auto sorting_strategy =
-      EffectiveStrategy(dt_config, selected_examples.size(), internal_config);
+    sorting_strategy =
+        EffectiveStrategy(dt_config, selected_examples.size(), internal_config);
+    return FeatureNumericalBucket::Filler(selected_examples.size(),
+                                          na_replacement, attributes);
+  }();
 
   // "Why ==3" ?
   // Categorical attributes always have one class reserved for
@@ -2574,9 +2606,12 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
   }
   // Determine the minimum and maximum values of the attribute.
   float min_value, max_value;
-  if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
-                                &max_value)) {
-    return SplitSearchResult::kInvalidAttribute;
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
+    if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
+                                  &max_value)) {
+      return SplitSearchResult::kInvalidAttribute;
+    }
   }
 
   // There should be at least two different unique values.
@@ -5019,6 +5054,23 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
   const auto& constraints = node_and_examples.constraints;
   const auto set_leaf_already_set = node_and_examples.set_leaf_already_set;
   auto node = node_and_examples.node;
+#ifdef CHRONO_ENABLED
+  using namespace yggdrasil_decision_forests::chrono_prof;
+  // Set depth explicitly from the struct. Works for both BFS (flat
+  // iteration) and DFS (recursion overwrites depth on each entry).
+  tls_ctx.cur_depth = depth;
+
+  const int t = tls_ctx.cur_tree;
+  const int d = depth;
+  if (t >= 0) {
+    if (d >= node_cnt()[t].size()) {  // grow once if new depth
+      node_cnt()[t].resize(d + 1);
+      sample_cnt()[t].resize(d + 1);
+    }
+    node_cnt()[t][d]++;
+    sample_cnt()[t][d] += selected_examples.size();
+  }
+#endif
 
   if (selected_examples.empty()) {
     return absl::InternalError("No examples fed to the node trainer");
