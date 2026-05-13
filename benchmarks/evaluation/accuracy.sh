@@ -1,32 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Quick (default) vs Full evaluation.
+# Accuracy evaluation: 10 seeds over all CC18 train folds.
 #
-# Workflow: use Quick to test whether a code change impacted accuracy. When
-# Quick agrees with the runtime evaluation that a change is worth keeping
-# (e.g. >20% runtime improvement on runtime.sh's Quick), run Full to confirm.
-#
-# Quick: small dataset surface (all CC18 train folds; no trunk).
-# Full:  Quick datasets + the large CSVs (HIGGS/SUSY/epsilon) and trunk
-#        10k/20k/40k/80k/100k/1M.
-# Seeds: 10 seeds run in BOTH modes (accuracy needs the variance regardless).
-#
-# Usage:  $0 [--full] <suffix>
+# Usage:  $0 <suffix>
 #   <suffix> becomes part of the result filename, e.g. 'AWS_m7i' ->
-#   accuracy_quick_aws_m7i.csv (or accuracy_full_aws_m7i.csv).
+#   accuracy_aws_m7i.csv.
 
-MODE="quick"
 SUFFIX=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --full)  MODE="full";  shift ;;
     -h|--help)
-      echo "Usage: $0 [--full] <suffix>" >&2
+      echo "Usage: $0 <suffix>" >&2
       exit 0 ;;
     --*)
       echo "ERROR: unknown flag '$1'" >&2
-      echo "Usage: $0 [--full] <suffix>" >&2
+      echo "Usage: $0 <suffix>" >&2
       exit 2 ;;
     *)
       if [[ -n "$SUFFIX" ]]; then
@@ -37,18 +26,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 if [[ -z "$SUFFIX" ]]; then
-  echo "Usage: $0 [--full] <suffix>" >&2
-  echo "  e.g. '$0 AWS_m7i' -> accuracy_quick_aws_m7i.csv" >&2
+  echo "Usage: $0 <suffix>" >&2
+  echo "  e.g. '$0 AWS_m7i' -> accuracy_aws_m7i.csv" >&2
   exit 2
 fi
 
 ###### Parameters
 
-if [[ "$MODE" == "quick" ]]; then
-  SEEDS=(1)
-else
-  SEEDS=(1 2 3 4 5 6 7 8 9 10)
-fi
+SEEDS=(1 2 3 4 5 6 7 8 9 10)
+
 if grep -q "Ultra 9 185H" /proc/cpuinfo 2>/dev/null; then
   NUM_TREES=30
 else
@@ -111,8 +97,8 @@ DYNAMIC_SPLIT_THRESHOLDS=(
   3100
 )
 
-# CSV datasets are built from the CC18 binary tasks (always) plus the large
-# benchmark CSVs (Full mode only). Datasets entries are "path|label_col".
+# CSV datasets are built from the CC18 binary tasks. Entries are
+# "path|label_col".
 CC18_DIR="benchmarks/data/cc18_binary_csv"
 if [[ ! -d "$CC18_DIR" ]]; then
   echo "ERROR: $CC18_DIR not found. Run from repo root." >&2
@@ -134,22 +120,6 @@ if [[ "${#CSV_DATASETS[@]}" -eq 0 ]]; then
   echo "ERROR: found no CC18 datasets under $CC18_DIR" >&2
   echo "Run: python3 benchmarks/utils/download_cc18_datasets.py" >&2
   exit 1
-fi
-
-# Full-mode-only large CSVs (added on top of CC18).
-FULL_EXTRA_CSV_DATASETS=(
-  "benchmarks/data/HIGGS_with_header.csv|class"
-  "benchmarks/data/SUSY_with_header.csv|class"
-  "benchmarks/data/epsilon_normalized_train.csv|label"
-)
-if [[ "$MODE" == "full" ]]; then
-  CSV_DATASETS+=("${FULL_EXTRA_CSV_DATASETS[@]}")
-fi
-
-# Synthetic trunk rows. Full mode only -- Quick is CC18-only.
-TRUNK_ROWS=()
-if [[ "$MODE" == "full" ]]; then
-  TRUNK_ROWS=(10000 20000 40000 80000 100000 1000000)
 fi
 
 # =========================
@@ -187,8 +157,8 @@ bazel_build() {
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
-logfile="${logdir}/accuracy_${MODE}_${SUFFIX}.log"
-csvfile="${logdir}/accuracy_${MODE}_${SUFFIX}.csv"
+logfile="${logdir}/accuracy_${SUFFIX}.log"
+csvfile="${logdir}/accuracy_${SUFFIX}.csv"
 
 if [[ -e "$logfile" ]]; then
   echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2
@@ -322,12 +292,6 @@ for split in "${SPLIT_TYPES[@]}"; do
         cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
         run_cmd "$cmd"
       done
-
-      # Trunk rows
-      for rows in "${TRUNK_ROWS[@]}"; do
-        cmd="$BINARY --input_mode trunk --rows $rows $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
-        run_cmd "$cmd"
-      done
     done
   done
 done
@@ -388,12 +352,6 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
         for entry in "${CSV_DATASETS[@]}"; do
           IFS='|' read -r path label <<<"$entry"
           cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg"
-          run_cmd "$cmd"
-        done
-
-        # Trunk rows
-        for rows in "${TRUNK_ROWS[@]}"; do
-          cmd="$BINARY --input_mode trunk --rows $rows --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg"
           run_cmd "$cmd"
         done
       done
@@ -479,12 +437,6 @@ for method in "${selected_vec_methods[@]}"; do
     for entry in "${CSV_DATASETS[@]}"; do
       IFS='|' read -r path label <<<"$entry"
       cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
-      run_cmd "$cmd"
-    done
-
-    # Trunk rows
-    for rows in "${TRUNK_ROWS[@]}"; do
-      cmd="$BINARY --input_mode trunk --rows $rows --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
       run_cmd "$cmd"
     done
   done
