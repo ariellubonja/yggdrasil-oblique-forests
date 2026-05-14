@@ -1126,9 +1126,11 @@ absl::Status ProjectionEvaluator::Evaluate(
       const auto* attribute_values = numerical_attributes_[item.attribute_idx];
       DCHECK(attribute_values != nullptr);
       float attribute_value = (*attribute_values)[example_idx];
+#ifndef YDF_BENCH_SKIP_ISNAN
       if (std::isnan(attribute_value)) {
         attribute_value = na_replacement_value_[item.attribute_idx];
       }
+#endif
       value += attribute_value * item.weight;
     }
     (*values)[selected_idx] = value;
