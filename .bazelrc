@@ -1,3 +1,11 @@
+# Compiler: pin Intel oneAPI ICX (clang-based). Without this, Bazel's
+# auto-detection silently falls back to /usr/bin/gcc, which compiles the
+# Oblique Exact hot path ~30-40% slower than ICX. Requires oneAPI to be
+# sourced in the shell (`source /opt/intel/oneapi/setvars.sh`) so that
+# `icx` / `icpx` are on PATH for Bazel's cc_configure rule.
+build --repo_env=CC=icx
+build --repo_env=CXX=icpx
+
 # Instrumentation & Information
 build:multithreaded_chrono_profile --cxxopt="-DCHRONO_ENABLED"
 build:with_isnan --cxxopt="-UYDF_BENCH_SKIP_ISNAN"

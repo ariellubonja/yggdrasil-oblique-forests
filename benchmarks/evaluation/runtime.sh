@@ -150,7 +150,7 @@ METHOD_EXTRA_ARGS["Dynamic Random Histogram"]="--histogram_num_bins=$histogram_n
 
 # Build target and base flags
 BUILD_TARGET="//examples:train_oblique_forest"
-BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native")
+BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --repo_env=CXX=icpx)
 # Vectorized build configs (adjust if your repo uses different config names)
 VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
 VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
