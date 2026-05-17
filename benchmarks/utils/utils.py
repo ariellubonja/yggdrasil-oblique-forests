@@ -193,21 +193,40 @@ def build_binary(args, chrono_mode):
         finished_cmd.append(f'--config={extra_config}')
 
     finished_cmd.append("--ui_event_filters=-warning")
+
+    # Pin Intel oneAPI ICX (clang-based) regardless of branch/.bazelrc state.
+    # Why: main's .bazelrc does not pin a compiler (auto-detects gcc);
+    # rebased-main's pins icx but fails when oneAPI is not sourced. Injecting
+    # an absolute path here makes both branches build with icx without any
+    # shell prep.
+    _icx = "/opt/intel/oneapi/compiler/latest/bin/icx"
+    _icpx = "/opt/intel/oneapi/compiler/latest/bin/icpx"
+    if os.path.isfile(_icx) and os.path.isfile(_icpx):
+        finished_cmd.append(f"--repo_env=CC={_icx}")
+        finished_cmd.append(f"--repo_env=CXX={_icpx}")
+
     finished_cmd.append('//examples:train_oblique_forest')
 
     global last_build_cmd
     last_build_cmd = " ".join(finished_cmd)
 
+    # Ensure oneAPI bin is on PATH for Bazel's cc_configure regardless of
+    # whether the user sourced setvars.sh in their shell.
+    build_env = os.environ.copy()
+    _oneapi_bin = "/opt/intel/oneapi/compiler/latest/bin"
+    if os.path.isdir(_oneapi_bin) and _oneapi_bin not in build_env.get("PATH", ""):
+        build_env["PATH"] = f"{_oneapi_bin}:{build_env.get('PATH', '')}"
+
     print("Building binary...")
     print(f"Running: {' '.join(finished_cmd)}")
-    
+
     try:
         result = subprocess.run(
-            finished_cmd, 
-            capture_output=False, 
-            text=True, 
+            finished_cmd,
+            capture_output=False,
+            text=True,
             check=True,
-            env=os.environ.copy(),  # Preserve current environment
+            env=build_env,
             cwd=os.getcwd()         # Explicitly set working directory
         )
         
