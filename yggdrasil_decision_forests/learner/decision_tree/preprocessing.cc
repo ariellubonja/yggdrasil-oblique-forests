@@ -58,6 +58,7 @@ absl::StatusOr<Preprocessing> PreprocessTrainingDataset(
 
   if (StrategyRequireFeaturePresorting(
           dt_config.internal().sorting_strategy())) {
+    // Ariel: Presorting done here
     RETURN_IF_ERROR(PresortNumericalFeatures(
         train_dataset, config_link, dt_config, num_threads, &preprocessing));
   }

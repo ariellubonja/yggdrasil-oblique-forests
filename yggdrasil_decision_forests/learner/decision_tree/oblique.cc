@@ -47,9 +47,21 @@
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 #include "yggdrasil_decision_forests/utils/random.h"
 
+// When true, empty projections sampled by SampleProjection are left empty and
+// skipped at the call sites (~22% of projections at proto-default density,
+// shaves ~20% off SPORF Exact runtime). When false, matches upstream YDF —
+// force-add a uniformly-picked feature with weight=1, and force weight=1 for
+// size==1 projections (axis-aligned-equivalent). Default false = upstream
+// behavior, so SPORF vs AA timing comparisons are not biased by free skips.
+#ifndef ALLOW_EMPTY_PROJECTIONS_FLAG
+  #define ALLOW_EMPTY_PROJECTIONS_FLAG 0
+#endif
+
 namespace yggdrasil_decision_forests {
 namespace model {
 namespace decision_tree {
+
+static constexpr bool ALLOW_EMPTY_PROJECTIONS = ALLOW_EMPTY_PROJECTIONS_FLAG;
 
 namespace {
 using std::is_same;
@@ -1135,6 +1147,22 @@ void SampleProjection(const absl::Span<const int>& features,
   // O(k) minimal pass to fill in those indices
   for (const auto idx : picked_idx) {
     projection->push_back({features[idx], gen_weight(features[idx])});
+  }
+
+  // Upstream-YDF behavior, gated on ALLOW_EMPTY_PROJECTIONS_FLAG: force-add 1
+  // uniformly-picked feature when empty, force weight=1 when size==1
+  // (axis-aligned-equivalent). When the flag is true, leave empty and let
+  // the call sites skip — faster but biases SPORF-vs-AA timing comparisons.
+  if constexpr (!ALLOW_EMPTY_PROJECTIONS) {
+    if (projection->empty()) {
+      std::uniform_int_distribution<int> unif_feature_idx(
+          0, features.size() - 1);
+      projection->push_back(
+          {/*.attribute_idx =*/features[unif_feature_idx(*random)],
+           /*.weight =*/1.f});
+    } else if (projection->size() == 1) {
+      projection->front().weight = 1.f;
+    }
   }
 
   int max_num_features = dt_config.sparse_oblique_split().max_num_features();
