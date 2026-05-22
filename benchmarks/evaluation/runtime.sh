@@ -69,8 +69,8 @@ GPU_MODES=(
 
 # Which feature split types to run (comment out any you don't want)
 SPLIT_TYPES=(
-  "Oblique"
-  # "Axis Aligned"
+  # "Oblique"
+  "Axis Aligned"
 )
 
 # Numerical split methods (comment out any you don't want)
@@ -192,6 +192,7 @@ ensure_icx() {
 }
 
 bazel_build() {
+  ensure_icx
   sudo "$SET_CPU_E_FEATURES" --enable
   bazel build "$@"
   sudo "$SET_CPU_E_FEATURES" --disable
