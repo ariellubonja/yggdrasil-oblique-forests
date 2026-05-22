@@ -151,7 +151,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
 sudo "$SET_CPU_E_FEATURES" --enable
 
+# .bazelrc pins --repo_env=CC=icx. If icx is not on PATH the build either
+# hard-fails or (worse, across bazel/cc_configure cache states) silently
+# falls back to gcc. Source oneAPI here and abort loudly if icx is missing.
+ensure_icx() {
+  if ! command -v icx >/dev/null 2>&1; then
+    local setvars="${ONEAPI_SETVARS:-/opt/intel/oneapi/setvars.sh}"
+    if [[ -r "$setvars" ]]; then
+      set +u +e                       # setvars.sh is not -e/-u clean
+      # shellcheck disable=SC1090
+      source "$setvars" >/dev/null 2>&1
+      set -u -e
+    fi
+  fi
+  if ! command -v icx >/dev/null 2>&1 || ! command -v icpx >/dev/null 2>&1; then
+    echo "ERROR: icx/icpx not on PATH and could not source oneAPI." >&2
+    echo "       .bazelrc pins CC=icx. Run 'source /opt/intel/oneapi/setvars.sh'" >&2
+    echo "       (or set ONEAPI_SETVARS=/path/to/setvars.sh) and retry." >&2
+    exit 1
+  fi
+  echo "Compiler: $(command -v icx)"
+}
+
 bazel_build() {
+  ensure_icx
   bazel build "$@"
 }
 
