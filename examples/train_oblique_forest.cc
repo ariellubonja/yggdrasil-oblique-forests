@@ -53,6 +53,16 @@ ABSL_FLAG(int, tree_depth, -1,
 ABSL_FLAG(std::string, feature_split_type, "Oblique",
           "Type of feature splits in decision trees: 'Axis Aligned' or 'Oblique'.");
 
+// Only consulted when --feature_split_type='Axis Aligned'. Oblique mode is
+// already forced to IN_NODE by SetInternalDefaultHyperParameters
+// (training.cc:4587), so this flag has no effect there.
+ABSL_FLAG(std::string, aa_sorting_strategy, "in_node",
+          "Sorting strategy for AA splits: 'in_node' (default — no presort), "
+          "'presorted', 'force_presorted', or 'auto'. Presorting allocates a "
+          "second N*sizeof(ExampleIdx) buffer per feature (~49 GB on a "
+          "3M-row, 4096-feature dataset) and is only useful for EXACT splits, "
+          "so keep 'in_node' for AA + Random/Histogram.");
+
 // Oblique split parameters (only used when feature_split_type = "Oblique")
 ABSL_FLAG(int, max_num_projections, 1000,
           "Maximum number of projections for oblique splits.");
@@ -420,6 +430,26 @@ int main(int argc, char** argv) {
 
     // Clear sparse_oblique_split so axis-aligned splits are used, not oblique
     dt_config->clear_sparse_oblique_split();
+
+    // AA sorting strategy — see flag description for the why.
+    using DTI = model::decision_tree::proto::DecisionTreeTrainingConfig_Internal;
+    const std::string aa_sort = absl::GetFlag(FLAGS_aa_sorting_strategy);
+    DTI::SortingStrategy strategy;
+    if (aa_sort == "in_node") {
+      strategy = DTI::IN_NODE;
+    } else if (aa_sort == "presorted") {
+      strategy = DTI::PRESORTED;
+    } else if (aa_sort == "force_presorted") {
+      strategy = DTI::FORCE_PRESORTED;
+    } else if (aa_sort == "auto") {
+      strategy = DTI::AUTO;
+    } else {
+      std::cerr << "Unknown aa_sorting_strategy: " << aa_sort
+                << ". Use 'in_node', 'presorted', 'force_presorted', or 'auto'.\n";
+      return 1;
+    }
+    dt_config->mutable_internal()->set_sorting_strategy(strategy);
+    LOG(INFO) << "AA sorting strategy: " << aa_sort;
 
     LOG(INFO) << "Num Candidate Attributes: " << num_candidates;
   } else {

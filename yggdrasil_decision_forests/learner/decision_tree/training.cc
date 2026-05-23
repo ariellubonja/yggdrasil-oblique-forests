@@ -1410,8 +1410,19 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
   int remaining_attributes_to_test;
   std::vector<int32_t>& candidate_attributes = cache->candidate_attributes;
 
+  // Oblique runs still execute the axis-aligned numerical splitter below, but
+  // its timing is noise when profiling oblique splits. The
+  // kGetCandidateAttributes scope is therefore only collected for the
+  // axis-aligned path.
+  [[maybe_unused]] const bool is_oblique =
+      dt_config.split_axis_case() ==
+          proto::DecisionTreeTrainingConfig::kSparseObliqueSplit ||
+      dt_config.split_axis_case() ==
+          proto::DecisionTreeTrainingConfig::kMhldObliqueSplit;
+
   {
-    CHRONO_SCOPE(
+    CHRONO_SCOPE_IF(
+        !is_oblique,
         ::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
     GetCandidateAttributes(config, config_link, dt_config,
                            &remaining_attributes_to_test, &candidate_attributes,
@@ -1421,10 +1432,7 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
   // Index of the next attribute to be tested in "candidate_attributes".
   int candidate_attribute_idx_in_candidate_list = 0;
 
-  {
-    CHRONO_SCOPE(
-        ::yggdrasil_decision_forests::chrono_prof::kAxisAlignedCandidateLoop);
-    while (remaining_attributes_to_test >= 0 &&
+  while (remaining_attributes_to_test >= 0 &&
            candidate_attribute_idx_in_candidate_list <
                candidate_attributes.size()) {
       // Get the attribute data.
@@ -1507,7 +1515,6 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
         }
       }
     }
-  }
 
   return found_good_condition;
 }
@@ -2359,7 +2366,6 @@ FindSplitLabelClassificationFeatureNumericalCart(
     proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
   proto::DecisionTreeTrainingConfig::Internal::SortingStrategy sorting_strategy;
   const auto feature_filler = [&]() {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartFinderSetup);
     if (!weights.empty()) {
       DCHECK_EQ(weights.size(), labels.size());
     }
