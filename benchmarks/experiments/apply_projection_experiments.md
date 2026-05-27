@@ -28,58 +28,86 @@ chrono scope, summed across all depths of tree 0.
 
 ## Phase A — baseline diagnosis (perf record + perf stat)
 
+**Re-run 2026-05-27** on `rebased-main` @ `f4522923` ("PRESORT vs. IN_NODE
+XPs"). Build: `bazel build -c opt --copt=-g --strip=never
+//examples:train_oblique_forest` (ICX/icpx via oneAPI; **no**
+`--config=multithreaded_chrono_profile` — chrono adds attribution overhead).
+Same hardware/pinning as the doc header. Original Phase A numbers
+(2026-04-25, on `origin/main`) kept in the "orig" column for comparison.
+Raw data:
+`benchmarks/experiments/baseline-rebased-main-perf/`.
+
 Goal: confirm whether `ApplyProjection` is read-bound (load `(*attribute_values)[example_idx]`) or write-bound (`(*values)[selected_idx] = value`).
 
 ### Top-level `perf record cycles:u`
 
-| Function | % cycles |
-|---|---|
-| `MakeTrunkDataset` (one-time data gen) | 30.10% |
-| **`ProjectionEvaluator::Evaluate`** | **23.09%** |
-| `FindSplitLabelClassificationFeatureNumericalCart` | 10.05% |
-| `__libm_logf_l9` + `__svml_logf4_l9` (entropy) | 13.01% |
-| hwy AVX2 sort kernels | 9.35% |
+| Function | Phase A orig (origin/main) | rebased-main HEAD |
+|---|---|---|
+| `MakeTrunkDataset` (one-time data gen) | 30.10 % | 30.70 % |
+| **`ProjectionEvaluator::Evaluate`** | **23.09 %** | **inlined** — see below |
+| `FindBestConditionSparseObliqueTemplate<…>` (contains inlined `Evaluate`) | (not split out) | **16.46 %** |
+| `FindSplitLabelClassificationFeatureNumericalCart` | 10.05 % | 12.84 % |
+| `__libm_logf_l9` + `__svml_logf4_l9` (entropy) | 13.01 % | 14.70 % |
+| hwy AVX2 sort kernels | 9.35 % | ~14.3 % |
+| `ProjectionEvaluator` ctor | — | 1.51 % |
 
-Inside training, `Evaluate` is the dominant CPU consumer.
+`ProjectionEvaluator::Evaluate` is **fully inlined** under ICX on the current
+build, so it has no standalone symbol; its cycles are attributed to the
+outer `FindBestConditionSparseObliqueTemplate` (16.46 % of total). The
+remaining symbols are essentially unchanged.
 
 ### Line-level inside `Evaluate` (perf annotate)
 
-clang vectorizes the inner loop into a 4-wide SIMD body + 1/2/3-item scalar
-tail. For the trunk dataset's typical density (≈ 3 items per projection),
-the **scalar tail dominates**. Hot samples:
+clang/ICX vectorizes the inner loop into a 4-wide SIMD body + 1/2/3-item
+scalar tail. For the trunk dataset's typical density (≈ 3 items per
+projection), the **scalar tail dominates**. Hot samples on rebased-main
+(inside `FindBestConditionSparseObliqueTemplate`, which contains the
+inlined `Evaluate` body):
 
-| Insn @ off | Source mapping | % |
+| Insn @ off | Source mapping | % of in-function cycles |
 |---|---|---|
-| `mulss (%rax,%rbp,4),%xmm3` | `attribute_values[example_idx] * weight` | scattered |
-| `addss %xmm3,%xmm0` (50d2c8) | accumulate item-1 product | 9.55% |
-| `addss %xmm3,%xmm0` (50d2e4) | accumulate item-2 product | 24.80% |
-| `addss %xmm3,%xmm0` (50d2ff) | accumulate item-3 product | 40.64% |
-| `movss %xmm0,(%r10,%r13,4)` (50d303) | **`(*values)[selected_idx] = value`** | **0.57%** |
-| SIMD attribute loads (50d3a2, 50d3b0) | parallel gathers of `attribute_values[ex]` | 9.06% |
+| `addss %xmm1,%xmm0` (3f836f) | accumulate item-1 product | **48.10 %** |
+| `addss %xmm1,%xmm0` (3f84bd) | accumulate item-2 product | **19.75 %** |
+| `addss %xmm1,%xmm0` (3f8499) | accumulate item-3 product | 7.56 % |
+| `movss (%r14,%r13,4),%xmm3` (3f8413) | gather of `attribute_values[ex]` | 5.46 % |
+| `unpcklps %xmm2,%xmm3` (3f8419) | pack | 2.61 % |
+| `movss (%r15,%r13,4),%xmm4` (3f8422) | gather of `attribute_values[ex]` | 2.03 % |
+| `unpcklps %xmm2,%xmm4` (3f8428) | pack | 1.67 % |
+| `mov -0xf8(%rbp),%rsi` (3f8373) | frame spill | 1.27 % |
 
-Perf attributes the cycles to the dependent `addss` (load-use stall), but
-the load is the actual cost — every `mulss (%rax,%rbp,4)` is a random read
-into a different attribute column at a different `example_idx`, jumping
-across cache lines.
+Three serialized `addss` ops sum to **75.4 %** (Phase A orig: ~75 % across
+the three `addss` lines at 50d2c8 / 50d2e4 / 50d2ff). Perf attributes the
+cycles to the dependent `addss` (load-use stall), but the load is the
+actual cost — every gather is a random read into a different attribute
+column at a different `example_idx`, jumping across cache lines.
 
 ### Memory counters (`perf stat`, baseline, 1 tree)
 
-| | Value | Note |
-|---|---|---|
-| L1 d-cache loads | 467 G | bulk of stream |
-| L1 miss rate | 1.35% | most reads hit L1 |
-| LLC-load-misses / LLC-loads | **91.5%** | when a miss escalates, it goes to DRAM |
-| Cache-misses / refs (~L2) | 67.29% |  |
-| IPC | 2.12 | memory-bound; well below peak |
-| Wall time | 210.7 s |  |
+| Metric | Phase A orig (origin/main, 2026-04-25) | rebased-main HEAD | main HEAD A/B (2026-05-27) |
+|---|---|---|---|
+| L1 d-cache loads | 467 G | 534 G | 517 G |
+| L1 miss rate | 1.35 % | **1.32 %** | 1.36 % |
+| LLC-load-misses / LLC-loads | **91.5 %** | **89.5 %** | 90.2 % |
+| Cache-misses / refs (~L2) | 67.29 % | 66.96 % | 67.54 % |
+| IPC | 2.12 | **2.37** | 2.20 |
+| Wall (whole binary) | 210.7 s | 424.3 s | 454.7 s |
+| Tree wall (random_forest.cc) | n/a | 242.3 s | 266.8 s |
+
+Cache behaviour is essentially unchanged across all three columns. The
+~2× wall-time gap vs. Phase A orig is **environmental, not a branch
+regression** — main shows the same slowdown today (455 s vs. 211 s). Likely
+~1 month of system/kernel/firmware/oneAPI churn or a different
+turbo/frequency state at the 2026-04-25 capture. Rebased-main is ~7 %
+faster than main on this workload (consistent with prior "rebased is
+equal, except AA Random is faster" measurement).
 
 ### Verdict — read vs write
 
-- **Write line `(*values)[selected_idx] = value;` is ~0.6% of `Evaluate`.** Not the bottleneck.
-- **Read line `(*attribute_values)[example_idx];` (load + dependent `addss` stall) is ≥ 75% of `Evaluate`.** Dominant.
-- Cost is **DRAM latency**: 91.5% of L3-escalated loads miss → ~150-300 cycles each. The surviving DRAM misses serialize and stall the FMA chain.
+- **Write line `(*values)[selected_idx] = value;` is ~0.6 % of `Evaluate`** (Phase A orig). Not the bottleneck. The rebased-main annotate doesn't surface the store as a hot line either; gather-side cost is dominant.
+- **Read line `(*attribute_values)[example_idx];` (load + dependent `addss` stall) is ≥ 75 % of `Evaluate`** on both Phase A orig and rebased-main. Dominant.
+- Cost is **DRAM latency**: ~90 % of L3-escalated loads miss → ~150-300 cycles each. The surviving DRAM misses serialize and stall the FMA chain.
 
-**Implication for V2.** A 1-pass kernel that performs the same set of `(*attribute_values)[example_idx]` loads as baseline will not reduce reads, so it cannot win at single-thread on this read-bound workload via parallelism alone. Wins must come from one of: software prefetch, multi-row interleaving (more loads in flight), data layout changes, or reducing the load count by sharing reads across projections.
+**Implication for V2.** A 1-pass kernel that performs the same set of `(*attribute_values)[example_idx]` loads as baseline will not reduce reads, so it cannot win at single-thread on this read-bound workload via parallelism alone. Wins must come from one of: software prefetch, multi-row interleaving (more loads in flight), data layout changes, or reducing the load count by sharing reads across projections. **This conclusion still holds on rebased-main HEAD as of 2026-05-27.**
 
 ## Phase B — V2 iteration
 
