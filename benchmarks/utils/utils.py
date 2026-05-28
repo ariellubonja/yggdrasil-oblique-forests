@@ -50,9 +50,9 @@ def get_base_parser():
                        default=False, help="Use GPU for oblique projections (default: false)")
     parser.add_argument("--bazel_config", action="append", default=[], metavar="NAME",
                        help="Extra --config=NAME to pass to the bazel build. Repeatable: "
-                            "--bazel_config=with_isnan --bazel_config=use_std_sort. "
+                            "--bazel_config=with_isnan. "
                             "Applied after the flag-driven configs (avx2, "
-                            "nodewise_proj_matrix, depthwise_1_pass, ...).")
+                            "nodewise_prnodewise_proj_matrixoj_matrix, depthwise_1_pass, ...).")
 
     return parser
 

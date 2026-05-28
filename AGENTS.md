@@ -86,7 +86,9 @@ beats narrative.
 - Sudo is available on request; just ask.
 - Default workload: `rows=3000000`, `num_threads=1`. Never run
   simultaneous experiments (timing noise).
-- **Never use sep5 / VTune / Advisor** — freezes this system. `perf` is fine.
+- **Never use Intel Advisor's Memory Access Pattern or Microarchitecture
+  Exploration profiles** — those use the `sep5` driver and freeze this system.
+  Other Advisor profile types, including Hotspots, are allowed. `perf` is fine.
 
 
 ### Artifacts
