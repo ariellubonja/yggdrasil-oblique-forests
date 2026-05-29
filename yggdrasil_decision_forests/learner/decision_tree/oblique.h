@@ -40,6 +40,17 @@
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_H_
 
+// Default: `ProjectionEvaluator::Evaluate` is NOT inlined, so Intel Advisor
+// (Roofline / Survey) attributes time and FLOPs to the function itself
+// instead of its callers. Measured cost is within noise (~1%) on Oblique
+// Exact. Opt back into inlining with:
+//   bazel build --config=inline_projection_evaluate ...
+#ifdef YDF_INLINE_PROJECTION_EVALUATE
+#define YDF_PROJECTION_EVALUATE_NOINLINE
+#else
+#define YDF_PROJECTION_EVALUATE_NOINLINE __attribute__((noinline))
+#endif
+
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -187,6 +198,7 @@ class ProjectionEvaluator {
   // If one of the input feature of the projection is missing, this input
   // feature is replaced by the mean value of feature as computed on the
   // training dataset. This is the same logic used during inference.
+  YDF_PROJECTION_EVALUATE_NOINLINE
   absl::Status Evaluate(const Projection& projection,
                         absl::Span<const UnsignedExampleIdx> selected_examples,
                         std::vector<float>* values) const;

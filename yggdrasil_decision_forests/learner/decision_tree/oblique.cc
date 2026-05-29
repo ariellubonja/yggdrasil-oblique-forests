@@ -1107,6 +1107,7 @@ ProjectionEvaluator::ProjectionEvaluator(
   }
 }
 
+YDF_PROJECTION_EVALUATE_NOINLINE
 absl::Status ProjectionEvaluator::Evaluate(
     const Projection& projection,
     const absl::Span<const UnsignedExampleIdx> selected_examples,
