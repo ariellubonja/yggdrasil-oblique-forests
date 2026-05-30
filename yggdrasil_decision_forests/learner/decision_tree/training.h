@@ -348,6 +348,14 @@ struct InternalTrainConfig {
       depthwise_projection_defs = nullptr;
   const std::vector<int8_t>* depthwise_monotonic = nullptr;
 
+  // Pre-computed projected values produced by a fused-per-level Apply
+  // (e.g. CPU symmetric-bagwide). Layout: slab[p * rows_n + i] = projection p
+  // applied to this node's i-th selected example. When non-empty AND
+  // depthwise_projection_defs is non-null, oblique.cc's sparse-oblique path
+  // skips SampleProjection + ProjectionEvaluator::Evaluate and reads
+  // projection values directly from this buffer.
+  absl::Span<const float> precomputed_projected_values;
+
   // Pre-computed best-split descriptor from the full-GPU depthwise split path.
   // When non-null, oblique.cc skips projection evaluation entirely and
   // materializes the NodeCondition directly from this descriptor +
@@ -1000,6 +1008,21 @@ absl::Status GrowTreeBestFirstGlobal(
     std::optional<SelectedExamplesRollingBuffer> leaf_examples);
 
 absl::Status GrowTreeLocal(
+    const dataset::VerticalDataset& train_dataset,
+    const model::proto::TrainingConfig& config,
+    const model::proto::TrainingConfigLinking& config_link,
+    const proto::DecisionTreeTrainingConfig& dt_config,
+    const model::proto::DeploymentConfig& deployment,
+    const std::vector<float>& weights, int32_t depth,
+    const InternalTrainConfig& internal_config,
+    const NodeConstraints& constraints, bool set_leaf_already_set,
+    NodeWithChildren* root, utils::RandomEngine* random, PerThreadCache* cache,
+    SelectedExamplesRollingBuffer selected_examples,
+    std::optional<SelectedExamplesRollingBuffer> leaf_examples);
+
+// BFS (level-order) variant of GrowTreeLocal. Uses a FIFO deque and collects
+// nodes at each depth into a depth_batch for fused-per-level processing.
+absl::Status GrowTreeLocalBFS(
     const dataset::VerticalDataset& train_dataset,
     const model::proto::TrainingConfig& config,
     const model::proto::TrainingConfigLinking& config_link,

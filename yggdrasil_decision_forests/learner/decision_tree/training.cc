@@ -27,6 +27,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <numeric>
@@ -55,6 +56,7 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/label.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_symmetric_bagwide.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_accumulator.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/uplift.h"
@@ -5055,10 +5057,17 @@ absl::Status DecisionTreeCoreTrain(
   switch (dt_config.growing_strategy_case()) {
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyLocal: {
       const auto constraints = NodeConstraints::CreateNodeConstraints();
+#ifdef SYMMETRIC_TREES
+      return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
+                              deployment, weights, 1, internal_config,
+                              constraints, false, dt->mutable_root(), random,
+                              &cache, selected_examples_rb, leaf_examples_rb);
+#else
       return GrowTreeLocal(train_dataset, config, config_link, dt_config,
                            deployment, weights, 1, internal_config, constraints,
                            false, dt->mutable_root(), random, &cache,
                            selected_examples_rb, leaf_examples_rb);
+#endif
     } break;
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyBestFirstGlobal:
       return GrowTreeBestFirstGlobal(
@@ -5080,7 +5089,7 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
     const std::vector<float>& weights,
     const InternalTrainConfig& internal_config, utils::RandomEngine* random,
     PerThreadCache* cache, internal::NodeAndExamples node_and_examples,
-    std::vector<internal::NodeAndExamples>& node_stack) {
+    std::deque<internal::NodeAndExamples>& node_stack) {
   auto& selected_examples = node_and_examples.selected_examples;
   auto& leaf_examples = node_and_examples.leaf_examples;
   const auto depth = node_and_examples.depth;
@@ -5286,11 +5295,7 @@ absl::Status GrowTreeLocal(
     NodeWithChildren* root, utils::RandomEngine* random, PerThreadCache* cache,
     SelectedExamplesRollingBuffer selected_examples,
     std::optional<SelectedExamplesRollingBuffer> leaf_examples) {
-  std::vector<internal::NodeAndExamples> node_stack;
-  const int expected_stack_size =
-      dt_config.max_depth() > 0 ? dt_config.max_depth()
-                                : 2 * std::log2(selected_examples.size() + 1);
-  node_stack.reserve(expected_stack_size);
+  std::deque<internal::NodeAndExamples> node_stack;
   node_stack.push_back({root, std::move(selected_examples),
                         std::move(leaf_examples), depth, constraints,
                         set_leaf_already_set});
@@ -5302,6 +5307,106 @@ absl::Status GrowTreeLocal(
     RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
                               deployment, weights, internal_config, random,
                               cache, std::move(current_node), node_stack));
+  }
+
+  return absl::OkStatus();
+}
+
+// BFS (level-order) variant of GrowTreeLocal. Uses a FIFO deque, collects all
+// nodes at the current depth into a `depth_batch`, then dispatches each node
+// through NodeTrain. The depth-batch collection is the seam where the
+// symmetric-trees fused-per-level Apply will hook in (see
+// `DEPTHWISE_SYMMETRIC_BAGWIDE`).
+absl::Status GrowTreeLocalBFS(
+    const dataset::VerticalDataset& train_dataset,
+    const model::proto::TrainingConfig& config,
+    const model::proto::TrainingConfigLinking& config_link,
+    const proto::DecisionTreeTrainingConfig& dt_config,
+    const model::proto::DeploymentConfig& deployment,
+    const std::vector<float>& weights, const int32_t depth,
+    const InternalTrainConfig& internal_config,
+    const NodeConstraints& constraints, bool set_leaf_already_set,
+    NodeWithChildren* root, utils::RandomEngine* random, PerThreadCache* cache,
+    SelectedExamplesRollingBuffer selected_examples,
+    std::optional<SelectedExamplesRollingBuffer> leaf_examples) {
+  std::deque<internal::NodeAndExamples> node_queue;
+  node_queue.push_back({root, std::move(selected_examples),
+                        std::move(leaf_examples), depth, constraints,
+                        set_leaf_already_set});
+
+  while (!node_queue.empty()) {
+    const int32_t current_depth = node_queue.front().depth;
+    std::vector<internal::NodeAndExamples> depth_batch;
+    while (!node_queue.empty() &&
+           node_queue.front().depth == current_depth) {
+      depth_batch.push_back(std::move(node_queue.front()));
+      node_queue.pop_front();
+    }
+
+#ifdef DEPTHWISE_SYMMETRIC_BAGWIDE
+    if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1) {
+      // CatBoost-style symmetric trees: sample K projections ONCE for this
+      // depth, shared across all nodes. The aggregate of nodes' selected
+      // examples at depth d == the bag, so the projection sweep becomes
+      // stride-1 in column space (vs. per-node scattered gather).
+      const int num_proj = GetNumProjections(
+          dt_config, config_link.numerical_features_size());
+      const float projection_density = std::clamp(
+          dt_config.sparse_oblique_split().projection_density_factor() /
+              config_link.numerical_features_size(),
+          0.f, 1.f);
+
+      std::vector<internal::Projection> shared_projections(num_proj);
+      std::vector<int8_t> shared_monotonic(num_proj, 0);
+      for (int p = 0; p < num_proj; ++p) {
+        internal::SampleProjection(
+            config_link.numerical_features(), dt_config,
+            train_dataset.data_spec(), config_link, projection_density,
+            &shared_projections[p], &shared_monotonic[p], random);
+      }
+
+      const int num_nodes = depth_batch.size();
+      std::vector<absl::Span<const UnsignedExampleIdx>> sel_spans(num_nodes);
+      for (int n = 0; n < num_nodes; ++n) {
+        sel_spans[n] = depth_batch[n].selected_examples.active;
+      }
+
+      std::vector<std::vector<float>> projected(num_nodes);
+      RETURN_IF_ERROR(ApplyProjectionsDepthwiseSymmetricBagwide(
+          train_dataset, config_link.numerical_features(),
+          absl::MakeConstSpan(sel_spans),
+          absl::MakeConstSpan(shared_projections),
+          absl::MakeSpan(projected)));
+
+      // FindBestConditionSparseObliqueTemplate consumes:
+      //   internal_config.depthwise_projection_defs  (K shared projections)
+      //   internal_config.depthwise_monotonic        (K shared monotonic dirs)
+      //   internal_config.precomputed_projected_values (this node's slab)
+      // Shared fields are the same for every node; slab is per-node.
+      // (Projection is a typedef for std::vector<AttributeAndWeight>, so the
+      // pointer types line up without a cast.)
+      for (int n = 0; n < num_nodes; ++n) {
+        auto node_config = internal_config;
+        node_config.depthwise_projection_defs = &shared_projections;
+        node_config.depthwise_monotonic = &shared_monotonic;
+        node_config.precomputed_projected_values =
+            absl::MakeConstSpan(projected[n]);
+        RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
+                                  deployment, weights, node_config, random,
+                                  cache, std::move(depth_batch[n]),
+                                  node_queue));
+        std::vector<float>().swap(projected[n]);  // free early
+      }
+    } else
+#endif
+    {
+      // Per-node fallback (default BFS without the fused-per-level Apply).
+      for (auto& nae : depth_batch) {
+        RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
+                                  deployment, weights, internal_config, random,
+                                  cache, std::move(nae), node_queue));
+      }
+    }
   }
 
   return absl::OkStatus();

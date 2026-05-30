@@ -203,6 +203,43 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   }
   /* #endregion */
 
+#ifdef OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS
+  // Fused CPU Apply (e.g. symmetric-bagwide kernel): GrowTreeLocalBFS pre-
+  // computed a per-node projected-values slab with K projections shared
+  // across all nodes at this depth. When the slab is present, skip
+  // SampleProjection + ProjectionEvaluator::Evaluate and run split-finding
+  // directly over slices of the slab (one slice per projection, length
+  // rows_n).
+  const bool has_precomputed_projected =
+      !internal_config.precomputed_projected_values.empty() &&
+      internal_config.depthwise_projection_defs != nullptr &&
+      internal_config.depthwise_monotonic != nullptr;
+  if (has_precomputed_projected) {
+    const auto& depth_projs = *internal_config.depthwise_projection_defs;
+    const auto& depth_mono = *internal_config.depthwise_monotonic;
+    const size_t rows_n = selected_examples.size();
+    const size_t num_projs = depth_projs.size();
+    const float* slab = internal_config.precomputed_projected_values.data();
+    for (size_t proj_idx = 0; proj_idx < num_projs; ++proj_idx) {
+      if (depth_projs[proj_idx].empty()) continue;
+      const absl::Span<const float> values_span =
+          absl::MakeConstSpan(slab + proj_idx * rows_n, rows_n);
+      ASSIGN_OR_RETURN(
+          const auto result,
+          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
+                             selected_weights, selected_labels, values_span,
+                             internal_config,
+                             depth_projs[proj_idx].front().attribute_idx,
+                             constraints, depth_mono[proj_idx], best_condition,
+                             cache, random));
+      if (result == SplitSearchResult::kBetterSplitFound) {
+        best_projection = depth_projs[proj_idx];
+        best_threshold =
+            best_condition->condition().higher_condition().threshold();
+      }
+    }
+  } else
+#endif
   for (int projection_idx = 0; projection_idx < num_projections;
        projection_idx++) {
     // Generate a current_projection.
