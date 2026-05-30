@@ -50,10 +50,10 @@ COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
 # NUM_TREES and BASE_ARGS are set later, AFTER e-cores are disabled, so that
 # nproc reflects the runtime CPU topology (P-cores only).
 
-histogram_num_bins=64  # NOTE! AVX512 will be used on Vectorized method
+histogram_num_bins=64  # 64 -> AVX2, 256 -> AVX512 in vectorized mode.
 
-RUN_CPU=true          # set false to skip the normal (CPU) experiments section
-RUN_VECTORIZED=false  # set true to run AVX2/AVX512 vectorized experiments
+RUN_CPU=false         # set false to skip the normal (CPU) experiments section
+RUN_VECTORIZED=true   # set true to run AVX2/AVX512 vectorized experiments
 
 # GPU experiments. Only applies to Oblique + HISTOGRAM_RANDOM-style splits.
 # The Oblique path requires --config=oblique_gpu (compiles in the GPU
@@ -69,40 +69,23 @@ GPU_MODES=(
 
 # Which feature split types to run (comment out any you don't want)
 SPLIT_TYPES=(
-  # "Oblique"
-  "Axis Aligned"
+  "Oblique"
+  # "Axis Aligned"
 )
 
 # Numerical split methods (comment out any you don't want)
 METHODS=(
-  "Exact"
-  "Random"
-  # "Dynamic Random Histogram"
-# "Equal Width"
-# "Dynamic Equal Width Histogram"
+  # "Exact"
+  # "Random"
+  "Dynamic Random Histogram"
+  # "Equal Width"
+  # "Dynamic Equal Width Histogram"
 )
 
-# Dynamic split threshold (only affects Dynamic methods)
-# Set true to sweep over all values below; false to use fixed defaults
-USE_THRESHOLD_SWEEP=false
+# Dynamic split thresholds (only affect Dynamic methods). Populate these from
+# benchmarks/evaluation/dynamic_threshold_sweep.sh results.
 DYNAMIC_SPLIT_THRESHOLD_DEFAULT=1350             # For Dynamic Random (normal)
 DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT=500   # For Dynamic Random (vectorized)
-
-DYNAMIC_SPLIT_THRESHOLDS=(
-  100
-  350
-  600
-  850
-  1100
-  1350
-  1600
-  1850
-  2100
-  2350
-  2600
-  2850
-  3100
-)
 
 # CSV datasets: large benchmark CSVs added in Full mode only. Entries are
 # "path|label_col".
@@ -214,7 +197,7 @@ fi
 
 # Parse log -> CSV. On parser success the log is deleted; if the parser fails
 # the log is kept for debugging. The log is also kept implicitly when the
-# script aborts mid-sweep (set -e), since this function is never reached.
+# script aborts mid-run (set -e), since this function is never reached.
 finalize_log() {
   echo "Parsing log -> CSV..."
   if python3 benchmarks/utils/parse_log_to_csv.py "$logfile" "$csvfile"; then
@@ -226,9 +209,10 @@ finalize_log() {
   fi
 }
 
-# Normal build (plain CPU binary). Skipped when only GPU experiments will
-# run, since the GPU section does its own builds with --config=oblique_gpu.
-if [[ "$RUN_CPU" == "true" || "$RUN_VECTORIZED" == "true" ]]; then
+# Normal build (plain CPU binary). Skipped when only vectorized or GPU
+# experiments will run, since those sections do their own config-specific
+# builds.
+if [[ "$RUN_CPU" == "true" ]]; then
   bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
 else
   # Ensure features are disabled for experiments even when no initial build runs.
@@ -349,13 +333,8 @@ for split in "${SPLIT_TYPES[@]}"; do
   for method in "${methods_to_run[@]}"; do
     extra="${METHOD_EXTRA_ARGS[$method]:-}"
 
-    # Build list of threshold values to iterate over
     if is_dynamic_method "$method"; then
-      if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-        thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-      else
-        thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
-      fi
+      thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
     else
       thresholds=("")  # single empty entry so the loop runs once
     fi
@@ -422,13 +401,8 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
     for method in "${METHODS[@]}"; do
       extra="${METHOD_EXTRA_ARGS[$method]:-}"
 
-      # Build list of threshold values to iterate over
       if is_dynamic_method "$method"; then
-        if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-          thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-        else
-          thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
-        fi
+        thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
       else
         thresholds=("")
       fi
@@ -550,13 +524,8 @@ for split in "${SPLIT_TYPES[@]}"; do
   for method in "${methods_to_run[@]}"; do
     extra="${METHOD_EXTRA_ARGS[$method]:-}"
 
-    # Build list of threshold values to iterate over
     if is_dynamic_method "$method"; then
-      if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-        thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-      else
-        thresholds=("$DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT")
-      fi
+      thresholds=("$DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT")
     else
       thresholds=("")  # single empty entry so the loop runs once
     fi
