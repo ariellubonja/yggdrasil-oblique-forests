@@ -1182,9 +1182,11 @@ absl::Status ProjectionEvaluator::Evaluate(
     for (const auto& item : projection) {
       DCHECK_LT(item.attribute_idx, numerical_attributes_.size());
       DCHECK_GE(item.attribute_idx, 0);
-      // TODO: Move the indirection outside of the loop.
+      
       const auto* attribute_values = numerical_attributes_[item.attribute_idx];
+      
       DCHECK(attribute_values != nullptr);
+      
       float attribute_value = (*attribute_values)[example_idx];
 #ifndef YDF_BENCH_SKIP_ISNAN
       if (std::isnan(attribute_value)) {

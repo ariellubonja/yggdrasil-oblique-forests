@@ -931,14 +931,25 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE double Score(const Initializer& initializer,
                                           const double weighted_num_examples,
                                           const LabelScoreAccumulator& pos,
                                           const LabelScoreAccumulator& neg) {
-  const double score_neg = neg.Score();
-  const double score_pos = pos.Score();
-
   if constexpr (LabelScoreAccumulator::kNormalizeByWeight) {
+#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+    if constexpr (std::is_same_v<LabelScoreAccumulator,
+                                 LabelBinaryCategoricalScoreAccumulator>) {
+      if (pos.count_log_count != nullptr) {
+        return initializer.NormalizeScore(
+            (pos.WeightedScore() + neg.WeightedScore()) /
+            weighted_num_examples);
+      }
+    }
+#endif
+    const double score_neg = neg.Score();
+    const double score_pos = pos.Score();
     const double ratio_pos = pos.WeightedNumExamples() / weighted_num_examples;
     return initializer.NormalizeScore(score_pos * ratio_pos +
                                       score_neg * (1. - ratio_pos));
   } else {
+    const double score_neg = neg.Score();
+    const double score_pos = pos.Score();
     return initializer.NormalizeScore(score_pos + score_neg);
   }
 }

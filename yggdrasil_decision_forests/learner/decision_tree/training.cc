@@ -2304,6 +2304,15 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
   const int num_classes = label_distribution.NumClasses();
   const double total_sum = label_distribution.NumObservations();
   const double inv_total = (total_sum > 0) ? 1.0 / total_sum : 0.0;
+#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+  const bool use_unweighted_binary_entropy =
+      weights.empty() && num_label_classes == 3;
+  std::vector<double> count_log_count;
+  if (use_unweighted_binary_entropy) {
+    count_log_count = internal::BuildCountLogCountTable(
+        static_cast<int64_t>(total_sum));
+  }
+#endif
 
   // Select the best threshold.
   bool found_split = false;
@@ -2321,18 +2330,36 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     const auto& pos = candidate_split.pos_label_distribution;
     const double pos_sum = pos.NumObservations();
     const double neg_sum = total_sum - pos_sum;
-    double w_entropy = 0.0;
-    for (int i = 0; i < num_classes; ++i) {
-      const double pi = pos.count(i);
-      if (pi > 0 && pi < pos_sum) {
-        w_entropy -= pi * std::log(pi / pos_sum);
+    double final_entropy;
+#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+    if (use_unweighted_binary_entropy) {
+      const int64_t pos_sum_int = static_cast<int64_t>(pos_sum);
+      const int64_t pos_trues = static_cast<int64_t>(pos.count(2));
+      const int64_t neg_sum_int = static_cast<int64_t>(neg_sum);
+      const int64_t neg_trues =
+          static_cast<int64_t>(label_distribution.count(2)) - pos_trues;
+      final_entropy =
+          (internal::BinaryEntropyNumeratorFromIntegerCounts(
+               pos_trues, pos_sum_int, count_log_count) +
+           internal::BinaryEntropyNumeratorFromIntegerCounts(
+               neg_trues, neg_sum_int, count_log_count)) *
+          inv_total;
+    } else
+#endif
+    {
+      double w_entropy = 0.0;
+      for (int i = 0; i < num_classes; ++i) {
+        const double pi = pos.count(i);
+        if (pi > 0 && pi < pos_sum) {
+          w_entropy -= pi * std::log(pi / pos_sum);
+        }
+        const double ni = label_distribution.count(i) - pi;
+        if (ni > 0 && ni < neg_sum) {
+          w_entropy -= ni * std::log(ni / neg_sum);
+        }
       }
-      const double ni = label_distribution.count(i) - pi;
-      if (ni > 0 && ni < neg_sum) {
-        w_entropy -= ni * std::log(ni / neg_sum);
-      }
+      final_entropy = w_entropy * inv_total;
     }
-    const double final_entropy = w_entropy * inv_total;
     const double information_gain = initial_entropy - final_entropy;
     if (information_gain > condition->split_score()) {
       condition->set_split_score(information_gain);
