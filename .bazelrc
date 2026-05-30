@@ -39,6 +39,11 @@ build:depthwise_1_pass --cxxopt="-DEVALUATE_ROW_BLOCKS_4=1"
 # shared across all nodes at depth d, one bag-wide sweep per candidate. Hooks
 # into GrowTreeLocalBFS's depth-batch loop. Implies BFS scheduling.
 build:symmetric_trees --cxxopt="-DSYMMETRIC_TREES=1"
+# Ablation-only benchmark config: symmetric-tree projection sampling without
+# the depthwise/bagwide column-read optimization. K projections are sampled once
+# per depth and reused by every node at that depth, but each node still runs the
+# normal node-local ProjectionEvaluator::Evaluate path.
+build:symmetric_shared_nodewise --cxxopt="-DSYMMETRIC_TREES=1" --cxxopt="-DDEPTHWISE_SHARED_PROJECTIONS_NODEWISE=1" --cxxopt="-DOBLIQUE_CPU_DEPTHWISE_SHARED_PROJECTIONS=1"
 build:symmetric_bagwide --cxxopt="-DSYMMETRIC_TREES=1" --cxxopt="-DDEPTHWISE_SYMMETRIC_BAGWIDE=1" --cxxopt="-DOBLIQUE_CPU_PRECOMPUTED_PROJECTIONS=1"
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 # Compile *all* C++ code (target and host) in C++17 mode.

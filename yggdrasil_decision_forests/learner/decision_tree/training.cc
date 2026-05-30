@@ -5343,7 +5343,8 @@ absl::Status GrowTreeLocalBFS(
       node_queue.pop_front();
     }
 
-#ifdef DEPTHWISE_SYMMETRIC_BAGWIDE
+#if defined(DEPTHWISE_SYMMETRIC_BAGWIDE) || \
+    defined(DEPTHWISE_SHARED_PROJECTIONS_NODEWISE)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1) {
       // CatBoost-style symmetric trees: sample K projections ONCE for this
       // depth, shared across all nodes. The aggregate of nodes' selected
@@ -5365,6 +5366,7 @@ absl::Status GrowTreeLocalBFS(
             &shared_projections[p], &shared_monotonic[p], random);
       }
 
+#ifdef DEPTHWISE_SYMMETRIC_BAGWIDE
       const int num_nodes = depth_batch.size();
       std::vector<absl::Span<const UnsignedExampleIdx>> sel_spans(num_nodes);
       for (int n = 0; n < num_nodes; ++n) {
@@ -5397,6 +5399,20 @@ absl::Status GrowTreeLocalBFS(
                                   node_queue));
         std::vector<float>().swap(projected[n]);  // free early
       }
+#else
+      // Ablation-only symmetric-tree variant: reuse the depth's sampled
+      // projections across nodes, but deliberately do not call the bagwide
+      // fused Apply kernel. Each node falls through to the normal node-local
+      // ProjectionEvaluator::Evaluate path in oblique.cc.
+      for (auto& nae : depth_batch) {
+        auto node_config = internal_config;
+        node_config.depthwise_projection_defs = &shared_projections;
+        node_config.depthwise_monotonic = &shared_monotonic;
+        RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
+                                  deployment, weights, node_config, random,
+                                  cache, std::move(nae), node_queue));
+      }
+#endif
     } else
 #endif
     {
