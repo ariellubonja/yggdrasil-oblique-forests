@@ -97,6 +97,12 @@ path. Effect scales with tree depth.
 - **Symmetric-tree accuracy.** "Assume training to purity" means depth isn't capped, but BFS vs DFS changes RNG draw order → trees are NOT bit-identical to baseline. Time comparison is still meaningful (work is comparable); accuracy comparison needs separate eval_ab_e2e run.
 - **Tile-and-route variant** (option d from interview): only relevant if scatter-write cache thrashing at deep depths hurts. Mitigation if runtime.sh shows weak speedup at deep depths only.
 
+## Failed experiment: skip bag sort with sorted-run merge
+
+| Date | Change | Measurement | Decision |
+|---|---|---:|---|
+| 2026-05-30 | Added `--config=symmetric_bagwide_sorted_run_merge`, which merges the already sorted per-node selected-example runs instead of full `stable_sort` on the bag. A dense row-marker variant was also tried and rejected because bootstrap duplicates made a single marker incorrect. | AVX2 smoke on `trunk_50000_x_4096`, Dynamic Random Histogram threshold 500: sorted-run merge samples `8.52689, 8.26059, 8.46446` s. Existing default symmetric depthwise CSV median: `7.60627` s. | Failed. Keep behind ablation config only; default `symmetric_bagwide` remains on `stable_sort`. |
+
 ## Memory entries written
 
 - `project_symmetric_depth_merged_projection.md` — the core idea.
