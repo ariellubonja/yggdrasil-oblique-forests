@@ -8,8 +8,9 @@ import pandas as pd
 
 BASE_URL = "https://huggingface.co/datasets/jxie/epsilon-normalized/resolve/refs%2Fconvert%2Fparquet/default/train"
 NUM_FILES = 20
-OUTPUT_CSV = "epsilon_normalized_train.csv"
-TEMP_DIR = "epsilon_parquet_temp"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_CSV = os.path.join(SCRIPT_DIR, "epsilon_normalized_train.csv")
+TEMP_DIR = os.path.join(SCRIPT_DIR, "epsilon_parquet_temp")
 
 def download_parquet_files():
     """Download all parquet files."""
@@ -67,5 +68,5 @@ def merge_to_csv():
     print(f"Done! Saved to {OUTPUT_CSV}")
 
 if __name__ == "__main__":
-    # download_parquet_files()
+    download_parquet_files()
     merge_to_csv()

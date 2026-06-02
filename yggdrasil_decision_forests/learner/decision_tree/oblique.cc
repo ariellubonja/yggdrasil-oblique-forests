@@ -203,6 +203,76 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   }
   /* #endregion */
 
+#ifdef SYMMETRIC_DEPTHWISE_AP
+  // Fused CPU Apply (symmetric depthwise-AP kernel): GrowTreeLocalBFS pre-
+  // computed a per-node projected-values slab with K projections shared
+  // across all nodes at this depth. When the slab is present, skip
+  // SampleProjection + ProjectionEvaluator::Evaluate and run split-finding
+  // directly over slices of the slab (one slice per projection, length
+  // rows_n).
+  const bool has_precomputed_projected =
+      !internal_config.precomputed_projected_values.empty() &&
+      internal_config.depthwise_projection_defs != nullptr &&
+      internal_config.depthwise_monotonic != nullptr;
+  if (has_precomputed_projected) {
+    const auto& depth_projs = *internal_config.depthwise_projection_defs;
+    const auto& depth_mono = *internal_config.depthwise_monotonic;
+    const size_t rows_n = selected_examples.size();
+    const size_t num_projs = depth_projs.size();
+    const float* slab = internal_config.precomputed_projected_values.data();
+    for (size_t proj_idx = 0; proj_idx < num_projs; ++proj_idx) {
+      if (depth_projs[proj_idx].empty()) continue;
+      const absl::Span<const float> values_span =
+          absl::MakeConstSpan(slab + proj_idx * rows_n, rows_n);
+      ASSIGN_OR_RETURN(
+          const auto result,
+          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
+                             selected_weights, selected_labels, values_span,
+                             internal_config,
+                             depth_projs[proj_idx].front().attribute_idx,
+                             constraints, depth_mono[proj_idx], best_condition,
+                             cache, random));
+      if (result == SplitSearchResult::kBetterSplitFound) {
+        best_projection = depth_projs[proj_idx];
+        best_threshold =
+            best_condition->condition().higher_condition().threshold();
+      }
+    }
+  } else
+#endif
+#ifdef SYMMETRIC_NODEWISE_CONTROL
+  // Control-experiment path for measuring symmetric projection sampling without
+  // the depthwise/bagwide column-read optimization. The caller provides the
+  // same K projections for every node at this depth, but this node still
+  // evaluates each projection locally with ProjectionEvaluator::Evaluate.
+  const bool has_depthwise_shared_projections =
+      internal_config.depthwise_projection_defs != nullptr &&
+      internal_config.depthwise_monotonic != nullptr;
+  if (has_depthwise_shared_projections) {
+    const auto& depth_projs = *internal_config.depthwise_projection_defs;
+    const auto& depth_mono = *internal_config.depthwise_monotonic;
+    for (size_t proj_idx = 0; proj_idx < depth_projs.size(); ++proj_idx) {
+      if (depth_projs[proj_idx].empty()) continue;
+
+      RETURN_IF_ERROR(projection_evaluator.Evaluate(
+          depth_projs[proj_idx], selected_examples, &projection_values));
+
+      ASSIGN_OR_RETURN(
+          const auto result,
+          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
+                             selected_weights, selected_labels,
+                             projection_values, internal_config,
+                             depth_projs[proj_idx].front().attribute_idx,
+                             constraints, depth_mono[proj_idx], best_condition,
+                             cache, random));
+      if (result == SplitSearchResult::kBetterSplitFound) {
+        best_projection = depth_projs[proj_idx];
+        best_threshold =
+            best_condition->condition().higher_condition().threshold();
+      }
+    }
+  } else
+#endif
   for (int projection_idx = 0; projection_idx < num_projections;
        projection_idx++) {
     // Generate a current_projection.
@@ -1141,7 +1211,7 @@ absl::Status ProjectionEvaluator::Evaluate(
       float v1 = (*attribute_values)[ex1];
       float v2 = (*attribute_values)[ex2];
       float v3 = (*attribute_values)[ex3];
-#ifndef YDF_BENCH_SKIP_ISNAN
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
       const float na = na_replacement_value_[item.attribute_idx];
       if (std::isnan(v0)) v0 = na;
       if (std::isnan(v1)) v1 = na;
@@ -1165,7 +1235,7 @@ absl::Status ProjectionEvaluator::Evaluate(
       const std::vector<float>* attribute_values =
           numerical_attributes_[item.attribute_idx];
       float attribute_value = (*attribute_values)[example_idx];
-#ifndef YDF_BENCH_SKIP_ISNAN
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
       if (std::isnan(attribute_value)) {
         attribute_value = na_replacement_value_[item.attribute_idx];
       }
@@ -1188,7 +1258,7 @@ absl::Status ProjectionEvaluator::Evaluate(
       DCHECK(attribute_values != nullptr);
       
       float attribute_value = (*attribute_values)[example_idx];
-#ifndef YDF_BENCH_SKIP_ISNAN
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
       if (std::isnan(attribute_value)) {
         attribute_value = na_replacement_value_[item.attribute_idx];
       }
