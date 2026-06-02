@@ -1211,13 +1211,7 @@ absl::Status ProjectionEvaluator::Evaluate(
       float v1 = (*attribute_values)[ex1];
       float v2 = (*attribute_values)[ex2];
       float v3 = (*attribute_values)[ex3];
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
-      const float na = na_replacement_value_[item.attribute_idx];
-      if (std::isnan(v0)) v0 = na;
-      if (std::isnan(v1)) v1 = na;
-      if (std::isnan(v2)) v2 = na;
-      if (std::isnan(v3)) v3 = na;
-#endif
+
       acc0 += w * v0;
       acc1 += w * v1;
       acc2 += w * v2;

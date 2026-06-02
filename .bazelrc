@@ -1,40 +1,18 @@
-# pin Intel oneAPI ICX (clang-based). Without this, Bazel's
-# auto-detection silently falls back to /usr/bin/gcc, which compiles the
-# Oblique Exact hot path ~30-40% slower than ICX. Requires oneAPI to be
-# sourced in the shell (`source /opt/intel/oneapi/setvars.sh`) so that
-# `icx` / `icpx` are on PATH for Bazel's cc_configure rule.
-build --repo_env=CC=icx
-build --repo_env=CXX=icpx
+# APPLYPROJECTION EXPERIMENTS
 
-# Instrumentation & Information
-build:chrono_profile --cxxopt="-DCHRONO_ENABLED"
-# Very small cost to not inline AP: <2%
-build:inline_projection_evaluate --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
-
-# Default builds skip the std::isnan branch in ProjectionEvaluator::Evaluate
-# (and in the symmetric depthwise-AP kernel) for A/B timing. Opt in to the
-# NaN-handling branch with:
-#   bazel build --config=enable_applyprojection_isnan //...
-build:enable_applyprojection_isnan --cxxopt="-DENABLE_APPLYPROJECTION_ISNAN=1"
-
-# Default: use the precomputed count*log(count) lookup table for unweighted
-# binary entropy in the Exact splitter hot path (~9% e2e runtime win on
-# Oblique+Exact, ~39% local on SortScanSplits). Opt out (revert to the
-# original BinaryDistributionEntropyF / per-class log loop) with:
-#   bazel build --config=disable_binary_entropy_lookup //...
-build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
-
-# Optimizations
-build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
-build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
 # V2-rev3 inner kernel only (4-row unroll with 4 independent accumulators
 # inside ProjectionEvaluator::Evaluate). Tests the kernel trick that gave
 # +20.1% AP on main; does NOT port the fused-per-level scheduler.
+
+# TODO Ariel: is this just 4-loop unroll? I remember the branch had a fancier impl.
 build:depthwise_1_pass --cxxopt="-DEVALUATE_ROW_BLOCKS_4=1"
+
+
+## SYMMETRIC TREES
 # CatBoost-style symmetric/oblivious trees for Sparse Oblique RF: K candidate projections
 # shared across all nodes at depth d, one bag-wide sweep per candidate. Hooks
 # into GrowTreeLocalBFS's depth-batch loop. Implies BFS scheduling.
-#
+
 # NOTE this does not include the shared Entropy logic of CatBoost, where only 1 entropy
 #  calculation per depth is done
 build:symmetric_depthwise_ap --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
@@ -45,7 +23,40 @@ build:symmetric_depthwise_ap --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
 # ProjectionEvaluator::Evaluate path. Do not combine with
 # --config=symmetric_depthwise_ap (the AP path would shadow the control).
 build:symmetric_nodewise_control --cxxopt="-DSYMMETRIC_NODEWISE_CONTROL=1"
+
+
+##### GPU Support
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
+
+# INSTRUMENTATION & DEFAULTS
+
+
+build:chrono_profile --cxxopt="-DCHRONO_ENABLED"
+# Don't Inlining ApplyProjection for more accurate profiling by Default. Very small cost: <2% e2e
+build:inline_projection_evaluate --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
+# Skip the std::isnan branch in ProjectionEvaluator::Evaluate. by default. again small cost but possible cache misbehavior
+build:enable_applyprojection_isnan --cxxopt="-DENABLE_APPLYPROJECTION_ISNAN=1"
+
+# Precomputed count*log(count) lookup table ON by default for unweighted binary entropy in RF/SPORF Exact 
+#   ~9% e2e runtime win, ~39% local on SortScanSplits)
+build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
+
+# STD::UPPER_BOUND VECTORIZATION
+build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
+build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
+
+
+# DEFAULTS
+
+
+# pin Intel oneAPI ICX (clang-based). Without this, Bazel's
+# auto-detection silently falls back to /usr/bin/gcc, which compiles the
+# Oblique Exact hot path ~30-40% slower than ICX. Requires oneAPI to be
+# sourced in the shell (`source /opt/intel/oneapi/setvars.sh`) so that
+# `icx` / `icpx` are on PATH for Bazel's cc_configure rule.
+build --repo_env=CC=icx
+build --repo_env=CXX=icpx
+
 # Compile *all* C++ code (target and host) in C++17 mode.
 build --cxxopt=-std=c++17
 build --host_cxxopt=-std=c++17
