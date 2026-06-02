@@ -1,4 +1,4 @@
-# Compiler: pin Intel oneAPI ICX (clang-based). Without this, Bazel's
+# pin Intel oneAPI ICX (clang-based). Without this, Bazel's
 # auto-detection silently falls back to /usr/bin/gcc, which compiles the
 # Oblique Exact hot path ~30-40% slower than ICX. Requires oneAPI to be
 # sourced in the shell (`source /opt/intel/oneapi/setvars.sh`) so that
@@ -7,26 +7,22 @@ build --repo_env=CC=icx
 build --repo_env=CXX=icpx
 
 # Instrumentation & Information
-build:multithreaded_chrono_profile --cxxopt="-DCHRONO_ENABLED"
-build:with_isnan --cxxopt="-UYDF_BENCH_SKIP_ISNAN"
-# Default builds disable inlining of ProjectionEvaluator::Evaluate so Intel
-# Advisor (Roofline / Survey) attributes time and FLOPs to the function
-# itself instead of its callers. Measured cost is <=1% on Oblique Exact
-# (within noise). Opt back into inlining with:
-#   bazel build --config=inline_projection_evaluate //...
+build:chrono_profile --cxxopt="-DCHRONO_ENABLED"
+# Very small cost to not inline AP: <2%
 build:inline_projection_evaluate --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
 
-# Default: skip the std::isnan branch in ProjectionEvaluator::Evaluate for A/B timing.
-# Opt back in (i.e. restore correct NaN handling) with:
-#   bazel build --config=with_isnan //...
-build --cxxopt="-DYDF_BENCH_SKIP_ISNAN"
+# Default builds skip the std::isnan branch in ProjectionEvaluator::Evaluate
+# (and in the symmetric depthwise-AP kernel) for A/B timing. Opt in to the
+# NaN-handling branch with:
+#   bazel build --config=enable_applyprojection_isnan //...
+build:enable_applyprojection_isnan --cxxopt="-DENABLE_APPLYPROJECTION_ISNAN=1"
 
 # Default: use the precomputed count*log(count) lookup table for unweighted
 # binary entropy in the Exact splitter hot path (~9% e2e runtime win on
 # Oblique+Exact, ~39% local on SortScanSplits). Opt out (revert to the
 # original BinaryDistributionEntropyF / per-class log loop) with:
 #   bazel build --config=disable_binary_entropy_lookup //...
-build:disable_binary_entropy_lookup --cxxopt="-DYDF_DISABLE_BINARY_ENTROPY_LOOKUP"
+build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
 
 # Optimizations
 build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
@@ -35,23 +31,20 @@ build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-mfma" --cxxo
 # inside ProjectionEvaluator::Evaluate). Tests the kernel trick that gave
 # +20.1% AP on main; does NOT port the fused-per-level scheduler.
 build:depthwise_1_pass --cxxopt="-DEVALUATE_ROW_BLOCKS_4=1"
-# CatBoost-style symmetric trees for Sparse Oblique RF: K candidate projections
+# CatBoost-style symmetric/oblivious trees for Sparse Oblique RF: K candidate projections
 # shared across all nodes at depth d, one bag-wide sweep per candidate. Hooks
 # into GrowTreeLocalBFS's depth-batch loop. Implies BFS scheduling.
 #
-# ENABLED BY DEFAULT on this branch. Opt out with --config=disable_symmetric_bagwide
-# (undefines all three macros via -U, so the build falls back to the baseline
-# DFS + per-node ApplyProjection path).
-build --cxxopt="-DSYMMETRIC_TREES=1"
-build --cxxopt="-DDEPTHWISE_SYMMETRIC_BAGWIDE=1"
-build --cxxopt="-DOBLIQUE_CPU_PRECOMPUTED_PROJECTIONS=1"
-build:disable_symmetric_bagwide --cxxopt="-USYMMETRIC_TREES" --cxxopt="-UDEPTHWISE_SYMMETRIC_BAGWIDE" --cxxopt="-UOBLIQUE_CPU_PRECOMPUTED_PROJECTIONS"
-# Ablation-only benchmark config: symmetric-tree projection sampling without
-# the depthwise/bagwide column-read optimization. K projections are sampled once
-# per depth and reused by every node at that depth, but each node still runs the
-# normal node-local ProjectionEvaluator::Evaluate path. Must undefine the bagwide
-# macros that are default-on, otherwise both paths compile in.
-build:symmetric_shared_nodewise --cxxopt="-UDEPTHWISE_SYMMETRIC_BAGWIDE" --cxxopt="-UOBLIQUE_CPU_PRECOMPUTED_PROJECTIONS" --cxxopt="-DDEPTHWISE_SHARED_PROJECTIONS_NODEWISE=1" --cxxopt="-DOBLIQUE_CPU_DEPTHWISE_SHARED_PROJECTIONS=1"
+# NOTE this does not include the shared Entropy logic of CatBoost, where only 1 entropy
+#  calculation per depth is done
+build:symmetric_depthwise_ap --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
+# Symmetric_Nodewise_Control: control experiment that isolates the
+# shared-projection-sampling effect from the bagwide column-read effect.
+# K projections are sampled once per depth and reused by every node at that
+# depth, but each node still runs the normal node-local
+# ProjectionEvaluator::Evaluate path. Do not combine with
+# --config=symmetric_depthwise_ap (the AP path would shadow the control).
+build:symmetric_nodewise_control --cxxopt="-DSYMMETRIC_NODEWISE_CONTROL=1"
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 # Compile *all* C++ code (target and host) in C++17 mode.
 build --cxxopt=-std=c++17
@@ -72,8 +65,6 @@ build:profiler --cxxopt=-O2 --linkopt=-O2
 # Make sure split-DWARF is off – VTune hates .dwo/.dwp
 build:profiler --features=-fission
 build:profiler --cxxopt=-gno-split-dwarf
-# Disable debug checks - pretty expensive
-# build:intel_base --copt=-DNDEBUG --cxxopt=-DNDEBUG
 
 
 # CUDA: use GCC-13 as nvcc host compiler (ICX not officially supported by NVIDIA)

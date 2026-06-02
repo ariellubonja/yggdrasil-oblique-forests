@@ -203,8 +203,8 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   }
   /* #endregion */
 
-#ifdef OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS
-  // Fused CPU Apply (e.g. symmetric-bagwide kernel): GrowTreeLocalBFS pre-
+#ifdef SYMMETRIC_DEPTHWISE_AP
+  // Fused CPU Apply (symmetric depthwise-AP kernel): GrowTreeLocalBFS pre-
   // computed a per-node projected-values slab with K projections shared
   // across all nodes at this depth. When the slab is present, skip
   // SampleProjection + ProjectionEvaluator::Evaluate and run split-finding
@@ -240,11 +240,11 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     }
   } else
 #endif
-#ifdef OBLIQUE_CPU_DEPTHWISE_SHARED_PROJECTIONS
-  // Ablation-only path for measuring symmetric projection sampling without the
-  // depthwise/bagwide column-read optimization. The caller provides the same K
-  // projections for every node at this depth, but this node still evaluates
-  // each projection locally with ProjectionEvaluator::Evaluate.
+#ifdef SYMMETRIC_NODEWISE_CONTROL
+  // Control-experiment path for measuring symmetric projection sampling without
+  // the depthwise/bagwide column-read optimization. The caller provides the
+  // same K projections for every node at this depth, but this node still
+  // evaluates each projection locally with ProjectionEvaluator::Evaluate.
   const bool has_depthwise_shared_projections =
       internal_config.depthwise_projection_defs != nullptr &&
       internal_config.depthwise_monotonic != nullptr;
@@ -1211,7 +1211,7 @@ absl::Status ProjectionEvaluator::Evaluate(
       float v1 = (*attribute_values)[ex1];
       float v2 = (*attribute_values)[ex2];
       float v3 = (*attribute_values)[ex3];
-#ifndef YDF_BENCH_SKIP_ISNAN
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
       const float na = na_replacement_value_[item.attribute_idx];
       if (std::isnan(v0)) v0 = na;
       if (std::isnan(v1)) v1 = na;
@@ -1235,7 +1235,7 @@ absl::Status ProjectionEvaluator::Evaluate(
       const std::vector<float>* attribute_values =
           numerical_attributes_[item.attribute_idx];
       float attribute_value = (*attribute_values)[example_idx];
-#ifndef YDF_BENCH_SKIP_ISNAN
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
       if (std::isnan(attribute_value)) {
         attribute_value = na_replacement_value_[item.attribute_idx];
       }
@@ -1258,7 +1258,7 @@ absl::Status ProjectionEvaluator::Evaluate(
       DCHECK(attribute_values != nullptr);
       
       float attribute_value = (*attribute_values)[example_idx];
-#ifndef YDF_BENCH_SKIP_ISNAN
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
       if (std::isnan(attribute_value)) {
         attribute_value = na_replacement_value_[item.attribute_idx];
       }

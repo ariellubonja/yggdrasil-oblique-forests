@@ -64,13 +64,13 @@ cc_library_ydf(
     name = "training",
     srcs = [
         "oblique.cc",
-        "oblique_cpu_depthwise_symmetric_bagwide.cc",
+        "oblique_cpu_symmetric_depthwise_ap.cc",
         "training.cc",
         "vector_sequence.cc",
     ],
     hdrs = [
         "oblique.h",
-        "oblique_cpu_depthwise_symmetric_bagwide.h",
+        "oblique_cpu_symmetric_depthwise_ap.h",
         "training.h",
         "vector_sequence.h",
     ],

@@ -15,10 +15,10 @@
 // Output contract (matches V1/V2/V3): out_projected[n] is a (K * rows_n)-
 // float slab where slab[k * rows_n + i] = projection k applied to node n's
 // i-th selected example. The consumer is FindBestConditionSparseObliqueTemplate
-// in oblique.cc (gated by OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS).
+// in oblique.cc (gated by SYMMETRIC_DEPTHWISE_AP).
 
-#ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_DEPTHWISE_SYMMETRIC_BAGWIDE_H_
-#define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_DEPTHWISE_SYMMETRIC_BAGWIDE_H_
+#ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_DEPTHWISE_AP_H_
+#define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_DEPTHWISE_AP_H_
 
 #include <vector>
 
@@ -36,7 +36,7 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 // is the K-element vector of projections shared across all nodes at the
 // current depth. `out_projected[n]` is resized to K * rows_n[n] and filled
 // with projection values.
-absl::Status ApplyProjectionsDepthwiseSymmetricBagwide(
+absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
@@ -46,4 +46,4 @@ absl::Status ApplyProjectionsDepthwiseSymmetricBagwide(
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
-#endif  // YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_DEPTHWISE_SYMMETRIC_BAGWIDE_H_
+#endif  // YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_DEPTHWISE_AP_H_

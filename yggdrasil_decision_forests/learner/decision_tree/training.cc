@@ -56,7 +56,7 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/label.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
-#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_symmetric_bagwide.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_symmetric_depthwise_ap.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_accumulator.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/uplift.h"
@@ -2306,7 +2306,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
   const int num_classes = label_distribution.NumClasses();
   const double total_sum = label_distribution.NumObservations();
   const double inv_total = (total_sum > 0) ? 1.0 / total_sum : 0.0;
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
   const bool use_unweighted_binary_entropy =
       weights.empty() && num_label_classes == 3;
   std::vector<double> count_log_count;
@@ -2333,7 +2333,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     const double pos_sum = pos.NumObservations();
     const double neg_sum = total_sum - pos_sum;
     double final_entropy;
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
     if (use_unweighted_binary_entropy) {
       const int64_t pos_sum_int = static_cast<int64_t>(pos_sum);
       const int64_t pos_trues = static_cast<int64_t>(pos.count(2));
@@ -5057,7 +5057,7 @@ absl::Status DecisionTreeCoreTrain(
   switch (dt_config.growing_strategy_case()) {
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyLocal: {
       const auto constraints = NodeConstraints::CreateNodeConstraints();
-#ifdef SYMMETRIC_TREES
+#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
       return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                               deployment, weights, 1, internal_config,
                               constraints, false, dt->mutable_root(), random,
@@ -5316,7 +5316,7 @@ absl::Status GrowTreeLocal(
 // nodes at the current depth into a `depth_batch`, then dispatches each node
 // through NodeTrain. The depth-batch collection is the seam where the
 // symmetric-trees fused-per-level Apply will hook in (see
-// `DEPTHWISE_SYMMETRIC_BAGWIDE`).
+// `SYMMETRIC_DEPTHWISE_AP`).
 absl::Status GrowTreeLocalBFS(
     const dataset::VerticalDataset& train_dataset,
     const model::proto::TrainingConfig& config,
@@ -5343,8 +5343,7 @@ absl::Status GrowTreeLocalBFS(
       node_queue.pop_front();
     }
 
-#if defined(DEPTHWISE_SYMMETRIC_BAGWIDE) || \
-    defined(DEPTHWISE_SHARED_PROJECTIONS_NODEWISE)
+#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1) {
       // CatBoost-style symmetric trees: sample K projections ONCE for this
       // depth, shared across all nodes. The aggregate of nodes' selected
@@ -5366,7 +5365,7 @@ absl::Status GrowTreeLocalBFS(
             &shared_projections[p], &shared_monotonic[p], random);
       }
 
-#ifdef DEPTHWISE_SYMMETRIC_BAGWIDE
+#ifdef SYMMETRIC_DEPTHWISE_AP
       const int num_nodes = depth_batch.size();
       std::vector<absl::Span<const UnsignedExampleIdx>> sel_spans(num_nodes);
       for (int n = 0; n < num_nodes; ++n) {
@@ -5374,7 +5373,7 @@ absl::Status GrowTreeLocalBFS(
       }
 
       std::vector<std::vector<float>> projected(num_nodes);
-      RETURN_IF_ERROR(ApplyProjectionsDepthwiseSymmetricBagwide(
+      RETURN_IF_ERROR(ApplyProjectionsSymmetricDepthwiseAP(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),
           absl::MakeConstSpan(shared_projections),
@@ -5400,9 +5399,9 @@ absl::Status GrowTreeLocalBFS(
         std::vector<float>().swap(projected[n]);  // free early
       }
 #else
-      // Ablation-only symmetric-tree variant: reuse the depth's sampled
-      // projections across nodes, but deliberately do not call the bagwide
-      // fused Apply kernel. Each node falls through to the normal node-local
+      // Symmetric_Nodewise_Control: reuse the depth's sampled projections
+      // across nodes, but deliberately do not call the bagwide fused Apply
+      // kernel. Each node falls through to the normal node-local
       // ProjectionEvaluator::Evaluate path in oblique.cc.
       for (auto& nae : depth_batch) {
         auto node_config = internal_config;

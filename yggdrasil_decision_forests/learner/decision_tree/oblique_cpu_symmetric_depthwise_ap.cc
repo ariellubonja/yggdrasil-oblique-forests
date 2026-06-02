@@ -1,6 +1,6 @@
-#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_symmetric_bagwide.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_symmetric_depthwise_ap.h"
 
-#ifdef DEPTHWISE_SYMMETRIC_BAGWIDE
+#ifdef SYMMETRIC_DEPTHWISE_AP
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +17,7 @@
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
-absl::Status ApplyProjectionsDepthwiseSymmetricBagwide(
+absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
@@ -98,13 +98,13 @@ absl::Status ApplyProjectionsDepthwiseSymmetricBagwide(
 
     std::vector<const float*> col_ptrs(M);
     std::vector<float> ws(M);
-#ifndef YDF_BENCH_SKIP_ISNAN
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
     std::vector<float> nas(M);
 #endif
     for (size_t m = 0; m < M; ++m) {
       col_ptrs[m] = evaluator.AttributeValues(proj[m].attribute_idx).data();
       ws[m] = proj[m].weight;
-#ifndef YDF_BENCH_SKIP_ISNAN
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
       nas[m] = evaluator.NaReplacementValue(proj[m].attribute_idx);
 #endif
     }
@@ -114,7 +114,7 @@ absl::Status ApplyProjectionsDepthwiseSymmetricBagwide(
       float value = 0.f;
       for (size_t m = 0; m < M; ++m) {
         float v = col_ptrs[m][ex];
-#ifndef YDF_BENCH_SKIP_ISNAN
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
         if (std::isnan(v)) v = nas[m];
 #endif
         value += ws[m] * v;
@@ -130,4 +130,4 @@ absl::Status ApplyProjectionsDepthwiseSymmetricBagwide(
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
-#endif  // DEPTHWISE_SYMMETRIC_BAGWIDE
+#endif  // SYMMETRIC_DEPTHWISE_AP

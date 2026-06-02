@@ -61,7 +61,7 @@ namespace model {
 namespace decision_tree {
 namespace internal {
 
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
 inline std::vector<double> BuildCountLogCountTable(const int64_t max_count) {
   std::vector<double> table(max_count + 1, 0.0);
   for (int64_t count = 2; count <= max_count; ++count) {
@@ -95,7 +95,7 @@ inline double BinaryEntropyFromIntegerCounts(
                                                 count_log_count) /
          num_examples;
 }
-#endif  // YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#endif  // DISABLE_BINARY_ENTROPY_LOOKUP
 
 // Bucket data containers.
 //
@@ -729,7 +729,7 @@ struct LabelBinaryCategoricalScoreAccumulator {
   static constexpr bool kNormalizeByWeight = true;
 
   double Score() const {
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
     if (count_log_count != nullptr) {
       return internal::BinaryEntropyFromIntegerCounts(
           static_cast<int64_t>(sum_trues), static_cast<int64_t>(sum_weights),
@@ -741,7 +741,7 @@ struct LabelBinaryCategoricalScoreAccumulator {
 
   double WeightedNumExamples() const { return sum_weights; }
 
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
   double WeightedScore() const {
     if (count_log_count != nullptr) {
       return internal::BinaryEntropyNumeratorFromIntegerCounts(
@@ -755,12 +755,12 @@ struct LabelBinaryCategoricalScoreAccumulator {
   void Clear() {
     sum_trues = 0.;
     sum_weights = 0.;
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
     count_log_count = nullptr;
 #endif
   }
 
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
   void Set(const double trues, const double weights,
            const std::vector<double>* count_log_count = nullptr) {
     this->sum_trues = trues;
@@ -810,7 +810,7 @@ struct LabelBinaryCategoricalScoreAccumulator {
 
   double sum_trues;
   double sum_weights;
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
   const std::vector<double>* count_log_count = nullptr;
 #endif
 };
@@ -1430,7 +1430,7 @@ struct LabelBinaryCategoricalOneValueBucket {
           label_distribution_trues_ / label_distribution_weights_);
       DCHECK(std::abs(initial_entropy_ - label_distribution.Entropy()) <=
              0.0001);
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
       if constexpr (!weighted) {
         count_log_count_ = internal::BuildCountLogCountTable(
             static_cast<int64_t>(label_distribution_weights_));
@@ -1440,7 +1440,7 @@ struct LabelBinaryCategoricalOneValueBucket {
 
     void InitEmpty(LabelBinaryCategoricalScoreAccumulator* acc) const {
       acc->Clear();
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
       if constexpr (!weighted) {
         acc->count_log_count = &count_log_count_;
       }
@@ -1448,7 +1448,7 @@ struct LabelBinaryCategoricalOneValueBucket {
     }
 
     void InitFull(LabelBinaryCategoricalScoreAccumulator* acc) const {
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
       if constexpr (weighted) {
         acc->Set(label_distribution_trues_, label_distribution_weights_);
       } else {
@@ -1475,7 +1475,7 @@ struct LabelBinaryCategoricalOneValueBucket {
     double label_distribution_trues_;
     double label_distribution_weights_;
     double initial_entropy_;
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
     std::vector<double> count_log_count_;
 #endif
   };
@@ -2109,7 +2109,7 @@ struct LabelBinaryCategoricalBucket {
           label_distribution_trues_ / label_distribution_weights_);
       DCHECK(std::abs(initial_entropy_ - label_distribution.Entropy()) <=
              0.0001);
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
       if constexpr (!weighted) {
         count_log_count_ = internal::BuildCountLogCountTable(
             static_cast<int64_t>(label_distribution_weights_));
@@ -2119,7 +2119,7 @@ struct LabelBinaryCategoricalBucket {
 
     void InitEmpty(LabelBinaryCategoricalScoreAccumulator* acc) const {
       acc->Clear();
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
       if constexpr (!weighted) {
         acc->count_log_count = &count_log_count_;
       }
@@ -2127,7 +2127,7 @@ struct LabelBinaryCategoricalBucket {
     }
 
     void InitFull(LabelBinaryCategoricalScoreAccumulator* acc) const {
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
       if constexpr (weighted) {
         acc->Set(label_distribution_trues_, label_distribution_weights_);
       } else {
@@ -2154,7 +2154,7 @@ struct LabelBinaryCategoricalBucket {
     double label_distribution_trues_;
     double label_distribution_weights_;
     double initial_entropy_;
-#ifndef YDF_DISABLE_BINARY_ENTROPY_LOOKUP
+#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
     std::vector<double> count_log_count_;
 #endif
   };
