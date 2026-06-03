@@ -85,7 +85,7 @@ METHODS=(
 # Dynamic split thresholds (only affect Dynamic methods). Populate these from
 # benchmarks/evaluation/dynamic_threshold_sweep.sh results.
 DYNAMIC_SPLIT_THRESHOLD_DEFAULT=1350             # For Dynamic Random (normal)
-DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT=500   # For Dynamic Random (vectorized)
+DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT=250   # For Dynamic Random (vectorized) — 2026-06-03 sweep on 3M*4096 AVX-2
 
 # CSV datasets: large benchmark CSVs added in Full mode only. Entries are
 # "path|label_col".
@@ -113,7 +113,7 @@ TRUNK_DATASETS=(
 )
 if [[ "$MODE" == "full" ]]; then
   TRUNK_DATASETS+=(
-    "50000000|4"
+    "50000000|4" # OOMs for Symmetric trees - comment out
     "3000000|4096"
     "3000|4000000"
   )
@@ -134,6 +134,10 @@ METHOD_EXTRA_ARGS["Dynamic Random Histogram"]="--histogram_num_bins=$histogram_n
 # Build target and base flags
 BUILD_TARGET="//examples:train_oblique_forest"
 BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --repo_env=CXX=icpx)
+# Optional space-separated extra build configs/flags injected into every
+# bazel_build (e.g. EXTRA_BAZEL_CONFIGS="--config=symmetric_nodewise_control").
+# shellcheck disable=SC2206
+EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
 # Vectorized build configs (adjust if your repo uses different config names)
 VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
 VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
@@ -177,7 +181,7 @@ ensure_icx() {
 bazel_build() {
   ensure_icx
   sudo "$SET_CPU_E_FEATURES" --enable
-  bazel build "$@"
+  bazel build "$@" "${EXTRA_BAZEL_CONFIGS_ARR[@]}"
   sudo "$SET_CPU_E_FEATURES" --disable
 }
 
