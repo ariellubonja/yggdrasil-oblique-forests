@@ -16,6 +16,17 @@
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_CONFIG_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_CONFIG_H_
 
+#if defined(NODEWISE_PROJ_MATRIX) && defined(DEPTHWISE_1_PASS)
+#error "NODEWISE_PROJ_MATRIX and DEPTHWISE_1_PASS are mutually exclusive"
+#endif
+#if (defined(NODEWISE_PROJ_MATRIX) || defined(DEPTHWISE_1_PASS)) && \
+    (defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL))
+#error "Nodewise/Depthwise oblique modes and symmetric oblique modes are mutually exclusive"
+#endif
+#if defined(NODEWISE_PROJ_MATRIX) || defined(DEPTHWISE_1_PASS)
+#define OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS 1
+#endif
+
 #include <cstdint>
 #include <functional>
 #include <vector>

@@ -203,13 +203,11 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   }
   /* #endregion */
 
-#ifdef SYMMETRIC_DEPTHWISE_AP
-  // Fused CPU Apply (symmetric depthwise-AP kernel): GrowTreeLocalBFS pre-
-  // computed a per-node projected-values slab with K projections shared
-  // across all nodes at this depth. When the slab is present, skip
-  // SampleProjection + ProjectionEvaluator::Evaluate and run split-finding
-  // directly over slices of the slab (one slice per projection, length
-  // rows_n).
+#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS)
+  // Fused CPU Apply: GrowTreeLocalBFS pre-computed a per-node projected-values
+  // slab. When the slab is present, skip SampleProjection +
+  // ProjectionEvaluator::Evaluate and run split-finding directly over slices
+  // of the slab (one slice per projection, length rows_n).
   const bool has_precomputed_projected =
       !internal_config.precomputed_projected_values.empty() &&
       internal_config.depthwise_projection_defs != nullptr &&
@@ -1186,59 +1184,6 @@ absl::Status ProjectionEvaluator::Evaluate(
 
   values->resize(selected_examples.size());
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
-#ifdef EVALUATE_ROW_BLOCKS_4
-  // V2-rev3 inner kernel only (not the fused-per-level scheduler): unroll
-  // the row loop by 4 with 4 independent accumulators so the OOO scheduler
-  // sees 4-way ILP on the random-DRAM gather chain. Up to 4 in-flight
-  // loads per projection item instead of serializing through the FMA acc.
-  // Reduction order differs from the sequential path; outputs may differ
-  // at LSB.
-  const size_t R = selected_examples.size();
-  const UnsignedExampleIdx* sel_ptr = selected_examples.data();
-  float* out_ptr = values->data();
-  size_t i = 0;
-  for (; i + 4 <= R; i += 4) {
-    const UnsignedExampleIdx ex0 = sel_ptr[i + 0];
-    const UnsignedExampleIdx ex1 = sel_ptr[i + 1];
-    const UnsignedExampleIdx ex2 = sel_ptr[i + 2];
-    const UnsignedExampleIdx ex3 = sel_ptr[i + 3];
-    float acc0 = 0.f, acc1 = 0.f, acc2 = 0.f, acc3 = 0.f;
-    for (const auto& item : projection) {
-      const std::vector<float>* attribute_values =
-          numerical_attributes_[item.attribute_idx];
-      const float w = item.weight;
-      float v0 = (*attribute_values)[ex0];
-      float v1 = (*attribute_values)[ex1];
-      float v2 = (*attribute_values)[ex2];
-      float v3 = (*attribute_values)[ex3];
-
-      acc0 += w * v0;
-      acc1 += w * v1;
-      acc2 += w * v2;
-      acc3 += w * v3;
-    }
-    out_ptr[i + 0] = acc0;
-    out_ptr[i + 1] = acc1;
-    out_ptr[i + 2] = acc2;
-    out_ptr[i + 3] = acc3;
-  }
-  for (; i < R; ++i) {
-    const auto example_idx = sel_ptr[i];
-    float value = 0.f;
-    for (const auto& item : projection) {
-      const std::vector<float>* attribute_values =
-          numerical_attributes_[item.attribute_idx];
-      float attribute_value = (*attribute_values)[example_idx];
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
-      if (std::isnan(attribute_value)) {
-        attribute_value = na_replacement_value_[item.attribute_idx];
-      }
-#endif
-      value += attribute_value * item.weight;
-    }
-    out_ptr[i] = value;
-  }
-#else
   for (size_t selected_idx = 0; selected_idx < selected_examples.size();
        selected_idx++) {
     float value = 0;
@@ -1261,7 +1206,6 @@ absl::Status ProjectionEvaluator::Evaluate(
     }
     (*values)[selected_idx] = value;
   }
-#endif  // EVALUATE_ROW_BLOCKS_4
   return absl::OkStatus();
 }
 

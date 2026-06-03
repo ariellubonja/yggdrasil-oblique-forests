@@ -56,6 +56,8 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/label.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_1pass.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_nodewise_proj_matrix.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_symmetric_depthwise_ap.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_accumulator.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h"
@@ -5057,7 +5059,8 @@ absl::Status DecisionTreeCoreTrain(
   switch (dt_config.growing_strategy_case()) {
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyLocal: {
       const auto constraints = NodeConstraints::CreateNodeConstraints();
-#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
+#if defined(NODEWISE_PROJ_MATRIX) || defined(DEPTHWISE_1_PASS) || \
+    defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
       return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                               deployment, weights, 1, internal_config,
                               constraints, false, dt->mutable_root(), random,
@@ -5343,7 +5346,65 @@ absl::Status GrowTreeLocalBFS(
       node_queue.pop_front();
     }
 
-#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
+#if defined(NODEWISE_PROJ_MATRIX) || defined(DEPTHWISE_1_PASS)
+    if (dt_config.has_sparse_oblique_split() && depth_batch.size() > 1) {
+      // Fused-per-level CPU Apply. Sample projections per node, preserving
+      // ordinary Sparse Oblique RF semantics, then precompute each node's
+      // projected-value slab before per-node split search.
+      const int num_proj = GetNumProjections(
+          dt_config, config_link.numerical_features_size());
+      const float projection_density = std::clamp(
+          dt_config.sparse_oblique_split().projection_density_factor() /
+              config_link.numerical_features_size(),
+          0.f, 1.f);
+
+      const int num_nodes = depth_batch.size();
+      std::vector<std::vector<internal::Projection>> all_node_projs(num_nodes);
+      std::vector<std::vector<int8_t>> all_node_mono(num_nodes);
+      for (int n = 0; n < num_nodes; ++n) {
+        all_node_projs[n].resize(num_proj);
+        all_node_mono[n].assign(num_proj, 0);
+        for (int p = 0; p < num_proj; ++p) {
+          internal::SampleProjection(
+              config_link.numerical_features(), dt_config,
+              train_dataset.data_spec(), config_link, projection_density,
+              &all_node_projs[n][p], &all_node_mono[n][p], random);
+        }
+      }
+
+      std::vector<absl::Span<const UnsignedExampleIdx>> sel_spans(num_nodes);
+      for (int n = 0; n < num_nodes; ++n) {
+        sel_spans[n] = depth_batch[n].selected_examples.active;
+      }
+
+      std::vector<std::vector<float>> projected(num_nodes);
+#ifdef NODEWISE_PROJ_MATRIX
+      RETURN_IF_ERROR(ApplyProjectionsNodewiseProjMatrix(
+          train_dataset, config_link.numerical_features(),
+          absl::MakeConstSpan(sel_spans),
+          absl::MakeConstSpan(all_node_projs), absl::MakeSpan(projected)));
+#else
+      RETURN_IF_ERROR(ApplyProjectionsDepthwise1Pass(
+          train_dataset, config_link.numerical_features(),
+          absl::MakeConstSpan(sel_spans),
+          absl::MakeConstSpan(all_node_projs), absl::MakeSpan(projected),
+          deployment.num_threads()));
+#endif
+
+      for (int n = 0; n < num_nodes; ++n) {
+        auto node_config = internal_config;
+        node_config.depthwise_projection_defs = &all_node_projs[n];
+        node_config.depthwise_monotonic = &all_node_mono[n];
+        node_config.precomputed_projected_values =
+            absl::MakeConstSpan(projected[n]);
+        RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
+                                  deployment, weights, node_config, random,
+                                  cache, std::move(depth_batch[n]),
+                                  node_queue));
+        std::vector<float>().swap(projected[n]);
+      }
+    } else
+#elif defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1) {
       // CatBoost-style symmetric trees: sample K projections ONCE for this
       // depth, shared across all nodes. The aggregate of nodes' selected

@@ -1,11 +1,15 @@
 # APPLYPROJECTION EXPERIMENTS
 
-# V2-rev3 inner kernel only (4-row unroll with 4 independent accumulators
-# inside ProjectionEvaluator::Evaluate). Tests the kernel trick that gave
-# +20.1% AP on main; does NOT port the fused-per-level scheduler.
+# Nodewise fused ApplyProjection control: depth-batch driver with ordinary
+# per-node projection sampling, but each node's projection matrix is filled
+# serially. Use to isolate precomputed-slab effects from Depthwise scheduling.
+build:nodewise_proj_matrix --cxxopt="-DNODEWISE_PROJ_MATRIX=1"
 
-# TODO Ariel: is this just 4-loop unroll? I remember the branch had a fancier impl.
-build:depthwise_1_pass --cxxopt="-DEVALUATE_ROW_BLOCKS_4=1"
+# Depthwise fused ApplyProjection: one depth-batch scheduler over all node/projection
+# tasks, preserving ordinary per-node Sparse Oblique RF projection sampling.
+# A 4-row inner-kernel unroll may be worth testing later as an implementation
+# improvement, but it is intentionally not part of this research contribution.
+build:depthwise_1_pass --cxxopt="-DDEPTHWISE_1_PASS=1"
 
 
 ## SYMMETRIC TREES
