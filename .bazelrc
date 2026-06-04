@@ -1,15 +1,22 @@
 # APPLYPROJECTION EXPERIMENTS
 
-# Nodewise fused ApplyProjection control: depth-batch driver with ordinary
-# per-node projection sampling, but each node's projection matrix is filled
-# serially. Use to isolate precomputed-slab effects from Depthwise scheduling.
-build:nodewise_proj_matrix --cxxopt="-DNODEWISE_PROJ_MATRIX=1"
+# Projection-matrix control: depth-batch driver with ordinary per-node projection
+# sampling, but each node's projected-value slab is filled serially. This is not
+# the Nodewise baseline; Nodewise is the default one-projection-at-a-time
+# ProjectionEvaluator::Evaluate path.
+build:projection_matrix_control --cxxopt="-DPROJECTION_MATRIX_CONTROL=1"
 
 # Depthwise fused ApplyProjection: one depth-batch scheduler over all node/projection
 # tasks, preserving ordinary per-node Sparse Oblique RF projection sampling.
 # A 4-row inner-kernel unroll may be worth testing later as an implementation
 # improvement, but it is intentionally not part of this research contribution.
 build:depthwise_1_pass --cxxopt="-DDEPTHWISE_1_PASS=1"
+
+# Hidden synthetic-layout experiments for ProjectionEvaluator. These change
+# numerical-feature storage for trunk synthetic datasets only; they are
+# scheduler-independent and can be combined with default Nodewise or Depthwise.
+build:row_major_dataset_layout --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
+build:flat_col_dataset_layout --cxxopt="-DFLAT_COL_DATASET_LAYOUT=1"
 
 
 ## SYMMETRIC TREES

@@ -31,9 +31,7 @@ inline void EvaluateProjectionRows(
     const UnsignedExampleIdx ex = sel_ptr[i];
     float acc = 0.f;
     for (const auto& feat : proj) {
-      const std::vector<float>& col =
-          evaluator.AttributeValues(feat.attribute_idx);
-      float v = col[ex];
+      float v = evaluator.AttributeValue(feat.attribute_idx, ex);
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
       if (std::isnan(v)) v = evaluator.NaReplacementValue(feat.attribute_idx);
 #endif

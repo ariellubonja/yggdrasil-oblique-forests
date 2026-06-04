@@ -60,6 +60,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
+#include "yggdrasil_decision_forests/dataset/row_major_feature_matrix.h"
 #include "yggdrasil_decision_forests/dataset/types.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
 #include "yggdrasil_decision_forests/learner/abstract_learner.pb.h"
@@ -211,14 +212,32 @@ class ProjectionEvaluator {
     return *numerical_attributes_[attribute_idx];
   }
 
+  const float* AttributeData(int attribute_idx) const {
+    return numerical_attribute_data_[attribute_idx];
+  }
+
+  float AttributeValue(int attribute_idx, UnsignedExampleIdx example_idx) const {
+    if (row_major_matrix_ != nullptr) {
+      return row_major_matrix_->Get(example_idx, attribute_idx);
+    }
+    if (flat_col_matrix_ != nullptr) {
+      return flat_col_matrix_->Get(example_idx, attribute_idx);
+    }
+    return numerical_attribute_data_[attribute_idx][example_idx];
+  }
+
   float NaReplacementValue(int attribute_idx) const {
     return na_replacement_value_[attribute_idx];
   }
 
  private:
   // Non-owning pointer to numerical attributes.
-  // Indexed by attribute idx.
+  // Indexed by attribute idx. Empty in alternate-layout modes.
   std::vector<const std::vector<float>*> numerical_attributes_;
+  std::vector<const float*> numerical_attribute_data_;
+
+  const dataset::RowMajorFeatureMatrix* row_major_matrix_ = nullptr;
+  const dataset::FlatColMajorFeatureMatrix* flat_col_matrix_ = nullptr;
 
   // Replacement for missing values.
   // Indexed by attribute idx.

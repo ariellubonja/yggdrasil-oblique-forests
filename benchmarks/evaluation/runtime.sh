@@ -138,6 +138,9 @@ BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --
 # bazel_build (e.g. EXTRA_BAZEL_CONFIGS="--config=symmetric_nodewise_control").
 # shellcheck disable=SC2206
 EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
+# Optional extra train_oblique_forest flags injected into every binary command
+# (e.g. EXTRA_TRAIN_ARGS="--dataset_layout=flat_column").
+EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
 # Vectorized build configs (adjust if your repo uses different config names)
 VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
 VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
@@ -360,14 +363,14 @@ for split in "${SPLIT_TYPES[@]}"; do
       # CSV datasets
       for entry in "${CSV_DATASETS[@]}"; do
         IFS='|' read -r path label <<<"$entry"
-        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
         run_cmd "$cmd"
       done
 
       # Trunk datasets (rows|cols)
       for entry in "${TRUNK_DATASETS[@]}"; do
         IFS='|' read -r rows cols <<<"$entry"
-        cmd="$BINARY --input_mode trunk --rows $rows --cols $cols $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+        cmd="$BINARY --input_mode trunk --rows $rows --cols $cols $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
         run_cmd "$cmd"
       done
     done
@@ -424,14 +427,14 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
         # CSV datasets
         for entry in "${CSV_DATASETS[@]}"; do
           IFS='|' read -r path label <<<"$entry"
-          cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg"
+          cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
           run_cmd "$cmd"
         done
 
         # Trunk datasets (rows|cols)
         for entry in "${TRUNK_DATASETS[@]}"; do
           IFS='|' read -r rows cols <<<"$entry"
-          cmd="$BINARY --input_mode trunk --rows $rows --cols $cols --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg"
+          cmd="$BINARY --input_mode trunk --rows $rows --cols $cols --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
           run_cmd "$cmd"
         done
       done
@@ -547,14 +550,14 @@ for split in "${SPLIT_TYPES[@]}"; do
       # CSV datasets
       for entry in "${CSV_DATASETS[@]}"; do
         IFS='|' read -r path label <<<"$entry"
-        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
         run_cmd "$cmd"
       done
 
       # Trunk datasets (rows|cols)
       for entry in "${TRUNK_DATASETS[@]}"; do
         IFS='|' read -r rows cols <<<"$entry"
-        cmd="$BINARY --input_mode trunk --rows $rows --cols $cols $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+        cmd="$BINARY --input_mode trunk --rows $rows --cols $cols $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
         run_cmd "$cmd"
       done
     done

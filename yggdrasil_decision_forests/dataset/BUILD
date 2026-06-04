@@ -134,6 +134,12 @@ cc_library_ydf(
 )
 
 cc_library_ydf(
+    name = "row_major_feature_matrix",
+    hdrs = ["row_major_feature_matrix.h"],
+    deps = [],
+)
+
+cc_library_ydf(
     name = "vertical_dataset",
     srcs = [
         "vertical_dataset.cc",

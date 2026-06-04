@@ -19,7 +19,7 @@ chrono scope, summed across all depths of tree 0.
 | Tag | Build flag | What it does |
 |---|---|---|
 | **baseline** |  | Per-call `ProjectionEvaluator::Evaluate`, one Evaluate per (node, projection) pair. Original code. |
-| **per-node projection matrix (v1)** | `--config=nodewise_proj_matrix` | Per-node fused: rows-outer / projs-inner inside each node. Single-threaded outer loop over nodes. |
+| **projection-matrix control (old v1)** | `--config=projection_matrix_control` | Per-node fused: rows-outer / projs-inner inside each node. Single-threaded outer loop over nodes. This is not the Nodewise baseline; Nodewise is the default one-projection-at-a-time `ProjectionEvaluator::Evaluate` path. |
 | **triple of (n,i,p) - V2** |  | Single-pass over `(n,i,p)` triplets. `flat_selected` / `flat_projs` / `flat_out` flat buffers; per-task `upper_bound` + `divmod`. **3.85× slower than V1** — abandoned. |
 | **V2-rev1** |  | Drops `flat_out` (writes directly into `out_projected[n]`); drops `flat_selected` / `flat_projs`; one `DecodeTriplet` at chunk entry, stateful `(n,i,p)` walk. **1.14× V1** — close but not winning. |
 | **V2-rev2** |  | V2-rev1 + per-item software prefetch K=16 rows ahead. **1.74× V1** (regressed). Prefetch address recompute cost > latency hidden. |
@@ -101,7 +101,7 @@ equal, except AA Random is faster" measurement).
 | Variant | tree wall | ΣProjEval | vs baseline |
 |---|---|---|---|
 | baseline (no-isnan-baseline.csv on main) | n/a | 57.23 s | 1.00× |
-| V1 (`nodewise_proj_matrix`) | 133.8 s | 56.74 s | 0.99× |
+| projection-matrix control (`projection_matrix_control`) | 133.8 s | 56.74 s | 0.99× |
 | V2 (triple n,i,p as discussed w/ Randal) | 292.5 s | ~218 s | 3.81× ⛔ |
 | V2-rev1 (stateful walk + no flat_out) | 138.8 s | ~65 s | 1.14× |
 | V2-rev2 (rev1 + per-item prefetch K=16) | 170.9 s | ~100 s | 1.75× ⛔ |

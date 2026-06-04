@@ -374,6 +374,8 @@ if __name__ == "__main__":
     elif a.input_mode == "uniform" or a.input_mode == "trunk":
         dataset_name = f"{a.input_mode}_{a.rows}_x_{a.cols}"
         cmd += [f"--input_mode={a.input_mode}", f"--rows={a.rows}", f"--cols={a.cols}"]
+        if getattr(a, "dataset_layout", "column") != "column":
+            cmd.append(f"--dataset_layout={a.dataset_layout}")
 
     if a.use_gpu:
         device_name = utils.get_gpu_name() or "Unknown_GPU"

@@ -35,16 +35,20 @@ def get_base_parser():
     parser.add_argument("--max_num_projections", type=int)
     parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast")
     parser.add_argument("--fixed_1000_projections", action="store_true")
-    parser.add_argument("--nodewise_proj_matrix", action="store_true",
-                        help="Build with -DNODEWISE_PROJ_MATRIX=1: V1 fused "
-                             "per-level CPU ApplyProjection (per-node rows-"
-                             "outer / projections-inner matrix fill; serial "
-                             "across nodes).")
+    parser.add_argument("--projection_matrix_control", action="store_true",
+                        help="Build with -DPROJECTION_MATRIX_CONTROL=1: "
+                             "per-level projected-value slab control "
+                             "(per-node rows-outer / projections-inner matrix "
+                             "fill; serial across nodes).")
     parser.add_argument("--depthwise_1_pass", action="store_true",
-                        help="Build with -DDEPTHWISE_1_PASS=1: V2 fused "
+                        help="Build with -DDEPTHWISE_1_PASS=1: Depthwise fused "
                              "per-level CPU ApplyProjection (single-pass "
                              "kernel across all (row, projection) tasks at "
                              "the level; thread-parallel, contention-free).")
+    parser.add_argument("--dataset_layout",
+                        choices=["column", "row", "flat_column"],
+                        default="column",
+                        help="Synthetic trunk dataset feature storage layout.")
     # parser.add_argument("--enable_fast_equal_width_binning", action="store_true") # This is on by default now
     parser.add_argument("--use_gpu", type=lambda x: x.lower() in ("true", "1", "yes"),
                        default=False, help="Use GPU for oblique projections (default: false)")
@@ -52,7 +56,7 @@ def get_base_parser():
                        help="Extra --config=NAME to pass to the bazel build. Repeatable: "
                             "--bazel_config=enable_applyprojection_isnan. "
                             "Applied after the flag-driven configs (avx2, "
-                            "nodewise_prnodewise_proj_matrixoj_matrix, depthwise_1_pass, ...).")
+                            "projection_matrix_control, depthwise_1_pass, ...).")
 
     return parser
 
@@ -174,14 +178,18 @@ def build_binary(args, chrono_mode):
     if getattr(args, 'use_gpu', False):
         finished_cmd.append('--config=oblique_gpu')
 
-    if getattr(args, 'nodewise_proj_matrix', False) and getattr(args, 'depthwise_1_pass', False):
+    if getattr(args, 'projection_matrix_control', False) and getattr(args, 'depthwise_1_pass', False):
         raise ValueError(
-            "--nodewise_proj_matrix and --depthwise_1_pass are mutually "
+            "--projection_matrix_control and --depthwise_1_pass are mutually "
             "exclusive (matches the C++ #error in label.h).")
-    if getattr(args, 'nodewise_proj_matrix', False):
-        finished_cmd.append('--config=nodewise_proj_matrix')
+    if getattr(args, 'projection_matrix_control', False):
+        finished_cmd.append('--config=projection_matrix_control')
     if getattr(args, 'depthwise_1_pass', False):
         finished_cmd.append('--config=depthwise_1_pass')
+    if getattr(args, 'dataset_layout', 'column') == 'row':
+        finished_cmd.append('--config=row_major_dataset_layout')
+    elif getattr(args, 'dataset_layout', 'column') == 'flat_column':
+        finished_cmd.append('--config=flat_col_dataset_layout')
 
     if getattr(args, 'gpu_mode', None) == 'per_node':
         finished_cmd.append('--config=dfs_node_queue')

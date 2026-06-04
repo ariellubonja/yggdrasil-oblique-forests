@@ -73,6 +73,7 @@ cc_binary(
     deps = [
         "//yggdrasil_decision_forests/dataset:csv_example_reader",
         "//yggdrasil_decision_forests/dataset:data_spec",
+        "//yggdrasil_decision_forests/dataset:row_major_feature_matrix",
         "//yggdrasil_decision_forests/learner:learner_library",
         "//yggdrasil_decision_forests/learner/decision_tree:training",
         "//yggdrasil_decision_forests/learner/gradient_boosted_trees",

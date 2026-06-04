@@ -5,21 +5,23 @@
 // depth scheduler only; row-block inner-kernel unrolling is a separate possible
 // implementation improvement and is intentionally not included here.
 //
-// Design contrasted with Nodewise (ApplyProjectionsNodewiseProjMatrix,
-// oblique_cpu_nodewise_proj_matrix.h): Nodewise walks the level's nodes
-// serially on one thread, filling a per-node (rows x projections) matrix in
-// each iteration. Depthwise flattens the level's (node, projection) pairs into
+// Design contrasted with the projection-matrix control
+// (ApplyProjectionsProjectionMatrixControl,
+// oblique_cpu_projection_matrix_control.h): the control walks the level's nodes
+// serially on one thread, filling a per-node projected-value slab in each
+// iteration. Depthwise flattens the level's (node, projection) pairs into
 // a prefix-summed task range so every (node, projection) maps to a unique
 // global task index. A thread pool iterates that task range; each task
 // processes all rows of one (node, projection) pair and writes into its own
 // contention-free per-node slab slot. Node-level parallelism falls out
 // implicitly -- no special-case logic for N == 1 vs. N large.
 //
-// Mutually exclusive at build time with Nodewise (NODEWISE_PROJ_MATRIX) and
+// Mutually exclusive at build time with the projection-matrix control
+// (PROJECTION_MATRIX_CONTROL) and
 // with the symmetric-trees variants (SYMMETRIC_DEPTHWISE_AP /
 // SYMMETRIC_NODEWISE_CONTROL).
 //
-// Output contract (shared with Nodewise and the symmetric kernel):
+// Output contract (shared with the projection-matrix control and the symmetric kernel):
 // out_projected[n] is a (P_n * rows_n)-float slab, row-minor within
 // projection -- slab[p * rows_n + i] = <projections_per_node[n][p],
 // features[selected_examples_per_node[n][i]]>, with NaN inputs replaced

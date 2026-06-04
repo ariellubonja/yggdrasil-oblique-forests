@@ -1,6 +1,6 @@
-#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_nodewise_proj_matrix.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_projection_matrix_control.h"
 
-#ifdef NODEWISE_PROJ_MATRIX
+#ifdef PROJECTION_MATRIX_CONTROL
 
 #include <cmath>
 #include <cstddef>
@@ -14,7 +14,7 @@
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
-absl::Status ApplyProjectionsNodewiseProjMatrix(
+absl::Status ApplyProjectionsProjectionMatrixControl(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
@@ -48,9 +48,7 @@ absl::Status ApplyProjectionsNodewiseProjMatrix(
       for (size_t p = 0; p < P; ++p) {
         float acc = 0.f;
         for (const auto& feat : projs[p]) {
-          const std::vector<float>& col =
-              evaluator.AttributeValues(feat.attribute_idx);
-          float v = col[ex];
+          float v = evaluator.AttributeValue(feat.attribute_idx, ex);
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
           if (std::isnan(v)) {
             v = evaluator.NaReplacementValue(feat.attribute_idx);
@@ -68,4 +66,4 @@ absl::Status ApplyProjectionsNodewiseProjMatrix(
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
-#endif  // NODEWISE_PROJ_MATRIX
+#endif  // PROJECTION_MATRIX_CONTROL

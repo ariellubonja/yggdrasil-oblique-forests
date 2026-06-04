@@ -1,6 +1,8 @@
 #include <iostream>
 #include <string>
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <random>
 #include <thread>
@@ -12,6 +14,7 @@
 
 #include "yggdrasil_decision_forests/dataset/data_spec_inference.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
+#include "yggdrasil_decision_forests/dataset/row_major_feature_matrix.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset_io.h"
 #include "yggdrasil_decision_forests/learner/learner_library.h"
@@ -94,6 +97,10 @@ ABSL_FLAG(int, label_mod, 2,
           "Number of classes (labels are 1..label_mod, for synthetic mode).");
 ABSL_FLAG(uint32_t, seed, 1234,
           "PRNG seed (for deterministic synthetic mode and model training).");
+ABSL_FLAG(std::string, dataset_layout, "column",
+          "Hidden dataset-layout experiment for trunk synthetic datasets: "
+          "'column', 'row', or 'flat_column'. Non-column layouts require the "
+          "matching Bazel config.");
 
 // Histogram-based splits - Updated to match Yggdrasil implementation
 ABSL_FLAG(std::string, numerical_split_type, "Exact",
@@ -221,10 +228,97 @@ dataset::VerticalDataset BuildSyntheticDataset(
   return {};  // never reached
 }
 
+struct RowMajorTrunkDataset {
+  std::unique_ptr<dataset::VerticalDataset> vd;
+  std::unique_ptr<dataset::RowMajorFeatureMatrix> matrix;
+};
+
+struct FlatColMajorTrunkDataset {
+  std::unique_ptr<dataset::VerticalDataset> vd;
+  std::unique_ptr<dataset::FlatColMajorFeatureMatrix> matrix;
+};
+
+template <typename Matrix>
+void FillTrunkMatrix(Matrix* matrix, int64_t rows, int cols, uint32_t seed) {
+  using RNG = std::minstd_rand;
+  constexpr int kNInformative = 256;
+  const int ninform = std::min(kNInformative, cols);
+
+  std::vector<float> mu0(cols, 0.f), mu1(cols, 0.f);
+  for (int j = 0; j < ninform; ++j) {
+    const float f = 1.f / std::sqrt(float(j + 1));
+    mu0[j] = -f;
+    mu1[j] = f;
+  }
+
+  const int n_threads = std::max(1u, std::thread::hardware_concurrency());
+  auto fill_range = [&](int j_begin, int j_end) {
+    for (int j = j_begin; j < j_end; ++j) {
+      std::seed_seq seq{seed, static_cast<uint32_t>(j)};
+      RNG rng(seq);
+      std::normal_distribution<float> normal(0.0f, 1.0f);
+      const float m0 = mu0[j];
+      const float m1 = mu1[j];
+      for (int64_t i = 0; i < rows; ++i) {
+        const bool cls1 = (i >= rows / 2);
+        matrix->Set(i, j, (cls1 ? m1 : m0) + normal(rng));
+      }
+    }
+  };
+
+  std::vector<std::thread> workers;
+  workers.reserve(n_threads);
+  const int chunk = (cols + n_threads - 1) / n_threads;
+  for (int t = 0; t < n_threads; ++t) {
+    const int j_begin = t * chunk;
+    const int j_end = std::min(cols, j_begin + chunk);
+    if (j_begin >= j_end) break;
+    workers.emplace_back(fill_range, j_begin, j_end);
+  }
+  for (auto& worker : workers) worker.join();
+}
+
+std::unique_ptr<dataset::VerticalDataset> MakeLabelOnlyTrunkDataset(
+    const dataset::proto::DataSpecification& spec, int64_t rows, int cols) {
+  auto vd = std::make_unique<dataset::VerticalDataset>();
+  vd->set_data_spec(spec);
+  CHECK_OK(vd->CreateColumnsFromDataspec());
+  vd->set_nrow(rows);
+
+  auto* y_col =
+      vd->MutableColumnWithCast<dataset::VerticalDataset::CategoricalColumn>(
+          cols);
+  y_col->mutable_values()->resize(rows);
+  auto* y = y_col->mutable_values();
+  for (int64_t i = 0; i < rows; ++i) {
+    (*y)[i] = (i >= rows / 2) ? 2 : 1;
+  }
+  return vd;
+}
+
+RowMajorTrunkDataset MakeTrunkDatasetRowMajor(
+    const dataset::proto::DataSpecification& spec, int64_t rows, int cols,
+    uint32_t seed) {
+  auto matrix = std::make_unique<dataset::RowMajorFeatureMatrix>(rows, cols);
+  FillTrunkMatrix(matrix.get(), rows, cols, seed);
+  return {MakeLabelOnlyTrunkDataset(spec, rows, cols), std::move(matrix)};
+}
+
+FlatColMajorTrunkDataset MakeTrunkDatasetFlatColMajor(
+    const dataset::proto::DataSpecification& spec, int64_t rows, int cols,
+    uint32_t seed) {
+  auto matrix =
+      std::make_unique<dataset::FlatColMajorFeatureMatrix>(rows, cols);
+  FillTrunkMatrix(matrix.get(), rows, cols, seed);
+  return {MakeLabelOnlyTrunkDataset(spec, rows, cols), std::move(matrix)};
+}
+
 /* #endregion */
 
 int main(int argc, char** argv) {
   absl::ParseCommandLine(argc, argv);
+  dataset::RowMajorFeatureMatrix::SetActive(nullptr);
+  dataset::FlatColMajorFeatureMatrix::SetActive(nullptr);
   const auto mode = absl::GetFlag(FLAGS_input_mode);
 
   // Validate required input_mode flag
@@ -268,24 +362,79 @@ int main(int argc, char** argv) {
         &data_spec);
   }
   else if (mode == "uniform" || mode == "trunk") {
+    const std::string layout = absl::GetFlag(FLAGS_dataset_layout);
     LOG(INFO) << "Generating " << mode << " synthetic dataset: rows="
               << absl::GetFlag(FLAGS_rows)
-              << ", cols=" << absl::GetFlag(FLAGS_cols);
+              << ", cols=" << absl::GetFlag(FLAGS_cols)
+              << ", layout=" << layout;
 
     label_col = "y";
     data_spec = MakeSyntheticSpec(absl::GetFlag(FLAGS_cols),
                                   absl::GetFlag(FLAGS_rows),
                                   2, label_col);
 
-    auto ds = BuildSyntheticDataset(
-                mode,
-                data_spec,
-                absl::GetFlag(FLAGS_rows),
-                absl::GetFlag(FLAGS_cols),
-                absl::GetFlag(FLAGS_seed));
+    static std::unique_ptr<dataset::RowMajorFeatureMatrix> row_major_matrix;
+    static std::unique_ptr<dataset::FlatColMajorFeatureMatrix> flat_col_matrix;
+    dataset::RowMajorFeatureMatrix::SetActive(nullptr);
+    dataset::FlatColMajorFeatureMatrix::SetActive(nullptr);
 
-    tf_ds = std::make_unique<dataset::VerticalDataset>(std::move(ds));
-    ds_ptr = tf_ds.get();
+    if (layout == "column") {
+      auto ds = BuildSyntheticDataset(mode, data_spec,
+                                      absl::GetFlag(FLAGS_rows),
+                                      absl::GetFlag(FLAGS_cols),
+                                      absl::GetFlag(FLAGS_seed));
+      tf_ds = std::make_unique<dataset::VerticalDataset>(std::move(ds));
+      ds_ptr = tf_ds.get();
+    } else if (layout == "row") {
+#if defined(ROW_MAJOR_DATASET_LAYOUT)
+      if (mode != "trunk") {
+        std::cerr << "--dataset_layout=row only supports trunk synthetic.\n";
+        return 1;
+      }
+      auto rm = MakeTrunkDatasetRowMajor(data_spec,
+                                         absl::GetFlag(FLAGS_rows),
+                                         absl::GetFlag(FLAGS_cols),
+                                         absl::GetFlag(FLAGS_seed));
+      tf_ds = std::move(rm.vd);
+      row_major_matrix = std::move(rm.matrix);
+      dataset::RowMajorFeatureMatrix::SetActive(row_major_matrix.get());
+      LOG(INFO) << "Row-major matrix allocated: "
+                << (row_major_matrix->bytes() / (1024.0 * 1024.0 * 1024.0))
+                << " GiB";
+      ds_ptr = tf_ds.get();
+#else
+      std::cerr << "--dataset_layout=row requires "
+                   "--config=row_major_dataset_layout.\n";
+      return 1;
+#endif
+    } else if (layout == "flat_column") {
+#if defined(FLAT_COL_DATASET_LAYOUT)
+      if (mode != "trunk") {
+        std::cerr
+            << "--dataset_layout=flat_column only supports trunk synthetic.\n";
+        return 1;
+      }
+      auto fc = MakeTrunkDatasetFlatColMajor(data_spec,
+                                             absl::GetFlag(FLAGS_rows),
+                                             absl::GetFlag(FLAGS_cols),
+                                             absl::GetFlag(FLAGS_seed));
+      tf_ds = std::move(fc.vd);
+      flat_col_matrix = std::move(fc.matrix);
+      dataset::FlatColMajorFeatureMatrix::SetActive(flat_col_matrix.get());
+      LOG(INFO) << "Flat-column-major matrix allocated: "
+                << (flat_col_matrix->bytes() / (1024.0 * 1024.0 * 1024.0))
+                << " GiB";
+      ds_ptr = tf_ds.get();
+#else
+      std::cerr << "--dataset_layout=flat_column requires "
+                   "--config=flat_col_dataset_layout.\n";
+      return 1;
+#endif
+    } else {
+      std::cerr << "Unknown --dataset_layout: " << layout
+                << ". Use 'column', 'row', or 'flat_column'.\n";
+      return 1;
+    }
   }
   else if (mode == "tfrecord") {
     LOG(INFO) << "Reading TFRECORD";

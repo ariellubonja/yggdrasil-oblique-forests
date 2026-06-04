@@ -65,7 +65,7 @@ cc_library_ydf(
     srcs = [
         "oblique.cc",
         "oblique_cpu_depthwise_1pass.cc",
-        "oblique_cpu_nodewise_proj_matrix.cc",
+        "oblique_cpu_projection_matrix_control.cc",
         "oblique_cpu_symmetric_depthwise_ap.cc",
         "training.cc",
         "vector_sequence.cc",
@@ -73,7 +73,7 @@ cc_library_ydf(
     hdrs = [
         "oblique.h",
         "oblique_cpu_depthwise_1pass.h",
-        "oblique_cpu_nodewise_proj_matrix.h",
+        "oblique_cpu_projection_matrix_control.h",
         "oblique_cpu_symmetric_depthwise_ap.h",
         "training.h",
         "vector_sequence.h",
@@ -89,6 +89,7 @@ cc_library_ydf(
         ":utils",
         "//yggdrasil_decision_forests/dataset:data_spec",
         "//yggdrasil_decision_forests/dataset:data_spec_cc_proto",
+        "//yggdrasil_decision_forests/dataset:row_major_feature_matrix",
         "//yggdrasil_decision_forests/dataset:types",
         "//yggdrasil_decision_forests/dataset:vertical_dataset",
         "//yggdrasil_decision_forests/learner:abstract_learner_cc_proto",

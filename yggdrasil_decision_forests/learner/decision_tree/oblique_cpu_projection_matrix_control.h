@@ -1,8 +1,8 @@
-// Nodewise fused-per-level CPU ApplyProjection for Oblique Random Forests:
-// per-node rows-outer / projections-inner matrix fill.
+// Projection-matrix control for Oblique Random Forests:
+// per-node rows-outer / projections-inner slab fill.
 //
 // Ported from branch `1-pass-AP-CPU` (commit 98ed1c66). Used as the
-// control counterpart to Depthwise (DEPTHWISE_1_PASS): Nodewise reorders the
+// control counterpart to Depthwise (DEPTHWISE_1_PASS): this path reorders the
 // work *within each node* so each row's feature loads are reused across all P
 // projections for that row's node, but it does NOT fuse across nodes -- the
 // outer loop walks the level's nodes serially on the caller thread, so
@@ -13,7 +13,7 @@
 // tasks at the level, scheduled across threads with contention-free writes.
 //
 // The two variants and the symmetric kernels are mutually exclusive at
-// build time (NODEWISE_PROJ_MATRIX vs. DEPTHWISE_1_PASS vs.
+// build time (PROJECTION_MATRIX_CONTROL vs. DEPTHWISE_1_PASS vs.
 // SYMMETRIC_DEPTHWISE_AP / SYMMETRIC_NODEWISE_CONTROL).
 //
 // Output contract (shared with Depthwise and the symmetric kernel):
@@ -23,8 +23,8 @@
 // by the dataset-level feature mean when ENABLE_APPLYPROJECTION_ISNAN is
 // defined.
 
-#ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_NODEWISE_PROJ_MATRIX_H_
-#define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_NODEWISE_PROJ_MATRIX_H_
+#ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_PROJECTION_MATRIX_CONTROL_H_
+#define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_PROJECTION_MATRIX_CONTROL_H_
 
 #include <vector>
 
@@ -37,10 +37,11 @@
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
-// Single-threaded Nodewise control. Per-node outer loop; within a node, rows outer and
+// Single-threaded projection-matrix control. Per-node outer loop; within a node,
+// rows outer and
 // projections inner so each row's feature reads are amortized across all
 // P projections for the node.
-absl::Status ApplyProjectionsNodewiseProjMatrix(
+absl::Status ApplyProjectionsProjectionMatrixControl(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
@@ -50,4 +51,4 @@ absl::Status ApplyProjectionsNodewiseProjMatrix(
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
-#endif  // YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_NODEWISE_PROJ_MATRIX_H_
+#endif  // YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_PROJECTION_MATRIX_CONTROL_H_

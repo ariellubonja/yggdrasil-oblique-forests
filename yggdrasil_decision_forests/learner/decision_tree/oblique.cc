@@ -1035,8 +1035,8 @@ absl::Status LDACache::ComputeClassification(
     weight_per_class[shifted_class] += weight;
 
     for (int feature_idx = 0; feature_idx < num_features; feature_idx++) {
-      const float feature_value = projection_evaluator.AttributeValues(
-          selected_features[feature_idx])[example_idx];
+      const float feature_value = projection_evaluator.AttributeValue(
+          selected_features[feature_idx], example_idx);
 
       mean_per_feature[feature_idx] += feature_value * weight;
       mean_per_feature_and_class[feature_idx + shifted_class * num_features] +=
@@ -1159,7 +1159,33 @@ ProjectionEvaluator::ProjectionEvaluator(
       *std::max_element(numerical_features.begin(), numerical_features.end());
 
   numerical_attributes_.assign(max_feature_idx + 1, nullptr);
+  numerical_attribute_data_.assign(max_feature_idx + 1, nullptr);
   na_replacement_value_.assign(max_feature_idx + 1, 0.f);
+
+  for (const auto attribute_idx : numerical_features) {
+    na_replacement_value_[attribute_idx] =
+        train_dataset.data_spec().columns(attribute_idx).numerical().mean();
+  }
+
+#if defined(ROW_MAJOR_DATASET_LAYOUT)
+  const auto* row_active = dataset::RowMajorFeatureMatrix::Active();
+  if (row_active != nullptr) {
+    DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+              row_active->num_rows());
+    row_major_matrix_ = row_active;
+    return;
+  }
+#endif
+
+#if defined(FLAT_COL_DATASET_LAYOUT)
+  const auto* flat_active = dataset::FlatColMajorFeatureMatrix::Active();
+  if (flat_active != nullptr) {
+    DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+              flat_active->num_rows());
+    flat_col_matrix_ = flat_active;
+    return;
+  }
+#endif
 
   for (const auto attribute_idx : numerical_features) {
     const auto column_or = train_dataset.ColumnWithCastWithStatus<
@@ -1170,8 +1196,8 @@ ProjectionEvaluator::ProjectionEvaluator(
     }
 
     numerical_attributes_[attribute_idx] = &column_or.value()->values();
-    na_replacement_value_[attribute_idx] =
-        train_dataset.data_spec().columns(attribute_idx).numerical().mean();
+    numerical_attribute_data_[attribute_idx] =
+        column_or.value()->values().data();
   }
 }
 
@@ -1191,12 +1217,8 @@ absl::Status ProjectionEvaluator::Evaluate(
     for (const auto& item : projection) {
       DCHECK_LT(item.attribute_idx, numerical_attributes_.size());
       DCHECK_GE(item.attribute_idx, 0);
-      
-      const auto* attribute_values = numerical_attributes_[item.attribute_idx];
-      
-      DCHECK(attribute_values != nullptr);
-      
-      float attribute_value = (*attribute_values)[example_idx];
+
+      float attribute_value = AttributeValue(item.attribute_idx, example_idx);
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
       if (std::isnan(attribute_value)) {
         attribute_value = na_replacement_value_[item.attribute_idx];
@@ -1215,12 +1237,11 @@ absl::Status ProjectionEvaluator::ExtractAttribute(
     std::vector<float>* values) const {
   RETURN_IF_ERROR(constructor_status_);
   values->resize(selected_examples.size());
-  const std::vector<float>& src_values = *numerical_attributes_[attribute_idx];
   const float na_replacement_value = na_replacement_value_[attribute_idx];
   for (size_t selected_idx = 0; selected_idx < selected_examples.size();
        selected_idx++) {
     const auto example_idx = selected_examples[selected_idx];
-    float value = src_values[example_idx];
+    float value = AttributeValue(attribute_idx, example_idx);
     if (std::isnan(value)) {
       value = na_replacement_value;
     }
@@ -1253,11 +1274,11 @@ void SubtractTransposeMultiplyAdd(
 
   const int n = b.size();
   for (int i = 0; i < n; i++) {
-    const double x_i =
-        projection_evaluator.AttributeValues(selected_features[i])[example_idx];
+    const double x_i = projection_evaluator.AttributeValue(
+        selected_features[i], example_idx);
     for (int j = 0; j < n; j++) {
-      const double x_j = projection_evaluator.AttributeValues(
-          selected_features[j])[example_idx];
+      const double x_j = projection_evaluator.AttributeValue(
+          selected_features[j], example_idx);
       output[j + i * n] += weight * (x_i - b[i]) * (x_j - b[j]);
     }
   }

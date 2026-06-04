@@ -102,7 +102,7 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     std::vector<float> nas(M);
 #endif
     for (size_t m = 0; m < M; ++m) {
-      col_ptrs[m] = evaluator.AttributeValues(proj[m].attribute_idx).data();
+      col_ptrs[m] = evaluator.AttributeData(proj[m].attribute_idx);
       ws[m] = proj[m].weight;
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
       nas[m] = evaluator.NaReplacementValue(proj[m].attribute_idx);
@@ -113,7 +113,9 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
       const UnsignedExampleIdx ex = bag[i];
       float value = 0.f;
       for (size_t m = 0; m < M; ++m) {
-        float v = col_ptrs[m][ex];
+        float v = col_ptrs[m] != nullptr
+                      ? col_ptrs[m][ex]
+                      : evaluator.AttributeValue(proj[m].attribute_idx, ex);
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
         if (std::isnan(v)) v = nas[m];
 #endif

@@ -42,6 +42,7 @@
 #include "yggdrasil_decision_forests/dataset/data_spec.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
 #include "yggdrasil_decision_forests/dataset/example.pb.h"
+#include "yggdrasil_decision_forests/dataset/row_major_feature_matrix.h"
 #include "yggdrasil_decision_forests/dataset/types.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
 #include "yggdrasil_decision_forests/model/abstract_model.pb.h"
@@ -847,6 +848,18 @@ struct EvalConditionOblique {
         const dataset::VerticalDataset& dataset,
         const proto::Condition::Oblique& condition) {
       Data data;
+#if defined(ROW_MAJOR_DATASET_LAYOUT)
+      data.row_major = dataset::RowMajorFeatureMatrix::Active();
+      if (data.row_major != nullptr) {
+        return data;
+      }
+#endif
+#if defined(FLAT_COL_DATASET_LAYOUT)
+      data.flat_col = dataset::FlatColMajorFeatureMatrix::Active();
+      if (data.flat_col != nullptr) {
+        return data;
+      }
+#endif
       data.attribute_data.reserve(condition.attributes_size());
       for (const auto attribute : condition.attributes()) {
         ASSIGN_OR_RETURN(
@@ -861,6 +874,8 @@ struct EvalConditionOblique {
     std::vector<
         const std::vector<dataset::VerticalDataset::NumericalColumn::Format>*>
         attribute_data;
+    const dataset::RowMajorFeatureMatrix* row_major = nullptr;
+    const dataset::FlatColMajorFeatureMatrix* flat_col = nullptr;
   };
 
   EvalConditionOblique(const proto::Condition::Oblique& condition)
@@ -876,7 +891,14 @@ struct EvalConditionOblique {
                                   const bool na_value) {
     float sum = 0.f;
     for (size_t item_idx = 0; item_idx < attributes.size(); item_idx++) {
-      float value = (*data.attribute_data[item_idx])[example_idx];
+      float value;
+      if (data.row_major != nullptr) {
+        value = data.row_major->Get(example_idx, attributes[item_idx]);
+      } else if (data.flat_col != nullptr) {
+        value = data.flat_col->Get(example_idx, attributes[item_idx]);
+      } else {
+        value = (*data.attribute_data[item_idx])[example_idx];
+      }
       if (std::isnan(value)) {
         if (na_replacements.empty()) {
           return na_value;
@@ -1300,11 +1322,26 @@ absl::StatusOr<bool> EvalConditionFromColumn(
       const auto& oblique = condition.condition().oblique_condition();
       for (int item_idx = 0; item_idx < oblique.attributes_size(); item_idx++) {
         const auto attribute = oblique.attributes(item_idx);
-        const auto local_column_data = dataset.column(attribute);
-        const auto* numerical_column =
-            static_cast<const dataset::VerticalDataset::NumericalColumn* const>(
-                local_column_data);
-        float value = numerical_column->values()[example_idx];
+        float value;
+#if defined(ROW_MAJOR_DATASET_LAYOUT)
+        if (const auto* row_major = dataset::RowMajorFeatureMatrix::Active();
+            row_major != nullptr) {
+          value = row_major->Get(example_idx, attribute);
+        } else
+#endif
+#if defined(FLAT_COL_DATASET_LAYOUT)
+        if (const auto* flat_col = dataset::FlatColMajorFeatureMatrix::Active();
+            flat_col != nullptr) {
+          value = flat_col->Get(example_idx, attribute);
+        } else
+#endif
+        {
+          const auto local_column_data = dataset.column(attribute);
+          const auto* numerical_column =
+              static_cast<const dataset::VerticalDataset::NumericalColumn* const>(
+                  local_column_data);
+          value = numerical_column->values()[example_idx];
+        }
         if (std::isnan(value)) {
           if (oblique.na_replacements_size() == 0) {
             return condition.na_value();
