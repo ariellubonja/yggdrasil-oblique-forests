@@ -58,6 +58,14 @@ enum FuncId {
   kGpuSortIndices,              // ThrustSortIndicesOnly (Exact sort stage)
   kGpuExactSplit,               // ExactSplit (Exact gain/argmax stage)
   kGpuOther,                    // Residual = bridge total − Σ tracked stages
+
+  // Sub-phases of ApplyProjectionsSymmetricDepthwiseAP. Only emitted when
+  // compiled with -DSYMMETRIC_DEPTHWISE_AP; left at zero otherwise so the
+  // enum values stay stable across builds.
+  kSymBuildBag,   // Pre-size slabs + concat per-node selected_examples → bag
+  kSymSortBag,    // stable_sort(perm) + materialize sorted bag/node_of_bag
+  kSymSweep,      // K bag-wide stride-1 projection sweeps (the hot loop)
+
   kNumFuncs
 };
 

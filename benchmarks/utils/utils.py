@@ -18,9 +18,9 @@ def get_base_parser():
     parser = argparse.ArgumentParser(add_help=False)  # add_help=False to avoid duplicate help
     
     # Common arguments
-    parser.add_argument("--input_mode", choices=["uniform", "trunk", "csv"], default="csv")
-    parser.add_argument("--train_csv", default="benchmarks/data/processed_wise1_data.csv")
-    parser.add_argument("--label_col", default="Cancer Status")
+    parser.add_argument("--input_mode", choices=["uniform", "trunk", "csv"], default="trunk")
+    parser.add_argument("--train_csv")
+    parser.add_argument("--label_col")
     parser.add_argument("--experiment_name", default="")
     parser.add_argument("--feature_split_type", default="Oblique",
                        choices=["Axis Aligned", "Oblique"])
@@ -45,6 +45,11 @@ def get_base_parser():
                              "per-level CPU ApplyProjection (single-pass "
                              "kernel across all (row, projection) tasks at "
                              "the level; thread-parallel, contention-free).")
+    parser.add_argument("--symmetric_depthwise_ap", action="store_true",
+                        help="Build with -DSYMMETRIC_DEPTHWISE_AP=1: "
+                             "CatBoost-style symmetric-trees bag-wide "
+                             "ApplyProjection (K stride-1 sweeps over the "
+                             "sorted bag, shared projections per depth).")
     parser.add_argument("--dataset_layout",
                         choices=["column", "row", "flat_column"],
                         default="column",
@@ -170,7 +175,7 @@ def build_binary(args, chrono_mode):
         finished_cmd.append('--config=slow_sample_projections')
     
     if chrono_mode:
-        finished_cmd.append('--config=multithreaded_chrono_profile')
+        finished_cmd.append('--config=chrono_profile')
 
     # --use_gpu=true requires the GPU code paths to be compiled in. Without
     # --config=oblique_gpu the OBLIQUE_GPU_ENABLED macro is undefined and
@@ -178,14 +183,25 @@ def build_binary(args, chrono_mode):
     if getattr(args, 'use_gpu', False):
         finished_cmd.append('--config=oblique_gpu')
 
-    if getattr(args, 'projection_matrix_control', False) and getattr(args, 'depthwise_1_pass', False):
+    _ap_variants = [
+        ('--projection_matrix_control',
+         getattr(args, 'projection_matrix_control', False)),
+        ('--depthwise_1_pass',
+         getattr(args, 'depthwise_1_pass', False)),
+        ('--symmetric_depthwise_ap',
+         getattr(args, 'symmetric_depthwise_ap', False)),
+    ]
+    _on = [name for name, v in _ap_variants if v]
+    if len(_on) > 1:
         raise ValueError(
-            "--projection_matrix_control and --depthwise_1_pass are mutually "
-            "exclusive (matches the C++ #error in label.h).")
+            f"{' / '.join(_on)} are mutually exclusive "
+            "(matches the C++ #error in label.h).")
     if getattr(args, 'projection_matrix_control', False):
         finished_cmd.append('--config=projection_matrix_control')
     if getattr(args, 'depthwise_1_pass', False):
         finished_cmd.append('--config=depthwise_1_pass')
+    if getattr(args, 'symmetric_depthwise_ap', False):
+        finished_cmd.append('--config=symmetric_depthwise_ap')
     if getattr(args, 'dataset_layout', 'column') == 'row':
         finished_cmd.append('--config=row_major_dataset_layout')
     elif getattr(args, 'dataset_layout', 'column') == 'flat_column':

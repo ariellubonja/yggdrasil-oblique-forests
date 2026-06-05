@@ -108,7 +108,7 @@ beats narrative.
 
 ```bash
 bazel build -c opt //yggdrasil_decision_forests/learner/decision_tree:training        # Default opt build
-bazel build -c opt --config=multithreaded_chrono_profile //...                        # CHRONO timing per tree/depth
+bazel build -c opt --config=chrono_profile //...                        # CHRONO timing per tree/depth
 bazel build -c opt --config=intel_profiler //...                                       # -O2 + DWARF, perf-annotate-friendly
 bazel build --config=intel_debug //...                                                  # icx debug build
 ```
@@ -116,7 +116,7 @@ bazel build --config=intel_debug //...                                          
 ### Key configs (`.bazelrc`)
 | Config | Purpose |
 |--------|---------|
-| `multithreaded_chrono_profile` | `CHRONO_ENABLED` — per-function timing by tree/depth |
+| `chrono_profile` | `CHRONO_ENABLED` — per-function timing by tree/depth |
 | `enable_std_upper_bound_avx2` / `avx512` | Vectorized `upper_bound` |
 
 

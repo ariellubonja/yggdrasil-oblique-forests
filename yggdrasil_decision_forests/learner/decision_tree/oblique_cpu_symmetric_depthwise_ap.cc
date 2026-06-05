@@ -24,6 +24,9 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
         selected_examples_per_node,
     absl::Span<const internal::Projection> shared_projections,
     absl::Span<std::vector<float>> out_projected) {
+  // Outer scope: total ProjectionEvaluate budget. Sub-phase scopes below
+  // partition this into BuildBag / SortBag / Sweep so parallel_chrono.py
+  // can break ApplyProjection down per depth.
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
 
   const size_t N = selected_examples_per_node.size();
@@ -36,22 +39,24 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     return absl::OkStatus();
   }
 
-  // Per-node row counts + slab pre-size.
+  // ── Phase 1: BuildBag ─────────────────────────────────────────────
+  // Per-node row counts + slab pre-size, then concat per-node
+  // selected_examples (+ parallel node-id) into one flat bag.
   std::vector<size_t> rows_n(N);
   size_t bag_size = 0;
-  for (size_t n = 0; n < N; ++n) {
-    rows_n[n] = selected_examples_per_node[n].size();
-    bag_size += rows_n[n];
-    out_projected[n].assign(K * rows_n[n], 0.f);
-  }
-  if (bag_size == 0) return absl::OkStatus();
-
-  // Build the bag (concat per-node selected_examples + parallel node-id),
-  // then sort by example_idx so projections sweep stride-1 in column space.
-  // Each per-node selected_examples is already individually sorted ascending.
-  std::vector<UnsignedExampleIdx> bag(bag_size);
-  std::vector<uint32_t> node_of_bag(bag_size);
+  std::vector<UnsignedExampleIdx> bag;
+  std::vector<uint32_t> node_of_bag;
   {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSymBuildBag);
+    for (size_t n = 0; n < N; ++n) {
+      rows_n[n] = selected_examples_per_node[n].size();
+      bag_size += rows_n[n];
+      out_projected[n].assign(K * rows_n[n], 0.f);
+    }
+    if (bag_size == 0) return absl::OkStatus();
+
+    bag.resize(bag_size);
+    node_of_bag.resize(bag_size);
     size_t cur = 0;
     for (size_t n = 0; n < N; ++n) {
       for (const UnsignedExampleIdx e : selected_examples_per_node[n]) {
@@ -62,16 +67,18 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     }
   }
 
-  // Sort bag by example_idx, carrying node_of_bag with it.
-  // Because per-node lists were already sorted, within each (sorted) node
-  // group the relative order of that node's examples is preserved — that's
-  // what makes the write_cursor[n]++ on the consumer side give the correct
-  // pos_in_node[i] for slab[k * rows_n + pos].
-  std::vector<uint32_t> perm(bag_size);
-  std::iota(perm.begin(), perm.end(), 0u);
-  std::stable_sort(perm.begin(), perm.end(),
-                   [&bag](uint32_t a, uint32_t b) { return bag[a] < bag[b]; });
+  // ── Phase 2: SortBag ──────────────────────────────────────────────
+  // Sort bag by example_idx, carrying node_of_bag with it. Because
+  // per-node lists were already sorted, within each (sorted) node group
+  // the relative order of that node's examples is preserved — that's
+  // what makes the write_cursor[n]++ on the consumer side give the
+  // correct pos_in_node[i] for slab[k * rows_n + pos].
   {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSymSortBag);
+    std::vector<uint32_t> perm(bag_size);
+    std::iota(perm.begin(), perm.end(), 0u);
+    std::stable_sort(perm.begin(), perm.end(),
+                     [&bag](uint32_t a, uint32_t b) { return bag[a] < bag[b]; });
     std::vector<UnsignedExampleIdx> sorted_bag(bag_size);
     std::vector<uint32_t> sorted_node_of_bag(bag_size);
     for (size_t i = 0; i < bag_size; ++i) {
@@ -82,48 +89,52 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     node_of_bag.swap(sorted_node_of_bag);
   }
 
-  internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
-
+  // ── Phase 3: Sweep ────────────────────────────────────────────────
   // K bag-wide sweeps. For each projection k:
   //  - Hoist per-item col pointers + weights + NA values out of the i-loop.
   //  - Walk sorted bag in stride-1 order. Per example: compute value, route
   //    to its owning node's slab via a write_cursor[].
-  std::vector<uint32_t> write_cursor(N);
-  for (size_t k = 0; k < K; ++k) {
-    std::fill(write_cursor.begin(), write_cursor.end(), 0u);
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSymSweep);
+    internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
 
-    const auto& proj = shared_projections[k];
-    const size_t M = proj.size();
-    if (M == 0) continue;
+    std::vector<uint32_t> write_cursor(N);
+    for (size_t k = 0; k < K; ++k) {
+      std::fill(write_cursor.begin(), write_cursor.end(), 0u);
 
-    std::vector<const float*> col_ptrs(M);
-    std::vector<float> ws(M);
+      const auto& proj = shared_projections[k];
+      const size_t M = proj.size();
+      if (M == 0) continue;
+
+      std::vector<const float*> col_ptrs(M);
+      std::vector<float> ws(M);
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
-    std::vector<float> nas(M);
+      std::vector<float> nas(M);
 #endif
-    for (size_t m = 0; m < M; ++m) {
-      col_ptrs[m] = evaluator.AttributeData(proj[m].attribute_idx);
-      ws[m] = proj[m].weight;
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
-      nas[m] = evaluator.NaReplacementValue(proj[m].attribute_idx);
-#endif
-    }
-
-    for (size_t i = 0; i < bag_size; ++i) {
-      const UnsignedExampleIdx ex = bag[i];
-      float value = 0.f;
       for (size_t m = 0; m < M; ++m) {
-        float v = col_ptrs[m] != nullptr
-                      ? col_ptrs[m][ex]
-                      : evaluator.AttributeValue(proj[m].attribute_idx, ex);
+        col_ptrs[m] = evaluator.AttributeData(proj[m].attribute_idx);
+        ws[m] = proj[m].weight;
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
-        if (std::isnan(v)) v = nas[m];
+        nas[m] = evaluator.NaReplacementValue(proj[m].attribute_idx);
 #endif
-        value += ws[m] * v;
       }
-      const uint32_t n = node_of_bag[i];
-      const uint32_t pos = write_cursor[n]++;
-      out_projected[n][k * rows_n[n] + pos] = value;
+
+      for (size_t i = 0; i < bag_size; ++i) {
+        const UnsignedExampleIdx ex = bag[i];
+        float value = 0.f;
+        for (size_t m = 0; m < M; ++m) {
+          float v = col_ptrs[m] != nullptr
+                        ? col_ptrs[m][ex]
+                        : evaluator.AttributeValue(proj[m].attribute_idx, ex);
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+          if (std::isnan(v)) v = nas[m];
+#endif
+          value += ws[m] * v;
+        }
+        const uint32_t n = node_of_bag[i];
+        const uint32_t pos = write_cursor[n]++;
+        out_projected[n][k * rows_n[n] + pos] = value;
+      }
     }
   }
 

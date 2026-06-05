@@ -24,7 +24,7 @@ def get_args():
     
     # Add script-specific arguments
     p.add_argument("--histogram_num_bins", type=int, default=64)
-    p.add_argument("--rows", type=int, default=4096)
+    p.add_argument("--rows", type=int, default=3000000)
     p.add_argument("--cols", type=int, default=4096)
     p.add_argument("--save_log", action="store_true")
     p.add_argument("--skip_build", help="Skip building target. Use whatever's in .bazel-bin", action="store_true")
@@ -53,6 +53,11 @@ _GPU_TAIL_RX = (
     r"(?:\s+SortIndices\s+([0-9.eE+-]+)s)?"
     r"(?:\s+ExactSplit\s+([0-9.eE+-]+)s)?"
     r"(?:\s+GpuOther\s+([0-9.eE+-]+)s)?"
+    # ApplyProjectionsSymmetricDepthwiseAP sub-phases. Optional — only
+    # emitted when the binary is built with -DSYMMETRIC_DEPTHWISE_AP.
+    r"(?:\s+SymBuildBag\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+SymSortBag\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+SymSweep\s+([0-9.eE+-]+)s)?"
 )
 
 # "Classic" (Exact / sort-based CPU split)
@@ -106,7 +111,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              setup, minmax, ast, sbt,
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
-             gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other) = g
+             gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
+             sym_build, sym_sort, sym_sweep) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -133,6 +139,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SortIndices                  = opt_float(gpu_sort_idx),
                 ExactSplit                   = opt_float(gpu_exact_split),
                 GpuOther                     = opt_float(gpu_other),
+                SymBuildBag                  = opt_float(sym_build),
+                SymSortBag                   = opt_float(sym_sort),
+                SymSweep                     = opt_float(sym_sweep),
             ))
         else:
             (tid, tree, depth, nodes, samples,
@@ -142,7 +151,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              features, labels, scan_presorted,
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
-             gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other) = g
+             gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
+             sym_build, sym_sort, sym_sweep) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -173,6 +183,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SortIndices                  = opt_float(gpu_sort_idx),
                 ExactSplit                   = opt_float(gpu_exact_split),
                 GpuOther                     = opt_float(gpu_other),
+                SymBuildBag                  = opt_float(sym_build),
+                SymSortBag                   = opt_float(sym_sort),
+                SymSweep                     = opt_float(sym_sweep),
             ))
 
     if not rows:
@@ -216,6 +229,11 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "SortLabels":                   "--SortLabels",
             "SortScanSplits":               "-SortScanSplits",
             "ScanPresorted":                "-ScanPresorted",
+            # ApplyProjectionsSymmetricDepthwiseAP sub-phases (nest under
+            # ApplyProjection — they sum to it).
+            "SymBuildBag":                  "-SymBuildBag",
+            "SymSortBag":                   "-SymSortBag",
+            "SymSweep":                     "-SymSweep",
         })
 
         g = g.drop(columns=["thread"])
@@ -242,6 +260,11 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "GpuUnpack",
             # CPU split-finder subtree follows.
             "ApplyProjection",
+            # Symmetric-depthwise-AP sub-phases (sum to ApplyProjection).
+            # Zero-dropped on non-symmetric builds.
+            "-SymBuildBag",
+            "-SymSortBag",
+            "-SymSweep",
             "EvaluateProjection",
             "GetCandidateAttributes",
             "AxisAlignedColumnFetch",
@@ -362,9 +385,6 @@ if __name__ == "__main__":
 
     # Use CSV filename (without extension) if using CSV input, otherwise use matrix dimensions
     if a.input_mode == "csv":
-        if a.rows != 4096 or a.cols != 4096:
-            raise ValueError("Input Mode specified to be CSV, however synthetic --rows or --cols was also specified")
-
         csv_filename = Path(a.train_csv).stem  # Gets filename without extension
         dataset_name = csv_filename
 

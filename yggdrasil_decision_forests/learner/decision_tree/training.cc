@@ -5434,6 +5434,15 @@ absl::Status GrowTreeLocalBFS(
       }
 
       std::vector<std::vector<float>> projected(num_nodes);
+#ifdef CHRONO_ENABLED
+      // BFS calls Apply *before* the per-node NodeTrain at this depth, so
+      // tls_ctx.cur_depth is still the *previous* depth's value (set by the
+      // last NodeTrain). Pin it to current_depth so the new SymBuildBag /
+      // SymSortBag / SymSweep scopes (and the outer kProjectionEvaluate) all
+      // accrue to the correct (tree, depth) cell.
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
+          current_depth;
+#endif
       RETURN_IF_ERROR(ApplyProjectionsSymmetricDepthwiseAP(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),

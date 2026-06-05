@@ -43,7 +43,7 @@ fi
 ###### Parameters
 
 # Repetitions per command; median runtime is reported in the CSV.
-NUM_RUNS=7
+NUM_RUNS=1
 NUM_THREADS=-1
 COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
 # Ariel - ENSURE compute_oob_performances===== - it has an equal sign, not a blank space
@@ -105,11 +105,11 @@ fi
 # Quick: rows*cols ~ 2e8 cells, sweeping the rows/cols ratio.
 # Full: same shape sweep plus a larger row sweep at fixed cols=4096.
 TRUNK_DATASETS=(
-  "12500|16384"
-  "25000|8192"
-  "50000|4096"
-  "100000|2048"
-  "200000|1024"
+  # "12500|16384"
+  # "25000|8192"
+  # "50000|4096"
+  # "100000|2048"
+  # "200000|1024"
 )
 if [[ "$MODE" == "full" ]]; then
   TRUNK_DATASETS+=(
