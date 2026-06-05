@@ -66,6 +66,13 @@ enum FuncId {
   kSymSortBag,    // stable_sort(perm) + materialize sorted bag/node_of_bag
   kSymSweep,      // K bag-wide stride-1 projection sweeps (the hot loop)
 
+  // Sub-phases of ApplyProjectionsDepthwise1Pass. Only emitted when compiled
+  // with -DDEPTHWISE_1_PASS; zero otherwise. The Sweep scope wraps the
+  // ConcurrentForLoop synchronization point in the caller thread, so
+  // wall-clock attribution is preserved even when num_threads > 1.
+  kDw1PreSize,    // proj_prefix sum + per-node out_projected[n].assign(...)
+  kDw1Sweep,      // ProjectionEvaluator ctor + kernel dispatch (Q tasks)
+
   kNumFuncs
 };
 

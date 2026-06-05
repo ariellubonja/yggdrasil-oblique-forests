@@ -5378,6 +5378,15 @@ absl::Status GrowTreeLocalBFS(
       }
 
       std::vector<std::vector<float>> projected(num_nodes);
+#ifdef CHRONO_ENABLED
+      // BFS calls Apply *before* the per-node NodeTrain at this depth, so
+      // tls_ctx.cur_depth is still the *previous* depth's value (set by the
+      // last NodeTrain). Pin it to current_depth so the new Dw1PreSize /
+      // Dw1Sweep scopes (and the outer kProjectionEvaluate) all accrue to
+      // the correct (tree, depth) cell. Mirrors the symmetric path fix.
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
+          current_depth;
+#endif
 #ifdef PROJECTION_MATRIX_CONTROL
       RETURN_IF_ERROR(ApplyProjectionsProjectionMatrixControl(
           train_dataset, config_link.numerical_features(),

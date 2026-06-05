@@ -58,6 +58,10 @@ _GPU_TAIL_RX = (
     r"(?:\s+SymBuildBag\s+([0-9.eE+-]+)s)?"
     r"(?:\s+SymSortBag\s+([0-9.eE+-]+)s)?"
     r"(?:\s+SymSweep\s+([0-9.eE+-]+)s)?"
+    # ApplyProjectionsDepthwise1Pass sub-phases. Optional — only emitted
+    # when the binary is built with -DDEPTHWISE_1_PASS.
+    r"(?:\s+Dw1PreSize\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+Dw1Sweep\s+([0-9.eE+-]+)s)?"
 )
 
 # "Classic" (Exact / sort-based CPU split)
@@ -112,7 +116,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
-             sym_build, sym_sort, sym_sweep) = g
+             sym_build, sym_sort, sym_sweep,
+             dw1_presize, dw1_sweep) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -142,6 +147,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymBuildBag                  = opt_float(sym_build),
                 SymSortBag                   = opt_float(sym_sort),
                 SymSweep                     = opt_float(sym_sweep),
+                Dw1PreSize                   = opt_float(dw1_presize),
+                Dw1Sweep                     = opt_float(dw1_sweep),
             ))
         else:
             (tid, tree, depth, nodes, samples,
@@ -152,7 +159,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
-             sym_build, sym_sort, sym_sweep) = g
+             sym_build, sym_sort, sym_sweep,
+             dw1_presize, dw1_sweep) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -186,6 +194,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymBuildBag                  = opt_float(sym_build),
                 SymSortBag                   = opt_float(sym_sort),
                 SymSweep                     = opt_float(sym_sweep),
+                Dw1PreSize                   = opt_float(dw1_presize),
+                Dw1Sweep                     = opt_float(dw1_sweep),
             ))
 
     if not rows:
@@ -234,6 +244,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "SymBuildBag":                  "-SymBuildBag",
             "SymSortBag":                   "-SymSortBag",
             "SymSweep":                     "-SymSweep",
+            # ApplyProjectionsDepthwise1Pass sub-phases (also sum to
+            # ApplyProjection, mutually exclusive with Sym* by build mode).
+            "Dw1PreSize":                   "-Dw1PreSize",
+            "Dw1Sweep":                     "-Dw1Sweep",
         })
 
         g = g.drop(columns=["thread"])
@@ -265,6 +279,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "-SymBuildBag",
             "-SymSortBag",
             "-SymSweep",
+            # Depthwise-1-pass sub-phases (also sum to ApplyProjection).
+            # Zero-dropped on non-depthwise_1_pass builds.
+            "-Dw1PreSize",
+            "-Dw1Sweep",
             "EvaluateProjection",
             "GetCandidateAttributes",
             "AxisAlignedColumnFetch",

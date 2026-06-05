@@ -1021,6 +1021,12 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " SymSortBag " << arr[kSymSortBag] * 1e-9 << "s"
                   << " SymSweep " << arr[kSymSweep] * 1e-9 << "s"
 #endif
+#ifdef DEPTHWISE_1_PASS
+                  // Sub-phases of ApplyProjectionsDepthwise1Pass. Sum to
+                  // ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
+                  << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
+                  << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
+#endif
                   ;
       } else {
         LOG(INFO) << "thread " << tree_thread_id()[t] << " tree " << t
@@ -1057,6 +1063,12 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " SymBuildBag " << arr[kSymBuildBag] * 1e-9 << "s"
                   << " SymSortBag " << arr[kSymSortBag] * 1e-9 << "s"
                   << " SymSweep " << arr[kSymSweep] * 1e-9 << "s"
+#endif
+#ifdef DEPTHWISE_1_PASS
+                  // Sub-phases of ApplyProjectionsDepthwise1Pass. Sum to
+                  // ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
+                  << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
+                  << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
 #endif
                   ;
       }

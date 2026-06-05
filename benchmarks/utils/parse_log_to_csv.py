@@ -24,7 +24,7 @@ ACC_RE = re.compile(r'Train tree \d+/\d+ accuracy:([\d.]+)')
 # STDDEV segment is optional so logs predating it still parse.
 MEDIAN_RUN_RE = re.compile(
     r'^MEDIAN of \d+/\d+ runs: ([\d.eE+\-]+) s'
-    r'(?:\s+STDDEV: [\d.eE+\-]+ s|\s+STDDEV: N/A)?'
+    r'(?:\s+STDDEV: (?:[\d.eE+\-]+|N/A) s)?'
     r'\s+\(samples: ([0-9. eE+\-]+)\)$'
 )
 
