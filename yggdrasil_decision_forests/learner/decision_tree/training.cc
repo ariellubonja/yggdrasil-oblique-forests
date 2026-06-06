@@ -5059,8 +5059,9 @@ absl::Status DecisionTreeCoreTrain(
   switch (dt_config.growing_strategy_case()) {
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyLocal: {
       const auto constraints = NodeConstraints::CreateNodeConstraints();
-#if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS) || \
-    defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
+#if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS) ||      \
+    defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL) || \
+    defined(SYMMETRIC_BFS_ONLY_CONTROL)
       return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                               deployment, weights, 1, internal_config,
                               constraints, false, dt->mutable_root(), random,
@@ -5494,7 +5495,13 @@ absl::Status GrowTreeLocalBFS(
     } else
 #endif
     {
-      // Per-node fallback (default BFS without the fused-per-level Apply).
+      // Per-node fallback: BFS scheduling without any fused-per-level Apply,
+      // shared-projection sampling, or precomputed slabs. Each node runs the
+      // standard per-node projection sampling + ProjectionEvaluator::Evaluate
+      // path. This is the path that --config=symmetric_bfs_only_control
+      // exercises in isolation, to measure how much of the symmetric-trees
+      // speedup comes from the BFS traversal order alone (vs. the AP-merging
+      // and shared-projection optimizations layered on top).
       for (auto& nae : depth_batch) {
         RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
                                   deployment, weights, internal_config, random,

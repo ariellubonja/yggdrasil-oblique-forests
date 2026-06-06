@@ -34,6 +34,15 @@ build:symmetric_depthwise_ap --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
 # ProjectionEvaluator::Evaluate path. Do not combine with
 # --config=symmetric_depthwise_ap (the AP path would shadow the control).
 build:symmetric_nodewise_control --cxxopt="-DSYMMETRIC_NODEWISE_CONTROL=1"
+# Symmetric_BFS_Only_Control: deeper control that isolates the cost/benefit of
+# just the BFS (level-order) scheduler vs. DFS. Triggers GrowTreeLocalBFS, but
+# does NOT sample shared projections and does NOT call any fused bag-wide
+# Apply. Each node at a depth runs the normal per-node projection sampling
+# and the standard per-node ProjectionEvaluator::Evaluate path — identical to
+# the Nodewise baseline algorithmically, only the tree-traversal order
+# differs. Mutually exclusive with symmetric_depthwise_ap and
+# symmetric_nodewise_control.
+build:symmetric_bfs_only_control --cxxopt="-DSYMMETRIC_BFS_ONLY_CONTROL=1"
 
 
 ##### GPU Support
