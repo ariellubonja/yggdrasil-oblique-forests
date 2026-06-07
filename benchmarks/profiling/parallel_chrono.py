@@ -34,7 +34,18 @@ def get_args():
                    help="GPU batching mode: per_depth (BFS, one kernel per depth level) "
                         "or per_node (DFS, one kernel per node). Only relevant when --use_gpu=true")
 
-    return p.parse_args()
+    # Bazel config passthrough: any unknown bare `--<name>` flag (no `=value`)
+    # is forwarded as `--config=<name>` to the bazel build. Lets new .bazelrc
+    # configs be exercised without touching this script — e.g. `--bfs_only`
+    # → `--config=bfs_only`. Anything else (typos with values, positional
+    # garbage, valid flags spelled wrong) still errors as usual.
+    args, unknown = p.parse_known_args()
+    for tok in unknown:
+        if tok.startswith("--") and "=" not in tok and len(tok) > 2:
+            args.bazel_config.append(tok[2:])
+        else:
+            p.error(f"unrecognized argument: {tok}")
+    return args
 
 
 # Tail of the per-depth LOG line: flat per-stage GPU timings (measured via
