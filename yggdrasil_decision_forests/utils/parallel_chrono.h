@@ -82,6 +82,13 @@ enum FuncId {
   kPmcPreSize,    // per-node out_projected[n].assign(...)
   kPmcSweep,      // per-node rows-outer / projs-inner triple loop
 
+  // Per-node sampling scope inside FindBestConditionSparseObliqueTemplate.
+  // Floyd's sampler + absl::btree_set in internal::SampleProjection, called
+  // K times per node (K = num_projections). Kept after a 3M×4K validation
+  // showed 4.3% of training-block CPU; sibling scopes kSplitExamplesInPlace
+  // and kSetLeafValue were removed for contributing <1%.
+  kSampleProjection,
+
   // BFS-only scheduler scopes. Emitted by GrowTreeLocalBFS to characterize
   // the BFS scheduling overhead in isolation from any fused-Apply work.
   // kBfsFrontier fires for any BFS-routed build (depthwise_1pass, symmetric_*,

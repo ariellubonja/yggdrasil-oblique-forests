@@ -6,9 +6,9 @@ set -euo pipefail
 # Workflow: use Quick to test whether a code change impacted runtime. When a
 # >20% runtime improvement is observed on Quick, run Full to confirm.
 #
-# Quick: 7 runs/cmd; trunk rows*cols sweep at constant ~2e8 cells.
-# Full:  7 runs/cmd; quick shapes plus large CSVs (HIGGS/SUSY/epsilon) and
-#        extreme-aspect trunk (50M*4, 3M*4096, 3000*4M).
+# Quick and Full run the same datasets; they differ only in NUM_RUNS.
+# Quick: 3 runs/cmd.
+# Full:  7 runs/cmd.
 #
 # Usage:  $0 [--full] <suffix>
 #   <suffix> becomes part of the result filename, e.g. 'AWS_m7i' ->
@@ -43,7 +43,12 @@ fi
 ###### Parameters
 
 # Repetitions per command; median runtime is reported in the CSV.
-NUM_RUNS=1
+# Quick mode uses 3 runs; Full mode uses 7 runs.
+if [[ "$MODE" == "full" ]]; then
+  NUM_RUNS=7
+else
+  NUM_RUNS=3
+fi
 NUM_THREADS=-1
 COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
 # Ariel - ENSURE compute_oob_performances===== - it has an equal sign, not a blank space
@@ -87,37 +92,18 @@ METHODS=(
 DYNAMIC_SPLIT_THRESHOLD_DEFAULT=1350             # For Dynamic Random (normal)
 DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT=250   # For Dynamic Random (vectorized) — 2026-06-03 sweep on 3M*4096 AVX-2
 
-# CSV datasets: large benchmark CSVs added in Full mode only. Entries are
-# "path|label_col".
-CSV_DATASETS=()
-
-# Full-mode-only large CSVs.
-FULL_EXTRA_CSV_DATASETS=(
+# CSV datasets. Entries are "path|label_col". Same in Quick and Full modes.
+CSV_DATASETS=(
   "benchmarks/data/HIGGS_with_header.csv|class"
-  "benchmarks/data/SUSY_with_header.csv|class"
-  "benchmarks/data/epsilon_normalized_train.csv|label"
-)
-if [[ "$MODE" == "full" ]]; then
-  CSV_DATASETS+=("${FULL_EXTRA_CSV_DATASETS[@]}")
-fi
-
-# Synthetic trunk datasets as "rows|cols" pairs.
-# Quick: rows*cols ~ 2e8 cells, sweeping the rows/cols ratio.
-# Full: same shape sweep plus a larger row sweep at fixed cols=4096.
-TRUNK_DATASETS=(
-  # "12500|16384"
-  # "25000|8192"
-  # "50000|4096"
-  # "100000|2048"
-  # "200000|1024"
-)
-if [[ "$MODE" == "full" ]]; then
-  TRUNK_DATASETS+=(
-    "50000000|4" # OOMs for Symmetric trees - comment out
-    "3000000|4096"
-    "3000|4000000"
+  # "benchmarks/data/SUSY_with_header.csv|class"
+  # "benchmarks/data/epsilon_normalized_train.csv|label"
   )
-fi
+# Synthetic trunk datasets as "rows|cols" pairs. Same in Quick and Full modes.
+TRUNK_DATASETS=(
+  # "30000000|4" # OOMs for Symmetric trees - comment out
+  "3000000|4096"
+  "30000|400000"
+)
 
 # =========================
 # Main Script

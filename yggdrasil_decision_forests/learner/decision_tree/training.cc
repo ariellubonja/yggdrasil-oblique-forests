@@ -5126,9 +5126,12 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
 
   if (!set_leaf_already_set) {
     // Set the node value (i.e. the label distribution).
-    RETURN_IF_ERROR(internal_config.set_leaf_value_functor(
-        train_dataset, selected_examples.active, weights, config, config_link,
-        node));
+    {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSetLeafValue);
+      RETURN_IF_ERROR(internal_config.set_leaf_value_functor(
+          train_dataset, selected_examples.active, weights, config, config_link,
+          node));
+    }
     RETURN_IF_ERROR(ApplyConstraintOnNode(constraints, node));
   }
 
@@ -5210,12 +5213,15 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
                           dt_config.store_detailed_label_distribution());
 
   // Separate the positive and negative examples.
+  CHRONO_BEGIN(split_examples_in_place_s);
   ASSIGN_OR_RETURN(
       auto example_split,
       internal::SplitExamplesInPlace(
           *train_dataset_for_splitter, selected_examples,
           node->node().condition(), splitter_dataset_is_compact,
           dt_config.internal_error_on_wrong_splitter_statistics()));
+  CHRONO_END(split_examples_in_place_s,
+             ::yggdrasil_decision_forests::chrono_prof::kSplitExamplesInPlace);
 
   if (example_split.positive_examples.empty() ||
       example_split.negative_examples.empty()) {
@@ -5243,12 +5249,15 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
   }
 
   // Set leaf outputs
-  RETURN_IF_ERROR(internal_config.set_leaf_value_functor(
-      train_dataset, example_split.positive_examples.active, weights, config,
-      config_link, node->mutable_pos_child()));
-  RETURN_IF_ERROR(internal_config.set_leaf_value_functor(
-      train_dataset, example_split.negative_examples.active, weights, config,
-      config_link, node->mutable_neg_child()));
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSetLeafValue);
+    RETURN_IF_ERROR(internal_config.set_leaf_value_functor(
+        train_dataset, example_split.positive_examples.active, weights, config,
+        config_link, node->mutable_pos_child()));
+    RETURN_IF_ERROR(internal_config.set_leaf_value_functor(
+        train_dataset, example_split.negative_examples.active, weights, config,
+        config_link, node->mutable_neg_child()));
+  }
   RETURN_IF_ERROR(
       ApplyConstraintOnNode(constraints, node->mutable_pos_child()));
   RETURN_IF_ERROR(

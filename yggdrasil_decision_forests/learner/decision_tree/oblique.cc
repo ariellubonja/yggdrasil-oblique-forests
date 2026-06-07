@@ -182,7 +182,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   // Per-node downgrade for the DYNAMIC_* histogram split types: if the node
   // has fewer than dynamic_split_threshold examples, switch back to EXACT
   // (sorting). Histogramming is faster on larger nodes; EXACT wins on small
-  // ones. Empirical threshold default is 350 (see decision_tree.proto).
+  // ones. Empirical threshold default is 250 (see decision_tree.proto).
   //
   // Ariel: threshold tuned on the trunk_3000000_x_4096 benchmark; revisit
   // if the histogram path gets faster (e.g. SIMD upper_bound or 1-pass).
@@ -275,9 +275,12 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
        projection_idx++) {
     // Generate a current_projection.
     int8_t monotonic_direction;
-    SampleProjection(config_link.numerical_features(), dynamic_dt_config,
-                     train_dataset.data_spec(), config_link, projection_density,
-                     &current_projection, &monotonic_direction, random);
+    {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
+      SampleProjection(config_link.numerical_features(), dynamic_dt_config,
+                       train_dataset.data_spec(), config_link, projection_density,
+                       &current_projection, &monotonic_direction, random);
+    }
 
     // Pre-compute the result of the current_projection.
     RETURN_IF_ERROR(projection_evaluator.Evaluate(

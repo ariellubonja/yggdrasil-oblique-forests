@@ -87,6 +87,10 @@ _GPU_TAIL_RX = (
     # under -DBFS_ONLY. Zero on DFS builds.
     r"(?:\s+BfsFrontier\s+([0-9.eE+-]+)s)?"
     r"(?:\s+BfsNodeLoop\s+([0-9.eE+-]+)s)?"
+    # Top-level per-tree scope. Only depth=0 of each tree is non-zero —
+    # the entire tree-train accumulates there. Works as the DFS-build
+    # analogue of BfsNodeLoop+BfsFrontier for CHRONO-coverage comparison.
+    r"(?:\s+TreeTrain\s+([0-9.eE+-]+)s)?"
 )
 
 # "Classic" (Exact / sort-based CPU split)
@@ -162,7 +166,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              dw1_presize, dw1_sweep,
              pmc_presize, pmc_sweep,
              sample_proj, split_in_place, set_leaf_value,
-             bfs_frontier, bfs_node_loop) = g
+             bfs_frontier, bfs_node_loop, tree_train) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -211,6 +215,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SetLeafValue                 = opt_float(set_leaf_value),
                 BfsFrontier                  = opt_float(bfs_frontier),
                 BfsNodeLoop                  = opt_float(bfs_node_loop),
+                TreeTrain                    = opt_float(tree_train),
             ))
         else:
             (tid, tree, depth, nodes, samples,
@@ -225,7 +230,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              dw1_presize, dw1_sweep,
              pmc_presize, pmc_sweep,
              sample_proj, split_in_place, set_leaf_value,
-             bfs_frontier, bfs_node_loop) = g
+             bfs_frontier, bfs_node_loop, tree_train) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -268,6 +273,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SetLeafValue                 = opt_float(set_leaf_value),
                 BfsFrontier                  = opt_float(bfs_frontier),
                 BfsNodeLoop                  = opt_float(bfs_node_loop),
+                TreeTrain                    = opt_float(tree_train),
             ))
 
     if not rows:
@@ -337,6 +343,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "SampleProjection":             "SampleProjection",
             "SplitExamplesInPlace":         "SplitExamplesInPlace",
             "SetLeafValue":                 "SetLeafValue",
+            # Top-level per-tree scope. Non-zero only at depth=0 of each
+            # tree. The DFS analogue of BFS top-level scopes.
+            "TreeTrain":                    "TreeTrain",
         })
 
         g = g.drop(columns=["thread"])
@@ -369,6 +378,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "SampleProjection",
             "SplitExamplesInPlace",
             "SetLeafValue",
+            "TreeTrain",
             # CPU split-finder subtree follows.
             "ApplyProjection",
             # Symmetric-depthwise-AP sub-phases (sum to ApplyProjection).
@@ -574,11 +584,71 @@ if __name__ == "__main__":
             r"random_forest\.cc Training block took:\s*([0-9.eE+-]+)\s*s",
             log_plain)
         if m_train:
-            print(f"\n⏱  Training block took {float(m_train.group(1)):.4f} s"
+            train_block = float(m_train.group(1))
+            print(f"\n⏱  Training block took {train_block:.4f} s"
                   f"   (subprocess wall: {dt:.4f} s)\n")
         else:
+            train_block = None
             print(f"\n⏱  Binary subprocess ran for {dt:.4f} s"
                   f"   (Training-block marker not found in log)\n")
+
+        # ── CHRONO coverage vs Training-block wall ────────────────────
+        # Sum top-level per-tree-train chrono scopes across all
+        # (tree, depth, thread) entries in the log. With BFS_ONLY,
+        # BfsNodeLoop + BfsFrontier cover the entire GrowTreeLocalBFS
+        # body (≈ all of one tree's training).
+        #
+        # When N trees train concurrently on T threads, each tree's
+        # internal time is single-thread, so:
+        #     Σ scope ≈ train_block × min(N_trees, T) for load-balanced
+        # case. For num_threads=1, Σ scope ≈ train_block exactly.
+        def _sum_scope(name: str) -> float:
+            return sum(float(v) for v in re.findall(
+                rf"\s{name}\s+([0-9.eE+-]+)s", log_plain))
+
+        if train_block is not None:
+            bfs_loop  = _sum_scope("BfsNodeLoop")
+            bfs_front = _sum_scope("BfsFrontier")
+            bfs_total = bfs_loop + bfs_front
+            n_threads = max(1, int(getattr(a, "num_threads", 1)))
+            try:
+                n_trees = int(getattr(a, "num_trees", 1))
+            except Exception:
+                n_trees = 1
+            cpu_budget = train_block * min(n_trees, n_threads)
+
+            print("── CHRONO coverage ─────────────────────────────────")
+            print(f"  Training block (wall):       {train_block:>10.4f} s")
+            print(f"  CPU budget (wall × min(trees, threads) = "
+                  f"{train_block:.3f} × min({n_trees},{n_threads})): "
+                  f"{cpu_budget:>10.4f} s")
+            tree_train = _sum_scope("TreeTrain")
+            if bfs_total > 0:
+                pct = (bfs_total / cpu_budget * 100.0) if cpu_budget > 0 else 0.0
+                print(f"  Σ BfsFrontier + BfsNodeLoop: {bfs_total:>10.4f} s  "
+                      f"({pct:5.1f}% of CPU budget)")
+                print(f"    └ BfsNodeLoop:             {bfs_loop:>10.4f} s")
+                print(f"    └ BfsFrontier:             {bfs_front:>10.4f} s")
+                gap = cpu_budget - bfs_total
+                print(f"  Unaccounted (CPU budget − Σ BFS): "
+                      f"{gap:>10.4f} s  ({gap/cpu_budget*100:5.1f}%)")
+            elif tree_train > 0:
+                # DFS-build path: kTreeTrain is the top-level per-tree
+                # scope and wraps the entire tree training. Sum across
+                # trees ≈ training_block × min(trees, threads).
+                pct = (tree_train / cpu_budget * 100.0) if cpu_budget > 0 else 0.0
+                print(f"  Σ TreeTrain (DFS top-level): {tree_train:>10.4f} s  "
+                      f"({pct:5.1f}% of CPU budget)")
+                gap = cpu_budget - tree_train
+                print(f"  Unaccounted (CPU budget − Σ TreeTrain): "
+                      f"{gap:>10.4f} s  ({gap/cpu_budget*100:5.1f}%)")
+            else:
+                # Pre-TreeTrain-emit binary (rebuild needed). Fall back to
+                # ApplyProjection as a partial coverage proxy.
+                proj = _sum_scope("ProjEval")
+                print(f"  Σ ProjEval (ApplyProjection): {proj:>10.4f} s   "
+                      f"(no BFS / TreeTrain scope in log — rebuild)")
+            print("────────────────────────────────────────────────────\n")
 
         print(log_plain[:1000])
 

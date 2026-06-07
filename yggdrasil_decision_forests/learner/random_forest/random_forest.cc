@@ -1034,12 +1034,26 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " PmcPreSize " << arr[kPmcPreSize] * 1e-9 << "s"
                   << " PmcSweep " << arr[kPmcSweep] * 1e-9 << "s"
 #endif
+                  // Per-node bookkeeping scopes inside NodeTrain /
+                  // FindBestConditionSparseObliqueTemplate. Always emitted;
+                  // these close the BfsNodeLoop − Σ(splitter scopes) gap.
+                  << " SampleProjection "
+                  << arr[kSampleProjection] * 1e-9 << "s"
+                  << " SplitExamplesInPlace "
+                  << arr[kSplitExamplesInPlace] * 1e-9 << "s"
+                  << " SetLeafValue " << arr[kSetLeafValue] * 1e-9 << "s"
                   // BFS-only scheduler scopes. BfsFrontier fires on every
                   // BFS-routed build (depthwise_1pass / symmetric_* / bfs_only);
                   // BfsNodeLoop only fires under -DBFS_ONLY. Both are zero
                   // for DFS builds.
                   << " BfsFrontier " << arr[kBfsFrontier] * 1e-9 << "s"
                   << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
+                  // Top-level per-tree scope (kTreeTrain) wraps the entire
+                  // tree training. Non-zero only at depth=0 of each tree;
+                  // works as the DFS-build analogue of BfsNodeLoop+BfsFrontier
+                  // when those are zero. Sum across trees ≈ training_block ×
+                  // min(N_trees, N_threads) under good load balance.
+                  << " TreeTrain " << arr[kTreeTrain] * 1e-9 << "s"
                   ;
       } else {
         LOG(INFO) << "thread " << tree_thread_id()[t] << " tree " << t
@@ -1056,6 +1070,22 @@ RandomForestLearner::TrainWithStatusImpl(
                   << arr[kAssignSamplesToHistogram] * 1e-9 << "s"
                   << " kSelectBestThresholdHistogram "
                   << arr[kSelectBestThresholdHistogram] * 1e-9 << "s"
+                  // Exact / sort-based splitter scopes. Normally zero on a
+                  // histogram-mode build, but DYNAMIC_RANDOM_HISTOGRAM /
+                  // DYNAMIC_EQUAL_WIDTH_HISTOGRAM fall back to EXACT per-node
+                  // when the node has fewer than dynamic_split_threshold
+                  // examples (see oblique.cc:194-203), so this branch still
+                  // accumulates non-zero Sort-path time on Dynamic runs.
+                  << " kSortFillExampleBucketSet "
+                  << arr[kSortFillExampleBucketSet] * 1e-9 << "s"
+                  << " kSortScanSplits " << arr[kSortScanSplits] * 1e-9 << "s"
+                  << " kSortInitBuckets " << arr[kSortInitBuckets] * 1e-9 << "s"
+                  << " kSortFillBuckets " << arr[kSortFillBuckets] * 1e-9 << "s"
+                  << " kSortFinalizeBuckets "
+                  << arr[kSortFinalizeBuckets] * 1e-9 << "s"
+                  << " kSortFeatures " << arr[kSortFeatures] * 1e-9 << "s"
+                  << " kSortLabels " << arr[kSortLabels] * 1e-9 << "s"
+                  << " kScanPresorted " << arr[kScanPresorted] * 1e-9 << "s"
                   << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
                   << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
                   << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
@@ -1090,12 +1120,26 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " PmcPreSize " << arr[kPmcPreSize] * 1e-9 << "s"
                   << " PmcSweep " << arr[kPmcSweep] * 1e-9 << "s"
 #endif
+                  // Per-node bookkeeping scopes inside NodeTrain /
+                  // FindBestConditionSparseObliqueTemplate. Always emitted;
+                  // these close the BfsNodeLoop − Σ(splitter scopes) gap.
+                  << " SampleProjection "
+                  << arr[kSampleProjection] * 1e-9 << "s"
+                  << " SplitExamplesInPlace "
+                  << arr[kSplitExamplesInPlace] * 1e-9 << "s"
+                  << " SetLeafValue " << arr[kSetLeafValue] * 1e-9 << "s"
                   // BFS-only scheduler scopes. BfsFrontier fires on every
                   // BFS-routed build (depthwise_1pass / symmetric_* / bfs_only);
                   // BfsNodeLoop only fires under -DBFS_ONLY. Both are zero
                   // for DFS builds.
                   << " BfsFrontier " << arr[kBfsFrontier] * 1e-9 << "s"
                   << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
+                  // Top-level per-tree scope (kTreeTrain) wraps the entire
+                  // tree training. Non-zero only at depth=0 of each tree;
+                  // works as the DFS-build analogue of BfsNodeLoop+BfsFrontier
+                  // when those are zero. Sum across trees ≈ training_block ×
+                  // min(N_trees, N_threads) under good load balance.
+                  << " TreeTrain " << arr[kTreeTrain] * 1e-9 << "s"
                   ;
       }
     }
