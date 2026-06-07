@@ -77,6 +77,11 @@ _GPU_TAIL_RX = (
     # emitted when the binary is built with -DPROJECTION_MATRIX_CONTROL.
     r"(?:\s+PmcPreSize\s+([0-9.eE+-]+)s)?"
     r"(?:\s+PmcSweep\s+([0-9.eE+-]+)s)?"
+    # Per-node bookkeeping scopes inside NodeTrain / FindBestConditionSparseOblique.
+    # Always emitted (no #ifdef). Close the BfsNodeLoop residual gap.
+    r"(?:\s+SampleProjection\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+SplitExamplesInPlace\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+SetLeafValue\s+([0-9.eE+-]+)s)?"
     # BFS-only scheduler scopes. BfsFrontier fires on any BFS-routed build
     # (depthwise_1pass / symmetric_* / bfs_only); BfsNodeLoop only fires
     # under -DBFS_ONLY. Zero on DFS builds.
@@ -102,7 +107,11 @@ TIMING_RX_SORT = re.compile(
     + _GPU_TAIL_RX
 )
 
-# Extended with the histogram-based CPU split phases
+# Extended with the histogram-based CPU split phases. The 8 Exact / sort-path
+# fields are optional: a pure-histogram run leaves them at zero, but
+# DYNAMIC_RANDOM_HISTOGRAM / DYNAMIC_EQUAL_WIDTH_HISTOGRAM downgrade per-node
+# to EXACT below dynamic_split_threshold (oblique.cc:194-203), so this branch
+# can carry non-zero Sort-path values on Dynamic runs.
 TIMING_RX_HISTO = re.compile(
     r"thread\s+(\d+)\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
@@ -113,6 +122,16 @@ TIMING_RX_HISTO = re.compile(
     r"kMinMaxNumerical\s+([0-9.eE+-]+)s\s+"
     r"kAssignSamplesToHistogram\s+([0-9.eE+-]+)s\s+"
     r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s"
+    # Dynamic-fallback Exact-path scopes. Optional — zero on pure-histogram
+    # builds, non-zero when DYNAMIC_* downgrades small nodes to EXACT.
+    r"(?:\s+kSortFillExampleBucketSet\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+kSortScanSplits\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+kSortInitBuckets\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+kSortFillBuckets\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+kSortFinalizeBuckets\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+kSortFeatures\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+kSortLabels\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+kScanPresorted\s+([0-9.eE+-]+)s)?"
     + _GPU_TAIL_RX
 )
 
@@ -133,12 +152,16 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             (tid, tree, depth, nodes, samples,
              pe, get_cand, aa_col_fetch,
              setup, minmax, ast, sbt,
+             fill_example, scan_splits,
+             init_buckets, fill_buckets, finalize_buckets,
+             features, labels, scan_presorted,
              gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
              pmc_presize, pmc_sweep,
+             sample_proj, split_in_place, set_leaf_value,
              bfs_frontier, bfs_node_loop) = g
 
             rows.append(dict(
@@ -154,6 +177,16 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 MinMaxNumerical              = float(minmax),
                 AssignSamplesToHist          = float(ast),
                 SelectBestThresholdHistogram = float(sbt),
+                # Exact / sort-path fields. Non-zero only when a DYNAMIC_*
+                # histogram run falls back to EXACT for small nodes.
+                SortFillExampleBucketSet     = opt_float(fill_example),
+                SortScanSplits               = opt_float(scan_splits),
+                SortInitBuckets              = opt_float(init_buckets),
+                SortFillBuckets              = opt_float(fill_buckets),
+                SortFinalizeBuckets          = opt_float(finalize_buckets),
+                SortFeatures                 = opt_float(features),
+                SortLabels                   = opt_float(labels),
+                ScanPresorted                = opt_float(scan_presorted),
                 GpuInit                      = opt_float(gpu_init),
                 GpuCsrFlatten                = opt_float(gpu_csr),
                 GpuUnpack                    = opt_float(gpu_unpack),
@@ -173,6 +206,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 Dw1Sweep                     = opt_float(dw1_sweep),
                 PmcPreSize                   = opt_float(pmc_presize),
                 PmcSweep                     = opt_float(pmc_sweep),
+                SampleProjection             = opt_float(sample_proj),
+                SplitExamplesInPlace         = opt_float(split_in_place),
+                SetLeafValue                 = opt_float(set_leaf_value),
                 BfsFrontier                  = opt_float(bfs_frontier),
                 BfsNodeLoop                  = opt_float(bfs_node_loop),
             ))
@@ -188,6 +224,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
              pmc_presize, pmc_sweep,
+             sample_proj, split_in_place, set_leaf_value,
              bfs_frontier, bfs_node_loop) = g
 
             rows.append(dict(
@@ -226,6 +263,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 Dw1Sweep                     = opt_float(dw1_sweep),
                 PmcPreSize                   = opt_float(pmc_presize),
                 PmcSweep                     = opt_float(pmc_sweep),
+                SampleProjection             = opt_float(sample_proj),
+                SplitExamplesInPlace         = opt_float(split_in_place),
+                SetLeafValue                 = opt_float(set_leaf_value),
                 BfsFrontier                  = opt_float(bfs_frontier),
                 BfsNodeLoop                  = opt_float(bfs_node_loop),
             ))
@@ -291,6 +331,12 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # dispatch in the BFS_ONLY fallback path.
             "BfsFrontier":                  "BfsFrontier",
             "BfsNodeLoop":                  "BfsNodeLoop",
+            # Per-node bookkeeping scopes inside NodeTrain /
+            # FindBestConditionSparseObliqueTemplate. Close the
+            # BfsNodeLoop − Σ(splitter scopes) gap.
+            "SampleProjection":             "SampleProjection",
+            "SplitExamplesInPlace":         "SplitExamplesInPlace",
+            "SetLeafValue":                 "SetLeafValue",
         })
 
         g = g.drop(columns=["thread"])
@@ -319,6 +365,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # — not nested). Zero-dropped on DFS builds.
             "BfsFrontier",
             "BfsNodeLoop",
+            # Per-node bookkeeping (NodeTrain residuals). Top-level.
+            "SampleProjection",
+            "SplitExamplesInPlace",
+            "SetLeafValue",
             # CPU split-finder subtree follows.
             "ApplyProjection",
             # Symmetric-depthwise-AP sub-phases (sum to ApplyProjection).
@@ -512,8 +562,23 @@ if __name__ == "__main__":
             print(f"binary died with signal {-proc.returncode}")
 
         dt = time.perf_counter() - t0
-        print(f"\n⏱  Binary subprocess ran for {dt:.4f} s\n")
         log_plain = re.sub(r'\x1B\[[0-?]*[ -/]*[@-~]', '', log)
+
+        # Prefer the training-only wall time logged by random_forest.cc
+        # ("Training block took: X s"). The subprocess wall time also
+        # includes dataset generation, learner config, GPU init, etc., so
+        # it overstates the training cost. Fall back to subprocess wall
+        # time if the marker is missing (e.g. binary crashed before the
+        # log line, or chrono build dropped the marker).
+        m_train = re.search(
+            r"random_forest\.cc Training block took:\s*([0-9.eE+-]+)\s*s",
+            log_plain)
+        if m_train:
+            print(f"\n⏱  Training block took {float(m_train.group(1)):.4f} s"
+                  f"   (subprocess wall: {dt:.4f} s)\n")
+        else:
+            print(f"\n⏱  Binary subprocess ran for {dt:.4f} s"
+                  f"   (Training-block marker not found in log)\n")
 
         print(log_plain[:1000])
 
