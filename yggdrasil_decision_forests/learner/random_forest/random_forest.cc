@@ -1027,6 +1027,13 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
 #endif
+#ifdef PROJECTION_MATRIX_CONTROL
+                  // Sub-phases of ApplyProjectionsProjectionMatrixControl.
+                  // PmcPreSize + PmcSweep + ProjectionEvaluator ctor ≈ ProjEval.
+                  // (ProjEval − PmcPreSize − PmcSweep) ≈ ctor cost.
+                  << " PmcPreSize " << arr[kPmcPreSize] * 1e-9 << "s"
+                  << " PmcSweep " << arr[kPmcSweep] * 1e-9 << "s"
+#endif
                   // BFS-only scheduler scopes. BfsFrontier fires on every
                   // BFS-routed build (depthwise_1pass / symmetric_* / bfs_only);
                   // BfsNodeLoop only fires under -DBFS_ONLY. Both are zero
@@ -1075,6 +1082,13 @@ RandomForestLearner::TrainWithStatusImpl(
                   // ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
+#endif
+#ifdef PROJECTION_MATRIX_CONTROL
+                  // Sub-phases of ApplyProjectionsProjectionMatrixControl.
+                  // PmcPreSize + PmcSweep + ProjectionEvaluator ctor ≈ ProjEval.
+                  // (ProjEval − PmcPreSize − PmcSweep) ≈ ctor cost.
+                  << " PmcPreSize " << arr[kPmcPreSize] * 1e-9 << "s"
+                  << " PmcSweep " << arr[kPmcSweep] * 1e-9 << "s"
 #endif
                   // BFS-only scheduler scopes. BfsFrontier fires on every
                   // BFS-routed build (depthwise_1pass / symmetric_* / bfs_only);

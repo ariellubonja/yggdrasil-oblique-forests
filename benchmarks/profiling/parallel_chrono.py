@@ -73,6 +73,10 @@ _GPU_TAIL_RX = (
     # when the binary is built with -DDEPTHWISE_1_PASS.
     r"(?:\s+Dw1PreSize\s+([0-9.eE+-]+)s)?"
     r"(?:\s+Dw1Sweep\s+([0-9.eE+-]+)s)?"
+    # ApplyProjectionsProjectionMatrixControl sub-phases. Optional — only
+    # emitted when the binary is built with -DPROJECTION_MATRIX_CONTROL.
+    r"(?:\s+PmcPreSize\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+PmcSweep\s+([0-9.eE+-]+)s)?"
     # BFS-only scheduler scopes. BfsFrontier fires on any BFS-routed build
     # (depthwise_1pass / symmetric_* / bfs_only); BfsNodeLoop only fires
     # under -DBFS_ONLY. Zero on DFS builds.
@@ -134,6 +138,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
+             pmc_presize, pmc_sweep,
              bfs_frontier, bfs_node_loop) = g
 
             rows.append(dict(
@@ -166,6 +171,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
+                PmcPreSize                   = opt_float(pmc_presize),
+                PmcSweep                     = opt_float(pmc_sweep),
                 BfsFrontier                  = opt_float(bfs_frontier),
                 BfsNodeLoop                  = opt_float(bfs_node_loop),
             ))
@@ -180,6 +187,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
+             pmc_presize, pmc_sweep,
              bfs_frontier, bfs_node_loop) = g
 
             rows.append(dict(
@@ -216,6 +224,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
+                PmcPreSize                   = opt_float(pmc_presize),
+                PmcSweep                     = opt_float(pmc_sweep),
                 BfsFrontier                  = opt_float(bfs_frontier),
                 BfsNodeLoop                  = opt_float(bfs_node_loop),
             ))
@@ -270,6 +280,11 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # ApplyProjection, mutually exclusive with Sym* by build mode).
             "Dw1PreSize":                   "-Dw1PreSize",
             "Dw1Sweep":                     "-Dw1Sweep",
+            # ApplyProjectionsProjectionMatrixControl sub-phases (sum to
+            # ApplyProjection minus the ctor; mutually exclusive with the
+            # Sym*/Dw1 paths by build mode).
+            "PmcPreSize":                   "-PmcPreSize",
+            "PmcSweep":                     "-PmcSweep",
             # BFS-only scheduler scopes (top-level, not nested under
             # ApplyProjection). BfsFrontier = depth-batch popping, fires
             # on any BFS-routed build. BfsNodeLoop = per-node NodeTrain
@@ -315,6 +330,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # Zero-dropped on non-depthwise_1_pass builds.
             "-Dw1PreSize",
             "-Dw1Sweep",
+            # Projection-matrix-control sub-phases. Zero-dropped on
+            # non-projection_matrix_control builds.
+            "-PmcPreSize",
+            "-PmcSweep",
             "EvaluateProjection",
             "GetCandidateAttributes",
             "AxisAlignedColumnFetch",

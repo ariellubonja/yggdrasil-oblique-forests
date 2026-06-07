@@ -25,8 +25,10 @@ absl::Status ApplyProjectionsProjectionMatrixControl(
   DCHECK_EQ(N, projections_per_node.size());
   DCHECK_EQ(N, out_projected.size());
 
-  // Tagged with kProjectionEvaluate so benchmark CSVs diff Nodewise vs.
-  // Depthwise vs. the baseline per-node projection loop at the same tag.
+  // Outer scope: total ProjectionEvaluate budget. Sub-phase scopes below
+  // partition the per-node work into PmcPreSize / PmcSweep, accumulated
+  // across nodes. The ProjectionEvaluator ctor sits outside both sub-scopes,
+  // so kProjectionEvaluate − (kPmcPreSize + kPmcSweep) ≈ ctor cost.
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
 
   internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
@@ -38,25 +40,31 @@ absl::Status ApplyProjectionsProjectionMatrixControl(
     const size_t P = projs.size();
 
     auto& out = out_projected[n];
-    out.assign(P * rows_n, 0.f);
+    {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kPmcPreSize);
+      out.assign(P * rows_n, 0.f);
+    }
 
     // Rows outer, projections inner. For a fixed row, its feature loads
     // stay hot in cache while all P projections consume them; the baseline
     // layout re-sweeps the node's row range once per projection.
-    for (size_t i = 0; i < rows_n; ++i) {
-      const UnsignedExampleIdx ex = selected[i];
-      for (size_t p = 0; p < P; ++p) {
-        float acc = 0.f;
-        for (const auto& feat : projs[p]) {
-          float v = evaluator.AttributeValue(feat.attribute_idx, ex);
+    {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kPmcSweep);
+      for (size_t i = 0; i < rows_n; ++i) {
+        const UnsignedExampleIdx ex = selected[i];
+        for (size_t p = 0; p < P; ++p) {
+          float acc = 0.f;
+          for (const auto& feat : projs[p]) {
+            float v = evaluator.AttributeValue(feat.attribute_idx, ex);
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
-          if (std::isnan(v)) {
-            v = evaluator.NaReplacementValue(feat.attribute_idx);
-          }
+            if (std::isnan(v)) {
+              v = evaluator.NaReplacementValue(feat.attribute_idx);
+            }
 #endif
-          acc += feat.weight * v;
+            acc += feat.weight * v;
+          }
+          out[p * rows_n + i] = acc;
         }
-        out[p * rows_n + i] = acc;
       }
     }
   }

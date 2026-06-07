@@ -73,6 +73,15 @@ enum FuncId {
   kDw1PreSize,    // proj_prefix sum + per-node out_projected[n].assign(...)
   kDw1Sweep,      // ProjectionEvaluator ctor + kernel dispatch (Q tasks)
 
+  // Sub-phases of ApplyProjectionsProjectionMatrixControl. Only emitted when
+  // compiled with -DPROJECTION_MATRIX_CONTROL; zero otherwise. The PMC path
+  // interleaves PreSize and Sweep per-node (unlike Dw1, which does PreSize
+  // for all nodes up front, then Sweep for all nodes), so both scopes are
+  // accumulated across the per-node loop. The ProjectionEvaluator ctor is
+  // not covered by either sub-phase, only by the outer kProjectionEvaluate.
+  kPmcPreSize,    // per-node out_projected[n].assign(...)
+  kPmcSweep,      // per-node rows-outer / projs-inner triple loop
+
   // BFS-only scheduler scopes. Emitted by GrowTreeLocalBFS to characterize
   // the BFS scheduling overhead in isolation from any fused-Apply work.
   // kBfsFrontier fires for any BFS-routed build (depthwise_1pass, symmetric_*,
