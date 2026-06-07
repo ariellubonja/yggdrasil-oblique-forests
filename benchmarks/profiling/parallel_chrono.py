@@ -62,6 +62,11 @@ _GPU_TAIL_RX = (
     # when the binary is built with -DDEPTHWISE_1_PASS.
     r"(?:\s+Dw1PreSize\s+([0-9.eE+-]+)s)?"
     r"(?:\s+Dw1Sweep\s+([0-9.eE+-]+)s)?"
+    # BFS-only scheduler scopes. BfsFrontier fires on any BFS-routed build
+    # (depthwise_1pass / symmetric_* / bfs_only); BfsNodeLoop only fires
+    # under -DBFS_ONLY. Zero on DFS builds.
+    r"(?:\s+BfsFrontier\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+BfsNodeLoop\s+([0-9.eE+-]+)s)?"
 )
 
 # "Classic" (Exact / sort-based CPU split)
@@ -117,7 +122,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
-             dw1_presize, dw1_sweep) = g
+             dw1_presize, dw1_sweep,
+             bfs_frontier, bfs_node_loop) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -149,6 +155,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
+                BfsFrontier                  = opt_float(bfs_frontier),
+                BfsNodeLoop                  = opt_float(bfs_node_loop),
             ))
         else:
             (tid, tree, depth, nodes, samples,
@@ -160,7 +168,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
-             dw1_presize, dw1_sweep) = g
+             dw1_presize, dw1_sweep,
+             bfs_frontier, bfs_node_loop) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -196,6 +205,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
+                BfsFrontier                  = opt_float(bfs_frontier),
+                BfsNodeLoop                  = opt_float(bfs_node_loop),
             ))
 
     if not rows:
@@ -248,6 +259,12 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # ApplyProjection, mutually exclusive with Sym* by build mode).
             "Dw1PreSize":                   "-Dw1PreSize",
             "Dw1Sweep":                     "-Dw1Sweep",
+            # BFS-only scheduler scopes (top-level, not nested under
+            # ApplyProjection). BfsFrontier = depth-batch popping, fires
+            # on any BFS-routed build. BfsNodeLoop = per-node NodeTrain
+            # dispatch in the BFS_ONLY fallback path.
+            "BfsFrontier":                  "BfsFrontier",
+            "BfsNodeLoop":                  "BfsNodeLoop",
         })
 
         g = g.drop(columns=["thread"])
@@ -272,6 +289,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "ExactSplit",
             "GpuOther",
             "GpuUnpack",
+            # BFS-only scheduler scopes (top-level, sibling of ApplyProjection
+            # — not nested). Zero-dropped on DFS builds.
+            "BfsFrontier",
+            "BfsNodeLoop",
             # CPU split-finder subtree follows.
             "ApplyProjection",
             # Symmetric-depthwise-AP sub-phases (sum to ApplyProjection).

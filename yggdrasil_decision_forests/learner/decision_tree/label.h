@@ -21,14 +21,18 @@
 #endif
 #if (defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS)) &&    \
     (defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL) || \
-     defined(SYMMETRIC_BFS_ONLY_CONTROL))
-#error "Projection-matrix/Depthwise oblique modes and symmetric oblique modes are mutually exclusive"
+     defined(BFS_ONLY))
+#error "Projection-matrix/Depthwise oblique modes and symmetric/BFS oblique modes are mutually exclusive"
 #endif
-// The three symmetric modes are themselves mutually exclusive: each one is a
-// distinct control / treatment in the symmetric-trees ablation.
+// The three depthwise scheduler modes are mutually exclusive: each one is a
+// distinct control / treatment in the symmetric-trees ablation series.
+// SYMMETRIC_DEPTHWISE_AP is the full treatment (shared projections + fused
+// bag-wide Apply); SYMMETRIC_NODEWISE_CONTROL keeps shared projections but
+// drops the fused Apply; BFS_ONLY drops both and isolates the BFS scheduler
+// alone (per-node projection sampling, no symmetric behavior).
 #if (defined(SYMMETRIC_DEPTHWISE_AP) + defined(SYMMETRIC_NODEWISE_CONTROL) + \
-     defined(SYMMETRIC_BFS_ONLY_CONTROL)) > 1
-#error "SYMMETRIC_DEPTHWISE_AP, SYMMETRIC_NODEWISE_CONTROL, and SYMMETRIC_BFS_ONLY_CONTROL are mutually exclusive"
+     defined(BFS_ONLY)) > 1
+#error "SYMMETRIC_DEPTHWISE_AP, SYMMETRIC_NODEWISE_CONTROL, and BFS_ONLY are mutually exclusive"
 #endif
 #if defined(ROW_MAJOR_DATASET_LAYOUT) && defined(FLAT_COL_DATASET_LAYOUT)
 #error "ROW_MAJOR_DATASET_LAYOUT and FLAT_COL_DATASET_LAYOUT are mutually exclusive"

@@ -5061,7 +5061,7 @@ absl::Status DecisionTreeCoreTrain(
       const auto constraints = NodeConstraints::CreateNodeConstraints();
 #if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS) ||      \
     defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL) || \
-    defined(SYMMETRIC_BFS_ONLY_CONTROL)
+    defined(BFS_ONLY)
       return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                               deployment, weights, 1, internal_config,
                               constraints, false, dt->mutable_root(), random,
@@ -5341,10 +5341,22 @@ absl::Status GrowTreeLocalBFS(
   while (!node_queue.empty()) {
     const int32_t current_depth = node_queue.front().depth;
     std::vector<internal::NodeAndExamples> depth_batch;
-    while (!node_queue.empty() &&
-           node_queue.front().depth == current_depth) {
-      depth_batch.push_back(std::move(node_queue.front()));
-      node_queue.pop_front();
+#ifdef CHRONO_ENABLED
+    // Frontier construction runs *before* the per-node NodeTrain at this
+    // depth, so tls_ctx.cur_depth still holds the previous depth's value.
+    // Pin it to current_depth so kBfsFrontier accrues to the correct
+    // (tree, depth) cell. Mirrors the depth-pinning fix in the depthwise
+    // and symmetric paths below.
+    ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
+        current_depth;
+#endif
+    {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kBfsFrontier);
+      while (!node_queue.empty() &&
+             node_queue.front().depth == current_depth) {
+        depth_batch.push_back(std::move(node_queue.front()));
+        node_queue.pop_front();
+      }
     }
 
 #if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS)
@@ -5498,10 +5510,17 @@ absl::Status GrowTreeLocalBFS(
       // Per-node fallback: BFS scheduling without any fused-per-level Apply,
       // shared-projection sampling, or precomputed slabs. Each node runs the
       // standard per-node projection sampling + ProjectionEvaluator::Evaluate
-      // path. This is the path that --config=symmetric_bfs_only_control
-      // exercises in isolation, to measure how much of the symmetric-trees
-      // speedup comes from the BFS traversal order alone (vs. the AP-merging
-      // and shared-projection optimizations layered on top).
+      // path. This is the path that --config=bfs_only exercises in isolation,
+      // to measure how much of the symmetric-trees speedup comes from the BFS
+      // traversal order alone (vs. the AP-merging and shared-projection
+      // optimizations layered on top).
+      //
+      // kBfsNodeLoop is only meaningful in the BFS_ONLY build — the other
+      // BFS-routed configs (depthwise_1pass, symmetric_*) consume the
+      // depth_batch in their own branches above and never reach here.
+#ifdef BFS_ONLY
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kBfsNodeLoop);
+#endif
       for (auto& nae : depth_batch) {
         RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
                                   deployment, weights, internal_config, random,

@@ -73,6 +73,17 @@ enum FuncId {
   kDw1PreSize,    // proj_prefix sum + per-node out_projected[n].assign(...)
   kDw1Sweep,      // ProjectionEvaluator ctor + kernel dispatch (Q tasks)
 
+  // BFS-only scheduler scopes. Emitted by GrowTreeLocalBFS to characterize
+  // the BFS scheduling overhead in isolation from any fused-Apply work.
+  // kBfsFrontier fires for any BFS-routed build (depthwise_1pass, symmetric_*,
+  // bfs_only) and measures the inner pop-loop that drains node_queue into
+  // depth_batch at each level. kBfsNodeLoop fires only on -DBFS_ONLY and
+  // wraps the per-node NodeTrain dispatch in the fallback path (i.e. without
+  // shared projections or fused Apply), so it isolates the cost of running
+  // K projections per node under BFS order vs. DFS.
+  kBfsFrontier,
+  kBfsNodeLoop,
+
   kNumFuncs
 };
 

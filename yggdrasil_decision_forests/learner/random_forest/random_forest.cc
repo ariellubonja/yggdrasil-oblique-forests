@@ -1027,6 +1027,12 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
 #endif
+                  // BFS-only scheduler scopes. BfsFrontier fires on every
+                  // BFS-routed build (depthwise_1pass / symmetric_* / bfs_only);
+                  // BfsNodeLoop only fires under -DBFS_ONLY. Both are zero
+                  // for DFS builds.
+                  << " BfsFrontier " << arr[kBfsFrontier] * 1e-9 << "s"
+                  << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
                   ;
       } else {
         LOG(INFO) << "thread " << tree_thread_id()[t] << " tree " << t
@@ -1070,6 +1076,12 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
 #endif
+                  // BFS-only scheduler scopes. BfsFrontier fires on every
+                  // BFS-routed build (depthwise_1pass / symmetric_* / bfs_only);
+                  // BfsNodeLoop only fires under -DBFS_ONLY. Both are zero
+                  // for DFS builds.
+                  << " BfsFrontier " << arr[kBfsFrontier] * 1e-9 << "s"
+                  << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
                   ;
       }
     }
