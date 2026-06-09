@@ -559,3 +559,68 @@ when checking whole-tree coverage.
 
 *Log started 2026-04-25 during /loop-style autonomous iteration on the
 1-pass design. V2-rev3 landed on `main` at 98ed1c66 / f1b102f4 / 9d38f22d.*
+
+---
+
+## Phase L — Row-major shadow layout for the hot band (microbench → real chrono)
+
+**Date:** 2026-06-09. **Branch:** `rebased-main` (no code change — existing
+`--config=projection_matrix_control` + `--config=row_major_dataset_layout`
+composed for the first time). **Workload:** DRH, trunk 3M×4096, 1 thread,
+1 tree, depth=-1.
+
+### Motivation (from the 2026-06-09 pre-screen)
+
+The AP kernel is already MLP-saturated (~9–11 ns/load measured both in
+microbench and depth-18 chrono) — latency-hiding is exhausted. 66% of AP is
+depths 12–23 (nodes of 70–1500 rows). In that band a node's K·d ≈ 192 column
+draws share the same R rows: column-major pays R×192 isolated DRAM lines;
+row-major puts all 192 reads for one example inside one 16 KB row (4 pages,
+~65% of its lines) — TLB- and locality-friendly, and one pass per row serves
+all K projections (requires the rows-outer/projs-inner PMC loop).
+
+### Microbench (`benchmarks/src/microbenchmarks/row_major_hotband.cc`, 1 GB, taskset CPU 0)
+
+| R (rows/node) | CM ns/load | CM+THP | RM ns/load | RM vs CM |
+|---|---|---|---|---|
+| 128 | 8.00 | 7.46 | 4.34 | **1.84×** |
+| 512 | 6.89 | 6.83 | 4.38 | **1.57×** |
+| 2048 | 3.76 | 3.74 | 4.28 | 0.88× (CM wins, density 3%) |
+
+bf16 rows (`/tmp/rm_bf16.cc`): additional **1.50×** at every R (row stream is
+bandwidth-bound) → bf16-RM vs CM at R=128: **2.86×**. THP: only 1.01–1.07×.
+
+Companion negative result: AMAC lane interleaving (`amac_lanes.cc`) FAILED —
+lanes 2/4/8 = 0.87×/0.74×/0.66× vs task-sequential; the OOO core already
+extracts cross-task MLP (adjacent tasks are independent in program order).
+
+### Real chrono — treatment (PMC + row-major, turbo ON / E-cores ON)
+
+`pmc_row_major_2026-06-09.csv`. TreeTrain-equivalent wall 95.2 s. Tree shape
+sane (371,935 nodes / max depth 35 vs baseline 365,965 / 37).
+
+| depth | nodes | AP treatment | AP baseline (turbo OFF) | ratio* |
+|---|---|---|---|---|
+| 5 | 16 | 2.10 s | 1.49 s | 0.71× (CM wins shallow, as microbench predicts) |
+| 10 | 512 | 2.08 s | 2.82 s | 1.36× |
+| 15 | 12.6k | 2.06 s | 3.80 s | 1.84× |
+| 18 | 36.9k | 1.85 s | 4.53 s | 2.45× |
+| 20 | 45.0k | 1.39 s | 3.92 s | 2.82× |
+| 23 | 29.6k | 0.62 s | 1.92 s | 3.10× |
+| **ΣAP** | | **44.7 s** | **65.6 s** | **1.47×** |
+
+*Caveat: baseline CSV (`baseline_bfs_2026-06-07.csv`) was captured turbo-OFF;
+this run is turbo-ON (sudo unavailable for E-core script). Compute-bound
+scopes halved (CartPath 14.8 vs 28.4 — pure clock), so cross-run ratios
+overstate; DRAM-bound AP scales weakly with clock so the deep-band ratios are
+approximately real. Same-state control run in progress; numbers to be
+replaced.
+
+### Interpretation
+
+- Crossover between depth 5 and 10 → hybrid dispatch (CM above ~R=100K rows,
+  RM below) takes the max of both curves.
+- RAM: `--dataset_layout=row` *replaces* the column store in the trunk
+  harness (45.8 GiB). A production hybrid needs a *shadow* (both layouts) —
+  fp32 shadow does not fit 62 GB at this shape; bf16 shadow (+24 GB) is the
+  realistic deployment and adds another ~1.5× per the microbench.
