@@ -520,5 +520,42 @@ THP is bonus; the shippable code gain is 20.1%.
 
 ---
 
+## Chrono Coverage Audit — TreeTrain baseline + BFS-only
+
+**Date:** 2026-06-07. **Status: DIAGNOSTIC — no speedup claim.**
+**Hardware:** Intel Core Ultra 9 185H, 1 thread, trunk 3M×4096, depth=-1, 1 tree.
+**Config:** Oblique + Dynamic Random Histogram, AVX2, `chrono_profile`.
+Compared:
+`benchmarks/results/per_function_timing/Intel(R) Core(TM) Ultra 9 185H/Oblique | Dynamic Random Histogram | /trunk_3000000_x_4096/baseline.csv`
+and `bfs_only.csv`.
+
+### Result
+
+| File | TreeTrain | Scheduler coverage | Tree child coverage | Node child coverage | Nested split details |
+|---|---:|---:|---:|---:|---:|
+| `baseline.csv` | 168.326 s | N/A | NodeTrain = 167.938 s (99.77%) | ObliqueSplitSearch+AxisAlignedSplitSearch+SplitExamplesInPlace+SetLeafValue = 167.644 s (99.59% of TreeTrain) | ApplyProjection = 66.496 s; SampleProjection = 7.029 s |
+| `bfs_only.csv` | 172.268 s | BfsFrontier+BfsNodeLoop = 171.906 s (99.79%) | NodeTrain = 171.829 s (99.75%) | FindBestCondition+SetLeafValue+SplitExamplesInPlace = 171.621 s (99.88% of NodeTrain; 99.62% of TreeTrain) | ApplyProjection = 67.032 s; SampleProjection = 7.377 s |
+
+### Instrumentation notes
+
+`baseline.csv` was stale and did not contain `TreeTrain`; it was regenerated.
+`bfs_only.csv` already had a `TreeTrain` total, but the top-level timer was
+attributed to the final `tls_ctx.cur_depth`. `CHRONO_SCOPE_TOP` now records via a
+dedicated top-level timer to `depth=0`, so both CSVs place `TreeTrain` on the
+placeholder tree row and can be compared directly.
+
+The 45% coverage gap was caused by missing direct-child scopes and by treating
+nested columns as siblings. `NodeTrain` measures the per-node body under
+`TreeTrain`; `ObliqueSplitSearch` and `AxisAlignedSplitSearch` split the dominant
+`FindBestCondition` work into additive children. For the regenerated baseline,
+the direct-child additive sum
+`ObliqueSplitSearch + AxisAlignedSplitSearch + SplitExamplesInPlace + SetLeafValue`
+is 167.644 s, or 99.59% of `TreeTrain`. The lower-level columns
+`ApplyProjection`, histogram phases, sort phases, and `SampleProjection` are
+nested diagnostics under those parent scopes and should not be added as siblings
+when checking whole-tree coverage.
+
+---
+
 *Log started 2026-04-25 during /loop-style autonomous iteration on the
 1-pass design. V2-rev3 landed on `main` at 98ed1c66 / f1b102f4 / 9d38f22d.*

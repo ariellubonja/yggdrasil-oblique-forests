@@ -165,6 +165,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   Projection current_projection;
   auto& projection_values = cache->projection_values;
 
+  CHRONO_BEGIN(find_oblique_setup);
   ProjectionEvaluator projection_evaluator(train_dataset,
                                            config_link.numerical_features());
 
@@ -177,6 +178,8 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
   std::vector<UnsignedExampleIdx> dense_example_idxs(selected_examples.size());
   std::iota(dense_example_idxs.begin(), dense_example_idxs.end(), 0);
+  CHRONO_END(find_oblique_setup,
+             ::yggdrasil_decision_forests::chrono_prof::kFindObliqueSetup);
 
   /* #region Dynamic histogram downgrade */
   // Per-node downgrade for the DYNAMIC_* histogram split types: if the node
@@ -391,6 +394,7 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
     const NodeConstraints& constraints, int8_t monotonic_direction,
     proto::NodeCondition* condition, SplitterPerThreadCache* cache,
     utils::RandomEngine* random) {
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kEvaluateProj);
   InternalTrainConfig effective_internal_config = internal_config;
   effective_internal_config.override_sorting_strategy =
       proto::DecisionTreeTrainingConfig::Internal::SortingStrategy::
@@ -1211,8 +1215,8 @@ absl::Status ProjectionEvaluator::Evaluate(
     std::vector<float>* values) const {
   RETURN_IF_ERROR(constructor_status_);
 
-  values->resize(selected_examples.size());
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
+  values->resize(selected_examples.size());
   for (size_t selected_idx = 0; selected_idx < selected_examples.size();
        selected_idx++) {
     float value = 0;

@@ -1401,12 +1401,17 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
       break;
     case proto::DecisionTreeTrainingConfig::kSparseObliqueSplit:
     case proto::DecisionTreeTrainingConfig::kMhldObliqueSplit:
-      ASSIGN_OR_RETURN(
-          found_good_condition,
-          FindBestConditionOblique(
-              train_dataset, selected_examples, weights, config, config_link,
-              dt_config, parent, internal_config, label_stats, {}, constraints,
-              best_condition, random, &cache->splitter_cache_list[0]));
+      {
+        CHRONO_SCOPE(
+            ::yggdrasil_decision_forests::chrono_prof::kObliqueSplitSearch);
+        ASSIGN_OR_RETURN(
+            found_good_condition,
+            FindBestConditionOblique(
+                train_dataset, selected_examples, weights, config, config_link,
+                dt_config, parent, internal_config, label_stats, {},
+                constraints, best_condition, random,
+                &cache->splitter_cache_list[0]));
+      }
       break;
   }
 
@@ -1426,19 +1431,21 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
 
   {
     CHRONO_SCOPE_IF(
+        is_oblique,
+        ::yggdrasil_decision_forests::chrono_prof::kAxisAlignedSplitSearch);
+    CHRONO_SCOPE_IF(
         !is_oblique,
         ::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
     GetCandidateAttributes(config, config_link, dt_config,
                            &remaining_attributes_to_test, &candidate_attributes,
                            random);
-  }
 
-  // Index of the next attribute to be tested in "candidate_attributes".
-  int candidate_attribute_idx_in_candidate_list = 0;
+    // Index of the next attribute to be tested in "candidate_attributes".
+    int candidate_attribute_idx_in_candidate_list = 0;
 
-  while (remaining_attributes_to_test >= 0 &&
-           candidate_attribute_idx_in_candidate_list <
-               candidate_attributes.size()) {
+    while (remaining_attributes_to_test >= 0 &&
+             candidate_attribute_idx_in_candidate_list <
+                 candidate_attributes.size()) {
       // Get the attribute data.
       const int32_t attribute_idx =
           candidate_attributes[candidate_attribute_idx_in_candidate_list++];
@@ -1519,6 +1526,7 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
         }
       }
     }
+  }
 
   return found_good_condition;
 }
@@ -2313,6 +2321,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       weights.empty() && num_label_classes == 3;
   std::vector<double> count_log_count;
   if (use_unweighted_binary_entropy) {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kEntropyTableSetup);
     count_log_count = internal::BuildCountLogCountTable(
         static_cast<int64_t>(total_sum));
   }
@@ -2395,6 +2404,7 @@ FindSplitLabelClassificationFeatureNumericalCart(
     const utils::IntegerDistributionDouble& label_distribution,
     const int32_t attribute_idx, const InternalTrainConfig& internal_config,
     proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartPath);
   proto::DecisionTreeTrainingConfig::Internal::SortingStrategy sorting_strategy;
   const auto feature_filler = [&]() {
     if (!weights.empty()) {
@@ -5105,6 +5115,7 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
   // Set depth explicitly from the struct. Works for both BFS (flat
   // iteration) and DFS (recursion overwrites depth on each entry).
   tls_ctx.cur_depth = depth;
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kNodeTrain);
 
   const int t = tls_ctx.cur_tree;
   const int d = depth;
@@ -5195,13 +5206,19 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
     return absl::InternalError("No examples fed to the splitter");
   }
 
-  ASSIGN_OR_RETURN(
-      const auto has_better_condition,
-      FindBestCondition(*train_dataset_for_splitter,
-                        selected_examples_for_splitter, weights, config,
-                        config_link, dt_config, node->node(), internal_config,
-                        constraints, node->mutable_node()->mutable_condition(),
-                        random, cache));
+  bool has_better_condition;
+  {
+    CHRONO_SCOPE(
+        ::yggdrasil_decision_forests::chrono_prof::kFindBestCondition);
+    ASSIGN_OR_RETURN(
+        has_better_condition,
+        FindBestCondition(*train_dataset_for_splitter,
+                          selected_examples_for_splitter, weights, config,
+                          config_link, dt_config, node->node(), internal_config,
+                          constraints,
+                          node->mutable_node()->mutable_condition(), random,
+                          cache));
+  }
   if (!has_better_condition) {
     return finalize_as_leaf();
   }

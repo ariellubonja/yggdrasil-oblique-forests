@@ -79,6 +79,17 @@ _GPU_TAIL_RX = (
     r"(?:\s+PmcSweep\s+([0-9.eE+-]+)s)?"
     # Per-node bookkeeping scopes inside NodeTrain / FindBestConditionSparseOblique.
     # Always emitted (no #ifdef). Close the BfsNodeLoop residual gap.
+    r"(?:\s+NodeTrain\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+FindBestCondition\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+ObliqueSplitSearch\s+([0-9.eE+-]+)s)?"
+    # Sub-scopes of ObliqueSplitSearch closing the FBC residual gap.
+    r"(?:\s+FindObliqueSetup\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+EvaluateProj\s+([0-9.eE+-]+)s)?"
+    # Sub-scope of EvaluateProj — BuildCountLogCountTable(N_node).
+    r"(?:\s+EntropyTableSetup\s+([0-9.eE+-]+)s)?"
+    # Sub-scope of EvaluateProj — FindSplitLabelClassificationFeatureNumericalCart.
+    r"(?:\s+CartPath\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+AxisAlignedSplitSearch\s+([0-9.eE+-]+)s)?"
     r"(?:\s+SampleProjection\s+([0-9.eE+-]+)s)?"
     r"(?:\s+SplitExamplesInPlace\s+([0-9.eE+-]+)s)?"
     r"(?:\s+SetLeafValue\s+([0-9.eE+-]+)s)?"
@@ -165,6 +176,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
              pmc_presize, pmc_sweep,
+             node_train, find_best_condition, oblique_split_search,
+             find_oblique_setup, evaluate_proj, entropy_table_setup,
+             cart_path,
+             axis_aligned_split_search,
              sample_proj, split_in_place, set_leaf_value,
              bfs_frontier, bfs_node_loop, tree_train) = g
 
@@ -210,6 +225,14 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 Dw1Sweep                     = opt_float(dw1_sweep),
                 PmcPreSize                   = opt_float(pmc_presize),
                 PmcSweep                     = opt_float(pmc_sweep),
+                NodeTrain                    = opt_float(node_train),
+                FindBestCondition            = opt_float(find_best_condition),
+                ObliqueSplitSearch           = opt_float(oblique_split_search),
+                FindObliqueSetup             = opt_float(find_oblique_setup),
+                EvaluateProj                 = opt_float(evaluate_proj),
+                EntropyTableSetup            = opt_float(entropy_table_setup),
+                CartPath                     = opt_float(cart_path),
+                AxisAlignedSplitSearch       = opt_float(axis_aligned_split_search),
                 SampleProjection             = opt_float(sample_proj),
                 SplitExamplesInPlace         = opt_float(split_in_place),
                 SetLeafValue                 = opt_float(set_leaf_value),
@@ -229,6 +252,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
              pmc_presize, pmc_sweep,
+             node_train, find_best_condition, oblique_split_search,
+             find_oblique_setup, evaluate_proj, entropy_table_setup,
+             cart_path,
+             axis_aligned_split_search,
              sample_proj, split_in_place, set_leaf_value,
              bfs_frontier, bfs_node_loop, tree_train) = g
 
@@ -268,6 +295,14 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 Dw1Sweep                     = opt_float(dw1_sweep),
                 PmcPreSize                   = opt_float(pmc_presize),
                 PmcSweep                     = opt_float(pmc_sweep),
+                NodeTrain                    = opt_float(node_train),
+                FindBestCondition            = opt_float(find_best_condition),
+                ObliqueSplitSearch           = opt_float(oblique_split_search),
+                FindObliqueSetup             = opt_float(find_oblique_setup),
+                EvaluateProj                 = opt_float(evaluate_proj),
+                EntropyTableSetup            = opt_float(entropy_table_setup),
+                CartPath                     = opt_float(cart_path),
+                AxisAlignedSplitSearch       = opt_float(axis_aligned_split_search),
                 SampleProjection             = opt_float(sample_proj),
                 SplitExamplesInPlace         = opt_float(split_in_place),
                 SetLeafValue                 = opt_float(set_leaf_value),
@@ -340,6 +375,14 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # Per-node bookkeeping scopes inside NodeTrain /
             # FindBestConditionSparseObliqueTemplate. Close the
             # BfsNodeLoop − Σ(splitter scopes) gap.
+            "NodeTrain":                    "NodeTrain",
+            "FindBestCondition":            "-FindBestCondition",
+            "ObliqueSplitSearch":           "--ObliqueSplitSearch",
+            "FindObliqueSetup":             "---FindObliqueSetup",
+            "EvaluateProj":                 "---EvaluateProj",
+            "EntropyTableSetup":            "----EntropyTableSetup",
+            "CartPath":                     "----CartPath",
+            "AxisAlignedSplitSearch":        "--AxisAlignedSplitSearch",
             "SampleProjection":             "SampleProjection",
             "SplitExamplesInPlace":         "SplitExamplesInPlace",
             "SetLeafValue":                 "SetLeafValue",
@@ -354,14 +397,17 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         # kernel columns + GpuOther residual, then the CPU split-finder
         # subtree. Columns missing for the current mode are filtered out
         # below.
+        # Call-stack order from outermost-in. CART and Histogram children
+        # of EvaluateProj are kept in adjacent blocks so each path can be
+        # read top-to-bottom. Columns missing for the current mode are
+        # zero-dropped below.
         desired_order = [
             "tree", "depth", "nodes", "Active Samples",
+            # GPU kernels (run before CPU work in GPU mode).
             "GpuSampleBatch",
             "GpuInit",
             "GpuMutex",
             "GpuCsrFlatten",
-            # Flat per-stage GPU kernel timings — one column per helper.
-            # Zero-drop hides the ones not fired by the current mode.
             "ApplyColumnADD",
             "ApplyColumnADDMultiNode",
             "RandomHistogram",
@@ -370,42 +416,51 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "ExactSplit",
             "GpuOther",
             "GpuUnpack",
-            # BFS-only scheduler scopes (top-level, sibling of ApplyProjection
-            # — not nested). Zero-dropped on DFS builds.
+            # Top-level ground-truth scope.
+            "TreeTrain",
+            # BFS-only scheduler scopes (top-level under TreeTrain).
             "BfsFrontier",
             "BfsNodeLoop",
-            # Per-node bookkeeping (NodeTrain residuals). Top-level.
+            # Per-node body.
+            "NodeTrain",
+            "-FindBestCondition",
+            "--ObliqueSplitSearch",
+            "---FindObliqueSetup",
             "SampleProjection",
-            "SplitExamplesInPlace",
-            "SetLeafValue",
-            "TreeTrain",
-            # CPU split-finder subtree follows.
             "ApplyProjection",
-            # Symmetric-depthwise-AP sub-phases (sum to ApplyProjection).
-            # Zero-dropped on non-symmetric builds.
+            # Sub-phases of ApplyProjection.
             "-SymBuildBag",
             "-SymSortBag",
             "-SymSweep",
-            # Depthwise-1-pass sub-phases (also sum to ApplyProjection).
-            # Zero-dropped on non-depthwise_1_pass builds.
             "-Dw1PreSize",
             "-Dw1Sweep",
-            # Projection-matrix-control sub-phases. Zero-dropped on
-            # non-projection_matrix_control builds.
             "-PmcPreSize",
             "-PmcSweep",
-            "EvaluateProjection",
-            "GetCandidateAttributes",
-            "AxisAlignedColumnFetch",
+            "---EvaluateProj",
+            # --- CART path inside EvaluateProj ---
+            "----CartPath",
+            "--SortFillBuckets",
+            "--SortFeatures",
+            "-SortScanSplits",
+            # --- Histogram path inside EvaluateProj ---
+            "----EntropyTableSetup",
             "--HistogramSetup",
             "---MinMaxNumerical",
             "--AssignSamplesToHist",
             "--SelectBestThresholdHistogram",
+            # Other splitter-related scopes (rare in current modes).
+            "EvaluateProjection",
             "-SortFillExampleBucketSet",
-            "--SortInitBuckets", "--SortFillBuckets",
-            "--SortFinalizeBuckets", "--SortFeatures", "--SortLabels",
-            "-SortScanSplits",
+            "--SortInitBuckets",
+            "--SortFinalizeBuckets",
+            "--SortLabels",
             "-ScanPresorted",
+            "GetCandidateAttributes",
+            "AxisAlignedColumnFetch",
+            "--AxisAlignedSplitSearch",
+            # Per-node finish.
+            "SplitExamplesInPlace",
+            "SetLeafValue",
         ]
         ordered = [c for c in desired_order if c in g.columns]
         remaining = [c for c in g.columns if c not in desired_order]

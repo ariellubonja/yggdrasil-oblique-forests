@@ -82,12 +82,48 @@ enum FuncId {
   kPmcPreSize,    // per-node out_projected[n].assign(...)
   kPmcSweep,      // per-node rows-outer / projs-inner triple loop
 
-  // Per-node sampling scope inside FindBestConditionSparseObliqueTemplate.
-  // Floyd's sampler + absl::btree_set in internal::SampleProjection, called
-  // K times per node (K = num_projections). Kept after a 3M×4K validation
-  // showed 4.3% of training-block CPU; sibling scopes kSplitExamplesInPlace
-  // and kSetLeafValue were removed for contributing <1%.
+  // Per-node bookkeeping scopes inside NodeTrain /
+  // FindBestConditionSparseObliqueTemplate.
+  kNodeTrain,
+  kFindBestCondition,
+  kObliqueSplitSearch,
+  kAxisAlignedSplitSearch,
   kSampleProjection,
+  kSplitExamplesInPlace,
+  kSetLeafValue,
+
+  // Sub-scopes of kObliqueSplitSearch, closing the residual gap between
+  // kObliqueSplitSearch and Σ(SampleProjection + ProjectionEvaluate +
+  // histogram/sort scopes) observed at ~20% on trunk 3M×4096.
+  //
+  // kFindObliqueSetup: per-node setup inside FindBestConditionSparseObliqueTemplate
+  //   — ProjectionEvaluator ctor, ExtractLabels copy, dense_example_idxs alloc +
+  //   iota — fires once per NodeTrain call (not K times).
+  // kEvaluateProj: per-K-projection call to EvaluateProjection (the wrapper that
+  //   dispatches to FindSplitLabel*FeatureNumericalHistogram / Cart). Captures
+  //   the scaffolding around the existing kHistogramSetup / kSortScanSplits /
+  //   kSelectBestThresholdHistogram sub-scopes (effective_internal_config copy,
+  //   template dispatch, DCHECK loop in debug builds).
+  kFindObliqueSetup,
+  kEvaluateProj,
+
+  // Sub-scope of kEvaluateProj, isolating BuildCountLogCountTable(total_sum) at
+  // training.cc:2324. The lookup-table is rebuilt from scratch per (projection,
+  // node) call — std::vector<double>(N_node + 1) allocation + N_node std::log
+  // evaluations — sitting in the uncovered gap between kAssignSamplesToHistogram
+  // and kSelectBestThresholdHistogram. Identified as the prime suspect for the
+  // ~16s residual inside kEvaluateProj on trunk 3M×4096.
+  kEntropyTableSetup,
+
+  // Sub-scope of kEvaluateProj wrapping FindSplitLabelClassificationFeature-
+  // NumericalCart at training.cc:2398. Used by the dynamic-fallback EXACT path
+  // for nodes below dt_config.dynamic_split_threshold examples. The outer
+  // dispatch (feature_filler lambda, EffectiveStrategy, sorting_strategy
+  // branching, Filler/Initializer construction) plus the FindBestSplitFlat-
+  // Highway buffer-resize and bucket InitializeAndZero are uncovered today; the
+  // inner kSortFillBuckets / kSortFeatures / kSortScanSplits scopes nest inside
+  // and are still per-phase measured.
+  kCartPath,
 
   // BFS-only scheduler scopes. Emitted by GrowTreeLocalBFS to characterize
   // the BFS scheduling overhead in isolation from any fused-Apply work.
@@ -176,6 +212,29 @@ class ScopedTimer {
   std::chrono::steady_clock::time_point start_;
 };
 
+class ScopedTopTimer {
+ public:
+  explicit ScopedTopTimer(FuncId id, bool enabled = true)
+      : id_(id),
+        enabled_(enabled),
+        tree_(tls_ctx.cur_tree),
+        start_(enabled ? std::chrono::steady_clock::now()
+                       : std::chrono::steady_clock::time_point{}) {}
+  ~ScopedTopTimer() {
+    if (!enabled_) return;
+    const uint64_t dt_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start_).count();
+    add_time(tree_, 0, id_, dt_ns);
+  }
+
+ private:
+  FuncId id_;
+  bool enabled_;
+  int tree_;
+  std::chrono::steady_clock::time_point start_;
+};
+
 // ---------- Tree / Depth scopes -----------------------------------
 struct TreeScope {
   explicit TreeScope(int tree) {
@@ -195,7 +254,9 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #define CHRONO_SCOPE(ID) \
   yggdrasil_decision_forests::chrono_prof::ScopedTimer \
       YDF_PP_CAT(_chrono_timer_, __LINE__)(ID)
-#define CHRONO_SCOPE_TOP(ID) CHRONO_SCOPE(ID)
+#define CHRONO_SCOPE_TOP(ID) \
+  yggdrasil_decision_forests::chrono_prof::ScopedTopTimer \
+      YDF_PP_CAT(_chrono_top_timer_, __LINE__)(ID)
 // Like CHRONO_SCOPE, but only measures when COND is true. When false the
 // timer collects nothing (no clock reads, no accumulation).
 #define CHRONO_SCOPE_IF(COND, ID) \

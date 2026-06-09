@@ -1037,6 +1037,21 @@ RandomForestLearner::TrainWithStatusImpl(
                   // Per-node bookkeeping scopes inside NodeTrain /
                   // FindBestConditionSparseObliqueTemplate. Always emitted;
                   // these close the BfsNodeLoop − Σ(splitter scopes) gap.
+                  << " NodeTrain " << arr[kNodeTrain] * 1e-9 << "s"
+                  << " FindBestCondition "
+                  << arr[kFindBestCondition] * 1e-9 << "s"
+                  << " ObliqueSplitSearch "
+                  << arr[kObliqueSplitSearch] * 1e-9 << "s"
+                  << " FindObliqueSetup "
+                  << arr[kFindObliqueSetup] * 1e-9 << "s"
+                  << " EvaluateProj "
+                  << arr[kEvaluateProj] * 1e-9 << "s"
+                  << " EntropyTableSetup "
+                  << arr[kEntropyTableSetup] * 1e-9 << "s"
+                  << " CartPath "
+                  << arr[kCartPath] * 1e-9 << "s"
+                  << " AxisAlignedSplitSearch "
+                  << arr[kAxisAlignedSplitSearch] * 1e-9 << "s"
                   << " SampleProjection "
                   << arr[kSampleProjection] * 1e-9 << "s"
                   << " SplitExamplesInPlace "
@@ -1123,6 +1138,21 @@ RandomForestLearner::TrainWithStatusImpl(
                   // Per-node bookkeeping scopes inside NodeTrain /
                   // FindBestConditionSparseObliqueTemplate. Always emitted;
                   // these close the BfsNodeLoop − Σ(splitter scopes) gap.
+                  << " NodeTrain " << arr[kNodeTrain] * 1e-9 << "s"
+                  << " FindBestCondition "
+                  << arr[kFindBestCondition] * 1e-9 << "s"
+                  << " ObliqueSplitSearch "
+                  << arr[kObliqueSplitSearch] * 1e-9 << "s"
+                  << " FindObliqueSetup "
+                  << arr[kFindObliqueSetup] * 1e-9 << "s"
+                  << " EvaluateProj "
+                  << arr[kEvaluateProj] * 1e-9 << "s"
+                  << " EntropyTableSetup "
+                  << arr[kEntropyTableSetup] * 1e-9 << "s"
+                  << " CartPath "
+                  << arr[kCartPath] * 1e-9 << "s"
+                  << " AxisAlignedSplitSearch "
+                  << arr[kAxisAlignedSplitSearch] * 1e-9 << "s"
                   << " SampleProjection "
                   << arr[kSampleProjection] * 1e-9 << "s"
                   << " SplitExamplesInPlace "
