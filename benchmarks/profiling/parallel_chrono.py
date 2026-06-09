@@ -89,18 +89,21 @@ _GPU_TAIL_RX = (
     r"(?:\s+EntropyTableSetup\s+([0-9.eE+-]+)s)?"
     # Sub-scope of EvaluateProj — FindSplitLabelClassificationFeatureNumericalCart.
     r"(?:\s+CartPath\s+([0-9.eE+-]+)s)?"
+    # Sub-scope of CartPath — feature_filler lambda (EffectiveStrategy etc.).
+    r"(?:\s+CartSetup\s+([0-9.eE+-]+)s)?"
+    # Sub-scope of EvaluateProj — whole histogram split-finder body (symmetric
+    # to CartPath; includes the reverse cumulative sweep and local destructors).
+    r"(?:\s+HistoPath\s+([0-9.eE+-]+)s)?"
     r"(?:\s+AxisAlignedSplitSearch\s+([0-9.eE+-]+)s)?"
     r"(?:\s+SampleProjection\s+([0-9.eE+-]+)s)?"
     r"(?:\s+SplitExamplesInPlace\s+([0-9.eE+-]+)s)?"
     r"(?:\s+SetLeafValue\s+([0-9.eE+-]+)s)?"
-    # BFS-only scheduler scopes. BfsFrontier fires on any BFS-routed build
-    # (depthwise_1pass / symmetric_* / bfs_only); BfsNodeLoop only fires
-    # under -DBFS_ONLY. Zero on DFS builds.
-    r"(?:\s+BfsFrontier\s+([0-9.eE+-]+)s)?"
+    # BFS-only scheduler scope. BfsNodeLoop only fires under -DBFS_ONLY.
+    # Zero on DFS builds.
     r"(?:\s+BfsNodeLoop\s+([0-9.eE+-]+)s)?"
     # Top-level per-tree scope. Only depth=0 of each tree is non-zero —
     # the entire tree-train accumulates there. Works as the DFS-build
-    # analogue of BfsNodeLoop+BfsFrontier for CHRONO-coverage comparison.
+    # analogue of BfsNodeLoop for CHRONO-coverage comparison.
     r"(?:\s+TreeTrain\s+([0-9.eE+-]+)s)?"
 )
 
@@ -178,10 +181,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              pmc_presize, pmc_sweep,
              node_train, find_best_condition, oblique_split_search,
              find_oblique_setup, evaluate_proj, entropy_table_setup,
-             cart_path,
+             cart_path, cart_setup, histo_path,
              axis_aligned_split_search,
              sample_proj, split_in_place, set_leaf_value,
-             bfs_frontier, bfs_node_loop, tree_train) = g
+             bfs_node_loop, tree_train) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -232,11 +235,12 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 EvaluateProj                 = opt_float(evaluate_proj),
                 EntropyTableSetup            = opt_float(entropy_table_setup),
                 CartPath                     = opt_float(cart_path),
+                CartSetup                    = opt_float(cart_setup),
+                HistoPath                    = opt_float(histo_path),
                 AxisAlignedSplitSearch       = opt_float(axis_aligned_split_search),
                 SampleProjection             = opt_float(sample_proj),
                 SplitExamplesInPlace         = opt_float(split_in_place),
                 SetLeafValue                 = opt_float(set_leaf_value),
-                BfsFrontier                  = opt_float(bfs_frontier),
                 BfsNodeLoop                  = opt_float(bfs_node_loop),
                 TreeTrain                    = opt_float(tree_train),
             ))
@@ -254,10 +258,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              pmc_presize, pmc_sweep,
              node_train, find_best_condition, oblique_split_search,
              find_oblique_setup, evaluate_proj, entropy_table_setup,
-             cart_path,
+             cart_path, cart_setup, histo_path,
              axis_aligned_split_search,
              sample_proj, split_in_place, set_leaf_value,
-             bfs_frontier, bfs_node_loop, tree_train) = g
+             bfs_node_loop, tree_train) = g
 
             rows.append(dict(
                 thread                       = int(tid),
@@ -302,11 +306,12 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 EvaluateProj                 = opt_float(evaluate_proj),
                 EntropyTableSetup            = opt_float(entropy_table_setup),
                 CartPath                     = opt_float(cart_path),
+                CartSetup                    = opt_float(cart_setup),
+                HistoPath                    = opt_float(histo_path),
                 AxisAlignedSplitSearch       = opt_float(axis_aligned_split_search),
                 SampleProjection             = opt_float(sample_proj),
                 SplitExamplesInPlace         = opt_float(split_in_place),
                 SetLeafValue                 = opt_float(set_leaf_value),
-                BfsFrontier                  = opt_float(bfs_frontier),
                 BfsNodeLoop                  = opt_float(bfs_node_loop),
                 TreeTrain                    = opt_float(tree_train),
             ))
@@ -366,11 +371,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # Sym*/Dw1 paths by build mode).
             "PmcPreSize":                   "-PmcPreSize",
             "PmcSweep":                     "-PmcSweep",
-            # BFS-only scheduler scopes (top-level, not nested under
-            # ApplyProjection). BfsFrontier = depth-batch popping, fires
-            # on any BFS-routed build. BfsNodeLoop = per-node NodeTrain
+            # BFS-only scheduler scope (top-level, not nested under
+            # ApplyProjection). BfsNodeLoop = per-node NodeTrain
             # dispatch in the BFS_ONLY fallback path.
-            "BfsFrontier":                  "BfsFrontier",
             "BfsNodeLoop":                  "BfsNodeLoop",
             # Per-node bookkeeping scopes inside NodeTrain /
             # FindBestConditionSparseObliqueTemplate. Close the
@@ -382,6 +385,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "EvaluateProj":                 "---EvaluateProj",
             "EntropyTableSetup":            "----EntropyTableSetup",
             "CartPath":                     "----CartPath",
+            "CartSetup":                    "-----CartSetup",
+            "HistoPath":                    "----HistoPath",
             "AxisAlignedSplitSearch":        "--AxisAlignedSplitSearch",
             "SampleProjection":             "SampleProjection",
             "SplitExamplesInPlace":         "SplitExamplesInPlace",
@@ -418,8 +423,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "GpuUnpack",
             # Top-level ground-truth scope.
             "TreeTrain",
-            # BFS-only scheduler scopes (top-level under TreeTrain).
-            "BfsFrontier",
+            # BFS-only scheduler scope (top-level under TreeTrain).
             "BfsNodeLoop",
             # Per-node body.
             "NodeTrain",
@@ -439,10 +443,13 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "---EvaluateProj",
             # --- CART path inside EvaluateProj ---
             "----CartPath",
+            "-----CartSetup",
+            "--SortInitBuckets",
             "--SortFillBuckets",
             "--SortFeatures",
             "-SortScanSplits",
             # --- Histogram path inside EvaluateProj ---
+            "----HistoPath",
             "----EntropyTableSetup",
             "--HistogramSetup",
             "---MinMaxNumerical",
@@ -451,7 +458,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # Other splitter-related scopes (rare in current modes).
             "EvaluateProjection",
             "-SortFillExampleBucketSet",
-            "--SortInitBuckets",
             "--SortFinalizeBuckets",
             "--SortLabels",
             "-ScanPresorted",
@@ -650,8 +656,9 @@ if __name__ == "__main__":
         # ── CHRONO coverage vs Training-block wall ────────────────────
         # Sum top-level per-tree-train chrono scopes across all
         # (tree, depth, thread) entries in the log. With BFS_ONLY,
-        # BfsNodeLoop + BfsFrontier cover the entire GrowTreeLocalBFS
-        # body (≈ all of one tree's training).
+        # BfsNodeLoop covers the entire GrowTreeLocalBFS body
+        # (≈ all of one tree's training; the frontier pop-loop is
+        # un-chrono'd, <0.1 s for 3M rows).
         #
         # When N trees train concurrently on T threads, each tree's
         # internal time is single-thread, so:
@@ -662,9 +669,7 @@ if __name__ == "__main__":
                 rf"\s{name}\s+([0-9.eE+-]+)s", log_plain))
 
         if train_block is not None:
-            bfs_loop  = _sum_scope("BfsNodeLoop")
-            bfs_front = _sum_scope("BfsFrontier")
-            bfs_total = bfs_loop + bfs_front
+            bfs_total = _sum_scope("BfsNodeLoop")
             n_threads = max(1, int(getattr(a, "num_threads", 1)))
             try:
                 n_trees = int(getattr(a, "num_trees", 1))
@@ -680,10 +685,8 @@ if __name__ == "__main__":
             tree_train = _sum_scope("TreeTrain")
             if bfs_total > 0:
                 pct = (bfs_total / cpu_budget * 100.0) if cpu_budget > 0 else 0.0
-                print(f"  Σ BfsFrontier + BfsNodeLoop: {bfs_total:>10.4f} s  "
+                print(f"  Σ BfsNodeLoop:               {bfs_total:>10.4f} s  "
                       f"({pct:5.1f}% of CPU budget)")
-                print(f"    └ BfsNodeLoop:             {bfs_loop:>10.4f} s")
-                print(f"    └ BfsFrontier:             {bfs_front:>10.4f} s")
                 gap = cpu_budget - bfs_total
                 print(f"  Unaccounted (CPU budget − Σ BFS): "
                       f"{gap:>10.4f} s  ({gap/cpu_budget*100:5.1f}%)")

@@ -2178,6 +2178,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     const utils::IntegerDistributionDouble& label_distribution,
     const int32_t attribute_idx, utils::RandomEngine* random,
     proto::NodeCondition* condition) {
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistoPath);
   // Randomly select some threshold values.
   struct CandidateSplit {
     float threshold;
@@ -2297,8 +2298,9 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       it_split.pos_label_distribution.Add(label, weight);
     }
   }
-  }
 
+  // Suffix-sum the per-bin counts into cumulative ">= threshold" counts.
+  // Part of histogram accumulation, hence inside kAssignSamplesToHistogram.
   for (int split_idx = candidate_splits.size() - 2; split_idx >= 0;
        split_idx--) {
     const auto& src = candidate_splits[split_idx + 1];
@@ -2306,6 +2308,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     dst.num_positive_examples_without_weights +=
         src.num_positive_examples_without_weights;
     dst.pos_label_distribution.Add(src.pos_label_distribution);
+  }
   }
 
   // Inline entropy computation: skips the BinaryToIntegerConfusionMatrix
@@ -2406,6 +2409,7 @@ FindSplitLabelClassificationFeatureNumericalCart(
     proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartPath);
   proto::DecisionTreeTrainingConfig::Internal::SortingStrategy sorting_strategy;
+  CHRONO_BEGIN(cart_setup);
   const auto feature_filler = [&]() {
     if (!weights.empty()) {
       DCHECK_EQ(weights.size(), labels.size());
@@ -2434,6 +2438,8 @@ FindSplitLabelClassificationFeatureNumericalCart(
           label_filler(labels, weights);
       LabelBinaryCategoricalOneValueBucket</*weighted=*/false>::Initializer
           initializer(label_distribution);
+      CHRONO_END(cart_setup,
+                 ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
 
       if (sorting_strategy ==
           proto::DecisionTreeTrainingConfig::Internal::FORCE_PRESORTED) {
@@ -2461,6 +2467,8 @@ FindSplitLabelClassificationFeatureNumericalCart(
           label_filler(labels, weights);
       LabelBinaryCategoricalOneValueBucket</*weighted=*/true>::Initializer
           initializer(label_distribution);
+      CHRONO_END(cart_setup,
+                 ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
       if (sorting_strategy ==
           proto::DecisionTreeTrainingConfig::Internal::FORCE_PRESORTED) {
         const auto& sorted_attributes =
@@ -2490,6 +2498,8 @@ FindSplitLabelClassificationFeatureNumericalCart(
           labels, weights);
       LabelCategoricalOneValueBucket</*weighted=*/false>::Initializer
           initializer(label_distribution);
+      CHRONO_END(cart_setup,
+                 ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
 
       if (sorting_strategy ==
           proto::DecisionTreeTrainingConfig::Internal::FORCE_PRESORTED) {
@@ -2517,6 +2527,8 @@ FindSplitLabelClassificationFeatureNumericalCart(
           labels, weights);
       LabelCategoricalOneValueBucket</*weighted=*/true>::Initializer
           initializer(label_distribution);
+      CHRONO_END(cart_setup,
+                 ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
 
       if (sorting_strategy ==
           proto::DecisionTreeTrainingConfig::Internal::FORCE_PRESORTED) {
@@ -5367,22 +5379,11 @@ absl::Status GrowTreeLocalBFS(
   while (!node_queue.empty()) {
     const int32_t current_depth = node_queue.front().depth;
     std::vector<internal::NodeAndExamples> depth_batch;
-#ifdef CHRONO_ENABLED
-    // Frontier construction runs *before* the per-node NodeTrain at this
-    // depth, so tls_ctx.cur_depth still holds the previous depth's value.
-    // Pin it to current_depth so kBfsFrontier accrues to the correct
-    // (tree, depth) cell. Mirrors the depth-pinning fix in the depthwise
-    // and symmetric paths below.
-    ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
-        current_depth;
-#endif
-    {
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kBfsFrontier);
-      while (!node_queue.empty() &&
-             node_queue.front().depth == current_depth) {
-        depth_batch.push_back(std::move(node_queue.front()));
-        node_queue.pop_front();
-      }
+    // Not chrono'd: measured at <0.1 s for 3M rows — completely trivial.
+    while (!node_queue.empty() &&
+           node_queue.front().depth == current_depth) {
+      depth_batch.push_back(std::move(node_queue.front()));
+      node_queue.pop_front();
     }
 
 #if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS)

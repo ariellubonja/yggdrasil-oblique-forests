@@ -1761,6 +1761,7 @@ SplitSearchResult FindBestSplitFlatHighway(
   }
 
   // Populate the flat highway arrays.
+  CHRONO_BEGIN(sort_init_buckets);
   if constexpr (std::is_same_v<typename FlatTraits::HWY_T, hwy::K32V32>) {
     cache->hwy_k32v32_buffer.resize(num_selected_examples);
   } else if constexpr (std::is_same_v<typename FlatTraits::HWY_T, double>) {
@@ -1779,6 +1780,8 @@ SplitSearchResult FindBestSplitFlatHighway(
   ExampleBucketType temp_bucket;
   feature_filler.InitializeAndZero(0, &temp_bucket.feature);
   label_filler.InitializeAndZero(&temp_bucket.label);
+  CHRONO_END(sort_init_buckets,
+             ::yggdrasil_decision_forests::chrono_prof::kSortInitBuckets);
 
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortFillBuckets);

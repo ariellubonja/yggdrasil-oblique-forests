@@ -125,15 +125,31 @@ enum FuncId {
   // and are still per-phase measured.
   kCartPath,
 
-  // BFS-only scheduler scopes. Emitted by GrowTreeLocalBFS to characterize
+  // Sub-scope of kCartPath wrapping the feature_filler immediate lambda at the
+  // top of FindSplitLabelClassificationFeatureNumericalCart — LOCAL_IMPUTATION
+  // check, EffectiveStrategy (config-proto reads), FeatureNumericalBucket::
+  // Filler construction. Isolates the pre-dispatch setup from the unnamed
+  // remainder of CartPath (leaf scopes' own clock-read overhead + StatusOr
+  // return machinery).
+  kCartSetup,
+
+  // Sub-scope of kEvaluateProj wrapping the whole body of FindSplitLabel-
+  // ClassificationFeatureNumericalHistogram at training.cc:2172, symmetric to
+  // kCartPath. Captures what the inner kHistogramSetup / kAssignSamplesToHist /
+  // kEntropyTableSetup / kSelectBestThresholdHistogram scopes miss: the reverse
+  // cumulative sweep over candidate_splits, the scalar entropy setup, and the
+  // destructors of candidate_splits + count_log_count (the latter is a
+  // vector<double>(N_node+1) free per call). With it, EvaluateProj ≈ CartPath +
+  // HistoPath up to dispatch overhead.
+  kHistoPath,
+
+  // BFS-only scheduler scope. Emitted by GrowTreeLocalBFS to characterize
   // the BFS scheduling overhead in isolation from any fused-Apply work.
-  // kBfsFrontier fires for any BFS-routed build (depthwise_1pass, symmetric_*,
-  // bfs_only) and measures the inner pop-loop that drains node_queue into
-  // depth_batch at each level. kBfsNodeLoop fires only on -DBFS_ONLY and
-  // wraps the per-node NodeTrain dispatch in the fallback path (i.e. without
-  // shared projections or fused Apply), so it isolates the cost of running
-  // K projections per node under BFS order vs. DFS.
-  kBfsFrontier,
+  // kBfsNodeLoop fires only on -DBFS_ONLY and wraps the per-node NodeTrain
+  // dispatch in the fallback path (i.e. without shared projections or fused
+  // Apply), so it isolates the cost of running K projections per node under
+  // BFS order vs. DFS. (The frontier pop-loop that drains node_queue into
+  // depth_batch is not chrono'd — measured at <0.1 s for 3M rows.)
   kBfsNodeLoop,
 
   kNumFuncs
