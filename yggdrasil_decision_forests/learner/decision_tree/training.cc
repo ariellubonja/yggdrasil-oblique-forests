@@ -5401,14 +5401,30 @@ absl::Status GrowTreeLocalBFS(
       const int num_nodes = depth_batch.size();
       std::vector<std::vector<internal::Projection>> all_node_projs(num_nodes);
       std::vector<std::vector<int8_t>> all_node_mono(num_nodes);
-      for (int n = 0; n < num_nodes; ++n) {
-        all_node_projs[n].resize(num_proj);
-        all_node_mono[n].assign(num_proj, 0);
-        for (int p = 0; p < num_proj; ++p) {
-          internal::SampleProjection(
-              config_link.numerical_features(), dt_config,
-              train_dataset.data_spec(), config_link, projection_density,
-              &all_node_projs[n][p], &all_node_mono[n][p], random);
+#ifdef CHRONO_ENABLED
+      // BFS does this depth-level work *before* the per-node NodeTrain at
+      // this depth, so tls_ctx.cur_depth is still the *previous* depth's
+      // value (set by the last NodeTrain). Pin it to current_depth so
+      // kSampleProjection, Dw1PreSize / Dw1Sweep (and the outer
+      // kProjectionEvaluate) all accrue to the correct (tree, depth) cell.
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
+          current_depth;
+#endif
+      {
+        // Per-node sampling (2^d nodes x K projections) runs at depth level,
+        // outside NodeTrain — without this scope it is invisible to the
+        // TreeTrain = NodeTrain + ApplyProjection + SampleProjection sum.
+        CHRONO_SCOPE(
+            ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
+        for (int n = 0; n < num_nodes; ++n) {
+          all_node_projs[n].resize(num_proj);
+          all_node_mono[n].assign(num_proj, 0);
+          for (int p = 0; p < num_proj; ++p) {
+            internal::SampleProjection(
+                config_link.numerical_features(), dt_config,
+                train_dataset.data_spec(), config_link, projection_density,
+                &all_node_projs[n][p], &all_node_mono[n][p], random);
+          }
         }
       }
 
@@ -5418,15 +5434,6 @@ absl::Status GrowTreeLocalBFS(
       }
 
       std::vector<std::vector<float>> projected(num_nodes);
-#ifdef CHRONO_ENABLED
-      // BFS calls Apply *before* the per-node NodeTrain at this depth, so
-      // tls_ctx.cur_depth is still the *previous* depth's value (set by the
-      // last NodeTrain). Pin it to current_depth so the new Dw1PreSize /
-      // Dw1Sweep scopes (and the outer kProjectionEvaluate) all accrue to
-      // the correct (tree, depth) cell. Mirrors the symmetric path fix.
-      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
-          current_depth;
-#endif
 #ifdef PROJECTION_MATRIX_CONTROL
       RETURN_IF_ERROR(ApplyProjectionsProjectionMatrixControl(
           train_dataset, config_link.numerical_features(),
@@ -5468,12 +5475,30 @@ absl::Status GrowTreeLocalBFS(
 
       std::vector<internal::Projection> shared_projections(num_proj);
       std::vector<int8_t> shared_monotonic(num_proj, 0);
+#if defined(CHRONO_ENABLED) && defined(SYMMETRIC_DEPTHWISE_AP)
+      // BFS does this depth-level work *before* the per-node NodeTrain at
+      // this depth, so tls_ctx.cur_depth is still the *previous* depth's
+      // value (set by the last NodeTrain). Pin it to current_depth so
+      // kSampleProjection, SymBuildBag / SymSortBag / SymSweep (and the
+      // outer kProjectionEvaluate) all accrue to the correct (tree, depth)
+      // cell. Nodewise control is deliberately left unscoped: its NodeTrain
+      // sum already matches TreeTrain.
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
+          current_depth;
+      // K shared samples per depth — tiny, but scoped so the depth-level
+      // sum (NodeTrain + ApplyProjection + SampleProjection) is complete.
+      CHRONO_BEGIN(sym_sample_proj);
+#endif
       for (int p = 0; p < num_proj; ++p) {
         internal::SampleProjection(
             config_link.numerical_features(), dt_config,
             train_dataset.data_spec(), config_link, projection_density,
             &shared_projections[p], &shared_monotonic[p], random);
       }
+#if defined(CHRONO_ENABLED) && defined(SYMMETRIC_DEPTHWISE_AP)
+      CHRONO_END(sym_sample_proj,
+                 ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
+#endif
 
 #ifdef SYMMETRIC_DEPTHWISE_AP
       const int num_nodes = depth_batch.size();
@@ -5483,15 +5508,8 @@ absl::Status GrowTreeLocalBFS(
       }
 
       std::vector<std::vector<float>> projected(num_nodes);
-#ifdef CHRONO_ENABLED
-      // BFS calls Apply *before* the per-node NodeTrain at this depth, so
-      // tls_ctx.cur_depth is still the *previous* depth's value (set by the
-      // last NodeTrain). Pin it to current_depth so the new SymBuildBag /
-      // SymSortBag / SymSweep scopes (and the outer kProjectionEvaluate) all
-      // accrue to the correct (tree, depth) cell.
-      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
-          current_depth;
-#endif
+      // tls_ctx.cur_depth already pinned to current_depth above (before the
+      // shared SampleProjection loop), so Sym* scopes accrue correctly.
       RETURN_IF_ERROR(ApplyProjectionsSymmetricDepthwiseAP(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),
@@ -5548,6 +5566,9 @@ absl::Status GrowTreeLocalBFS(
 #ifdef BFS_ONLY
       CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kBfsNodeLoop);
 #endif
+// TODO Ariel - make this use GrowTreeLocal.
+// Or is GrowTreeLocal even mandatory for Depthwise 1-pass? It has a performance penalty
+// CHRONO of this contradicts Randal's assumption of cache friendliness of DFS
       for (auto& nae : depth_batch) {
         RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
                                   deployment, weights, internal_config, random,

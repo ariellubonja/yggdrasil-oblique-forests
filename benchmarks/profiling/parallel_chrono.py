@@ -428,9 +428,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # Per-node body.
             "NodeTrain",
             "-FindBestCondition",
-            "--ObliqueSplitSearch",
             "---FindObliqueSetup",
+            "--ObliqueSplitSearch",
             "SampleProjection",
+            "--AxisAlignedSplitSearch",
             "ApplyProjection",
             # Sub-phases of ApplyProjection.
             "-SymBuildBag",
@@ -452,7 +453,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "----HistoPath",
             "----EntropyTableSetup",
             "--HistogramSetup",
-            "---MinMaxNumerical",
             "--AssignSamplesToHist",
             "--SelectBestThresholdHistogram",
             # Other splitter-related scopes (rare in current modes).
@@ -463,7 +463,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "-ScanPresorted",
             "GetCandidateAttributes",
             "AxisAlignedColumnFetch",
-            "--AxisAlignedSplitSearch",
             # Per-node finish.
             "SplitExamplesInPlace",
             "SetLeafValue",
@@ -471,6 +470,12 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         ordered = [c for c in desired_order if c in g.columns]
         remaining = [c for c in g.columns if c not in desired_order]
         g = g[ordered + remaining]
+
+        # Columns intentionally excluded from the CSV (still chrono'd in
+        # C++). MinMaxNumerical is nested inside --HistogramSetup, so no
+        # coverage is lost.
+        excluded = ["---MinMaxNumerical"]
+        g = g.drop(columns=[c for c in excluded if c in g.columns])
 
         # Drop timing columns that are all-zero for this run (e.g. GPU
         # columns in a CPU run, Histogram columns in an Exact run). Keep
