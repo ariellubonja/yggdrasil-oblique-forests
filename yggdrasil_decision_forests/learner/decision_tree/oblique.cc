@@ -1193,11 +1193,21 @@ ProjectionEvaluator::ProjectionEvaluator(
     return;
   }
 
+  // Dual fp32 layout: same dispatch idea as dual bf16, full precision. Either
+  // store alone also lands here (single-layout experiments).
   const auto* row_active = dataset::RowMajorFeatureMatrix::Active();
-  if (row_active != nullptr) {
-    DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
-              row_active->num_rows());
-    row_major_matrix_ = row_active;
+  const auto* flat_active_rm = dataset::FlatColMajorFeatureMatrix::Active();
+  if (row_active != nullptr || flat_active_rm != nullptr) {
+    if (row_active != nullptr) {
+      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+                row_active->num_rows());
+      row_major_matrix_ = row_active;
+    }
+    if (flat_active_rm != nullptr) {
+      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+                flat_active_rm->num_rows());
+      flat_col_matrix_ = flat_active_rm;
+    }
     return;
   }
 #endif

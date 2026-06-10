@@ -123,6 +123,56 @@ absl::Status ApplyProjectionsProjectionMatrixControl(
             o[i] = acc;
           }
         }
+      } else if (const auto* fp32_rows = evaluator.Fp32Rows();
+                 fp32_rows != nullptr &&
+                 (rows_n <= RowMajorMaxRows() ||
+                  evaluator.Fp32Cols() == nullptr)) {
+        // Row-major fp32: same dispatch as the bf16 hybrid, full precision.
+        for (size_t i = 0; i < rows_n; ++i) {
+          const float* row = fp32_rows->row_ptr(selected[i]);
+          for (size_t p = 0; p < P; ++p) {
+            float acc = 0.f;
+            for (const auto& feat : projs[p]) {
+              float v = row[feat.attribute_idx];
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+              if (std::isnan(v)) {
+                v = evaluator.NaReplacementValue(feat.attribute_idx);
+              }
+#endif
+              acc += feat.weight * v;
+            }
+            out[p * rows_n + i] = acc;
+          }
+        }
+      } else if (const auto* fp32_cols = evaluator.Fp32Cols();
+                 fp32_cols != nullptr) {
+        for (size_t p = 0; p < P; ++p) {
+          float* o = &out[p * rows_n];
+          size_t i = 0;
+          for (; i + 4 <= rows_n; i += 4) {
+            float a0 = 0.f, a1 = 0.f, a2 = 0.f, a3 = 0.f;
+            for (const auto& feat : projs[p]) {
+              const float* col = fp32_cols->col_ptr(feat.attribute_idx);
+              const float w = feat.weight;
+              a0 += w * col[selected[i + 0]];
+              a1 += w * col[selected[i + 1]];
+              a2 += w * col[selected[i + 2]];
+              a3 += w * col[selected[i + 3]];
+            }
+            o[i] = a0;
+            o[i + 1] = a1;
+            o[i + 2] = a2;
+            o[i + 3] = a3;
+          }
+          for (; i < rows_n; ++i) {
+            float acc = 0.f;
+            for (const auto& feat : projs[p]) {
+              acc += feat.weight *
+                     fp32_cols->col_ptr(feat.attribute_idx)[selected[i]];
+            }
+            o[i] = acc;
+          }
+        }
       } else {
         for (size_t i = 0; i < rows_n; ++i) {
           const UnsignedExampleIdx ex = selected[i];

@@ -249,6 +249,12 @@ struct DualBf16TrunkDataset {
   std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix> cols;
 };
 
+struct DualFp32TrunkDataset {
+  std::unique_ptr<dataset::VerticalDataset> vd;
+  std::unique_ptr<dataset::RowMajorFeatureMatrix> rows;
+  std::unique_ptr<dataset::FlatColMajorFeatureMatrix> cols;
+};
+
 template <typename Matrix>
 void FillTrunkMatrix(Matrix* matrix, int64_t rows, int cols, uint32_t seed) {
   using RNG = std::minstd_rand;
@@ -332,6 +338,17 @@ DualBf16TrunkDataset MakeTrunkDatasetDualBf16(
       std::make_unique<dataset::Bf16FlatColMajorFeatureMatrix>(rows, cols);
   // Same seed => identical values in both stores (the per-column RNG stream
   // is deterministic and bf16 rounding happens at Set in both).
+  FillTrunkMatrix(rm.get(), rows, cols, seed);
+  FillTrunkMatrix(cm.get(), rows, cols, seed);
+  return {MakeLabelOnlyTrunkDataset(spec, rows, cols), std::move(rm),
+          std::move(cm)};
+}
+
+DualFp32TrunkDataset MakeTrunkDatasetDualFp32(
+    const dataset::proto::DataSpecification& spec, int64_t rows, int cols,
+    uint32_t seed) {
+  auto rm = std::make_unique<dataset::RowMajorFeatureMatrix>(rows, cols);
+  auto cm = std::make_unique<dataset::FlatColMajorFeatureMatrix>(rows, cols);
   FillTrunkMatrix(rm.get(), rows, cols, seed);
   FillTrunkMatrix(cm.get(), rows, cols, seed);
   return {MakeLabelOnlyTrunkDataset(spec, rows, cols), std::move(rm),
@@ -485,9 +502,36 @@ int main(int argc, char** argv) {
                    "--config=row_major_dataset_layout.\n";
       return 1;
 #endif
+    } else if (layout == "dual_fp32") {
+#if defined(ROW_MAJOR_DATASET_LAYOUT)
+      if (mode != "trunk") {
+        std::cerr << "--dataset_layout=dual_fp32 only supports trunk "
+                     "synthetic.\n";
+        return 1;
+      }
+      auto dual = MakeTrunkDatasetDualFp32(data_spec,
+                                           absl::GetFlag(FLAGS_rows),
+                                           absl::GetFlag(FLAGS_cols),
+                                           absl::GetFlag(FLAGS_seed));
+      tf_ds = std::move(dual.vd);
+      row_major_matrix = std::move(dual.rows);
+      flat_col_matrix = std::move(dual.cols);
+      dataset::RowMajorFeatureMatrix::SetActive(row_major_matrix.get());
+      dataset::FlatColMajorFeatureMatrix::SetActive(flat_col_matrix.get());
+      LOG(INFO) << "Dual fp32 matrices allocated: "
+                << ((row_major_matrix->bytes() + flat_col_matrix->bytes()) /
+                    (1024.0 * 1024.0 * 1024.0))
+                << " GiB total";
+      ds_ptr = tf_ds.get();
+#else
+      std::cerr << "--dataset_layout=dual_fp32 requires "
+                   "--config=row_major_dataset_layout.\n";
+      return 1;
+#endif
     } else {
       std::cerr << "Unknown --dataset_layout: " << layout
-                << ". Use 'column', 'row', 'flat_column', or 'dual_bf16'.\n";
+                << ". Use 'column', 'row', 'flat_column', 'dual_bf16', or "
+                   "'dual_fp32'.\n";
       return 1;
     }
   }

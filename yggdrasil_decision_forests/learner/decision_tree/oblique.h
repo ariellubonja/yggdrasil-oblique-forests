@@ -226,11 +226,11 @@ class ProjectionEvaluator {
     if (bf16_row_major_matrix_ != nullptr) {
       return bf16_row_major_matrix_->Get(example_idx, attribute_idx);
     }
-    if (row_major_matrix_ != nullptr) {
-      return row_major_matrix_->Get(example_idx, attribute_idx);
-    }
     if (flat_col_matrix_ != nullptr) {
       return flat_col_matrix_->Get(example_idx, attribute_idx);
+    }
+    if (row_major_matrix_ != nullptr) {
+      return row_major_matrix_->Get(example_idx, attribute_idx);
     }
     return numerical_attribute_data_[attribute_idx][example_idx];
   }
@@ -240,6 +240,12 @@ class ProjectionEvaluator {
   }
   const dataset::Bf16FlatColMajorFeatureMatrix* Bf16Cols() const {
     return bf16_flat_col_matrix_;
+  }
+  const dataset::RowMajorFeatureMatrix* Fp32Rows() const {
+    return row_major_matrix_;
+  }
+  const dataset::FlatColMajorFeatureMatrix* Fp32Cols() const {
+    return flat_col_matrix_;
   }
 
   float NaReplacementValue(int attribute_idx) const {
