@@ -7,9 +7,10 @@
 # 2x4-byte stores, so shape is 1.5M x 4096 (24+24 GiB) on this 62 GiB box,
 # with a matched fp32 control at the same shape and a dual_bf16 cross-point.
 
-set -u
 cd /home/ariel/prog/ydf/yggdrasil-oblique-forests
+# setvars.sh reads unset vars, so it must run before set -u.
 source /opt/intel/oneapi/setvars.sh >/dev/null 2>&1
+set -u
 
 LOG=benchmarks/results/offline_queue_2026-06-10.log
 echo "=== queue start $(date) ===" >> "$LOG"
