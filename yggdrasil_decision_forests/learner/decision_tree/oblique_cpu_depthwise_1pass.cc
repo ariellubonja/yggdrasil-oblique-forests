@@ -55,6 +55,20 @@ size_t Dw1BlockFloats() {
   return value;
 }
 
+// Override for dw1's internal parallelism. The caller passes
+// deployment.num_threads(), but when random_forest already trains
+// num_threads trees concurrently, each tree spawning its own per-depth
+// ThreadPool oversubscribes the machine (num_threads^2 runnable threads +
+// a sync barrier per depth). YDF_DW1_THREADS=1 forces the serial kernel
+// within each tree; unset keeps the caller's value.
+int Dw1ThreadsOverride(int num_threads) {
+  static const int value = [] {
+    const char* e = std::getenv("YDF_DW1_THREADS");
+    return e != nullptr ? static_cast<int>(std::strtol(e, nullptr, 10)) : -1;
+  }();
+  return value > 0 ? value : num_threads;
+}
+
 struct ColEntry {
   int32_t node;   // index within the depth batch
   int32_t proj;   // projection index within the node
@@ -146,6 +160,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
     absl::Span<std::vector<float>> out_projected, int num_threads) {
+  num_threads = Dw1ThreadsOverride(num_threads);
   const size_t N = selected_examples_per_node.size();
   DCHECK_EQ(N, projections_per_node.size());
   DCHECK_EQ(N, out_projected.size());

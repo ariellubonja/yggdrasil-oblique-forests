@@ -895,3 +895,37 @@ BFS-vs-DFS scheduler costs. The AP scope is the clean kernel A/B.
 but flattening (64→256 MiB = −3%). Column sharing dominates output-slab
 residency outright. Default block size set to 256 MiB (64 Mi floats) in
 code; YDF_DW1_BLOCK_FLOATS still overrides.
+
+### Flag audit (2026-06-10, code inspection only)
+
+- **symmetric_depthwise_ap: as intended.** Shared K projections per depth,
+  bag concat + VQSort, K stride-1 sweeps, write-cursor routing to per-node
+  slabs; slab/selected alignment guaranteed by the sorted-.active invariant
+  (DCHECKs training.cc:5728/5734). Footnote: "aggregate == bag" comment only
+  holds before any branch terminates; code correctly uses the actual frontier
+  aggregate.
+- **symmetric_nodewise_control: as intended.** Shared projections, no slab,
+  per-node ProjectionEvaluator::Evaluate (oblique.cc:244).
+- **projection_matrix_control: was NOT the intended driver-overhead
+  control.** Its fallback kernel was rows-outer/projections-inner — a
+  different AP memory-access order than Nodewise (scattered per-row column
+  touches on column-major storage). PMC-vs-Nodewise comparisons therefore
+  measured a loop-order artifact, not driver overhead; this likely explains
+  "Nodewise AP (Control)" being the slowest column in the e2e table
+  (trunk 1005 vs BFS-only 909; HIGGS 579 vs 457). **Fixed**: fallback now
+  replicates the Evaluate traversal exactly (projection-outer, rows inner,
+  AttributeValue, identical NaN handling). All prior PMC "control" numbers
+  need re-running; the Dynamic_Row_Col_Major treatment branches (bf16/fp32
+  dual stores) are unaffected. NOT yet rebuilt/re-measured (runs paused at
+  user request).
+
+**Correction (same day):** user clarified PMC's intent — it is the control
+for **depthwise_1_pass** (same work, no column sharing), not a
+Nodewise-driver control. Reimplemented accordingly: PMC now runs dw1's exact
+kernels (same big/small split on YDF_DW1_BLOCK_FLOATS, projection-major dot
+for big nodes, feature-major accumulate for small nodes, direct column
+pointers) in (node, projection, feature) order with no cross-node column
+grouping. dw1 − PMC isolates column sharing; entry build + counting sort
+remain charged to dw1. The interim Evaluate-mimicking fallback survives only
+as the no-direct-pointers generic path (mirrors dw1's). Still unbuilt /
+unmeasured — runs paused.
