@@ -46,8 +46,11 @@ namespace {
 size_t Dw1BlockFloats() {
   static const size_t value = [] {
     const char* e = std::getenv("YDF_DW1_BLOCK_FLOATS");
+    // Measured at 3M×4096: 4 MiB 55.0 s, 16 MiB 49.6, 64 MiB 47.0,
+    // 256 MiB 45.6 — column sharing dominates output-slab residency, with
+    // diminishing returns past 64 MiB. Default 256 MiB (64 Mi floats).
     return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
-                        : static_cast<size_t>(4) << 20;  // 16 MiB of fp32
+                        : static_cast<size_t>(64) << 20;
   }();
   return value;
 }

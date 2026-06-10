@@ -874,3 +874,24 @@ bit-identical, same precision class).
 Per-depth: 1.3–1.5× shallow/mid, rising to ~1.8× at depths 18+; depth 1
 flat (single node = big-node path). CSVs: dw1_old_5trees_pcore_2026-06-10,
 dw1_colcentric_5trees_pcore_2026-06-10.
+
+dw1 column-centric follow-ups (canonical state, 5-tree medians):
+
+- Block-size ablation at 3M×4096 (ΣAP): 4 MiB → 55.02 s, 16 MiB → 49.62 s,
+  64 MiB → **47.05 s** (1.66× vs old dw1). Monotone: column sharing
+  outweighs output-slab cache residency; probing 256 MiB before fixing the
+  default.
+- 30k×400k: AP 3.71 vs nodewise control 5.09 = **1.37×**; TreeTrain 44.3 vs
+  47.1.
+- 11M×28 (HIGGS shape): AP 11.67 vs control 16.05 = **1.38×**; TreeTrain
+  43.9 vs 45.5 (AP is only ~26% of TreeTrain at this shape, so e2e gains are
+  bounded; whether dw1 mode now beats the DFS baseline on real HIGGS needs
+  the user's e2e rerun).
+
+Caveat: controls use the default scheduler; TreeTrain comparisons entangle
+BFS-vs-DFS scheduler costs. The AP scope is the clean kernel A/B.
+
+256 MiB block probe: ΣAP **45.62 s** (1.71× vs old dw1) — still improving
+but flattening (64→256 MiB = −3%). Column sharing dominates output-slab
+residency outright. Default block size set to 256 MiB (64 Mi floats) in
+code; YDF_DW1_BLOCK_FLOATS still overrides.
