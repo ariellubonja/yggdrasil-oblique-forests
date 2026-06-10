@@ -849,3 +849,28 @@ now called **Dynamic_Row_Col_Major**. Flag values:
 `--dataset_layout=dynamic_row_col_major_bf16` (bf16 stores). The old
 `dual_fp32`/`dual_bf16` spellings remain as deprecated aliases; existing
 result CSV names are unchanged.
+
+### Phase N: column-centric depthwise_1_pass rewrite (2026-06-10)
+
+Finding: the previous depthwise_1_pass never exploited column sharing — its
+kernel was the nodewise per-(node,projection) gather loop (via the branchy
+AttributeValue path) batched per depth. Canonical-state 5-tree medians at
+3M×4096 confirm: old dw1 AP 77.91 s ≈ nodewise control 79.56 s.
+
+Rewrite (same interface): per depth, group consecutive nodes into blocks
+sized so output slabs stay cache-resident (YDF_DW1_BLOCK_FLOATS, default
+16 MiB fp32); counting-sort each block's (node, proj, weight) references by
+column; sweep touched columns ascending with direct column pointers.
+Oversized nodes keep projection-major order with hoisted pointers. No extra
+memory, no dataset copy, works on any dataset; float additions within a
+projection are reassociated (same summands, different rounding order — not
+bit-identical, same precision class).
+
+| 3M×4096, 5-tree medians | old dw1 | column-centric | ratio |
+|---|---|---|---|
+| ΣApplyProjection | 77.91 s | 49.62 s | **★ 1.57×** |
+| TreeTrain | 181.2 s | 153.0 s | 1.18× |
+
+Per-depth: 1.3–1.5× shallow/mid, rising to ~1.8× at depths 18+; depth 1
+flat (single node = big-node path). CSVs: dw1_old_5trees_pcore_2026-06-10,
+dw1_colcentric_5trees_pcore_2026-06-10.
