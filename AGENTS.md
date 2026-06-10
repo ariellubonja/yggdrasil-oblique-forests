@@ -39,19 +39,14 @@ Empiricism is foundational here — if this loop isn't followed, the work is was
 4. **Measure.** Same methodology as baseline. **Median of 3 trees** via
    `--num_trees=3`, never 3 separate process invocations (cold-cache cost
    inflates each run).
-5. **Significance gate.** If median speedup over baseline (on the
-   targeted chrono scope) is **< 20%**, this experiment is a **failed
+5. **Significance gate.** If median speedup over baseline on the end-to-end runtime.sh measures is **< 15%**, this experiment is a **failed
    experiment** for the purpose of step 6.
 6. **Log result.** Append to the branch's `*_experiments.md` (see
    `benchmarks/experiments/apply_projection_experiments.md` for the
    shape). Every experiment — failed or successful — gets a row. **Mark
    successful experiments (≥ 20% speedup) prominently** (★, bold table,
    etc.) so they're easy to spot.
-7. **5 consecutive failures → enter full plan mode.** Stop the loop, list
-   what was tried and what was learned (cache pattern, FMA serialization,
-   load-buffer occupancy, …), and design fundamentally different
-   approaches before resuming. Do not just keep trying small variations.
-8. **Iterate.** Loop back to step 2.
+7. **Iterate.** Loop back to step 2. Call the Advisor model liberally.
 
 ### A/B evaluation
 Two tools, two jobs:
@@ -65,14 +60,7 @@ Two tools, two jobs:
   why a change moves a number.
 
 ### On guessing vs. measuring
-Avoid speculative "why" stories about a result. A small autonomous-mode
-guess is fine to keep moving, but if a result doesn't match the
-hypothesis — or lands inside the noise floor — stop guessing and dig
-deeper instead of trying another variation. Concretely: add `taskset`
-pinning, run repeats with σ, take a per-depth breakdown, capture
-`perf stat` (LLC misses, IPC, stall counters) and `perf annotate`
-deltas between A and B, or strip the kernel into a microbench. Evidence
-beats narrative.
+Avoid speculative "why" stories about a result. Measure instead. Guesses are necessary when coming up with a hypothesis, but not when answering questions that can be answered empirically.
 
 ### Hardware + measurement rules
 - Intel Core Ultra 9 185H is hybrid (P-cores + E-cores). E-cores must be
@@ -82,10 +70,8 @@ beats narrative.
   with `--enable` when done. With E-cores on, `perf` splits counters
   across `cpu_atom/*` and `cpu_core/*` PMUs and many events become
   `<not supported>` — A/B comparisons become meaningless. However, leave E-cores on for bazel builds to speed them up 3x. Note that parallel_chrono.py automatically manages this for per-function timings.
-- For per-function timing runs, invoke `parallel_chrono.py` directly — it handles the bazel build (pass extra `--config=…` via `--bazel_config=NAME`) and the E-core toggle for you; don't run `bazel build` or `set_cpu_e_features.sh` separately.
 - Sudo is available on request; just ask.
-- Default workload: `rows=3000000`, `num_threads=1`. Never run
-  simultaneous experiments (timing noise).
+- Never run simultaneous experiments (timing noise).
 - **Never use Intel Advisor's Memory Access Pattern or Microarchitecture
   Exploration profiles** — those use the `sep5` driver and freeze this system.
   Other Advisor profile types, including Hotspots, are allowed. `perf` is fine.
@@ -100,25 +86,10 @@ beats narrative.
   `benchmarks/experiments/<branch-name>/iteration_logs/` — both
   gitignored. Regeneratable from the binary on demand.
 
-### After completing a successful experiment
-- Remind the user to describe how they want times-per-depth plotted
-  from `parallel_chrono.py` outputs.
 
-## Build commands
+## Build flags
 
-```bash
-bazel build -c opt //yggdrasil_decision_forests/learner/decision_tree:training        # Default opt build
-bazel build -c opt --config=chrono_profile //...                        # CHRONO timing per tree/depth
-bazel build -c opt --config=intel_profiler //...                                       # -O2 + DWARF, perf-annotate-friendly
-bazel build --config=intel_debug //...                                                  # icx debug build
-```
-
-### Key configs (`.bazelrc`)
-| Config | Purpose |
-|--------|---------|
-| `chrono_profile` | `CHRONO_ENABLED` — per-function timing by tree/depth |
-| `enable_std_upper_bound_avx2` / `avx512` | Vectorized `upper_bound` |
-
+Different versions of the code are hidden behind compile flags. See .bazelrc
 
 ## Conventions
 - Data is **column-major** (`VerticalDataset`).

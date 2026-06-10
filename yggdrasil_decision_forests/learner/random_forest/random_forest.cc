@@ -974,6 +974,33 @@ RandomForestLearner::TrainWithStatusImpl(
 #ifdef CHRONO_ENABLED
   using namespace yggdrasil_decision_forests::chrono_prof;
 
+  // One-shot call-count totals (call_cnt() is filled by add_time but never
+  // emitted in the per-depth lines). Used to express unnamed residuals as
+  // ns/call — e.g. CartPath − CartSetup − Σ(sort leaves) over CartPath calls.
+  {
+    FuncArray total_calls{};
+    for (const auto& by_depth : call_cnt()) {
+      for (const auto& cnt : by_depth) {
+        for (int f = 0; f < kNumFuncs; ++f) total_calls[f] += cnt[f];
+      }
+    }
+    LOG(INFO) << "CHRONO_CALLS"
+              << " EvaluateProj " << total_calls[kEvaluateProj]
+              << " CartPath " << total_calls[kCartPath]
+              << " CartSetup " << total_calls[kCartSetup]
+              << " SortInitBuckets " << total_calls[kSortInitBuckets]
+              << " SortFillBuckets " << total_calls[kSortFillBuckets]
+              << " SortFeatures " << total_calls[kSortFeatures]
+              << " SortScanSplits " << total_calls[kSortScanSplits]
+              << " HistoPath " << total_calls[kHistoPath]
+              << " EntropyTableSetup " << total_calls[kEntropyTableSetup]
+              << " HistogramSetup " << total_calls[kHistogramSetup]
+              << " AssignSamplesToHist "
+              << total_calls[kAssignSamplesToHistogram]
+              << " SelectBestThresholdHistogram "
+              << total_calls[kSelectBestThresholdHistogram];
+  }
+
   for (int t = 0; t < static_cast<int>(time_ns().size()); ++t) {
     for (int d = 0; d < static_cast<int>(time_ns()[t].size()); ++d) {
       auto& arr = time_ns()[t][d];
@@ -1050,6 +1077,10 @@ RandomForestLearner::TrainWithStatusImpl(
                   << arr[kEntropyTableSetup] * 1e-9 << "s"
                   << " CartPath "
                   << arr[kCartPath] * 1e-9 << "s"
+                  << " CartSetup "
+                  << arr[kCartSetup] * 1e-9 << "s"
+                  << " HistoPath "
+                  << arr[kHistoPath] * 1e-9 << "s"
                   << " AxisAlignedSplitSearch "
                   << arr[kAxisAlignedSplitSearch] * 1e-9 << "s"
                   << " SampleProjection "
@@ -1057,16 +1088,13 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " SplitExamplesInPlace "
                   << arr[kSplitExamplesInPlace] * 1e-9 << "s"
                   << " SetLeafValue " << arr[kSetLeafValue] * 1e-9 << "s"
-                  // BFS-only scheduler scopes. BfsFrontier fires on every
-                  // BFS-routed build (depthwise_1pass / symmetric_* / bfs_only);
-                  // BfsNodeLoop only fires under -DBFS_ONLY. Both are zero
-                  // for DFS builds.
-                  << " BfsFrontier " << arr[kBfsFrontier] * 1e-9 << "s"
+                  // BFS-only scheduler scope. BfsNodeLoop only fires under
+                  // -DBFS_ONLY; zero for DFS builds.
                   << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
                   // Top-level per-tree scope (kTreeTrain) wraps the entire
                   // tree training. Non-zero only at depth=0 of each tree;
-                  // works as the DFS-build analogue of BfsNodeLoop+BfsFrontier
-                  // when those are zero. Sum across trees ≈ training_block ×
+                  // works as the DFS-build analogue of BfsNodeLoop
+                  // when it is zero. Sum across trees ≈ training_block ×
                   // min(N_trees, N_threads) under good load balance.
                   << " TreeTrain " << arr[kTreeTrain] * 1e-9 << "s"
                   ;
@@ -1151,6 +1179,10 @@ RandomForestLearner::TrainWithStatusImpl(
                   << arr[kEntropyTableSetup] * 1e-9 << "s"
                   << " CartPath "
                   << arr[kCartPath] * 1e-9 << "s"
+                  << " CartSetup "
+                  << arr[kCartSetup] * 1e-9 << "s"
+                  << " HistoPath "
+                  << arr[kHistoPath] * 1e-9 << "s"
                   << " AxisAlignedSplitSearch "
                   << arr[kAxisAlignedSplitSearch] * 1e-9 << "s"
                   << " SampleProjection "
@@ -1158,16 +1190,13 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " SplitExamplesInPlace "
                   << arr[kSplitExamplesInPlace] * 1e-9 << "s"
                   << " SetLeafValue " << arr[kSetLeafValue] * 1e-9 << "s"
-                  // BFS-only scheduler scopes. BfsFrontier fires on every
-                  // BFS-routed build (depthwise_1pass / symmetric_* / bfs_only);
-                  // BfsNodeLoop only fires under -DBFS_ONLY. Both are zero
-                  // for DFS builds.
-                  << " BfsFrontier " << arr[kBfsFrontier] * 1e-9 << "s"
+                  // BFS-only scheduler scope. BfsNodeLoop only fires under
+                  // -DBFS_ONLY; zero for DFS builds.
                   << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
                   // Top-level per-tree scope (kTreeTrain) wraps the entire
                   // tree training. Non-zero only at depth=0 of each tree;
-                  // works as the DFS-build analogue of BfsNodeLoop+BfsFrontier
-                  // when those are zero. Sum across trees ≈ training_block ×
+                  // works as the DFS-build analogue of BfsNodeLoop
+                  // when it is zero. Sum across trees ≈ training_block ×
                   // min(N_trees, N_threads) under good load balance.
                   << " TreeTrain " << arr[kTreeTrain] * 1e-9 << "s"
                   ;
