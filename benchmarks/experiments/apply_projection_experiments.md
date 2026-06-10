@@ -842,3 +842,10 @@ TreeTrain win exceeding the AP win suggests the flat bf16 column store also
 helps the non-AP consumers (EvalProj/histogram reads through AttributeValue)
 on this shape. Queue complete: all 7 steps exit=0
 (offline_queue_2026-06-10.log).
+
+**Naming (2026-06-10):** the per-node row/column-major dispatch approach is
+now called **Dynamic_Row_Col_Major**. Flag values:
+`--dataset_layout=dynamic_row_col_major` (fp32, precision-neutral) and
+`--dataset_layout=dynamic_row_col_major_bf16` (bf16 stores). The old
+`dual_fp32`/`dual_bf16` spellings remain as deprecated aliases; existing
+result CSV names are unchanged.

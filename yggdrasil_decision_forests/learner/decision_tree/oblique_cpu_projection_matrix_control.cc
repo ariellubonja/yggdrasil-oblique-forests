@@ -18,9 +18,9 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 
 namespace {
 
-// Dual-bf16 dispatch threshold: nodes with at most this many selected rows
-// take the row-major path; larger nodes take the column-major path.
-// Experiment knob, read once. Unset => row-major for every node.
+// Dynamic_Row_Col_Major dispatch threshold: nodes with at most this many
+// selected rows take the row-major path; larger nodes take the column-major
+// path. Experiment knob, read once. Unset => row-major for every node.
 size_t RowMajorMaxRows() {
   static const size_t value = [] {
     const char* e = std::getenv("YDF_RM_MAX_ROWS");

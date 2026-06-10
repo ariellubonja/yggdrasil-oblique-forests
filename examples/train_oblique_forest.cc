@@ -104,8 +104,11 @@ ABSL_FLAG(bool, bf16_shadow, false,
           "--config=row_major_dataset_layout.");
 ABSL_FLAG(std::string, dataset_layout, "column",
           "Hidden dataset-layout experiment for trunk synthetic datasets: "
-          "'column', 'row', or 'flat_column'. Non-column layouts require the "
-          "matching Bazel config.");
+          "'column', 'row', 'flat_column', 'dynamic_row_col_major' (fp32), or "
+          "'dynamic_row_col_major_bf16'. Dynamic_Row_Col_Major keeps both a "
+          "row-major and a column-major store and dispatches per node on "
+          "YDF_RM_MAX_ROWS. Non-column layouts require the matching Bazel "
+          "config. 'dual_fp32'/'dual_bf16' are deprecated aliases.");
 
 // Histogram-based splits - Updated to match Yggdrasil implementation
 ABSL_FLAG(std::string, numerical_split_type, "Exact",
@@ -404,7 +407,11 @@ int main(int argc, char** argv) {
         &data_spec);
   }
   else if (mode == "uniform" || mode == "trunk") {
-    const std::string layout = absl::GetFlag(FLAGS_dataset_layout);
+    std::string layout = absl::GetFlag(FLAGS_dataset_layout);
+    // Approach renamed to Dynamic_Row_Col_Major (2026-06-10); accept the old
+    // dual_* spellings.
+    if (layout == "dual_bf16") layout = "dynamic_row_col_major_bf16";
+    if (layout == "dual_fp32") layout = "dynamic_row_col_major";
     LOG(INFO) << "Generating " << mode << " synthetic dataset: rows="
               << absl::GetFlag(FLAGS_rows)
               << ", cols=" << absl::GetFlag(FLAGS_cols)
@@ -476,11 +483,11 @@ int main(int argc, char** argv) {
                    "--config=flat_col_dataset_layout.\n";
       return 1;
 #endif
-    } else if (layout == "dual_bf16") {
+    } else if (layout == "dynamic_row_col_major_bf16") {
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
       if (mode != "trunk") {
-        std::cerr << "--dataset_layout=dual_bf16 only supports trunk "
-                     "synthetic.\n";
+        std::cerr << "--dataset_layout=dynamic_row_col_major_bf16 only "
+                     "supports trunk synthetic.\n";
         return 1;
       }
       auto dual = MakeTrunkDatasetDualBf16(data_spec,
@@ -492,21 +499,21 @@ int main(int argc, char** argv) {
       bf16_cols = std::move(dual.cols);
       dataset::Bf16RowMajorFeatureMatrix::SetActive(bf16_rows.get());
       dataset::Bf16FlatColMajorFeatureMatrix::SetActive(bf16_cols.get());
-      LOG(INFO) << "Dual bf16 matrices allocated: "
+      LOG(INFO) << "Dynamic_Row_Col_Major bf16 matrices allocated: "
                 << ((bf16_rows->bytes() + bf16_cols->bytes()) /
                     (1024.0 * 1024.0 * 1024.0))
                 << " GiB total";
       ds_ptr = tf_ds.get();
 #else
-      std::cerr << "--dataset_layout=dual_bf16 requires "
+      std::cerr << "--dataset_layout=dynamic_row_col_major_bf16 requires "
                    "--config=row_major_dataset_layout.\n";
       return 1;
 #endif
-    } else if (layout == "dual_fp32") {
+    } else if (layout == "dynamic_row_col_major") {
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
       if (mode != "trunk") {
-        std::cerr << "--dataset_layout=dual_fp32 only supports trunk "
-                     "synthetic.\n";
+        std::cerr << "--dataset_layout=dynamic_row_col_major only supports "
+                     "trunk synthetic.\n";
         return 1;
       }
       auto dual = MakeTrunkDatasetDualFp32(data_spec,
@@ -518,20 +525,21 @@ int main(int argc, char** argv) {
       flat_col_matrix = std::move(dual.cols);
       dataset::RowMajorFeatureMatrix::SetActive(row_major_matrix.get());
       dataset::FlatColMajorFeatureMatrix::SetActive(flat_col_matrix.get());
-      LOG(INFO) << "Dual fp32 matrices allocated: "
+      LOG(INFO) << "Dynamic_Row_Col_Major fp32 matrices allocated: "
                 << ((row_major_matrix->bytes() + flat_col_matrix->bytes()) /
                     (1024.0 * 1024.0 * 1024.0))
                 << " GiB total";
       ds_ptr = tf_ds.get();
 #else
-      std::cerr << "--dataset_layout=dual_fp32 requires "
+      std::cerr << "--dataset_layout=dynamic_row_col_major requires "
                    "--config=row_major_dataset_layout.\n";
       return 1;
 #endif
     } else {
       std::cerr << "Unknown --dataset_layout: " << layout
-                << ". Use 'column', 'row', 'flat_column', 'dual_bf16', or "
-                   "'dual_fp32'.\n";
+                << ". Use 'column', 'row', 'flat_column', "
+                   "'dynamic_row_col_major', or "
+                   "'dynamic_row_col_major_bf16'.\n";
       return 1;
     }
   }
