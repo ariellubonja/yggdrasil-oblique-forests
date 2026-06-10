@@ -1175,6 +1175,24 @@ ProjectionEvaluator::ProjectionEvaluator(
   }
 
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
+  // Dual bf16 layout: both half-width stores live; per-node kernels pick the
+  // order, AttributeValue defaults to the column store.
+  const auto* bf16_rows = dataset::Bf16RowMajorFeatureMatrix::Active();
+  const auto* bf16_cols = dataset::Bf16FlatColMajorFeatureMatrix::Active();
+  if (bf16_rows != nullptr || bf16_cols != nullptr) {
+    if (bf16_rows != nullptr) {
+      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+                bf16_rows->num_rows());
+      bf16_row_major_matrix_ = bf16_rows;
+    }
+    if (bf16_cols != nullptr) {
+      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+                bf16_cols->num_rows());
+      bf16_flat_col_matrix_ = bf16_cols;
+    }
+    return;
+  }
+
   const auto* row_active = dataset::RowMajorFeatureMatrix::Active();
   if (row_active != nullptr) {
     DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),

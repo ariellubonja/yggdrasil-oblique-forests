@@ -4,6 +4,8 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
+#include <limits>
 #include <vector>
 
 #include "absl/log/check.h"
@@ -13,6 +15,22 @@
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 
 namespace yggdrasil_decision_forests::model::decision_tree {
+
+namespace {
+
+// Dual-bf16 dispatch threshold: nodes with at most this many selected rows
+// take the row-major path; larger nodes take the column-major path.
+// Experiment knob, read once. Unset => row-major for every node.
+size_t RowMajorMaxRows() {
+  static const size_t value = [] {
+    const char* e = std::getenv("YDF_RM_MAX_ROWS");
+    return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
+                        : std::numeric_limits<size_t>::max();
+  }();
+  return value;
+}
+
+}  // namespace
 
 absl::Status ApplyProjectionsProjectionMatrixControl(
     const dataset::VerticalDataset& train_dataset,
@@ -50,20 +68,77 @@ absl::Status ApplyProjectionsProjectionMatrixControl(
     // layout re-sweeps the node's row range once per projection.
     {
       CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kPmcSweep);
-      for (size_t i = 0; i < rows_n; ++i) {
-        const UnsignedExampleIdx ex = selected[i];
-        for (size_t p = 0; p < P; ++p) {
-          float acc = 0.f;
-          for (const auto& feat : projs[p]) {
-            float v = evaluator.AttributeValue(feat.attribute_idx, ex);
+      const auto* bf16_rows = evaluator.Bf16Rows();
+      const auto* bf16_cols = evaluator.Bf16Cols();
+      if (bf16_rows != nullptr &&
+          (rows_n <= RowMajorMaxRows() || bf16_cols == nullptr)) {
+        // Row-major bf16: one pass per row serves all P projections; the
+        // row's feature loads share pages/lines instead of P*d isolated
+        // DRAM gathers.
+        for (size_t i = 0; i < rows_n; ++i) {
+          const uint16_t* row = bf16_rows->row_ptr(selected[i]);
+          for (size_t p = 0; p < P; ++p) {
+            float acc = 0.f;
+            for (const auto& feat : projs[p]) {
+              float v = dataset::Bf16ToFloat(row[feat.attribute_idx]);
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
-            if (std::isnan(v)) {
-              v = evaluator.NaReplacementValue(feat.attribute_idx);
-            }
+              if (std::isnan(v)) {
+                v = evaluator.NaReplacementValue(feat.attribute_idx);
+              }
 #endif
-            acc += feat.weight * v;
+              acc += feat.weight * v;
+            }
+            out[p * rows_n + i] = acc;
           }
-          out[p * rows_n + i] = acc;
+        }
+      } else if (bf16_cols != nullptr) {
+        // Column-major bf16 for large/shallow nodes: per projection, walk
+        // only the needed columns sequentially-ish; 4-row blocks expose
+        // independent accumulators (V2-rev3 pattern).
+        for (size_t p = 0; p < P; ++p) {
+          float* o = &out[p * rows_n];
+          size_t i = 0;
+          for (; i + 4 <= rows_n; i += 4) {
+            float a0 = 0.f, a1 = 0.f, a2 = 0.f, a3 = 0.f;
+            for (const auto& feat : projs[p]) {
+              const uint16_t* col = bf16_cols->col_ptr(feat.attribute_idx);
+              const float w = feat.weight;
+              a0 += w * dataset::Bf16ToFloat(col[selected[i + 0]]);
+              a1 += w * dataset::Bf16ToFloat(col[selected[i + 1]]);
+              a2 += w * dataset::Bf16ToFloat(col[selected[i + 2]]);
+              a3 += w * dataset::Bf16ToFloat(col[selected[i + 3]]);
+            }
+            o[i] = a0;
+            o[i + 1] = a1;
+            o[i + 2] = a2;
+            o[i + 3] = a3;
+          }
+          for (; i < rows_n; ++i) {
+            float acc = 0.f;
+            for (const auto& feat : projs[p]) {
+              acc += feat.weight * dataset::Bf16ToFloat(
+                                       bf16_cols->col_ptr(
+                                           feat.attribute_idx)[selected[i]]);
+            }
+            o[i] = acc;
+          }
+        }
+      } else {
+        for (size_t i = 0; i < rows_n; ++i) {
+          const UnsignedExampleIdx ex = selected[i];
+          for (size_t p = 0; p < P; ++p) {
+            float acc = 0.f;
+            for (const auto& feat : projs[p]) {
+              float v = evaluator.AttributeValue(feat.attribute_idx, ex);
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+              if (std::isnan(v)) {
+                v = evaluator.NaReplacementValue(feat.attribute_idx);
+              }
+#endif
+              acc += feat.weight * v;
+            }
+            out[p * rows_n + i] = acc;
+          }
         }
       }
     }

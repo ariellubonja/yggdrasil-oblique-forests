@@ -217,6 +217,15 @@ class ProjectionEvaluator {
   }
 
   float AttributeValue(int attribute_idx, UnsignedExampleIdx example_idx) const {
+    // Generic consumers (axis-aligned search, ExtractAttribute) walk one
+    // column over many rows, so prefer the column-major bf16 store when the
+    // dual layout is active.
+    if (bf16_flat_col_matrix_ != nullptr) {
+      return bf16_flat_col_matrix_->Get(example_idx, attribute_idx);
+    }
+    if (bf16_row_major_matrix_ != nullptr) {
+      return bf16_row_major_matrix_->Get(example_idx, attribute_idx);
+    }
     if (row_major_matrix_ != nullptr) {
       return row_major_matrix_->Get(example_idx, attribute_idx);
     }
@@ -224,6 +233,13 @@ class ProjectionEvaluator {
       return flat_col_matrix_->Get(example_idx, attribute_idx);
     }
     return numerical_attribute_data_[attribute_idx][example_idx];
+  }
+
+  const dataset::Bf16RowMajorFeatureMatrix* Bf16Rows() const {
+    return bf16_row_major_matrix_;
+  }
+  const dataset::Bf16FlatColMajorFeatureMatrix* Bf16Cols() const {
+    return bf16_flat_col_matrix_;
   }
 
   float NaReplacementValue(int attribute_idx) const {
@@ -238,6 +254,9 @@ class ProjectionEvaluator {
 
   const dataset::RowMajorFeatureMatrix* row_major_matrix_ = nullptr;
   const dataset::FlatColMajorFeatureMatrix* flat_col_matrix_ = nullptr;
+  const dataset::Bf16RowMajorFeatureMatrix* bf16_row_major_matrix_ = nullptr;
+  const dataset::Bf16FlatColMajorFeatureMatrix* bf16_flat_col_matrix_ =
+      nullptr;
 
   // Replacement for missing values.
   // Indexed by attribute idx.

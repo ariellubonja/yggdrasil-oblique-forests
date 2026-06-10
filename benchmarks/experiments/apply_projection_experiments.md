@@ -624,3 +624,186 @@ replaced.
   harness (45.8 GiB). A production hybrid needs a *shadow* (both layouts) —
   fp32 shadow does not fit 62 GB at this shape; bf16 shadow (+24 GB) is the
   realistic deployment and adds another ~1.5× per the microbench.
+
+### Same-state control (turbo ON both sides) — 2026-06-09 late
+
+`control_cm_turbo_2026-06-09.csv` vs `pmc_row_major_2026-06-09.csv`:
+
+| depth | ctrl AP | RM AP | ratio |
+|---|---|---|---|
+| 1 | 0.23 | 2.64 | 0.09× |
+| 5 | 1.03 | 2.10 | 0.49× |
+| 10 | 2.23 | 2.08 | 1.07× |
+| 15 | 3.00 | 2.06 | 1.46× |
+| 18 | 3.48 | 1.85 | 1.88× |
+| 20 | 3.05 | 1.39 | 2.19× |
+| 23 | 1.53 | 0.62 | 2.46× |
+| **ΣAP** | **50.5** | **44.7** | **1.13×** |
+
+Turbo recovers a chunk of baseline AP (50.5 s vs 65.6 s turbo-off), so the
+honest fp32-RM-everywhere result is only **1.13× ΣAP** — the deep-band win
+(1.5–2.5×) is real but shallow depths pay full-row line traffic (0.09× at
+depth 1: 32 GB of 65%-utilized lines vs CM's 2.2 GB sequential columns).
+First RM-winning depth: 9.
+
+**Hybrid prediction from the two curves:** min(CM, RM) per depth = 35.1 s →
+**1.44×** ΣAP. With bf16 on both sides (microbench 1.5×): ~23.4 s → **~2.16×**.
+fp32 dual layouts don't fit RAM (96 GB > 62 GB); bf16 dual = 48 GB fits.
+
+### Dual-bf16 hybrid implementation (same evening)
+
+Implemented `--dataset_layout=dual_bf16`: `Bf16RowMajorFeatureMatrix` +
+`Bf16FlatColMajorFeatureMatrix` (RNE convert at Set, widen at Get), PMC sweep
+dispatches per node on `YDF_RM_MAX_ROWS` (row-major path when
+`rows_n <= threshold`, else 4-row-unrolled bf16 column path; AttributeValue
+serves generic consumers from the bf16 column store). One binary gives the
+full ablation: threshold 0 = CM-bf16, unset = RM-bf16, 20000 = hybrid.
+Files: `row_major_feature_matrix.h`, `oblique.h/.cc`,
+`oblique_cpu_projection_matrix_control.cc`, `train_oblique_forest.cc`,
+`benchmarks/utils/utils.py`. Results pending.
+
+### ★ Dual-bf16 hybrid — first results (1-run probe, turbo ON) ★
+
+Crash fix first: `EvalConditionOblique` (decision_tree.cc, 2 sites) read the
+label-only VerticalDataset's empty numerical columns in dual_bf16 mode →
+SIGSEGV at first split application. Added bf16-row-major fallbacks.
+
+`hybrid_bf16_rm20k_2026-06-09.csv` (`YDF_RM_MAX_ROWS=20000`):
+
+| depth | ctrl fp32-CM | hybrid bf16 | ratio |
+|---|---|---|---|
+| 1 | 0.23 | 0.34 | 0.69× (scalar bf16 convert in L2-stream regime) |
+| 5 | 1.03 | 0.69 | 1.48× (bf16-CM path: bandwidth halving) |
+| 10 | 2.23 | 1.60 | 1.40× (bf16-RM path begins) |
+| 15 | 3.00 | 1.58 | 1.89× |
+| 18 | 3.48 | 1.41 | 2.48× |
+| 20 | 3.05 | 1.12 | 2.73× |
+| 23 | 1.53 | 0.50 | 3.06× |
+| **ΣAP** | **50.5** | **26.8** | **★ 1.88×** |
+
+Training block 77.7 s vs ~104 s control ≈ **1.34× e2e** (1 tree, 1 thread).
+Memory: 45.8 GiB total for BOTH layouts — *less* than the single fp32 store.
+Tree shape: 370,947 nodes vs 352,205 control (bf16 rounding shifts splits;
+accuracy A/B on real datasets still required before any merge).
+Threshold ≈ optimal at 20K rows: bf16-RM ≈ bf16-CM at the depth-8 boundary.
+5-tree median runs in progress.
+
+### ★★ 5-tree median confirmation — GATE PASSED ★★
+
+Back-to-back sequential 5-tree runs (same thermal/turbo state, E-cores ON):
+
+| | per-tree ΣAP | median ΣAP | per-tree TreeTrain | median |
+|---|---|---|---|---|
+| control fp32-CM | 63.6 / 62.3 / 64.5 / 64.1 / 66.1 | **64.14 s** | 116.6–121.2 | **117.3 s** |
+| hybrid dual-bf16 (RM≤20K) | 26.9 / 27.7 / 26.6 / 26.3 / 26.3 | **26.57 s** | 76.6–79.0 | **77.6 s** |
+
+**AP (targeted scope): 64.14 / 26.57 = ★ 2.41× (+141%) — far past the ≥1.20× gate.**
+**TreeTrain e2e: 117.3 / 77.6 = 1.51×.**
+
+Thermal note: the 1-run control earlier measured 50.5 s AP (cooler machine);
+control AP is clock/thermal-sensitive while the hybrid is not (26.3–27.7
+across every run tonight). Worst-case-for-us pairing (cold control vs hybrid)
+is still 50.5/26.6 = **1.90×**. The turbo-off canonical baseline (65.6 s)
+gives 2.47×.
+
+Consecutive failure counter: resets to 0.
+
+**Owed before merge:** (1) accuracy A/B on CC18 + epsilon/HIGGS — bf16
+rounding shifts splits (~5% node-count delta on trunk); consider stochastic
+rounding or fp32 recompute of the winning split if deltas exceed gate.
+(2) Vectorize bf16→fp32 widen in the CM path (depths 1–3 currently 0.7–0.8×).
+(3) Real-dataset (CSV/non-trunk) wiring of the dual store — currently
+trunk-synthetic-only via `--dataset_layout=dual_bf16`.
+(4) Multi-thread e2e sweep via runtime.sh + threshold sensitivity.
+
+### Threshold ablation (1-run probes, same binary, turbo ON)
+
+| depth | ctrl fp32-CM | all-CM-bf16 | all-RM-bf16 | hybrid 20K |
+|---|---|---|---|---|
+| 1 | 0.23 | 0.33 | 0.33 | 0.34 |
+| 5 | 1.03 | 0.67 | 1.61 | 0.69 |
+| 15 | 3.00 | 1.99 | 1.61 | 1.58 |
+| 18 | 3.48 | 2.17 | 1.46 | 1.41 |
+| 23 | 1.53 | 0.87 | 0.47 | 0.50 |
+| **ΣAP** | **50.5** | **33.2** | **32.8** | **26.8** |
+
+Decomposition: **bf16 alone = 1.52×** (50.5→33.2; halved bytes help gathers
+too — 2 rows/line + halved TLB footprint, not just streaming bandwidth);
+**layout dispatch adds 1.24×** on top (33.2→26.8). Hybrid ≈ per-depth
+min(CM,RM), confirming the dispatch threshold behaves. Depth 1 is
+convert-bound in all bf16 variants (~0.33 s — the scalar widen; vectorizable).
+
+**Deployment ladder:** (a) bf16-CM single store: 1.52× AP, 23 GiB (−52%
+memory), smallest diff — only the store + widen-on-load touch the kernel;
+(b) dual-bf16 hybrid: 2.41× AP / 1.51× TreeTrain (5-tree medians), 45.8 GiB.
+Both owe the bf16 accuracy gate.
+
+### bf16 accuracy gate — CC18 probe (Oblique Exact, 30 trees, OOB, 3 seeds)
+
+`--bf16_shadow` (csv mode): split *search* reads a bf16 column-major shadow
+via AttributeValue; split *application*, structure, and OOB stay fp32 — the
+deployment semantics of a compressed search store. Same binary A/B
+(`--config=row_major_dataset_layout`, flag toggles).
+
+| task | Δ OOB (pp), seeds 1/2/3 |
+|---|---|
+| task_14952_PhishingWebsites | 0 / 0 / 0 (bit-identical — binary-coded features are bf16-exact) |
+| task_14965_bank-marketing | +0.13 / −0.05 / +0.03 |
+| task_167125_Internet-Advertisements | 0 / −0.07 / −0.31 |
+| task_29_credit-approval | +0.48 / 0 / +0.48 |
+
+Max |Δ| = 0.48 pp, mean ≈ +0.06 pp — within seed noise, **PASS** (gate ≤5 pp).
+Epsilon (dense continuous, the adversarial case) A/B in progress.
+
+Epsilon (400K×2000 dense continuous, Oblique Exact, 30 trees, seed 1):
+fp32 OOB 0.6566 vs bf16 0.6539 → **Δ −0.27 pp — PASS.**
+
+### Phase L verdict
+
+**bf16 + hybrid layout is the validated outcome of this session: AP 2.41× /
+TreeTrain 1.51× (5-tree medians), accuracy deltas ≤0.5 pp on CC18 + epsilon.**
+Remaining engineering (not gates): vectorized bf16 widen (depth 1–3),
+real-dataset dual-store wiring, multithread runtime.sh sweep across shapes,
+threshold auto-tuning (R-based, currently env `YDF_RM_MAX_ROWS=20000`).
+Next research rung: tree-lockstep depth-synchronous column sweeps
+(union-density model says ≥0.98 dense at T=100 — multi-× ceiling on top).
+
+### Multithread e2e — saturation caveat
+
+30 trees, trunk 3M×4096 DRH, num_threads=-1 → **22 threads (6P+16E,
+E-cores ON)**: hybrid 408.2 s vs control 417.4 s = **only +2.3%**.
+The 1.51× TreeTrain win is a single-thread result; at full-machine
+saturation the advantage nearly vanishes. Scaling note: 22-thread control is
+only 3.85× faster than 1-thread (417 vs 117×30 s) — the machine is deeply
+DRAM-contended in this regime, and 16 of 22 workers are E-cores where the
+scalar bf16 widen is relatively expensive. P-core-only 6-thread A/B running
+to separate bandwidth contention from E-core effects.
+
+P-core-only (6 threads, taskset 0,1,3,6,8,10): control **640.5 s** vs hybrid
+**422.1 s** = **★ 1.52× e2e — the single-thread ratio holds under uniform
+parallelism.** The 22-thread wash is an E-core artifact: E-cores lift the
+fp32 control 640→417 s but the hybrid only 422→408 s (scalar bf16 widen is
+expensive on E-cores; hybrid already bandwidth-saturated at 6P). Notably the
+hybrid on 6 P-cores ≈ control on all 22 CPUs (422 vs 417 s): same wall clock
+on ~27% of the threads. On homogeneous server cores (Xeon), expect the 1.5×
+to transfer; E-core widen needs a vectorized (AVX2) bf16→fp32 path if hybrid
+client throughput matters.
+
+### Canonical-state confirmation (2026-06-10, P-cores only / no HT / no turbo)
+
+Rerun of the gated 5-tree single-thread pair with `set_cpu_e_features.sh
+--disable` active (parallel_chrono.py staged it itself; CPUs 0,1,3,6,8,10,
+turbo off). CSVs: `control_cm_5trees_pcore_2026-06-10` /
+`hybrid_bf16_rm20k_5trees_pcore_2026-06-10`.
+
+| metric (5-tree median) | control fp32 CM | hybrid dual-bf16 | ratio |
+|---|---|---|---|
+| ΣApplyProjection | 79.56 s | 35.03 s | **2.27×** |
+| TreeTrain | 186.9 s | 130.1 s | **1.44×** |
+
+vs yesterday's turbo-on pair (AP 2.41×, TreeTrain 1.51×): ratios shrink
+slightly because turbo-off lowers the P-core clock, which inflates the
+compute-bound share on both sides — but the gate result is unchanged.
+**CONFIRMED in canonical state.** Per-tree spreads are tight (control AP
+77.0–81.3, hybrid 34.4–35.4 s), consistent with the hybrid being
+clock/thermal-insensitive.

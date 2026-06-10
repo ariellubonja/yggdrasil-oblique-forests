@@ -97,6 +97,11 @@ ABSL_FLAG(int, label_mod, 2,
           "Number of classes (labels are 1..label_mod, for synthetic mode).");
 ABSL_FLAG(uint32_t, seed, 1234,
           "PRNG seed (for deterministic synthetic mode and model training).");
+ABSL_FLAG(bool, bf16_shadow, false,
+          "CSV mode only: build a bf16 column-major shadow of the numerical "
+          "features and route oblique split search through it (split "
+          "application and OOB stay fp32). Requires "
+          "--config=row_major_dataset_layout.");
 ABSL_FLAG(std::string, dataset_layout, "column",
           "Hidden dataset-layout experiment for trunk synthetic datasets: "
           "'column', 'row', or 'flat_column'. Non-column layouts require the "
@@ -238,6 +243,12 @@ struct FlatColMajorTrunkDataset {
   std::unique_ptr<dataset::FlatColMajorFeatureMatrix> matrix;
 };
 
+struct DualBf16TrunkDataset {
+  std::unique_ptr<dataset::VerticalDataset> vd;
+  std::unique_ptr<dataset::Bf16RowMajorFeatureMatrix> rows;
+  std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix> cols;
+};
+
 template <typename Matrix>
 void FillTrunkMatrix(Matrix* matrix, int64_t rows, int cols, uint32_t seed) {
   using RNG = std::minstd_rand;
@@ -313,6 +324,20 @@ FlatColMajorTrunkDataset MakeTrunkDatasetFlatColMajor(
   return {MakeLabelOnlyTrunkDataset(spec, rows, cols), std::move(matrix)};
 }
 
+DualBf16TrunkDataset MakeTrunkDatasetDualBf16(
+    const dataset::proto::DataSpecification& spec, int64_t rows, int cols,
+    uint32_t seed) {
+  auto rm = std::make_unique<dataset::Bf16RowMajorFeatureMatrix>(rows, cols);
+  auto cm =
+      std::make_unique<dataset::Bf16FlatColMajorFeatureMatrix>(rows, cols);
+  // Same seed => identical values in both stores (the per-column RNG stream
+  // is deterministic and bf16 rounding happens at Set in both).
+  FillTrunkMatrix(rm.get(), rows, cols, seed);
+  FillTrunkMatrix(cm.get(), rows, cols, seed);
+  return {MakeLabelOnlyTrunkDataset(spec, rows, cols), std::move(rm),
+          std::move(cm)};
+}
+
 /* #endregion */
 
 int main(int argc, char** argv) {
@@ -375,8 +400,12 @@ int main(int argc, char** argv) {
 
     static std::unique_ptr<dataset::RowMajorFeatureMatrix> row_major_matrix;
     static std::unique_ptr<dataset::FlatColMajorFeatureMatrix> flat_col_matrix;
+    static std::unique_ptr<dataset::Bf16RowMajorFeatureMatrix> bf16_rows;
+    static std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix> bf16_cols;
     dataset::RowMajorFeatureMatrix::SetActive(nullptr);
     dataset::FlatColMajorFeatureMatrix::SetActive(nullptr);
+    dataset::Bf16RowMajorFeatureMatrix::SetActive(nullptr);
+    dataset::Bf16FlatColMajorFeatureMatrix::SetActive(nullptr);
 
     if (layout == "column") {
       auto ds = BuildSyntheticDataset(mode, data_spec,
@@ -430,9 +459,35 @@ int main(int argc, char** argv) {
                    "--config=flat_col_dataset_layout.\n";
       return 1;
 #endif
+    } else if (layout == "dual_bf16") {
+#if defined(ROW_MAJOR_DATASET_LAYOUT)
+      if (mode != "trunk") {
+        std::cerr << "--dataset_layout=dual_bf16 only supports trunk "
+                     "synthetic.\n";
+        return 1;
+      }
+      auto dual = MakeTrunkDatasetDualBf16(data_spec,
+                                           absl::GetFlag(FLAGS_rows),
+                                           absl::GetFlag(FLAGS_cols),
+                                           absl::GetFlag(FLAGS_seed));
+      tf_ds = std::move(dual.vd);
+      bf16_rows = std::move(dual.rows);
+      bf16_cols = std::move(dual.cols);
+      dataset::Bf16RowMajorFeatureMatrix::SetActive(bf16_rows.get());
+      dataset::Bf16FlatColMajorFeatureMatrix::SetActive(bf16_cols.get());
+      LOG(INFO) << "Dual bf16 matrices allocated: "
+                << ((bf16_rows->bytes() + bf16_cols->bytes()) /
+                    (1024.0 * 1024.0 * 1024.0))
+                << " GiB total";
+      ds_ptr = tf_ds.get();
+#else
+      std::cerr << "--dataset_layout=dual_bf16 requires "
+                   "--config=row_major_dataset_layout.\n";
+      return 1;
+#endif
     } else {
       std::cerr << "Unknown --dataset_layout: " << layout
-                << ". Use 'column', 'row', or 'flat_column'.\n";
+                << ". Use 'column', 'row', 'flat_column', or 'dual_bf16'.\n";
       return 1;
     }
   }
@@ -660,7 +715,45 @@ int main(int argc, char** argv) {
   absl::StatusOr<std::unique_ptr<model::AbstractModel>> model_or;
 
   if (mode == "csv") {
+#if defined(ROW_MAJOR_DATASET_LAYOUT)
+    if (absl::GetFlag(FLAGS_bf16_shadow)) {
+      // Load the dataset explicitly, mirror its numerical columns into a
+      // bf16 column-major shadow, and train from the in-memory dataset so
+      // split search reads bf16 while split application / OOB read the
+      // original fp32 columns.
+      static std::unique_ptr<dataset::VerticalDataset> csv_ds;
+      static std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix> csv_bf16;
+      csv_ds = std::make_unique<dataset::VerticalDataset>();
+      CHECK_OK(dataset::LoadVerticalDataset("csv:" + csv_path, data_spec,
+                                            csv_ds.get()));
+      const int total_cols = csv_ds->data_spec().columns_size();
+      csv_bf16 = std::make_unique<dataset::Bf16FlatColMajorFeatureMatrix>(
+          csv_ds->nrow(), total_cols);
+      int shadowed = 0;
+      for (int col = 0; col < total_cols; ++col) {
+        if (csv_ds->data_spec().columns(col).type() !=
+            dataset::proto::ColumnType::NUMERICAL) {
+          continue;
+        }
+        const auto column_or = csv_ds->ColumnWithCastWithStatus<
+            dataset::VerticalDataset::NumericalColumn>(col);
+        if (!column_or.ok()) continue;
+        const auto& values = column_or.value()->values();
+        for (int64_t row = 0; row < csv_ds->nrow(); ++row) {
+          csv_bf16->Set(row, col, values[row]);
+        }
+        ++shadowed;
+      }
+      dataset::Bf16FlatColMajorFeatureMatrix::SetActive(csv_bf16.get());
+      LOG(INFO) << "bf16 shadow active: " << shadowed << " numerical columns, "
+                << (csv_bf16->bytes() / (1024.0 * 1024.0)) << " MiB";
+      model_or = learner->TrainWithStatus(*csv_ds);
+    } else {
+      model_or = learner->TrainWithStatus("csv:" + csv_path, data_spec);
+    }
+#else
     model_or = learner->TrainWithStatus("csv:" + csv_path, data_spec);
+#endif
   } else {
     model_or = learner->TrainWithStatus(*ds_ptr);
   }
