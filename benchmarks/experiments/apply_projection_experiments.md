@@ -807,3 +807,38 @@ compute-bound share on both sides — but the gate result is unchanged.
 **CONFIRMED in canonical state.** Per-tree spreads are tight (control AP
 77.0–81.3, hybrid 34.4–35.4 s), consistent with the hybrid being
 clock/thermal-insensitive.
+
+### Phase M: dual_fp32 hybrid — precision-neutral dispatch (2026-06-10)
+
+Same per-node CM/RM dispatch as dual_bf16 but fp32 both stores → bit-identical
+model. Needs 2×4-byte stores (96 GiB at 3M), so A/B at **1.5M×4096**
+(45.8 GiB total), canonical P-core state, 5-tree single-thread medians:
+
+| metric | control fp32 CM | dual_fp32 (rm20k) | ratio |
+|---|---|---|---|
+| ΣApplyProjection | 36.14 s | 19.32 s | **★ 1.87×** |
+| TreeTrain | 88.5 s | 64.5 s | **1.37×** |
+
+Pure layout dispatch with zero precision change gets 1.87× AP — i.e. most of
+the dual-bf16 win (2.27× at 3M) is the access-order dispatch, not the bf16
+halving, at this shape. Threshold untuned (20k carried from 3M); 10k/40k
+ablation + dual_bf16 cross-point at the same shape queued
+(offline_queue_2026-06-10.sh).
+
+dual_bf16 cross-point at 1.5M×4096 (same state): AP **16.47 s** (2.19× vs
+control), TreeTrain 61.9 s (1.43×). Decomposition at this shape: dispatch
+(precision-free) 1.87×, bf16 halving adds a further 1.17× (19.32→16.47).
+dual_fp32 captures ~85% of the bf16-hybrid AP win with zero precision change.
+
+dual_fp32 threshold ablation at 1.5M×4096 (ΣAP 5-tree medians): RM_MAX_ROWS
+10k → **19.00 s**, 20k → 19.32 s, 40k → 19.63 s. Flat within ±1.6% — the
+dispatch threshold is insensitive over 10k–40k; no retuning needed per shape
+in this range.
+
+Shape check 30k×400k (wide-short, AP only ~11% of TreeTrain): control AP
+5.09 s / TreeTrain 47.1 s vs dual_bf16 AP 4.13 s / TreeTrain 35.6 s →
+AP 1.23×, TreeTrain **1.32×**. No regression on the adversarial shape; the
+TreeTrain win exceeding the AP win suggests the flat bf16 column store also
+helps the non-AP consumers (EvalProj/histogram reads through AttributeValue)
+on this shape. Queue complete: all 7 steps exit=0
+(offline_queue_2026-06-10.log).
