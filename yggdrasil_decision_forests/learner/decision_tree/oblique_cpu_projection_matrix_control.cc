@@ -143,6 +143,11 @@ absl::Status ApplyProjectionsProjectionMatrixControl(
                  (rows_n <= RowMajorMaxRows() ||
                   evaluator.Fp32Cols() == nullptr)) {
         // Row-major fp32: same dispatch as the bf16 hybrid, full precision.
+        // Accumulation order must match EvalConditionOblique's scalar loop
+        // (split application) bit-for-bit; icx fast-math may otherwise
+        // reassociate one loop and not the other, flipping examples whose
+        // projected value straddles the threshold by ulps.
+#pragma clang fp reassociate(off)
         for (size_t i = 0; i < rows_n; ++i) {
           const float* row = fp32_rows->row_ptr(selected[i]);
           for (size_t p = 0; p < P; ++p) {
@@ -161,6 +166,9 @@ absl::Status ApplyProjectionsProjectionMatrixControl(
         }
       } else if (const auto* fp32_cols = evaluator.Fp32Cols();
                  fp32_cols != nullptr) {
+        // Same strict-order requirement as the row-major fp32 kernel above:
+        // per-example accumulation must match split application bit-for-bit.
+#pragma clang fp reassociate(off)
         for (size_t p = 0; p < P; ++p) {
           float* o = &out[p * rows_n];
           size_t i = 0;
