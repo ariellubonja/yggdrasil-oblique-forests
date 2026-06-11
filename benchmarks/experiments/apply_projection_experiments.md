@@ -559,3 +559,502 @@ when checking whole-tree coverage.
 
 *Log started 2026-04-25 during /loop-style autonomous iteration on the
 1-pass design. V2-rev3 landed on `main` at 98ed1c66 / f1b102f4 / 9d38f22d.*
+
+---
+
+## Phase L — Row-major shadow layout for the hot band (microbench → real chrono)
+
+**Date:** 2026-06-09. **Branch:** `rebased-main` (no code change — existing
+`--config=projection_matrix_control` + `--config=row_major_dataset_layout`
+composed for the first time). **Workload:** DRH, trunk 3M×4096, 1 thread,
+1 tree, depth=-1.
+
+### Motivation (from the 2026-06-09 pre-screen)
+
+The AP kernel is already MLP-saturated (~9–11 ns/load measured both in
+microbench and depth-18 chrono) — latency-hiding is exhausted. 66% of AP is
+depths 12–23 (nodes of 70–1500 rows). In that band a node's K·d ≈ 192 column
+draws share the same R rows: column-major pays R×192 isolated DRAM lines;
+row-major puts all 192 reads for one example inside one 16 KB row (4 pages,
+~65% of its lines) — TLB- and locality-friendly, and one pass per row serves
+all K projections (requires the rows-outer/projs-inner PMC loop).
+
+### Microbench (`benchmarks/src/microbenchmarks/row_major_hotband.cc`, 1 GB, taskset CPU 0)
+
+| R (rows/node) | CM ns/load | CM+THP | RM ns/load | RM vs CM |
+|---|---|---|---|---|
+| 128 | 8.00 | 7.46 | 4.34 | **1.84×** |
+| 512 | 6.89 | 6.83 | 4.38 | **1.57×** |
+| 2048 | 3.76 | 3.74 | 4.28 | 0.88× (CM wins, density 3%) |
+
+bf16 rows (`/tmp/rm_bf16.cc`): additional **1.50×** at every R (row stream is
+bandwidth-bound) → bf16-RM vs CM at R=128: **2.86×**. THP: only 1.01–1.07×.
+
+Companion negative result: AMAC lane interleaving (`amac_lanes.cc`) FAILED —
+lanes 2/4/8 = 0.87×/0.74×/0.66× vs task-sequential; the OOO core already
+extracts cross-task MLP (adjacent tasks are independent in program order).
+
+### Real chrono — treatment (PMC + row-major, turbo ON / E-cores ON)
+
+`pmc_row_major_2026-06-09.csv`. TreeTrain-equivalent wall 95.2 s. Tree shape
+sane (371,935 nodes / max depth 35 vs baseline 365,965 / 37).
+
+| depth | nodes | AP treatment | AP baseline (turbo OFF) | ratio* |
+|---|---|---|---|---|
+| 5 | 16 | 2.10 s | 1.49 s | 0.71× (CM wins shallow, as microbench predicts) |
+| 10 | 512 | 2.08 s | 2.82 s | 1.36× |
+| 15 | 12.6k | 2.06 s | 3.80 s | 1.84× |
+| 18 | 36.9k | 1.85 s | 4.53 s | 2.45× |
+| 20 | 45.0k | 1.39 s | 3.92 s | 2.82× |
+| 23 | 29.6k | 0.62 s | 1.92 s | 3.10× |
+| **ΣAP** | | **44.7 s** | **65.6 s** | **1.47×** |
+
+*Caveat: baseline CSV (`baseline_bfs_2026-06-07.csv`) was captured turbo-OFF;
+this run is turbo-ON (sudo unavailable for E-core script). Compute-bound
+scopes halved (CartPath 14.8 vs 28.4 — pure clock), so cross-run ratios
+overstate; DRAM-bound AP scales weakly with clock so the deep-band ratios are
+approximately real. Same-state control run in progress; numbers to be
+replaced.
+
+### Interpretation
+
+- Crossover between depth 5 and 10 → hybrid dispatch (CM above ~R=100K rows,
+  RM below) takes the max of both curves.
+- RAM: `--dataset_layout=row` *replaces* the column store in the trunk
+  harness (45.8 GiB). A production hybrid needs a *shadow* (both layouts) —
+  fp32 shadow does not fit 62 GB at this shape; bf16 shadow (+24 GB) is the
+  realistic deployment and adds another ~1.5× per the microbench.
+
+### Same-state control (turbo ON both sides) — 2026-06-09 late
+
+`control_cm_turbo_2026-06-09.csv` vs `pmc_row_major_2026-06-09.csv`:
+
+| depth | ctrl AP | RM AP | ratio |
+|---|---|---|---|
+| 1 | 0.23 | 2.64 | 0.09× |
+| 5 | 1.03 | 2.10 | 0.49× |
+| 10 | 2.23 | 2.08 | 1.07× |
+| 15 | 3.00 | 2.06 | 1.46× |
+| 18 | 3.48 | 1.85 | 1.88× |
+| 20 | 3.05 | 1.39 | 2.19× |
+| 23 | 1.53 | 0.62 | 2.46× |
+| **ΣAP** | **50.5** | **44.7** | **1.13×** |
+
+Turbo recovers a chunk of baseline AP (50.5 s vs 65.6 s turbo-off), so the
+honest fp32-RM-everywhere result is only **1.13× ΣAP** — the deep-band win
+(1.5–2.5×) is real but shallow depths pay full-row line traffic (0.09× at
+depth 1: 32 GB of 65%-utilized lines vs CM's 2.2 GB sequential columns).
+First RM-winning depth: 9.
+
+**Hybrid prediction from the two curves:** min(CM, RM) per depth = 35.1 s →
+**1.44×** ΣAP. With bf16 on both sides (microbench 1.5×): ~23.4 s → **~2.16×**.
+fp32 dual layouts don't fit RAM (96 GB > 62 GB); bf16 dual = 48 GB fits.
+
+### Dual-bf16 hybrid implementation (same evening)
+
+Implemented `--dataset_layout=dual_bf16`: `Bf16RowMajorFeatureMatrix` +
+`Bf16FlatColMajorFeatureMatrix` (RNE convert at Set, widen at Get), PMC sweep
+dispatches per node on `YDF_RM_MAX_ROWS` (row-major path when
+`rows_n <= threshold`, else 4-row-unrolled bf16 column path; AttributeValue
+serves generic consumers from the bf16 column store). One binary gives the
+full ablation: threshold 0 = CM-bf16, unset = RM-bf16, 20000 = hybrid.
+Files: `row_major_feature_matrix.h`, `oblique.h/.cc`,
+`oblique_cpu_projection_matrix_control.cc`, `train_oblique_forest.cc`,
+`benchmarks/utils/utils.py`. Results pending.
+
+### ★ Dual-bf16 hybrid — first results (1-run probe, turbo ON) ★
+
+Crash fix first: `EvalConditionOblique` (decision_tree.cc, 2 sites) read the
+label-only VerticalDataset's empty numerical columns in dual_bf16 mode →
+SIGSEGV at first split application. Added bf16-row-major fallbacks.
+
+`hybrid_bf16_rm20k_2026-06-09.csv` (`YDF_RM_MAX_ROWS=20000`):
+
+| depth | ctrl fp32-CM | hybrid bf16 | ratio |
+|---|---|---|---|
+| 1 | 0.23 | 0.34 | 0.69× (scalar bf16 convert in L2-stream regime) |
+| 5 | 1.03 | 0.69 | 1.48× (bf16-CM path: bandwidth halving) |
+| 10 | 2.23 | 1.60 | 1.40× (bf16-RM path begins) |
+| 15 | 3.00 | 1.58 | 1.89× |
+| 18 | 3.48 | 1.41 | 2.48× |
+| 20 | 3.05 | 1.12 | 2.73× |
+| 23 | 1.53 | 0.50 | 3.06× |
+| **ΣAP** | **50.5** | **26.8** | **★ 1.88×** |
+
+Training block 77.7 s vs ~104 s control ≈ **1.34× e2e** (1 tree, 1 thread).
+Memory: 45.8 GiB total for BOTH layouts — *less* than the single fp32 store.
+Tree shape: 370,947 nodes vs 352,205 control (bf16 rounding shifts splits;
+accuracy A/B on real datasets still required before any merge).
+Threshold ≈ optimal at 20K rows: bf16-RM ≈ bf16-CM at the depth-8 boundary.
+5-tree median runs in progress.
+
+### ★★ 5-tree median confirmation — GATE PASSED ★★
+
+Back-to-back sequential 5-tree runs (same thermal/turbo state, E-cores ON):
+
+| | per-tree ΣAP | median ΣAP | per-tree TreeTrain | median |
+|---|---|---|---|---|
+| control fp32-CM | 63.6 / 62.3 / 64.5 / 64.1 / 66.1 | **64.14 s** | 116.6–121.2 | **117.3 s** |
+| hybrid dual-bf16 (RM≤20K) | 26.9 / 27.7 / 26.6 / 26.3 / 26.3 | **26.57 s** | 76.6–79.0 | **77.6 s** |
+
+**AP (targeted scope): 64.14 / 26.57 = ★ 2.41× (+141%) — far past the ≥1.20× gate.**
+**TreeTrain e2e: 117.3 / 77.6 = 1.51×.**
+
+Thermal note: the 1-run control earlier measured 50.5 s AP (cooler machine);
+control AP is clock/thermal-sensitive while the hybrid is not (26.3–27.7
+across every run tonight). Worst-case-for-us pairing (cold control vs hybrid)
+is still 50.5/26.6 = **1.90×**. The turbo-off canonical baseline (65.6 s)
+gives 2.47×.
+
+Consecutive failure counter: resets to 0.
+
+**Owed before merge:** (1) accuracy A/B on CC18 + epsilon/HIGGS — bf16
+rounding shifts splits (~5% node-count delta on trunk); consider stochastic
+rounding or fp32 recompute of the winning split if deltas exceed gate.
+(2) Vectorize bf16→fp32 widen in the CM path (depths 1–3 currently 0.7–0.8×).
+(3) Real-dataset (CSV/non-trunk) wiring of the dual store — currently
+trunk-synthetic-only via `--dataset_layout=dual_bf16`.
+(4) Multi-thread e2e sweep via runtime.sh + threshold sensitivity.
+
+### Threshold ablation (1-run probes, same binary, turbo ON)
+
+| depth | ctrl fp32-CM | all-CM-bf16 | all-RM-bf16 | hybrid 20K |
+|---|---|---|---|---|
+| 1 | 0.23 | 0.33 | 0.33 | 0.34 |
+| 5 | 1.03 | 0.67 | 1.61 | 0.69 |
+| 15 | 3.00 | 1.99 | 1.61 | 1.58 |
+| 18 | 3.48 | 2.17 | 1.46 | 1.41 |
+| 23 | 1.53 | 0.87 | 0.47 | 0.50 |
+| **ΣAP** | **50.5** | **33.2** | **32.8** | **26.8** |
+
+Decomposition: **bf16 alone = 1.52×** (50.5→33.2; halved bytes help gathers
+too — 2 rows/line + halved TLB footprint, not just streaming bandwidth);
+**layout dispatch adds 1.24×** on top (33.2→26.8). Hybrid ≈ per-depth
+min(CM,RM), confirming the dispatch threshold behaves. Depth 1 is
+convert-bound in all bf16 variants (~0.33 s — the scalar widen; vectorizable).
+
+**Deployment ladder:** (a) bf16-CM single store: 1.52× AP, 23 GiB (−52%
+memory), smallest diff — only the store + widen-on-load touch the kernel;
+(b) dual-bf16 hybrid: 2.41× AP / 1.51× TreeTrain (5-tree medians), 45.8 GiB.
+Both owe the bf16 accuracy gate.
+
+### bf16 accuracy gate — CC18 probe (Oblique Exact, 30 trees, OOB, 3 seeds)
+
+`--bf16_shadow` (csv mode): split *search* reads a bf16 column-major shadow
+via AttributeValue; split *application*, structure, and OOB stay fp32 — the
+deployment semantics of a compressed search store. Same binary A/B
+(`--config=row_major_dataset_layout`, flag toggles).
+
+| task | Δ OOB (pp), seeds 1/2/3 |
+|---|---|
+| task_14952_PhishingWebsites | 0 / 0 / 0 (bit-identical — binary-coded features are bf16-exact) |
+| task_14965_bank-marketing | +0.13 / −0.05 / +0.03 |
+| task_167125_Internet-Advertisements | 0 / −0.07 / −0.31 |
+| task_29_credit-approval | +0.48 / 0 / +0.48 |
+
+Max |Δ| = 0.48 pp, mean ≈ +0.06 pp — within seed noise, **PASS** (gate ≤5 pp).
+Epsilon (dense continuous, the adversarial case) A/B in progress.
+
+Epsilon (400K×2000 dense continuous, Oblique Exact, 30 trees, seed 1):
+fp32 OOB 0.6566 vs bf16 0.6539 → **Δ −0.27 pp — PASS.**
+
+### Phase L verdict
+
+**bf16 + hybrid layout is the validated outcome of this session: AP 2.41× /
+TreeTrain 1.51× (5-tree medians), accuracy deltas ≤0.5 pp on CC18 + epsilon.**
+Remaining engineering (not gates): vectorized bf16 widen (depth 1–3),
+real-dataset dual-store wiring, multithread runtime.sh sweep across shapes,
+threshold auto-tuning (R-based, currently env `YDF_RM_MAX_ROWS=20000`).
+Next research rung: tree-lockstep depth-synchronous column sweeps
+(union-density model says ≥0.98 dense at T=100 — multi-× ceiling on top).
+
+### Multithread e2e — saturation caveat
+
+30 trees, trunk 3M×4096 DRH, num_threads=-1 → **22 threads (6P+16E,
+E-cores ON)**: hybrid 408.2 s vs control 417.4 s = **only +2.3%**.
+The 1.51× TreeTrain win is a single-thread result; at full-machine
+saturation the advantage nearly vanishes. Scaling note: 22-thread control is
+only 3.85× faster than 1-thread (417 vs 117×30 s) — the machine is deeply
+DRAM-contended in this regime, and 16 of 22 workers are E-cores where the
+scalar bf16 widen is relatively expensive. P-core-only 6-thread A/B running
+to separate bandwidth contention from E-core effects.
+
+P-core-only (6 threads, taskset 0,1,3,6,8,10): control **640.5 s** vs hybrid
+**422.1 s** = **★ 1.52× e2e — the single-thread ratio holds under uniform
+parallelism.** The 22-thread wash is an E-core artifact: E-cores lift the
+fp32 control 640→417 s but the hybrid only 422→408 s (scalar bf16 widen is
+expensive on E-cores; hybrid already bandwidth-saturated at 6P). Notably the
+hybrid on 6 P-cores ≈ control on all 22 CPUs (422 vs 417 s): same wall clock
+on ~27% of the threads. On homogeneous server cores (Xeon), expect the 1.5×
+to transfer; E-core widen needs a vectorized (AVX2) bf16→fp32 path if hybrid
+client throughput matters.
+
+### Canonical-state confirmation (2026-06-10, P-cores only / no HT / no turbo)
+
+Rerun of the gated 5-tree single-thread pair with `set_cpu_e_features.sh
+--disable` active (parallel_chrono.py staged it itself; CPUs 0,1,3,6,8,10,
+turbo off). CSVs: `control_cm_5trees_pcore_2026-06-10` /
+`hybrid_bf16_rm20k_5trees_pcore_2026-06-10`.
+
+| metric (5-tree median) | control fp32 CM | hybrid dual-bf16 | ratio |
+|---|---|---|---|
+| ΣApplyProjection | 79.56 s | 35.03 s | **2.27×** |
+| TreeTrain | 186.9 s | 130.1 s | **1.44×** |
+
+vs yesterday's turbo-on pair (AP 2.41×, TreeTrain 1.51×): ratios shrink
+slightly because turbo-off lowers the P-core clock, which inflates the
+compute-bound share on both sides — but the gate result is unchanged.
+**CONFIRMED in canonical state.** Per-tree spreads are tight (control AP
+77.0–81.3, hybrid 34.4–35.4 s), consistent with the hybrid being
+clock/thermal-insensitive.
+
+### Phase M: dual_fp32 hybrid — precision-neutral dispatch (2026-06-10)
+
+Same per-node CM/RM dispatch as dual_bf16 but fp32 both stores → bit-identical
+model. Needs 2×4-byte stores (96 GiB at 3M), so A/B at **1.5M×4096**
+(45.8 GiB total), canonical P-core state, 5-tree single-thread medians:
+
+| metric | control fp32 CM | dual_fp32 (rm20k) | ratio |
+|---|---|---|---|
+| ΣApplyProjection | 36.14 s | 19.32 s | **★ 1.87×** |
+| TreeTrain | 88.5 s | 64.5 s | **1.37×** |
+
+Pure layout dispatch with zero precision change gets 1.87× AP — i.e. most of
+the dual-bf16 win (2.27× at 3M) is the access-order dispatch, not the bf16
+halving, at this shape. Threshold untuned (20k carried from 3M); 10k/40k
+ablation + dual_bf16 cross-point at the same shape queued
+(offline_queue_2026-06-10.sh).
+
+dual_bf16 cross-point at 1.5M×4096 (same state): AP **16.47 s** (2.19× vs
+control), TreeTrain 61.9 s (1.43×). Decomposition at this shape: dispatch
+(precision-free) 1.87×, bf16 halving adds a further 1.17× (19.32→16.47).
+dual_fp32 captures ~85% of the bf16-hybrid AP win with zero precision change.
+
+dual_fp32 threshold ablation at 1.5M×4096 (ΣAP 5-tree medians): RM_MAX_ROWS
+10k → **19.00 s**, 20k → 19.32 s, 40k → 19.63 s. Flat within ±1.6% — the
+dispatch threshold is insensitive over 10k–40k; no retuning needed per shape
+in this range.
+
+Shape check 30k×400k (wide-short, AP only ~11% of TreeTrain): control AP
+5.09 s / TreeTrain 47.1 s vs dual_bf16 AP 4.13 s / TreeTrain 35.6 s →
+AP 1.23×, TreeTrain **1.32×**. No regression on the adversarial shape; the
+TreeTrain win exceeding the AP win suggests the flat bf16 column store also
+helps the non-AP consumers (EvalProj/histogram reads through AttributeValue)
+on this shape. Queue complete: all 7 steps exit=0
+(offline_queue_2026-06-10.log).
+
+**Naming (2026-06-10):** the per-node row/column-major dispatch approach is
+now called **Dynamic_Row_Col_Major**. Flag values:
+`--dataset_layout=dynamic_row_col_major` (fp32, precision-neutral) and
+`--dataset_layout=dynamic_row_col_major_bf16` (bf16 stores). The old
+`dual_fp32`/`dual_bf16` spellings remain as deprecated aliases; existing
+result CSV names are unchanged.
+
+### Phase N: column-centric depthwise_1_pass rewrite (2026-06-10)
+
+Finding: the previous depthwise_1_pass never exploited column sharing — its
+kernel was the nodewise per-(node,projection) gather loop (via the branchy
+AttributeValue path) batched per depth. Canonical-state 5-tree medians at
+3M×4096 confirm: old dw1 AP 77.91 s ≈ nodewise control 79.56 s.
+
+Rewrite (same interface): per depth, group consecutive nodes into blocks
+sized so output slabs stay cache-resident (YDF_DW1_BLOCK_FLOATS, default
+16 MiB fp32); counting-sort each block's (node, proj, weight) references by
+column; sweep touched columns ascending with direct column pointers.
+Oversized nodes keep projection-major order with hoisted pointers. No extra
+memory, no dataset copy, works on any dataset; float additions within a
+projection are reassociated (same summands, different rounding order — not
+bit-identical, same precision class).
+
+| 3M×4096, 5-tree medians | old dw1 | column-centric | ratio |
+|---|---|---|---|
+| ΣApplyProjection | 77.91 s | 49.62 s | **★ 1.57×** |
+| TreeTrain | 181.2 s | 153.0 s | 1.18× |
+
+Per-depth: 1.3–1.5× shallow/mid, rising to ~1.8× at depths 18+; depth 1
+flat (single node = big-node path). CSVs: dw1_old_5trees_pcore_2026-06-10,
+dw1_colcentric_5trees_pcore_2026-06-10.
+
+dw1 column-centric follow-ups (canonical state, 5-tree medians):
+
+- Block-size ablation at 3M×4096 (ΣAP): 4 MiB → 55.02 s, 16 MiB → 49.62 s,
+  64 MiB → **47.05 s** (1.66× vs old dw1). Monotone: column sharing
+  outweighs output-slab cache residency; probing 256 MiB before fixing the
+  default.
+- 30k×400k: AP 3.71 vs nodewise control 5.09 = **1.37×**; TreeTrain 44.3 vs
+  47.1.
+- 11M×28 (HIGGS shape): AP 11.67 vs control 16.05 = **1.38×**; TreeTrain
+  43.9 vs 45.5 (AP is only ~26% of TreeTrain at this shape, so e2e gains are
+  bounded; whether dw1 mode now beats the DFS baseline on real HIGGS needs
+  the user's e2e rerun).
+
+Caveat: controls use the default scheduler; TreeTrain comparisons entangle
+BFS-vs-DFS scheduler costs. The AP scope is the clean kernel A/B.
+
+256 MiB block probe: ΣAP **45.62 s** (1.71× vs old dw1) — still improving
+but flattening (64→256 MiB = −3%). Column sharing dominates output-slab
+residency outright. Default block size set to 256 MiB (64 Mi floats) in
+code; YDF_DW1_BLOCK_FLOATS still overrides.
+
+### Flag audit (2026-06-10, code inspection only)
+
+- **symmetric_depthwise_ap: as intended.** Shared K projections per depth,
+  bag concat + VQSort, K stride-1 sweeps, write-cursor routing to per-node
+  slabs; slab/selected alignment guaranteed by the sorted-.active invariant
+  (DCHECKs training.cc:5728/5734). Footnote: "aggregate == bag" comment only
+  holds before any branch terminates; code correctly uses the actual frontier
+  aggregate.
+- **symmetric_nodewise_control: as intended.** Shared projections, no slab,
+  per-node ProjectionEvaluator::Evaluate (oblique.cc:244).
+- **projection_matrix_control: was NOT the intended driver-overhead
+  control.** Its fallback kernel was rows-outer/projections-inner — a
+  different AP memory-access order than Nodewise (scattered per-row column
+  touches on column-major storage). PMC-vs-Nodewise comparisons therefore
+  measured a loop-order artifact, not driver overhead; this likely explains
+  "Nodewise AP (Control)" being the slowest column in the e2e table
+  (trunk 1005 vs BFS-only 909; HIGGS 579 vs 457). **Fixed**: fallback now
+  replicates the Evaluate traversal exactly (projection-outer, rows inner,
+  AttributeValue, identical NaN handling). All prior PMC "control" numbers
+  need re-running; the Dynamic_Row_Col_Major treatment branches (bf16/fp32
+  dual stores) are unaffected. NOT yet rebuilt/re-measured (runs paused at
+  user request).
+
+**Correction (same day):** user clarified PMC's intent — it is the control
+for **depthwise_1_pass** (same work, no column sharing), not a
+Nodewise-driver control. Reimplemented accordingly: PMC now runs dw1's exact
+kernels (same big/small split on YDF_DW1_BLOCK_FLOATS, projection-major dot
+for big nodes, feature-major accumulate for small nodes, direct column
+pointers) in (node, projection, feature) order with no cross-node column
+grouping. dw1 − PMC isolates column sharing; entry build + counting sort
+remain charged to dw1. The interim Evaluate-mimicking fallback survives only
+as the no-direct-pointers generic path (mirrors dw1's). Still unbuilt /
+unmeasured — runs paused.
+
+## Phase O — e2e validation round, 2026-06-10 (evening)
+
+### O.1 Dynamic_Row_Col_Major fp32 (precision-neutral) — m7i.4x e2e, FULL mode (7 runs)
+Halved trunk shapes (64 GB box; dual fp32 stores need 2x dataset). Matched
+control run on the same machine, same shapes. Files:
+`runtime_full_control_cm_halfshapes_m7i.csv`,
+`runtime_full_dynamic_row_col_major_fp32_m7i.csv`.
+
+| shape | control CM (s) | dynamic fp32 (s) | speedup |
+|---|---|---|---|
+| 1.5M x 4096 | 330.93 ±0.53 | 265.65 ±1.83 | **1.246x (−19.7%)** |
+| 15k x 400k | 117.30 ±0.72 | 64.27 ±0.83 | **1.825x (−45.2%)** |
+
+Bit-identical models (fp32, same summation order per node). This is the
+first e2e-backed claim for the dispatch idea, and the wide-short shape wins
+big — small-node row-major path dominates there (15k rows ⇒ every node is
+under the 20k dispatch threshold ⇒ effectively all row-major, and 400k
+columns make CM gathers brutal). Cost: 2x dataset RAM.
+
+### O.2 Column-centric dw1 — laptop e2e quick sweep (3 runs, killed during 30k×400k run 2)
+`runtime_quick_depthwise_1_pass_fable_fixed.log`. Medians vs user's
+reference table (Baseline DFS / old dw1):
+
+| shape | new dw1 | old dw1 | DFS baseline |
+|---|---|---|---|
+| HIGGS | 520.1 | 539 | 372 |
+| 3M x 4096 | **755.8** | 853 | 788 |
+| 30k x 400k | 307.3 (1 run) | 307 | 274 |
+
+First depth-batched config to beat DFS at 3M x 4096 (−4.1%), but well short
+of the single-thread chrono projection (~1.18x TT) — consistent with the
+thread-oversubscription hypothesis (6 concurrent trees x per-depth
+ThreadPool(6) ≈ 36 runnable threads on 6 P-cores + a barrier per depth).
+HIGGS unchanged-bad; 30k x 400k flat. Next: YDF_DW1_THREADS=1 HIGGS A/B.
+
+### O.3 YDF_RM_MAX_ROWS bracket search (overnight 2026-06-10, in progress)
+Seed points from the offline queue (1.5M x 4096 dual_fp32, 5-tree AP
+medians, single thread): control CM 36.14 | rm10k **19.00** | rm20k 19.32 |
+rm40k 19.63. Monotone rising 10k→40k ⇒ optimum ≤ 10k, the "flat 10k–40k"
+read was the top of a shallow slope. Batch 1 (running): rm0 (pure CM via
+dual-store kernel — also calibrates dual-store CM vs stock CM 36.14), rmINF
+(pure row-major — if ≈ optimum, the CM copy can be dropped and the 2x RAM
+cost halves), rm5000, rm2500. Refinement next per bracket rule; ties under
+~2% (per-tree spread) stop the split. Then the same mini-search at 750k x
+4096: if the optimal threshold halves with N, the dispatch variable is
+density (rows_n/N); if it stays put, it's absolute working-set size.
+Log: `benchmarks/results/rm_threshold_search_2026-06-10.log`.
+
+### O.3 results — YDF_RM_MAX_ROWS bracket search COMPLETE (2026-06-11 ~00:30)
+1.5M x 4096 dual_fp32, AP medians (5 trees, 1 thread), stock-CM control 36.14:
+
+| thr | 0 (pure CM) | 312 | 625 | 1250 | 2500 | 5000 | 10k | 20k | 40k | INF (pure RM) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| AP | 21.42 | 18.85 | **18.77** | 18.88 | 19.03 | 19.18 | 19.00 | 19.32 | 19.63 | 23.62 |
+
+750k x 4096 (same kernel-CM rm0 reference 9.10):
+
+| thr | 0 | 156 | 312 | 625 | 1250 | 2500 | 5000 | INF |
+|---|---|---|---|---|---|---|---|---|
+| AP | 9.10 | **8.43** | 8.49 | 8.55 | 8.66 | 8.80 | 8.84 | 11.00 |
+
+Findings:
+1. **The optimum is a wide flat plateau (~150–10k rows), not a point.** All
+   within-plateau differences ≤ per-tree noise (~0.3 s). Search stopped per
+   the ties rule.
+2. **Both endpoints lose clearly**: pure CM +14% vs best, pure RM +26–30%.
+   The CM copy earns its RAM at tall shapes — can't drop it.
+3. **Most of the dual_fp32 win is the kernel, not the dispatch**: stock CM
+   36.14 → dual-kernel pure-CM 21.42 (direct pointers + 4-row unroll);
+   dispatch adds the last ~12% (21.42 → 18.77).
+4. **Density vs absolute: indeterminate, and moot.** No sharp knee exists
+   to scale with N; both shapes are flat from ~150 to ~10k. No
+   justification for a YDF_RM_MAX_DENSITY knob — a fixed threshold in the
+   hundreds-to-thousands range is robust across N. Recommend default
+   ~625–1000 (≈3% better than the 20000 used in the m7i e2e run).
+5. TT medians track AP: best 65.25 (rm1250) vs control 88.46 = 1.36x.
+
+Raw: benchmarks/results/rm_threshold_search_2026-06-10.log; CSVs under
+per_function_timing/.../trunk_{1500000,750000}_x_4096/dualfp32_rm*.csv.
+
+### O.4 HIGGS YDF_DW1_THREADS=1 e2e A/B (2026-06-11 ~01:30) — hypothesis FALSIFIED
+Quick mode (3 runs), HIGGS only: median **550.0 s ±9.3** vs dw1 with
+per-depth threading 520.1 and DFS baseline 372. Serializing the within-tree
+kernel makes it *worse* — thread oversubscription does not explain the
+HIGGS regression. New hypothesis: HIGGS has 28 columns, so column sharing
+has nothing to share (every column is hot at every node already); the
+depth-batch driver itself (slab zero-init, entry build + counting sort,
+giant shallow-depth slabs at 11M rows) is pure overhead. The original dw1
+premise — columns touched per depth >> total columns — *inverts* on
+narrow-D datasets. Decomposition in flight: corrected-PMC vs dw1 vs
+nodewise chrono on HIGGS (PMC ≈ dw1 there ⇒ kernel order irrelevant at
+28 cols, gap = driver) + corrected-PMC at 3M x 4096 for the
+column-sharing measurement. CSV: runtime_quick_dw1_threads1_higgs.csv.
+
+### O.5 Corrected-PMC decomposition (2026-06-11 ~01:50) — first valid column-sharing measurement
+Chrono, 5 trees, 1 thread, AP medians.
+
+**3M x 4096** (with prior runs: nodewise ~79.6, dw1 45.6):
+nodewise 79.6 → **PMC 59.97** → dw1 45.6. The 1.71x dw1 AP win splits into
+~25% from kernel quality alone (direct pointers, big/small split,
+feature-major accumulate — PMC has all of it, in node order) and ~24% more
+from actual cross-node column sharing. Both halves are real.
+
+**HIGGS** (11M x 28):
+| | nodewise | PMC | dw1 |
+|---|---|---|---|
+| AP | 25.13 | 25.39 | **19.70** |
+| TT | **85.63** | 106.32 | 99.32 |
+
+1. PMC ≈ nodewise AP ⇒ kernel order is irrelevant at 28 columns, as
+   predicted.
+2. dw1 *wins AP even on HIGGS* (−22%) — the counting-sorted sweep helps a
+   little even with nothing to share.
+3. The e2e regression is entirely **driver overhead**: per-tree deltas
+   dw1 − nodewise: SampleProjection +5.7 s (depth-batch per-node projection
+   materialization), SplitExamplesInPlace +2.9 s (BFS splits lose DFS's
+   just-trained cache locality), NodeTrain-other +3 s, untracked per-depth
+   driver (slab zero/assign, frontier bookkeeping, ThreadPool per depth)
+   ~+7 s. Total +19 s vs AP win −5.4 s ⇒ TT +13.7 s. With AP only 29% of
+   HIGGS TT, no AP-side fix can rescue depth-batching here; the fix (if
+   pursued) is driver cost: depth-level projection sampling, slab reuse
+   across depths, persistent thread pool, or simply not depth-batching when
+   D is small (cols ≲ a few hundred ⇒ nothing to share).
+
+Also: YDF_DW1_THREADS=1 e2e (O.4) falsified oversubscription; per-depth
+threading is net positive (520 vs 550).
+CSVs: per_function_timing/.../{trunk_3000000_x_4096,HIGGS_with_header}/
+{pmc_dw1control,dw1,nodewise}_5trees_*_2026-06-11.csv.

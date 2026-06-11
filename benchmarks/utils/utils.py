@@ -51,7 +51,8 @@ def get_base_parser():
                              "ApplyProjection (K stride-1 sweeps over the "
                              "sorted bag, shared projections per depth).")
     parser.add_argument("--dataset_layout",
-                        choices=["column", "row", "flat_column"],
+                        choices=["column", "row", "flat_column", "dynamic_row_col_major",
+                                 "dynamic_row_col_major_bf16", "dual_bf16", "dual_fp32"],
                         default="column",
                         help="Synthetic trunk dataset feature storage layout.")
     # parser.add_argument("--enable_fast_equal_width_binning", action="store_true") # This is on by default now
@@ -202,7 +203,7 @@ def build_binary(args, chrono_mode):
         finished_cmd.append('--config=depthwise_1_pass')
     if getattr(args, 'symmetric_depthwise_ap', False):
         finished_cmd.append('--config=symmetric_depthwise_ap')
-    if getattr(args, 'dataset_layout', 'column') == 'row':
+    if getattr(args, 'dataset_layout', 'column') in ('row', 'dynamic_row_col_major', 'dynamic_row_col_major_bf16', 'dual_bf16', 'dual_fp32'):
         finished_cmd.append('--config=row_major_dataset_layout')
     elif getattr(args, 'dataset_layout', 'column') == 'flat_column':
         finished_cmd.append('--config=flat_col_dataset_layout')

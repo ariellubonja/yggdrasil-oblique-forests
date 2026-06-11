@@ -853,6 +853,11 @@ struct EvalConditionOblique {
       if (data.row_major != nullptr) {
         return data;
       }
+      // Condition eval reads few attributes of one example: row-major order.
+      data.bf16_row_major = dataset::Bf16RowMajorFeatureMatrix::Active();
+      if (data.bf16_row_major != nullptr) {
+        return data;
+      }
 #endif
 #if defined(FLAT_COL_DATASET_LAYOUT)
       data.flat_col = dataset::FlatColMajorFeatureMatrix::Active();
@@ -876,6 +881,7 @@ struct EvalConditionOblique {
         attribute_data;
     const dataset::RowMajorFeatureMatrix* row_major = nullptr;
     const dataset::FlatColMajorFeatureMatrix* flat_col = nullptr;
+    const dataset::Bf16RowMajorFeatureMatrix* bf16_row_major = nullptr;
   };
 
   EvalConditionOblique(const proto::Condition::Oblique& condition)
@@ -894,6 +900,8 @@ struct EvalConditionOblique {
       float value;
       if (data.row_major != nullptr) {
         value = data.row_major->Get(example_idx, attributes[item_idx]);
+      } else if (data.bf16_row_major != nullptr) {
+        value = data.bf16_row_major->Get(example_idx, attributes[item_idx]);
       } else if (data.flat_col != nullptr) {
         value = data.flat_col->Get(example_idx, attributes[item_idx]);
       } else {
@@ -1327,6 +1335,10 @@ absl::StatusOr<bool> EvalConditionFromColumn(
         if (const auto* row_major = dataset::RowMajorFeatureMatrix::Active();
             row_major != nullptr) {
           value = row_major->Get(example_idx, attribute);
+        } else if (const auto* bf16_row_major =
+                       dataset::Bf16RowMajorFeatureMatrix::Active();
+                   bf16_row_major != nullptr) {
+          value = bf16_row_major->Get(example_idx, attribute);
         } else
 #endif
 #if defined(FLAT_COL_DATASET_LAYOUT)

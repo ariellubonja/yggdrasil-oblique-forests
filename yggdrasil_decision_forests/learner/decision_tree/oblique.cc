@@ -1175,11 +1175,39 @@ ProjectionEvaluator::ProjectionEvaluator(
   }
 
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
+  // Dual bf16 layout: both half-width stores live; per-node kernels pick the
+  // order, AttributeValue defaults to the column store.
+  const auto* bf16_rows = dataset::Bf16RowMajorFeatureMatrix::Active();
+  const auto* bf16_cols = dataset::Bf16FlatColMajorFeatureMatrix::Active();
+  if (bf16_rows != nullptr || bf16_cols != nullptr) {
+    if (bf16_rows != nullptr) {
+      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+                bf16_rows->num_rows());
+      bf16_row_major_matrix_ = bf16_rows;
+    }
+    if (bf16_cols != nullptr) {
+      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+                bf16_cols->num_rows());
+      bf16_flat_col_matrix_ = bf16_cols;
+    }
+    return;
+  }
+
+  // Dual fp32 layout: same dispatch idea as dual bf16, full precision. Either
+  // store alone also lands here (single-layout experiments).
   const auto* row_active = dataset::RowMajorFeatureMatrix::Active();
-  if (row_active != nullptr) {
-    DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
-              row_active->num_rows());
-    row_major_matrix_ = row_active;
+  const auto* flat_active_rm = dataset::FlatColMajorFeatureMatrix::Active();
+  if (row_active != nullptr || flat_active_rm != nullptr) {
+    if (row_active != nullptr) {
+      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+                row_active->num_rows());
+      row_major_matrix_ = row_active;
+    }
+    if (flat_active_rm != nullptr) {
+      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
+                flat_active_rm->num_rows());
+      flat_col_matrix_ = flat_active_rm;
+    }
     return;
   }
 #endif
