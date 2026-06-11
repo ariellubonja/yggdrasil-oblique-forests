@@ -97,18 +97,21 @@ ABSL_FLAG(int, label_mod, 2,
           "Number of classes (labels are 1..label_mod, for synthetic mode).");
 ABSL_FLAG(uint32_t, seed, 1234,
           "PRNG seed (for deterministic synthetic mode and model training).");
+#if 0  // bf16 disabled for now.
 ABSL_FLAG(bool, bf16_shadow, false,
           "CSV mode only: build a bf16 column-major shadow of the numerical "
           "features and route oblique split search through it (split "
           "application and OOB stay fp32). Requires "
           "--config=row_major_dataset_layout.");
+#endif
 ABSL_FLAG(std::string, dataset_layout, "column",
-          "Hidden dataset-layout experiment for trunk synthetic datasets: "
-          "'column', 'row', 'flat_column', 'dynamic_row_col_major' (fp32), or "
-          "'dynamic_row_col_major_bf16'. Dynamic_Row_Col_Major keeps both a "
-          "row-major and a column-major store and dispatches per node on "
-          "YDF_RM_MAX_ROWS. Non-column layouts require the matching Bazel "
-          "config. 'dual_fp32'/'dual_bf16' are deprecated aliases.");
+          "Hidden dataset-layout experiment: 'column', 'row', 'flat_column', "
+          "or 'dynamic_row_col_major' (fp32). Dynamic_Row_Col_Major keeps "
+          "both a row-major and a column-major store and dispatches per node "
+          "on YDF_RM_MAX_ROWS. CSV mode supports 'column', 'row', and "
+          "'dynamic_row_col_major'; 'flat_column' is trunk-synthetic only. "
+          "Non-column layouts require the matching Bazel config. 'dual_fp32' "
+          "is a deprecated alias.");
 
 // Histogram-based splits - Updated to match Yggdrasil implementation
 ABSL_FLAG(std::string, numerical_split_type, "Exact",
@@ -246,11 +249,13 @@ struct FlatColMajorTrunkDataset {
   std::unique_ptr<dataset::FlatColMajorFeatureMatrix> matrix;
 };
 
+#if 0  // bf16 disabled for now.
 struct DualBf16TrunkDataset {
   std::unique_ptr<dataset::VerticalDataset> vd;
   std::unique_ptr<dataset::Bf16RowMajorFeatureMatrix> rows;
   std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix> cols;
 };
+#endif
 
 struct DualFp32TrunkDataset {
   std::unique_ptr<dataset::VerticalDataset> vd;
@@ -333,6 +338,7 @@ FlatColMajorTrunkDataset MakeTrunkDatasetFlatColMajor(
   return {MakeLabelOnlyTrunkDataset(spec, rows, cols), std::move(matrix)};
 }
 
+#if 0  // bf16 disabled for now.
 DualBf16TrunkDataset MakeTrunkDatasetDualBf16(
     const dataset::proto::DataSpecification& spec, int64_t rows, int cols,
     uint32_t seed) {
@@ -346,6 +352,7 @@ DualBf16TrunkDataset MakeTrunkDatasetDualBf16(
   return {MakeLabelOnlyTrunkDataset(spec, rows, cols), std::move(rm),
           std::move(cm)};
 }
+#endif
 
 DualFp32TrunkDataset MakeTrunkDatasetDualFp32(
     const dataset::proto::DataSpecification& spec, int64_t rows, int cols,
@@ -462,7 +469,7 @@ int main(int argc, char** argv) {
     std::string layout = absl::GetFlag(FLAGS_dataset_layout);
     // Approach renamed to Dynamic_Row_Col_Major (2026-06-10); accept the old
     // dual_* spellings.
-    if (layout == "dual_bf16") layout = "dynamic_row_col_major_bf16";
+    // if (layout == "dual_bf16") layout = "dynamic_row_col_major_bf16";  // bf16 disabled for now.
     if (layout == "dual_fp32") layout = "dynamic_row_col_major";
     LOG(INFO) << "Generating " << mode << " synthetic dataset: rows="
               << absl::GetFlag(FLAGS_rows)
@@ -476,12 +483,12 @@ int main(int argc, char** argv) {
 
     static std::unique_ptr<dataset::RowMajorFeatureMatrix> row_major_matrix;
     static std::unique_ptr<dataset::FlatColMajorFeatureMatrix> flat_col_matrix;
-    static std::unique_ptr<dataset::Bf16RowMajorFeatureMatrix> bf16_rows;
-    static std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix> bf16_cols;
+    // static std::unique_ptr<dataset::Bf16RowMajorFeatureMatrix> bf16_rows;  // bf16 disabled for now.
+    // static std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix> bf16_cols;
     dataset::RowMajorFeatureMatrix::SetActive(nullptr);
     dataset::FlatColMajorFeatureMatrix::SetActive(nullptr);
-    dataset::Bf16RowMajorFeatureMatrix::SetActive(nullptr);
-    dataset::Bf16FlatColMajorFeatureMatrix::SetActive(nullptr);
+    // dataset::Bf16RowMajorFeatureMatrix::SetActive(nullptr);  // bf16 disabled for now.
+    // dataset::Bf16FlatColMajorFeatureMatrix::SetActive(nullptr);
 
     if (layout == "column") {
       auto ds = BuildSyntheticDataset(mode, data_spec,
@@ -535,7 +542,9 @@ int main(int argc, char** argv) {
                    "--config=flat_col_dataset_layout.\n";
       return 1;
 #endif
-    } else if (layout == "dynamic_row_col_major_bf16") {
+    }
+#if 0  // bf16 disabled for now.
+    else if (layout == "dynamic_row_col_major_bf16") {
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
       if (mode != "trunk") {
         std::cerr << "--dataset_layout=dynamic_row_col_major_bf16 only "
@@ -561,7 +570,9 @@ int main(int argc, char** argv) {
                    "--config=row_major_dataset_layout.\n";
       return 1;
 #endif
-    } else if (layout == "dynamic_row_col_major") {
+    }
+#endif  // bf16 disabled
+    else if (layout == "dynamic_row_col_major") {
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
       if (mode != "trunk") {
         std::cerr << "--dataset_layout=dynamic_row_col_major only supports "
@@ -589,9 +600,8 @@ int main(int argc, char** argv) {
 #endif
     } else {
       std::cerr << "Unknown --dataset_layout: " << layout
-                << ". Use 'column', 'row', 'flat_column', "
-                   "'dynamic_row_col_major', or "
-                   "'dynamic_row_col_major_bf16'.\n";
+                << ". Use 'column', 'row', 'flat_column', or "
+                   "'dynamic_row_col_major'.\n";
       return 1;
     }
   }
@@ -822,9 +832,8 @@ int main(int argc, char** argv) {
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
     std::string csv_layout = absl::GetFlag(FLAGS_dataset_layout);
     if (csv_layout == "dual_fp32") csv_layout = "dynamic_row_col_major";
-    if (csv_layout == "dual_bf16") csv_layout = "dynamic_row_col_major_bf16";
-    if (csv_layout == "dynamic_row_col_major" ||
-        csv_layout == "dynamic_row_col_major_bf16") {
+    // if (csv_layout == "dual_bf16") csv_layout = "dynamic_row_col_major_bf16";  // bf16 disabled for now.
+    if (csv_layout == "dynamic_row_col_major") {
       // Dynamic_Row_Col_Major from CSV: load once, mirror numerical columns
       // into both a row-major and a column-major store, train in-memory so
       // matrix rows line up with dataset rows.
@@ -834,40 +843,65 @@ int main(int argc, char** argv) {
                                             csv_ds.get()));
       const int64_t nrow = csv_ds->nrow();
       const int total_cols = csv_ds->data_spec().columns_size();
-      if (csv_layout == "dynamic_row_col_major") {
-        static std::unique_ptr<dataset::RowMajorFeatureMatrix> csv_rows;
-        static std::unique_ptr<dataset::FlatColMajorFeatureMatrix> csv_cols;
-        csv_rows =
-            std::make_unique<dataset::RowMajorFeatureMatrix>(nrow, total_cols);
-        csv_cols = std::make_unique<dataset::FlatColMajorFeatureMatrix>(
-            nrow, total_cols);
-        const int mirrored = FillMatrixFromDataset(csv_rows.get(), *csv_ds);
-        FillMatrixFromDataset(csv_cols.get(), *csv_ds);
-        dataset::RowMajorFeatureMatrix::SetActive(csv_rows.get());
-        dataset::FlatColMajorFeatureMatrix::SetActive(csv_cols.get());
-        LOG(INFO) << "Dynamic_Row_Col_Major fp32 CSV matrices: " << mirrored
-                  << " numerical columns, "
-                  << ((csv_rows->bytes() + csv_cols->bytes()) /
-                      (1024.0 * 1024.0 * 1024.0))
-                  << " GiB total";
-      } else {
-        static std::unique_ptr<dataset::Bf16RowMajorFeatureMatrix> csv_rows;
-        static std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix>
-            csv_cols;
-        csv_rows = std::make_unique<dataset::Bf16RowMajorFeatureMatrix>(
-            nrow, total_cols);
-        csv_cols = std::make_unique<dataset::Bf16FlatColMajorFeatureMatrix>(
-            nrow, total_cols);
-        const int mirrored = FillMatrixFromDataset(csv_rows.get(), *csv_ds);
-        FillMatrixFromDataset(csv_cols.get(), *csv_ds);
-        dataset::Bf16RowMajorFeatureMatrix::SetActive(csv_rows.get());
-        dataset::Bf16FlatColMajorFeatureMatrix::SetActive(csv_cols.get());
-        LOG(INFO) << "Dynamic_Row_Col_Major bf16 CSV matrices: " << mirrored
-                  << " numerical columns, "
-                  << ((csv_rows->bytes() + csv_cols->bytes()) /
-                      (1024.0 * 1024.0 * 1024.0))
-                  << " GiB total";
-      }
+      static std::unique_ptr<dataset::RowMajorFeatureMatrix> csv_rows;
+      static std::unique_ptr<dataset::FlatColMajorFeatureMatrix> csv_cols;
+      csv_rows =
+          std::make_unique<dataset::RowMajorFeatureMatrix>(nrow, total_cols);
+      csv_cols = std::make_unique<dataset::FlatColMajorFeatureMatrix>(
+          nrow, total_cols);
+      const int mirrored = FillMatrixFromDataset(csv_rows.get(), *csv_ds);
+      FillMatrixFromDataset(csv_cols.get(), *csv_ds);
+      dataset::RowMajorFeatureMatrix::SetActive(csv_rows.get());
+      dataset::FlatColMajorFeatureMatrix::SetActive(csv_cols.get());
+      LOG(INFO) << "Dynamic_Row_Col_Major fp32 CSV matrices: " << mirrored
+                << " numerical columns, "
+                << ((csv_rows->bytes() + csv_cols->bytes()) /
+                    (1024.0 * 1024.0 * 1024.0))
+                << " GiB total";
+      model_or = learner->TrainWithStatus(*csv_ds);
+    } else if (csv_layout == "row") {
+      // Row-major from CSV: same scheme as Dynamic_Row_Col_Major but only
+      // the row-major store. The VerticalDataset stays the fp32 source for
+      // split application and OOB.
+      static std::unique_ptr<dataset::VerticalDataset> csv_ds;
+      csv_ds = std::make_unique<dataset::VerticalDataset>();
+      CHECK_OK(dataset::LoadVerticalDataset("csv:" + csv_path, data_spec,
+                                            csv_ds.get()));
+      const int64_t nrow = csv_ds->nrow();
+      const int total_cols = csv_ds->data_spec().columns_size();
+      static std::unique_ptr<dataset::RowMajorFeatureMatrix> csv_rows;
+      csv_rows =
+          std::make_unique<dataset::RowMajorFeatureMatrix>(nrow, total_cols);
+      const int mirrored = FillMatrixFromDataset(csv_rows.get(), *csv_ds);
+      dataset::RowMajorFeatureMatrix::SetActive(csv_rows.get());
+      LOG(INFO) << "Row-major CSV matrix: " << mirrored
+                << " numerical columns, "
+                << (csv_rows->bytes() / (1024.0 * 1024.0 * 1024.0)) << " GiB";
+      model_or = learner->TrainWithStatus(*csv_ds);
+    }
+#if 0  // bf16 disabled for now.
+    else if (csv_layout == "dynamic_row_col_major_bf16") {
+      static std::unique_ptr<dataset::VerticalDataset> csv_ds;
+      csv_ds = std::make_unique<dataset::VerticalDataset>();
+      CHECK_OK(dataset::LoadVerticalDataset("csv:" + csv_path, data_spec,
+                                            csv_ds.get()));
+      const int64_t nrow = csv_ds->nrow();
+      const int total_cols = csv_ds->data_spec().columns_size();
+      static std::unique_ptr<dataset::Bf16RowMajorFeatureMatrix> csv_rows;
+      static std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix> csv_cols;
+      csv_rows = std::make_unique<dataset::Bf16RowMajorFeatureMatrix>(
+          nrow, total_cols);
+      csv_cols = std::make_unique<dataset::Bf16FlatColMajorFeatureMatrix>(
+          nrow, total_cols);
+      const int mirrored = FillMatrixFromDataset(csv_rows.get(), *csv_ds);
+      FillMatrixFromDataset(csv_cols.get(), *csv_ds);
+      dataset::Bf16RowMajorFeatureMatrix::SetActive(csv_rows.get());
+      dataset::Bf16FlatColMajorFeatureMatrix::SetActive(csv_cols.get());
+      LOG(INFO) << "Dynamic_Row_Col_Major bf16 CSV matrices: " << mirrored
+                << " numerical columns, "
+                << ((csv_rows->bytes() + csv_cols->bytes()) /
+                    (1024.0 * 1024.0 * 1024.0))
+                << " GiB total";
       model_or = learner->TrainWithStatus(*csv_ds);
     } else if (absl::GetFlag(FLAGS_bf16_shadow)) {
       // Load the dataset explicitly, mirror its numerical columns into a
@@ -901,10 +935,22 @@ int main(int argc, char** argv) {
       LOG(INFO) << "bf16 shadow active: " << shadowed << " numerical columns, "
                 << (csv_bf16->bytes() / (1024.0 * 1024.0)) << " MiB";
       model_or = learner->TrainWithStatus(*csv_ds);
-    } else {
+    }
+#endif  // bf16 disabled
+    else if (csv_layout == "column") {
       model_or = learner->TrainWithStatus("csv:" + csv_path, data_spec);
+    } else {
+      std::cerr << "Unsupported --dataset_layout for csv mode: " << csv_layout
+                << ". Use 'column', 'row', or 'dynamic_row_col_major'.\n";
+      return 1;
     }
 #else
+    if (absl::GetFlag(FLAGS_dataset_layout) != "column") {
+      std::cerr << "--dataset_layout=" << absl::GetFlag(FLAGS_dataset_layout)
+                << " in csv mode requires "
+                   "--config=row_major_dataset_layout.\n";
+      return 1;
+    }
     model_or = learner->TrainWithStatus("csv:" + csv_path, data_spec);
 #endif
   } else {
