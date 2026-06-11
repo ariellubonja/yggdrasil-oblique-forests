@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <memory>
 #include <random>
 #include <thread>
@@ -97,13 +98,12 @@ ABSL_FLAG(int, label_mod, 2,
           "Number of classes (labels are 1..label_mod, for synthetic mode).");
 ABSL_FLAG(uint32_t, seed, 1234,
           "PRNG seed (for deterministic synthetic mode and model training).");
-#if 0  // bf16 disabled for now.
-ABSL_FLAG(bool, bf16_shadow, false,
-          "CSV mode only: build a bf16 column-major shadow of the numerical "
-          "features and route oblique split search through it (split "
-          "application and OOB stay fp32). Requires "
-          "--config=row_major_dataset_layout.");
-#endif
+// bf16 disabled for now.
+// ABSL_FLAG(bool, bf16_shadow, false,
+//           "CSV mode only: build a bf16 column-major shadow of the numerical "
+//           "features and route oblique split search through it (split "
+//           "application and OOB stay fp32). Requires "
+//           "--config=row_major_dataset_layout.");
 ABSL_FLAG(std::string, dataset_layout, "column",
           "Hidden dataset-layout experiment: 'column', 'row', 'flat_column', "
           "or 'dynamic_row_col_major' (fp32). Dynamic_Row_Col_Major keeps "
@@ -421,6 +421,9 @@ int FillMatrixFromDataset(Matrix* matrix,
 
 int main(int argc, char** argv) {
   absl::ParseCommandLine(argc, argv);
+  if (std::getenv("YDF_RM_MAX_ROWS") == nullptr) {
+    setenv("YDF_RM_MAX_ROWS", "5000", /*overwrite=*/0);
+  }
   dataset::RowMajorFeatureMatrix::SetActive(nullptr);
   dataset::FlatColMajorFeatureMatrix::SetActive(nullptr);
   const auto mode = absl::GetFlag(FLAGS_input_mode);
