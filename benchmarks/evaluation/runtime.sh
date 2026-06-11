@@ -1,30 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Quick (default) vs Full evaluation.
+# Runtime evaluation.
 #
-# Workflow: use Quick to test whether a code change impacted runtime. When a
-# >20% runtime improvement is observed on Quick, run Full to confirm.
+# Workflow: use a low --runs count to test whether a code change impacted
+# runtime. When a >20% runtime improvement is observed, re-run with more runs
+# to confirm.
 #
-# Quick and Full run the same datasets; they differ only in NUM_RUNS.
-# Quick: 3 runs/cmd.
-# Full:  7 runs/cmd.
+# --runs controls only the number of repetitions per command (median is
+# reported); the datasets are the same regardless.
 #
-# Usage:  $0 [--full] <suffix>
+# Usage:  $0 [--runs=N] <suffix>     (default --runs=3)
 #   <suffix> becomes part of the result filename, e.g. 'AWS_m7i' ->
-#   runtime_quick_aws_m7i.csv (or runtime_full_aws_m7i.csv).
+#   runtime_3runs_aws_m7i.csv.
 
-MODE="quick"
+NUM_RUNS=3
 SUFFIX=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --full)  MODE="full";  shift ;;
+    --runs=*)
+      NUM_RUNS="${1#*=}"
+      if ! [[ "$NUM_RUNS" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: --runs must be a positive integer, got '$NUM_RUNS'" >&2
+        exit 2
+      fi
+      shift ;;
     -h|--help)
-      echo "Usage: $0 [--full] <suffix>" >&2
+      echo "Usage: $0 [--runs=N] <suffix>" >&2
       exit 0 ;;
     --*)
       echo "ERROR: unknown flag '$1'" >&2
-      echo "Usage: $0 [--full] <suffix>" >&2
+      echo "Usage: $0 [--runs=N] <suffix>" >&2
       exit 2 ;;
     *)
       if [[ -n "$SUFFIX" ]]; then
@@ -35,20 +41,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 if [[ -z "$SUFFIX" ]]; then
-  echo "Usage: $0 [--full] <suffix>" >&2
-  echo "  e.g. '$0 AWS_m7i' -> runtime_quick_aws_m7i.csv" >&2
+  echo "Usage: $0 [--runs=N] <suffix>" >&2
+  echo "  e.g. '$0 AWS_m7i' -> runtime_3runs_aws_m7i.csv" >&2
   exit 2
 fi
 
 ###### Parameters
 
 # Repetitions per command; median runtime is reported in the CSV.
-# Quick mode uses 3 runs; Full mode uses 7 runs.
-if [[ "$MODE" == "full" ]]; then
-  NUM_RUNS=7
-else
-  NUM_RUNS=3
-fi
+# Controlled by --runs (default 3); NUM_RUNS is already set during arg parsing.
 NUM_THREADS=-1
 COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
 # Ariel - ENSURE compute_oob_performances===== - it has an equal sign, not a blank space
@@ -176,8 +177,8 @@ bazel_build() {
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
-logfile="${logdir}/runtime_${MODE}_${SUFFIX}.log"
-csvfile="${logdir}/runtime_${MODE}_${SUFFIX}.csv"
+logfile="${logdir}/runtime_${NUM_RUNS}runs_${SUFFIX}.log"
+csvfile="${logdir}/runtime_${NUM_RUNS}runs_${SUFFIX}.csv"
 
 if [[ -e "$logfile" ]]; then
   echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2
