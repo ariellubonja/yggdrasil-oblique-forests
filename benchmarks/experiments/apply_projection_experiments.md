@@ -929,3 +929,132 @@ grouping. dw1 − PMC isolates column sharing; entry build + counting sort
 remain charged to dw1. The interim Evaluate-mimicking fallback survives only
 as the no-direct-pointers generic path (mirrors dw1's). Still unbuilt /
 unmeasured — runs paused.
+
+## Phase O — e2e validation round, 2026-06-10 (evening)
+
+### O.1 Dynamic_Row_Col_Major fp32 (precision-neutral) — m7i.4x e2e, FULL mode (7 runs)
+Halved trunk shapes (64 GB box; dual fp32 stores need 2x dataset). Matched
+control run on the same machine, same shapes. Files:
+`runtime_full_control_cm_halfshapes_m7i.csv`,
+`runtime_full_dynamic_row_col_major_fp32_m7i.csv`.
+
+| shape | control CM (s) | dynamic fp32 (s) | speedup |
+|---|---|---|---|
+| 1.5M x 4096 | 330.93 ±0.53 | 265.65 ±1.83 | **1.246x (−19.7%)** |
+| 15k x 400k | 117.30 ±0.72 | 64.27 ±0.83 | **1.825x (−45.2%)** |
+
+Bit-identical models (fp32, same summation order per node). This is the
+first e2e-backed claim for the dispatch idea, and the wide-short shape wins
+big — small-node row-major path dominates there (15k rows ⇒ every node is
+under the 20k dispatch threshold ⇒ effectively all row-major, and 400k
+columns make CM gathers brutal). Cost: 2x dataset RAM.
+
+### O.2 Column-centric dw1 — laptop e2e quick sweep (3 runs, killed during 30k×400k run 2)
+`runtime_quick_depthwise_1_pass_fable_fixed.log`. Medians vs user's
+reference table (Baseline DFS / old dw1):
+
+| shape | new dw1 | old dw1 | DFS baseline |
+|---|---|---|---|
+| HIGGS | 520.1 | 539 | 372 |
+| 3M x 4096 | **755.8** | 853 | 788 |
+| 30k x 400k | 307.3 (1 run) | 307 | 274 |
+
+First depth-batched config to beat DFS at 3M x 4096 (−4.1%), but well short
+of the single-thread chrono projection (~1.18x TT) — consistent with the
+thread-oversubscription hypothesis (6 concurrent trees x per-depth
+ThreadPool(6) ≈ 36 runnable threads on 6 P-cores + a barrier per depth).
+HIGGS unchanged-bad; 30k x 400k flat. Next: YDF_DW1_THREADS=1 HIGGS A/B.
+
+### O.3 YDF_RM_MAX_ROWS bracket search (overnight 2026-06-10, in progress)
+Seed points from the offline queue (1.5M x 4096 dual_fp32, 5-tree AP
+medians, single thread): control CM 36.14 | rm10k **19.00** | rm20k 19.32 |
+rm40k 19.63. Monotone rising 10k→40k ⇒ optimum ≤ 10k, the "flat 10k–40k"
+read was the top of a shallow slope. Batch 1 (running): rm0 (pure CM via
+dual-store kernel — also calibrates dual-store CM vs stock CM 36.14), rmINF
+(pure row-major — if ≈ optimum, the CM copy can be dropped and the 2x RAM
+cost halves), rm5000, rm2500. Refinement next per bracket rule; ties under
+~2% (per-tree spread) stop the split. Then the same mini-search at 750k x
+4096: if the optimal threshold halves with N, the dispatch variable is
+density (rows_n/N); if it stays put, it's absolute working-set size.
+Log: `benchmarks/results/rm_threshold_search_2026-06-10.log`.
+
+### O.3 results — YDF_RM_MAX_ROWS bracket search COMPLETE (2026-06-11 ~00:30)
+1.5M x 4096 dual_fp32, AP medians (5 trees, 1 thread), stock-CM control 36.14:
+
+| thr | 0 (pure CM) | 312 | 625 | 1250 | 2500 | 5000 | 10k | 20k | 40k | INF (pure RM) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| AP | 21.42 | 18.85 | **18.77** | 18.88 | 19.03 | 19.18 | 19.00 | 19.32 | 19.63 | 23.62 |
+
+750k x 4096 (same kernel-CM rm0 reference 9.10):
+
+| thr | 0 | 156 | 312 | 625 | 1250 | 2500 | 5000 | INF |
+|---|---|---|---|---|---|---|---|---|
+| AP | 9.10 | **8.43** | 8.49 | 8.55 | 8.66 | 8.80 | 8.84 | 11.00 |
+
+Findings:
+1. **The optimum is a wide flat plateau (~150–10k rows), not a point.** All
+   within-plateau differences ≤ per-tree noise (~0.3 s). Search stopped per
+   the ties rule.
+2. **Both endpoints lose clearly**: pure CM +14% vs best, pure RM +26–30%.
+   The CM copy earns its RAM at tall shapes — can't drop it.
+3. **Most of the dual_fp32 win is the kernel, not the dispatch**: stock CM
+   36.14 → dual-kernel pure-CM 21.42 (direct pointers + 4-row unroll);
+   dispatch adds the last ~12% (21.42 → 18.77).
+4. **Density vs absolute: indeterminate, and moot.** No sharp knee exists
+   to scale with N; both shapes are flat from ~150 to ~10k. No
+   justification for a YDF_RM_MAX_DENSITY knob — a fixed threshold in the
+   hundreds-to-thousands range is robust across N. Recommend default
+   ~625–1000 (≈3% better than the 20000 used in the m7i e2e run).
+5. TT medians track AP: best 65.25 (rm1250) vs control 88.46 = 1.36x.
+
+Raw: benchmarks/results/rm_threshold_search_2026-06-10.log; CSVs under
+per_function_timing/.../trunk_{1500000,750000}_x_4096/dualfp32_rm*.csv.
+
+### O.4 HIGGS YDF_DW1_THREADS=1 e2e A/B (2026-06-11 ~01:30) — hypothesis FALSIFIED
+Quick mode (3 runs), HIGGS only: median **550.0 s ±9.3** vs dw1 with
+per-depth threading 520.1 and DFS baseline 372. Serializing the within-tree
+kernel makes it *worse* — thread oversubscription does not explain the
+HIGGS regression. New hypothesis: HIGGS has 28 columns, so column sharing
+has nothing to share (every column is hot at every node already); the
+depth-batch driver itself (slab zero-init, entry build + counting sort,
+giant shallow-depth slabs at 11M rows) is pure overhead. The original dw1
+premise — columns touched per depth >> total columns — *inverts* on
+narrow-D datasets. Decomposition in flight: corrected-PMC vs dw1 vs
+nodewise chrono on HIGGS (PMC ≈ dw1 there ⇒ kernel order irrelevant at
+28 cols, gap = driver) + corrected-PMC at 3M x 4096 for the
+column-sharing measurement. CSV: runtime_quick_dw1_threads1_higgs.csv.
+
+### O.5 Corrected-PMC decomposition (2026-06-11 ~01:50) — first valid column-sharing measurement
+Chrono, 5 trees, 1 thread, AP medians.
+
+**3M x 4096** (with prior runs: nodewise ~79.6, dw1 45.6):
+nodewise 79.6 → **PMC 59.97** → dw1 45.6. The 1.71x dw1 AP win splits into
+~25% from kernel quality alone (direct pointers, big/small split,
+feature-major accumulate — PMC has all of it, in node order) and ~24% more
+from actual cross-node column sharing. Both halves are real.
+
+**HIGGS** (11M x 28):
+| | nodewise | PMC | dw1 |
+|---|---|---|---|
+| AP | 25.13 | 25.39 | **19.70** |
+| TT | **85.63** | 106.32 | 99.32 |
+
+1. PMC ≈ nodewise AP ⇒ kernel order is irrelevant at 28 columns, as
+   predicted.
+2. dw1 *wins AP even on HIGGS* (−22%) — the counting-sorted sweep helps a
+   little even with nothing to share.
+3. The e2e regression is entirely **driver overhead**: per-tree deltas
+   dw1 − nodewise: SampleProjection +5.7 s (depth-batch per-node projection
+   materialization), SplitExamplesInPlace +2.9 s (BFS splits lose DFS's
+   just-trained cache locality), NodeTrain-other +3 s, untracked per-depth
+   driver (slab zero/assign, frontier bookkeeping, ThreadPool per depth)
+   ~+7 s. Total +19 s vs AP win −5.4 s ⇒ TT +13.7 s. With AP only 29% of
+   HIGGS TT, no AP-side fix can rescue depth-batching here; the fix (if
+   pursued) is driver cost: depth-level projection sampling, slab reuse
+   across depths, persistent thread pool, or simply not depth-batching when
+   D is small (cols ≲ a few hundred ⇒ nothing to share).
+
+Also: YDF_DW1_THREADS=1 e2e (O.4) falsified oversubscription; per-depth
+threading is net positive (520 vs 550).
+CSVs: per_function_timing/.../{trunk_3000000_x_4096,HIGGS_with_header}/
+{pmc_dw1control,dw1,nodewise}_5trees_*_2026-06-11.csv.

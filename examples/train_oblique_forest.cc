@@ -358,6 +358,58 @@ DualFp32TrunkDataset MakeTrunkDatasetDualFp32(
           std::move(cm)};
 }
 
+// Mirrors the numerical columns of a loaded VerticalDataset into a feature
+// matrix indexed by raw dataspec column index (non-numerical slots stay
+// zero). NaN is replaced by the column mean at copy time — the same
+// substitution stock Evaluate applies per lookup — so kernels never see NaN.
+// Returns the number of mirrored columns.
+template <typename Matrix>
+int FillMatrixFromDataset(Matrix* matrix,
+                          const dataset::VerticalDataset& ds) {
+  const auto& spec = ds.data_spec();
+  std::vector<int> numerical_cols;
+  for (int col = 0; col < spec.columns_size(); ++col) {
+    if (spec.columns(col).type() != dataset::proto::ColumnType::NUMERICAL) {
+      continue;
+    }
+    if (!ds.ColumnWithCastWithStatus<dataset::VerticalDataset::NumericalColumn>(
+              col)
+             .ok()) {
+      continue;
+    }
+    numerical_cols.push_back(col);
+  }
+
+  const int64_t nrow = ds.nrow();
+  const int n_threads = std::max(1u, std::thread::hardware_concurrency());
+  auto fill_range = [&](size_t begin, size_t end) {
+    for (size_t k = begin; k < end; ++k) {
+      const int col = numerical_cols[k];
+      const auto& values =
+          ds.ColumnWithCastWithStatus<dataset::VerticalDataset::NumericalColumn>(
+                col)
+              .value()
+              ->values();
+      const float na = spec.columns(col).numerical().mean();
+      for (int64_t row = 0; row < nrow; ++row) {
+        const float v = values[row];
+        matrix->Set(row, col, std::isnan(v) ? na : v);
+      }
+    }
+  };
+
+  std::vector<std::thread> workers;
+  const size_t chunk = (numerical_cols.size() + n_threads - 1) / n_threads;
+  for (int t = 0; t < n_threads; ++t) {
+    const size_t begin = t * chunk;
+    const size_t end = std::min(numerical_cols.size(), begin + chunk);
+    if (begin >= end) break;
+    workers.emplace_back(fill_range, begin, end);
+  }
+  for (auto& worker : workers) worker.join();
+  return static_cast<int>(numerical_cols.size());
+}
+
 /* #endregion */
 
 int main(int argc, char** argv) {
@@ -768,7 +820,56 @@ int main(int argc, char** argv) {
 
   if (mode == "csv") {
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
-    if (absl::GetFlag(FLAGS_bf16_shadow)) {
+    std::string csv_layout = absl::GetFlag(FLAGS_dataset_layout);
+    if (csv_layout == "dual_fp32") csv_layout = "dynamic_row_col_major";
+    if (csv_layout == "dual_bf16") csv_layout = "dynamic_row_col_major_bf16";
+    if (csv_layout == "dynamic_row_col_major" ||
+        csv_layout == "dynamic_row_col_major_bf16") {
+      // Dynamic_Row_Col_Major from CSV: load once, mirror numerical columns
+      // into both a row-major and a column-major store, train in-memory so
+      // matrix rows line up with dataset rows.
+      static std::unique_ptr<dataset::VerticalDataset> csv_ds;
+      csv_ds = std::make_unique<dataset::VerticalDataset>();
+      CHECK_OK(dataset::LoadVerticalDataset("csv:" + csv_path, data_spec,
+                                            csv_ds.get()));
+      const int64_t nrow = csv_ds->nrow();
+      const int total_cols = csv_ds->data_spec().columns_size();
+      if (csv_layout == "dynamic_row_col_major") {
+        static std::unique_ptr<dataset::RowMajorFeatureMatrix> csv_rows;
+        static std::unique_ptr<dataset::FlatColMajorFeatureMatrix> csv_cols;
+        csv_rows =
+            std::make_unique<dataset::RowMajorFeatureMatrix>(nrow, total_cols);
+        csv_cols = std::make_unique<dataset::FlatColMajorFeatureMatrix>(
+            nrow, total_cols);
+        const int mirrored = FillMatrixFromDataset(csv_rows.get(), *csv_ds);
+        FillMatrixFromDataset(csv_cols.get(), *csv_ds);
+        dataset::RowMajorFeatureMatrix::SetActive(csv_rows.get());
+        dataset::FlatColMajorFeatureMatrix::SetActive(csv_cols.get());
+        LOG(INFO) << "Dynamic_Row_Col_Major fp32 CSV matrices: " << mirrored
+                  << " numerical columns, "
+                  << ((csv_rows->bytes() + csv_cols->bytes()) /
+                      (1024.0 * 1024.0 * 1024.0))
+                  << " GiB total";
+      } else {
+        static std::unique_ptr<dataset::Bf16RowMajorFeatureMatrix> csv_rows;
+        static std::unique_ptr<dataset::Bf16FlatColMajorFeatureMatrix>
+            csv_cols;
+        csv_rows = std::make_unique<dataset::Bf16RowMajorFeatureMatrix>(
+            nrow, total_cols);
+        csv_cols = std::make_unique<dataset::Bf16FlatColMajorFeatureMatrix>(
+            nrow, total_cols);
+        const int mirrored = FillMatrixFromDataset(csv_rows.get(), *csv_ds);
+        FillMatrixFromDataset(csv_cols.get(), *csv_ds);
+        dataset::Bf16RowMajorFeatureMatrix::SetActive(csv_rows.get());
+        dataset::Bf16FlatColMajorFeatureMatrix::SetActive(csv_cols.get());
+        LOG(INFO) << "Dynamic_Row_Col_Major bf16 CSV matrices: " << mirrored
+                  << " numerical columns, "
+                  << ((csv_rows->bytes() + csv_cols->bytes()) /
+                      (1024.0 * 1024.0 * 1024.0))
+                  << " GiB total";
+      }
+      model_or = learner->TrainWithStatus(*csv_ds);
+    } else if (absl::GetFlag(FLAGS_bf16_shadow)) {
       // Load the dataset explicitly, mirror its numerical columns into a
       // bf16 column-major shadow, and train from the in-memory dataset so
       // split search reads bf16 while split application / OOB read the
