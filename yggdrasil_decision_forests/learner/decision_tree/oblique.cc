@@ -19,6 +19,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <random>
@@ -1158,6 +1160,15 @@ absl::Status LDACache::GetSW(const std::vector<int>& selected_features,
   return Extract(selected_features, sw_, out);
 }
 
+size_t RowMajorMaxRows() {
+  static const size_t value = [] {
+    const char* e = std::getenv("YDF_RM_MAX_ROWS");
+    return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
+                        : std::numeric_limits<size_t>::max();
+  }();
+  return value;
+}
+
 ProjectionEvaluator::ProjectionEvaluator(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features) {
@@ -1245,6 +1256,38 @@ absl::Status ProjectionEvaluator::Evaluate(
 
   CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
   values->resize(selected_examples.size());
+
+#if defined(ROW_MAJOR_DATASET_LAYOUT)
+  // Dynamic_Row_Col_Major on the DFS/nodewise path: when both fp32 stores are
+  // live, pick per node with the same YDF_RM_MAX_ROWS threshold as the BFS
+  // (PROJECTION_MATRIX_CONTROL) kernel. Without this, AttributeValue's static
+  // store priority would read the column store for every node. Both branches
+  // keep the generic loop shape below (only the store is fixed), so timings
+  // stay comparable with the single-layout 'row' / 'flat_column' runs.
+  if (row_major_matrix_ != nullptr && flat_col_matrix_ != nullptr) {
+    const bool use_row_major = selected_examples.size() <= RowMajorMaxRows();
+    for (size_t selected_idx = 0; selected_idx < selected_examples.size();
+         selected_idx++) {
+      float value = 0;
+      const auto example_idx = selected_examples[selected_idx];
+      for (const auto& item : projection) {
+        float attribute_value =
+            use_row_major
+                ? row_major_matrix_->Get(example_idx, item.attribute_idx)
+                : flat_col_matrix_->Get(example_idx, item.attribute_idx);
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+        if (std::isnan(attribute_value)) {
+          attribute_value = na_replacement_value_[item.attribute_idx];
+        }
+#endif
+        value += attribute_value * item.weight;
+      }
+      (*values)[selected_idx] = value;
+    }
+    return absl::OkStatus();
+  }
+#endif
+
   for (size_t selected_idx = 0; selected_idx < selected_examples.size();
        selected_idx++) {
     float value = 0;

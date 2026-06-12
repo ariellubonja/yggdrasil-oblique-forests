@@ -178,6 +178,14 @@ namespace internal {
 // translation units in oblique_gpu_kernels.cu.cc / randomprojection.cu without
 // pulling in the absl/protobuf-heavy transitive includes of this header.
 
+// Dynamic_Row_Col_Major dispatch threshold (YDF_RM_MAX_ROWS env var): nodes
+// with at most this many selected rows take the row-major path; larger nodes
+// take the column-major path. Experiment knob, read once. Unset => row-major
+// for every node. Shared by the BFS (PROJECTION_MATRIX_CONTROL) kernel and
+// the DFS/nodewise dispatch in ProjectionEvaluator::Evaluate so both
+// schedulers split row-vs-col identically.
+size_t RowMajorMaxRows();
+
 // Utility to evaluate projections.
 //
 // This object references the data of the vertical dataset given as input.

@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
-#include <limits>
 #include <vector>
 
 #include "absl/log/check.h"
@@ -18,17 +17,9 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 
 namespace {
 
-// Dynamic_Row_Col_Major dispatch threshold: nodes with at most this many
-// selected rows take the row-major path; larger nodes take the column-major
-// path. Experiment knob, read once. Unset => row-major for every node.
-size_t RowMajorMaxRows() {
-  static const size_t value = [] {
-    const char* e = std::getenv("YDF_RM_MAX_ROWS");
-    return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
-                        : std::numeric_limits<size_t>::max();
-  }();
-  return value;
-}
+// Dynamic_Row_Col_Major dispatch threshold (YDF_RM_MAX_ROWS) now lives in
+// internal::RowMajorMaxRows() (oblique.h) so the DFS/nodewise dispatch in
+// ProjectionEvaluator::Evaluate uses the identical knob.
 
 // Big-node cutoff shared with depthwise_1_pass (same env knob and default),
 // so PMC and dw1 split big-vs-small nodes identically. Nodes whose slab
@@ -86,7 +77,7 @@ absl::Status ApplyProjectionsProjectionMatrixControl(
       const auto* bf16_rows = evaluator.Bf16Rows();
       const auto* bf16_cols = evaluator.Bf16Cols();
       if (bf16_rows != nullptr &&
-          (rows_n <= RowMajorMaxRows() || bf16_cols == nullptr)) {
+          (rows_n <= internal::RowMajorMaxRows() || bf16_cols == nullptr)) {
         // Row-major bf16: one pass per row serves all P projections; the
         // row's feature loads share pages/lines instead of P*d isolated
         // DRAM gathers.
@@ -140,7 +131,7 @@ absl::Status ApplyProjectionsProjectionMatrixControl(
         }
       } else if (const auto* fp32_rows = evaluator.Fp32Rows();
                  fp32_rows != nullptr &&
-                 (rows_n <= RowMajorMaxRows() ||
+                 (rows_n <= internal::RowMajorMaxRows() ||
                   evaluator.Fp32Cols() == nullptr)) {
         // Row-major fp32: same dispatch as the bf16 hybrid, full precision.
         // Accumulation order must match EvalConditionOblique's scalar loop
