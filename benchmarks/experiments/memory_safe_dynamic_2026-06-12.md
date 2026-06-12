@@ -95,3 +95,22 @@ Peak RSS stays at single-dataset-copy levels (~24.8 GB at 1.5m×4096 vs
   economics still unproven).
 - `dense_example_idxs` iota + `selected_labels` extraction per node are
   smaller per-node setup items if more setup shaving is needed.
+
+## Ablation: separate contribution of the two configs (1-run probes)
+
+2×2 grid, non-AVX probe builds. 1.5m×4096: 8 trees / 8 threads / t=1350;
+the two wide sets: 40 trees / threads=-1 / t=250 (harness-like).
+
+| Dataset | plain | 4row only | cache only | both |
+|---|---|---|---|---|
+| trunk 1.5m×4096 | 84.0 | 77.1 (−8.2 %) | 78.3 (−6.8 %) | **72.5 (−13.7 %)** |
+| trunk 150k×40k | 169.8 | 157.8 (−7.0 %) | 132.9 (−21.7 %) | **123.5 (−27.2 %)** |
+| trunk 10k×400k | 82.4 | 82.1 (−0.4 %) | 30.5 (−63.0 %) | **29.4 (−64.4 %)** |
+
+- The two effects are essentially **additive** (no interaction term).
+- `evaluate_4row` is worth a steady ~7-8 % wherever nodes have enough
+  rows for the projection loop to matter; it vanishes on ultra-wide
+  data (tiny row counts per node, AP is a sliver of node cost there).
+- `cache_projection_evaluator` scales with feature count — the per-node
+  table rebuild is O(num_features): −6.8 % @ 4k features, −21.7 % @ 40k,
+  −63 % @ 400k.
