@@ -48,17 +48,42 @@ All variants verified bit-identical to stock on trunk 50k×256 OOB
 
 Build: `EXTRA_BAZEL_CONFIGS="--config=evaluate_4row --config=cache_projection_evaluator"`
 
-PENDING — run `runtime_1runs_4row_cache_m7i.csv` in flight.
+★ **1-run verdict (`runtime_1runs_4row_cache_m7i.csv`) — new best on 3 of 4
+datasets, and it is memory-safe where dyn OOMs:**
 
-Reference points (user's table, same harness):
+| Dataset | stock DFS col | dyn dual T=5000 (best prior, OOM-prone) | **4row+cache** | vs stock | vs dyn |
+|---|---|---|---|---|---|
+| HIGGS 11m×29 | 282 | 266 (DFS) | **251.0** | −11 % | −5.6 % |
+| trunk 1.5m×4096 | 331 | **241** (DFS) | 259.0 | −22 % | +7.5 % |
+| trunk 150k×40k | — | 105 (BFS) | **86.1** | — | −18 % |
+| trunk 10k×400k | 78 | 40 (BFS) | **23.0** | −71 % | −43 % |
 
-| Dataset | stock DFS col | dyn DFS T=5000 (dual, OOM-prone) |
+The wide-dataset blowout is the evaluator cache: stock rebuilds
+`numerical_attributes_` / `na_replacement_value_` tables sized
+`num_features` (40k / 400k entries) **per node**. The 4-row kernel
+carries the narrow/tall datasets.
+
+★ **3× confirmation (`runtime_3runs_4rowcache_confirm_m7i.csv`) — holds,
+with sub-0.5 s stddevs:**
+
+| Dataset | median (3 runs) | stddev |
 |---|---|---|
-| HIGGS 11m×29 | 282 | 266 |
-| trunk 3m×4096 | 688 | oom |
-| trunk 1.5m×4096 | 331 | 241 |
-| trunk 150k×40k | — | 110 |
-| trunk 10k×400k | 78 | 47 |
+| HIGGS 11m×29 | **251.6** | 0.35 |
+| trunk 1.5m×4096 | **255.8** | 0.06 |
+| trunk 150k×40k | **85.6** | 0.30 |
+| trunk 10k×400k | **22.6** | 0.13 |
+
+★ **Full-size datasets (`runtime_1runs_4rowcache_fullsize_m7i.csv`) — the
+rows where dyn dual OOMs. New best on all three:**
+
+| Dataset | stock DFS col | best prior (any variant) | **4row+cache** | vs stock |
+|---|---|---|---|---|
+| trunk 3m×4096 | 688 | 688 (everything else oom/no better) | **576.1** | −16 % |
+| trunk 300k×40k | 288 | 287 (BFS col) | **186.9** | −35 % |
+| trunk 30k×400k | 245 | 152 (BFS row-major) | **73.4** | −70 % |
+
+Peak RSS stays at single-dataset-copy levels (~24.8 GB at 1.5m×4096 vs
+~49 GB for dual), so nothing in the grid is memory-bound anymore.
 
 ## Next ideas
 
