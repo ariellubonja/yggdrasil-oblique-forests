@@ -102,8 +102,12 @@ CSV_DATASETS=(
 # Synthetic trunk datasets as "rows|cols" pairs. Same in Quick and Full modes.
 TRUNK_DATASETS=(
   # "30000000|4" # OOMs for Symmetric trees - comment out
-  "3000000|4096"
-  "30000|400000"
+  # "3000000|4096"
+  "1500000|4096"
+  # "300000|40000"
+  "150000|40000"
+  #"30000|400000"
+  "10000|400000"
 )
 
 # =========================
