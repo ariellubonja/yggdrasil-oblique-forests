@@ -168,8 +168,36 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   auto& projection_values = cache->projection_values;
 
   CHRONO_BEGIN(find_oblique_setup);
+#ifdef CACHE_PROJECTION_EVALUATOR
+  // ProjectionEvaluator only depends on (dataset, numerical_features), both
+  // constant across every node of every tree under GLOBAL_IMPUTATION, so
+  // rebuilding its per-attribute pointer tables per node is pure
+  // kFindObliqueSetup waste. RANDOM_LOCAL_IMPUTATION trains each node on a
+  // fresh per-node dataset whose address could alias a freed one — never
+  // cache there.
+  static thread_local std::optional<ProjectionEvaluator> tl_evaluator;
+  static thread_local const dataset::VerticalDataset* tl_evaluator_ds =
+      nullptr;
+  static thread_local int64_t tl_evaluator_nrow = -1;
+  static thread_local int tl_evaluator_num_features = -1;
+  const bool can_cache_evaluator =
+      dt_config.missing_value_policy() ==
+      proto::DecisionTreeTrainingConfig::GLOBAL_IMPUTATION;
+  if (!can_cache_evaluator || tl_evaluator_ds != &train_dataset ||
+      tl_evaluator_nrow != static_cast<int64_t>(train_dataset.nrow()) ||
+      tl_evaluator_num_features != config_link.numerical_features_size()) {
+    tl_evaluator.emplace(train_dataset, config_link.numerical_features());
+    tl_evaluator_ds = can_cache_evaluator ? &train_dataset : nullptr;
+    tl_evaluator_nrow =
+        can_cache_evaluator ? static_cast<int64_t>(train_dataset.nrow()) : -1;
+    tl_evaluator_num_features =
+        can_cache_evaluator ? config_link.numerical_features_size() : -1;
+  }
+  ProjectionEvaluator& projection_evaluator = *tl_evaluator;
+#else
   ProjectionEvaluator projection_evaluator(train_dataset,
                                            config_link.numerical_features());
+#endif
 
   // TODO: Cache.
   const auto selected_labels = ExtractLabels(label_stats, selected_examples);
@@ -276,6 +304,15 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     }
   } else
 #endif
+  {
+#ifdef SUBTREE_GATHER_CACHE
+  // Nodes at or below the RowMajorMaxRows() threshold evaluate their
+  // projections from the per-thread gathered block (materializing it when
+  // this node is the first of a new subtree).
+  SubtreeGatherCache* const sg = &cache->subtree_gather;
+  const bool sg_active = internal::PrepareSubtreeGatherNode(
+      selected_examples, train_dataset.nrow(), sg);
+#endif
   for (int projection_idx = 0; projection_idx < num_projections;
        projection_idx++) {
     // Generate a current_projection.
@@ -288,6 +325,12 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     }
 
     // Pre-compute the result of the current_projection.
+#ifdef SUBTREE_GATHER_CACHE
+    if (sg_active) {
+      RETURN_IF_ERROR(projection_evaluator.EvaluateWithSubtreeCache(
+          current_projection, selected_examples, sg, &projection_values));
+    } else
+#endif
     RETURN_IF_ERROR(projection_evaluator.Evaluate(
         current_projection, selected_examples, &projection_values));
 
@@ -304,6 +347,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       best_threshold =
           best_condition->condition().higher_condition().threshold();
     }
+  }
   }
 
   // Update with the actual current_projection definition.
@@ -1169,6 +1213,182 @@ size_t RowMajorMaxRows() {
   return value;
 }
 
+#ifdef SUBTREE_GATHER_CACHE
+namespace {
+// Per-thread cap on gathered-column bytes per block (and, via the 2x sweep
+// gate, on bytes retained as capacity across blocks).
+size_t SubtreeGatherBudgetBytes() {
+  static const size_t value = [] {
+    const char* e = std::getenv("YDF_SG_BUDGET_MB");
+    const size_t mb = e != nullptr ? std::strtoull(e, nullptr, 10) : 1024;
+    return mb * 1024 * 1024;
+  }();
+  return value;
+}
+}  // namespace
+
+bool PrepareSubtreeGatherNode(
+    const absl::Span<const UnsignedExampleIdx> selected_examples,
+    const size_t num_rows_in_dataset, SubtreeGatherCache* sg) {
+  const size_t n = selected_examples.size();
+  if (n == 0 || n > RowMajorMaxRows() || n > SubtreeGatherCache::kSlotMask) {
+    return false;
+  }
+  if (sg->slot_of_example.size() != num_rows_in_dataset) {
+    sg->slot_of_example.assign(num_rows_in_dataset, 0);
+    sg->epoch = 0;
+  }
+  sg->node_slots.resize(n);
+
+  // Reuse the current block if every row of this node belongs to it. Rows of
+  // a node are either all inside the block (descendant of the block node) or
+  // — being a tree partition — disjoint from it, but the per-row check also
+  // keeps interleavings across trees / BFS orders correct.
+  if (sg->epoch != 0) {
+    const uint32_t tag = sg->epoch << SubtreeGatherCache::kSlotBits;
+    bool valid = true;
+    for (size_t i = 0; i < n; ++i) {
+      const uint32_t entry = sg->slot_of_example[selected_examples[i]];
+      if ((entry & ~SubtreeGatherCache::kSlotMask) != tag) {
+        valid = false;
+        break;
+      }
+      sg->node_slots[i] = entry & SubtreeGatherCache::kSlotMask;
+    }
+    if (valid) {
+      return true;
+    }
+  }
+
+  // Materialize a new block from this node's examples.
+  if (sg->epoch >= SubtreeGatherCache::kMaxEpoch) {
+    // Epoch tag space exhausted: stale entries could alias the wrapped tag.
+    std::fill(sg->slot_of_example.begin(), sg->slot_of_example.end(), 0u);
+    sg->epoch = 0;
+  }
+  ++sg->epoch;
+  const uint32_t tag = sg->epoch << SubtreeGatherCache::kSlotBits;
+  sg->block_rows.assign(selected_examples.begin(), selected_examples.end());
+  for (size_t i = 0; i < n; ++i) {
+    sg->slot_of_example[selected_examples[i]] =
+        tag | static_cast<uint32_t>(i);
+    sg->node_slots[i] = static_cast<uint32_t>(i);
+  }
+  sg->gathered_bytes = 0;
+  return true;
+}
+
+const float* ProjectionEvaluator::GatheredColumn(const int attribute_idx,
+                                                 SubtreeGatherCache* sg) const {
+  if (sg->cols.size() <= static_cast<size_t>(attribute_idx)) {
+    sg->cols.resize(attribute_idx + 1);
+    sg->col_epoch.resize(attribute_idx + 1, 0);
+  }
+  auto& col = sg->cols[attribute_idx];
+  if (sg->col_epoch[attribute_idx] == sg->epoch && !col.empty()) {
+    return col.data();
+  }
+  const size_t n = sg->block_rows.size();
+  const size_t bytes = n * sizeof(float);
+  if (sg->gathered_bytes + bytes > SubtreeGatherBudgetBytes()) {
+    return nullptr;
+  }
+  // Capacity persists across blocks so the frequent case (same features
+  // re-gathered every block) does not churn the allocator. When the feature
+  // space is so large that retained capacity piles up (ultra-wide datasets),
+  // sweep stale columns before growing further.
+  if (sg->retained_bytes + bytes > 2 * SubtreeGatherBudgetBytes()) {
+    for (size_t a = 0; a < sg->cols.size(); ++a) {
+      if (sg->col_epoch[a] != sg->epoch && !sg->cols[a].empty()) {
+        sg->retained_bytes -= sg->cols[a].capacity() * sizeof(float);
+        std::vector<float>().swap(sg->cols[a]);
+      }
+    }
+    if (sg->retained_bytes + bytes > 2 * SubtreeGatherBudgetBytes()) {
+      return nullptr;
+    }
+  }
+  const uint64_t capacity_before = col.capacity() * sizeof(float);
+  col.resize(n);
+  sg->retained_bytes += col.capacity() * sizeof(float) - capacity_before;
+  const float* src = numerical_attribute_data_[attribute_idx];
+  float* dst = col.data();
+  for (size_t i = 0; i < n; ++i) {
+    dst[i] = src[sg->block_rows[i]];
+  }
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+  const float na_replacement = na_replacement_value_[attribute_idx];
+  for (size_t i = 0; i < n; ++i) {
+    if (std::isnan(dst[i])) dst[i] = na_replacement;
+  }
+#endif
+  sg->col_epoch[attribute_idx] = sg->epoch;
+  sg->gathered_bytes += bytes;
+  return col.data();
+}
+
+YDF_PROJECTION_EVALUATE_NOINLINE
+absl::Status ProjectionEvaluator::EvaluateWithSubtreeCache(
+    const Projection& projection,
+    const absl::Span<const UnsignedExampleIdx> selected_examples,
+    SubtreeGatherCache* sg, std::vector<float>* values) const {
+  RETURN_IF_ERROR(constructor_status_);
+
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
+  const size_t n = selected_examples.size();
+  DCHECK_EQ(n, sg->node_slots.size());
+  values->resize(n);
+
+  // Resolve each projection item to its gathered column, or to the raw
+  // column store when the budget is exhausted.
+  struct ResolvedItem {
+    const float* gathered;  // nullptr => read "raw" by example index.
+    const float* raw;
+    float weight;
+    float na_replacement;
+  };
+  // Projections are tiny (~density items); a fixed-size stack array would be
+  // wrong for dense oblique configs, so keep a small vector.
+  static thread_local std::vector<ResolvedItem> items;
+  items.clear();
+  items.reserve(projection.size());
+  for (const auto& item : projection) {
+    DCHECK_LT(item.attribute_idx, numerical_attributes_.size());
+    DCHECK_GE(item.attribute_idx, 0);
+    const float* gathered = GatheredColumn(item.attribute_idx, sg);
+    items.push_back({gathered, numerical_attribute_data_[item.attribute_idx],
+                     item.weight, na_replacement_value_[item.attribute_idx]});
+  }
+
+  // Same loop shape as Evaluate (rows outer, items inner, scalar float
+  // accumulator) so the two paths keep identical summation order and the
+  // split decisions stay bit-identical.
+  const uint32_t* slots = sg->node_slots.data();
+  for (size_t selected_idx = 0; selected_idx < n; selected_idx++) {
+    const uint32_t slot = slots[selected_idx];
+    float value = 0;
+    for (const auto& item : items) {
+      float attribute_value;
+      if (item.gathered != nullptr) {
+        attribute_value = item.gathered[slot];
+      } else {
+        attribute_value = item.raw[selected_examples[selected_idx]];
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+        // Gathered columns are NaN-replaced at gather time; only the raw
+        // fallback needs the per-lookup check.
+        if (std::isnan(attribute_value)) {
+          attribute_value = item.na_replacement;
+        }
+#endif
+      }
+      value += attribute_value * item.weight;
+    }
+    (*values)[selected_idx] = value;
+  }
+  return absl::OkStatus();
+}
+#endif  // SUBTREE_GATHER_CACHE
+
 ProjectionEvaluator::ProjectionEvaluator(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features) {
@@ -1287,6 +1507,135 @@ absl::Status ProjectionEvaluator::Evaluate(
     return absl::OkStatus();
   }
 #endif
+
+#ifdef EVALUATE_4ROW_KERNEL
+  // V2-rev3's inner kernel at per-(node, projection) granularity: process
+  // the selected rows in blocks of 4 with 4 independent accumulators and 4
+  // parallel column loads per projection item. Each item's loads are random
+  // DRAM gathers; the stock loop chains them through one accumulator (one
+  // miss in flight per item), the 4-row block exposes 4. Per-row item order
+  // is unchanged, so the sums are bit-identical to the generic loop below.
+  // Only the plain column-store path is unrolled; the experimental layout
+  // configs keep their own dispatch above.
+  {
+    struct ItemRef {
+      const float* col;
+      float weight;
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+      float na;
+#endif
+    };
+    static thread_local std::vector<ItemRef> item_refs;
+    item_refs.clear();
+    item_refs.reserve(projection.size());
+    bool all_direct = true;
+    for (const auto& item : projection) {
+      DCHECK_LT(item.attribute_idx, numerical_attributes_.size());
+      DCHECK_GE(item.attribute_idx, 0);
+      const float* col = numerical_attribute_data_[item.attribute_idx];
+      if (col == nullptr) {
+        all_direct = false;
+        break;
+      }
+      item_refs.push_back({col, item.weight
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+                           ,
+                           na_replacement_value_[item.attribute_idx]
+#endif
+      });
+    }
+    if (all_direct) {
+      const UnsignedExampleIdx* sel = selected_examples.data();
+      const size_t n = selected_examples.size();
+      float* out = values->data();
+      size_t i = 0;
+#if defined(EVALUATE_ROW_BLOCK_8)
+      for (; i + 8 <= n; i += 8) {
+        const UnsignedExampleIdx e0 = sel[i], e1 = sel[i + 1], e2 = sel[i + 2],
+                                 e3 = sel[i + 3], e4 = sel[i + 4],
+                                 e5 = sel[i + 5], e6 = sel[i + 6],
+                                 e7 = sel[i + 7];
+        float a0 = 0.f, a1 = 0.f, a2 = 0.f, a3 = 0.f, a4 = 0.f, a5 = 0.f,
+              a6 = 0.f, a7 = 0.f;
+        for (const auto& ref : item_refs) {
+          float v0 = ref.col[e0];
+          float v1 = ref.col[e1];
+          float v2 = ref.col[e2];
+          float v3 = ref.col[e3];
+          float v4 = ref.col[e4];
+          float v5 = ref.col[e5];
+          float v6 = ref.col[e6];
+          float v7 = ref.col[e7];
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+          if (std::isnan(v0)) v0 = ref.na;
+          if (std::isnan(v1)) v1 = ref.na;
+          if (std::isnan(v2)) v2 = ref.na;
+          if (std::isnan(v3)) v3 = ref.na;
+          if (std::isnan(v4)) v4 = ref.na;
+          if (std::isnan(v5)) v5 = ref.na;
+          if (std::isnan(v6)) v6 = ref.na;
+          if (std::isnan(v7)) v7 = ref.na;
+#endif
+          a0 += v0 * ref.weight;
+          a1 += v1 * ref.weight;
+          a2 += v2 * ref.weight;
+          a3 += v3 * ref.weight;
+          a4 += v4 * ref.weight;
+          a5 += v5 * ref.weight;
+          a6 += v6 * ref.weight;
+          a7 += v7 * ref.weight;
+        }
+        out[i] = a0;
+        out[i + 1] = a1;
+        out[i + 2] = a2;
+        out[i + 3] = a3;
+        out[i + 4] = a4;
+        out[i + 5] = a5;
+        out[i + 6] = a6;
+        out[i + 7] = a7;
+      }
+#else
+      for (; i + 4 <= n; i += 4) {
+        const UnsignedExampleIdx e0 = sel[i], e1 = sel[i + 1], e2 = sel[i + 2],
+                                 e3 = sel[i + 3];
+        float a0 = 0.f, a1 = 0.f, a2 = 0.f, a3 = 0.f;
+        for (const auto& ref : item_refs) {
+          float v0 = ref.col[e0];
+          float v1 = ref.col[e1];
+          float v2 = ref.col[e2];
+          float v3 = ref.col[e3];
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+          if (std::isnan(v0)) v0 = ref.na;
+          if (std::isnan(v1)) v1 = ref.na;
+          if (std::isnan(v2)) v2 = ref.na;
+          if (std::isnan(v3)) v3 = ref.na;
+#endif
+          a0 += v0 * ref.weight;
+          a1 += v1 * ref.weight;
+          a2 += v2 * ref.weight;
+          a3 += v3 * ref.weight;
+        }
+        out[i] = a0;
+        out[i + 1] = a1;
+        out[i + 2] = a2;
+        out[i + 3] = a3;
+      }
+#endif  // EVALUATE_ROW_BLOCK_8
+      for (; i < n; ++i) {
+        float value = 0;
+        for (const auto& ref : item_refs) {
+          float v = ref.col[sel[i]];
+#ifdef ENABLE_APPLYPROJECTION_ISNAN
+          if (std::isnan(v)) v = ref.na;
+#endif
+          value += v * ref.weight;
+        }
+        out[i] = value;
+      }
+      return absl::OkStatus();
+    }
+  }
+#endif  // EVALUATE_4ROW_KERNEL
 
   for (size_t selected_idx = 0; selected_idx < selected_examples.size();
        selected_idx++) {

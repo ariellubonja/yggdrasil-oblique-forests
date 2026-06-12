@@ -186,6 +186,17 @@ namespace internal {
 // schedulers split row-vs-col identically.
 size_t RowMajorMaxRows();
 
+#ifdef SUBTREE_GATHER_CACHE
+// Prepares "sg" for the node defined by "selected_examples" and fills
+// sg->node_slots. Returns true when the node evaluates from the gathered
+// block: either its rows all lie in the current block (reuse), or a fresh
+// block is materialized from them. Returns false for nodes larger than
+// RowMajorMaxRows() — those evaluate on the raw column store.
+bool PrepareSubtreeGatherNode(
+    absl::Span<const UnsignedExampleIdx> selected_examples,
+    size_t num_rows_in_dataset, SubtreeGatherCache* sg);
+#endif
+
 // Utility to evaluate projections.
 //
 // This object references the data of the vertical dataset given as input.
@@ -215,6 +226,23 @@ class ProjectionEvaluator {
   absl::Status ExtractAttribute(
       int attribute_idx, absl::Span<const UnsignedExampleIdx> selected_examples,
       std::vector<float>* values) const;
+
+#ifdef SUBTREE_GATHER_CACHE
+  // Same contract as Evaluate, but reads the projection's features from the
+  // compact gathered columns of "sg" (gathering them on first touch).
+  // Requires a successful PrepareSubtreeGatherNode for "selected_examples"
+  // (sg->node_slots aligned with it). Falls back to the raw column store for
+  // features that cannot be gathered within the memory budget.
+  absl::Status EvaluateWithSubtreeCache(
+      const Projection& projection,
+      absl::Span<const UnsignedExampleIdx> selected_examples,
+      SubtreeGatherCache* sg, std::vector<float>* values) const;
+
+  // Returns the gathered column of "attribute_idx" for the current block of
+  // "sg", materializing it if needed. Returns nullptr if gathering it would
+  // exceed the per-thread budget (YDF_SG_BUDGET_MB).
+  const float* GatheredColumn(int attribute_idx, SubtreeGatherCache* sg) const;
+#endif
 
   const std::vector<float>& AttributeValues(int attribute_idx) const {
     return *numerical_attributes_[attribute_idx];

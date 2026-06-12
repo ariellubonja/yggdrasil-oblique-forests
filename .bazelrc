@@ -55,6 +55,27 @@ build:symmetric_nodewise_control --cxxopt="-DSYMMETRIC_NODEWISE_CONTROL=1"
 # symmetric_nodewise_control.
 build:bfs_only --cxxopt="-DBFS_ONLY=1"
 
+# Subtree gather cache: memory-safe replacement for the Dynamic_Row_Col_Major
+# dual store. Keeps the single column-major dataset; nodes with <=
+# YDF_RM_MAX_ROWS (default 5000) rows gather the feature columns their
+# projections touch into compact per-subtree buffers (lazily, reused by all
+# descendant nodes under DFS). Extra memory is capped at YDF_SG_BUDGET_MB
+# (default 1024) per training thread instead of a second full dataset copy.
+# Run with the plain --dataset_layout=column; do not combine with the
+# *_dataset_layout configs.
+build:subtree_gather --cxxopt="-DSUBTREE_GATHER_CACHE=1"
+
+# 4-row-block ApplyProjection kernel (V2-rev3's inner loop) applied
+# per-(node, projection) inside the stock DFS ProjectionEvaluator::Evaluate:
+# 4 independent accumulators expose 4 concurrent DRAM gathers per projection
+# item. No extra memory, no driver/sampling change, bit-identical results.
+build:evaluate_4row --cxxopt="-DEVALUATE_4ROW_KERNEL=1"
+
+# Reuse one ProjectionEvaluator per thread instead of rebuilding its
+# per-attribute pointer tables on every node (kFindObliqueSetup waste).
+# Bit-identical; disabled automatically under RANDOM_LOCAL_IMPUTATION.
+build:cache_projection_evaluator --cxxopt="-DCACHE_PROJECTION_EVALUATOR=1"
+
 
 ##### GPU Support
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
