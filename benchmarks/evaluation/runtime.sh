@@ -177,8 +177,8 @@ bazel_build() {
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
-logfile="${logdir}/runtime_${NUM_RUNS}runs_${SUFFIX}.log"
-csvfile="${logdir}/runtime_${NUM_RUNS}runs_${SUFFIX}.csv"
+logfile="${logdir}/${NUM_RUNS}runs_${SUFFIX}.log"
+csvfile="${logdir}/${NUM_RUNS}runs_${SUFFIX}.csv"
 
 if [[ -e "$logfile" ]]; then
   echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2
