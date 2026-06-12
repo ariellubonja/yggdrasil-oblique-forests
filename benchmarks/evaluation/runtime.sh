@@ -223,6 +223,23 @@ BINARY="./bazel-bin/examples/train_oblique_forest"
 NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_performances=$COMPUTE_OOB_PERFORMANCES"
 
+# Provenance: without this, a result CSV cannot be traced back to the build
+# that produced it (bazel configs are invisible in the binary command line).
+# Written to the log AND a .meta sidecar next to the CSV — the log is
+# deleted after a successful parse, the sidecar survives.
+metafile="${csvfile%.csv}.meta"
+{
+  echo "==== PROVENANCE ===="
+  echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "git_sha: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)$(git diff --quiet 2>/dev/null || echo '-dirty')"
+  echo "git_branch: $(git branch --show-current 2>/dev/null || echo unknown)"
+  echo "machine: $(lscpu | grep 'Model name' | sed 's/Model name:[[:space:]]*//') (nproc=$(nproc))"
+  echo "EXTRA_BAZEL_CONFIGS: ${EXTRA_BAZEL_CONFIGS:-<none>}"
+  echo "EXTRA_TRAIN_ARGS: ${EXTRA_TRAIN_ARGS:-<none>}"
+  echo "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  bins: $histogram_num_bins"
+  echo "===================="
+} | tee -a "$logfile" "$metafile"
+
 run_cmd() {
   echo "$*" | tee -a "$logfile"
   local times=()

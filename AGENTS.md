@@ -3,6 +3,43 @@
 > **Scope**: oblique split methods only. Ignore other learners
 > (gradient boosted trees, CART, etc.) unless explicitly asked.
 
+## Orientation — read these FIRST, in this order
+
+A fresh session must not re-derive (or worse, re-run) what is already
+known. Before forming any hypothesis:
+
+1. **`benchmarks/experiments/LEDGER.md`** — one row per experiment ever
+   tried (including failures) + the "Standing conclusions" list. If your
+   idea matches a ⛔ row or contradicts a standing conclusion, drop it or
+   explain what's different.
+2. **`benchmarks/experiments/LEADERBOARD.md`** — current best end-to-end
+   numbers per dataset × variant, with exact build recipes. This defines
+   the bar your change must beat and the baselines you may reuse.
+3. The per-topic deep-dive .md linked from the relevant LEDGER row — only
+   for the area you're working on.
+
+### Maintenance contract (non-negotiable, same standing as the workflow below)
+
+- **Every experiment appends a LEDGER row immediately** — failures and
+  neutrals included, one line of idea + one line of outcome + verdict
+  symbol + link to the deep-dive .md. An unlogged experiment will be
+  re-run by the next session at full cost.
+- **Any new best cell updates LEADERBOARD.md** in the same commit as the
+  result CSV, with the CSV linked. Only protocol-conformant numbers
+  (runtime.sh, same trees/threshold/ISA) go in the table.
+- When a finding generalizes ("X never works because Y"), promote it to
+  the LEDGER's **Standing conclusions** — that list is the distilled
+  memory of this project.
+- `runtime.sh` writes a `.meta` provenance sidecar (git SHA, bazel
+  configs, train args, machine) next to every CSV. **Never delete .meta
+  files**, and quote configs from them — don't reconstruct from memory.
+- Deep narrative (perf annotate excerpts, per-depth tables, dead ends'
+  diagnosis) stays in per-topic .md files; LEDGER rows stay one line.
+- Experiment code goes in its **own branch** (one feature = one branch,
+  e.g. `evaluate-4row`, `subtree-gather`); `auto-fable` (or the session's
+  integration branch) carries the combination + results. Failed
+  experiments keep their branch — the code is part of the record.
+
 The relevant files are:
 
 - `yggdrasil_decision_forests/learner/decision_tree/oblique.cc` . Important functions: `EvaluateProjection`, `ProjectionEvaluator::Evaluate`, `FindBestConditionSparseObliqueTemplate`
@@ -41,11 +78,15 @@ Empiricism is foundational here — if this loop isn't followed, the work is was
    inflates each run).
 5. **Significance gate.** If median speedup over baseline on the end-to-end runtime.sh measures is **< 15%**, this experiment is a **failed
    experiment** for the purpose of step 6.
-6. **Log result.** Append to the branch's `*_experiments.md` (see
+6. **Log result.** Two places, always: (a) one-line row appended to
+   `benchmarks/experiments/LEDGER.md` (see Maintenance contract above);
+   (b) the full account in the topic's deep-dive `*_experiments.md` (see
    `benchmarks/experiments/apply_projection_experiments.md` for the
-   shape). Every experiment — failed or successful — gets a row. **Mark
+   shape). Every experiment — failed or successful — gets logged. **Mark
    successful experiments (≥ 20% speedup) prominently** (★, bold table,
-   etc.) so they're easy to spot.
+   etc.) so they're easy to spot. If a cell on
+   `benchmarks/experiments/LEADERBOARD.md` improved, update it in the
+   same commit.
 7. **Iterate.** Loop back to step 2. Call the Advisor model liberally.
 
 ### A/B evaluation
