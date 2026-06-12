@@ -80,13 +80,23 @@ build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-mfma" --cxxo
 # DEFAULTS
 
 
-# pin Intel oneAPI ICX (clang-based). Without this, Bazel's
+# Auto-apply the build:linux / build:macos / build:windows configs based on
+# the host OS, so the compiler pins below take effect without needing an
+# explicit --config on the command line.
+build --enable_platform_specific_config
+
+# pin Intel oneAPI ICX (clang-based) on Linux. Without this, Bazel's
 # auto-detection silently falls back to /usr/bin/gcc, which compiles the
 # Oblique Exact hot path ~30-40% slower than ICX. Requires oneAPI to be
 # sourced in the shell (`source /opt/intel/oneapi/setvars.sh`) so that
-# `icx` / `icpx` are on PATH for Bazel's cc_configure rule.
-build --repo_env=CC=icx
-build --repo_env=CXX=icpx
+# `icx` / `icpx` are on PATH for Bazel's cc_configure rule. This is pinned
+# under build:linux (not global) so that on Linux a missing icx is a hard
+# error -- it must not silently fall back to gcc, which would invalidate
+# performance numbers. macOS cannot use icx (Intel never shipped icx/icpx
+# for macOS, and not at all for Apple Silicon), so it intentionally has no
+# pin and uses the native Apple clang toolchain instead.
+build:linux --repo_env=CC=icx
+build:linux --repo_env=CXX=icpx
 
 # Compile *all* C++ code (target and host) in C++17 mode.
 build --cxxopt=-std=c++17
