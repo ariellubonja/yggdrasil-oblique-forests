@@ -27,7 +27,7 @@ def get_base_parser():
     parser.add_argument("--numerical_split_type", default="Dynamic Random Histogram",
                        choices=["Exact", "Random", "Equal Width",
                                 "Dynamic Random Histogram", "Dynamic Equal Width Histogram"])
-    parser.add_argument("--vectorized", choices=[None, "avx2", "avx512"], default="avx2")
+    parser.add_argument("--vectorized", choices=["None", "avx2", "avx512"], default="avx2")
     parser.add_argument("--tree_depth", type=int, default=-1)
     parser.add_argument("--num_threads", type=int, default=1)
     parser.add_argument("--num_trees", type=int, default=1)  # Note: different defaults in your files
