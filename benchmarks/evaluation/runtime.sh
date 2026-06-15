@@ -14,7 +14,7 @@ set -euo pipefail
 #   <suffix> becomes part of the result filename, e.g. 'AWS_m7i' ->
 #   runtime_3runs_aws_m7i.csv.
 
-NUM_RUNS=3
+NUM_RUNS=1
 SUFFIX=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
