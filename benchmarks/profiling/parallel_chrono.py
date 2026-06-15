@@ -107,9 +107,16 @@ _GPU_TAIL_RX = (
     r"(?:\s+TreeTrain\s+([0-9.eE+-]+)s)?"
 )
 
+# Thread identifier printed by random_forest.cc is `std::this_thread::get_id()`
+# streamed via operator<<. That representation is implementation-defined:
+# libstdc++ (Linux benchmark box) prints a decimal number, libc++ (macOS)
+# prints a hex pointer like `0x16da57000`. Accept either so the parser works
+# on both — the value is only used as a per-thread grouping key.
+_THREAD_ID_RX = r"(0x[0-9a-fA-F]+|\d+)"
+
 # "Classic" (Exact / sort-based CPU split)
 TIMING_RX_SORT = re.compile(
-    r"thread\s+(\d+)\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
+    r"thread\s+" + _THREAD_ID_RX + r"\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
     r"ProjEval\s+([0-9.eE+-]+)s\s+"            #  7
     r"kGetCandidateAttributes\s+([0-9.eE+-]+)s\s+"      #  7a
@@ -131,7 +138,7 @@ TIMING_RX_SORT = re.compile(
 # to EXACT below dynamic_split_threshold (oblique.cc:194-203), so this branch
 # can carry non-zero Sort-path values on Dynamic runs.
 TIMING_RX_HISTO = re.compile(
-    r"thread\s+(\d+)\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
+    r"thread\s+" + _THREAD_ID_RX + r"\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
     r"ProjEval\s+([0-9.eE+-]+)s\s+"
     r"kGetCandidateAttributes\s+([0-9.eE+-]+)s\s+"
@@ -187,7 +194,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              bfs_node_loop, tree_train) = g
 
             rows.append(dict(
-                thread                       = int(tid),
+                thread                       = int(tid, 0),  # 0x… (libc++) or decimal (libstdc++)
                 tree                         = int(tree),
                 depth                        = int(depth),
                 nodes                        = int(nodes),
@@ -264,7 +271,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              bfs_node_loop, tree_train) = g
 
             rows.append(dict(
-                thread                       = int(tid),
+                thread                       = int(tid, 0),  # 0x… (libc++) or decimal (libstdc++)
                 tree                         = int(tree),
                 depth                        = int(depth),
                 nodes                        = int(nodes),

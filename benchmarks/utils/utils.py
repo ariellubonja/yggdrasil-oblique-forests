@@ -282,7 +282,9 @@ def build_binary(args, chrono_mode):
 
 def get_cpu_model_proc():
     """
-    Reads /proc/cpuinfo and returns the first 'model name' value.
+    Returns the CPU model name. Reads /proc/cpuinfo on Linux; falls back to
+    `sysctl machdep.cpu.brand_string` on macOS (no /proc there) so the results
+    directory gets a real device name instead of an error string.
     """
     try:
         with open("/proc/cpuinfo", "r") as f:
@@ -291,7 +293,20 @@ def get_cpu_model_proc():
                     # split only on the first ':' → [key, value]
                     return line.split(":", 1)[1].strip()
     except FileNotFoundError:
-        return "Could not access /proc/cpuinfo to get CPU model name"
+        pass
+
+    # macOS / BSD: /proc/cpuinfo doesn't exist.
+    try:
+        import subprocess
+        out = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            text=True, capture_output=True, check=False).stdout.strip()
+        if out:
+            return out
+    except (OSError, FileNotFoundError):
+        pass
+
+    return "Unknown_CPU"
 
 
 def get_gpu_name():
