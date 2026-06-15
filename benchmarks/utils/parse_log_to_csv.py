@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Parse e2e_runtime or e2e_accuracy logs into CSV.
 
-Detects log type from filename:
-  e2e_runtime_*.log  -> per-run timing samples (uses MEDIAN samples line)
-  e2e_accuracy_*.log -> per-seed final OOB accuracy (last 'Train tree N/N accuracy:' per run)
+Log type is taken from an explicit 3rd argument when given, otherwise it is
+inferred from the filename (substring 'runtime' or 'accuracy'):
+  *runtime*.log  -> per-run timing samples (uses MEDIAN samples line)
+  *accuracy*.log -> per-seed final OOB accuracy (last 'Train tree N/N accuracy:' per run)
 
-Usage: parse_log_to_csv.py <log_file> <out_csv>
+Usage: parse_log_to_csv.py <log_file> <out_csv> [runtime|accuracy]
 
 Exit codes:
   0 - CSV written successfully
@@ -139,25 +140,35 @@ def parse_accuracy(log_path):
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: parse_log_to_csv.py <log_file> <out_csv>", file=sys.stderr)
+    if len(sys.argv) not in (3, 4):
+        print("Usage: parse_log_to_csv.py <log_file> <out_csv> [runtime|accuracy]", file=sys.stderr)
         return 2
     log_path, out_path = sys.argv[1], sys.argv[2]
     if not os.path.exists(log_path):
         print(f"ERROR: log file not found: {log_path}", file=sys.stderr)
         return 1
 
+    # Log type comes from an explicit 3rd argument when given; otherwise it is
+    # inferred from the filename (substring 'runtime' or 'accuracy').
     basename = os.path.basename(log_path)
-    if 'accuracy' in basename:
+    log_type = sys.argv[3].lower() if len(sys.argv) > 3 else None
+    if log_type is None:
+        if 'accuracy' in basename:
+            log_type = 'accuracy'
+        elif 'runtime' in basename:
+            log_type = 'runtime'
+
+    if log_type == 'accuracy':
         rows = parse_accuracy(log_path)
         col_prefix = 'seed'
         is_runtime = False
-    elif 'runtime' in basename:
+    elif log_type == 'runtime':
         rows = parse_runtime(log_path)
         col_prefix = 'run'
         is_runtime = True
     else:
-        print(f"ERROR: cannot determine log type from filename '{basename}'", file=sys.stderr)
+        print(f"ERROR: cannot determine log type for '{basename}'; "
+              f"pass 'runtime' or 'accuracy' as the 3rd argument", file=sys.stderr)
         return 1
 
     if not rows:

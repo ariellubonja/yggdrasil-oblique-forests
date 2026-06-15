@@ -198,7 +198,7 @@ fi
 # script aborts mid-run (set -e), since this function is never reached.
 finalize_log() {
   echo "Parsing log -> CSV..."
-  if python3 benchmarks/utils/parse_log_to_csv.py "$logfile" "$csvfile"; then
+  if python3 benchmarks/utils/parse_log_to_csv.py "$logfile" "$csvfile" runtime; then
     rm -f "$logfile"
     echo "CSV: $csvfile  (log deleted on success)"
   else
