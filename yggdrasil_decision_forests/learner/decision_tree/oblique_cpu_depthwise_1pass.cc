@@ -7,16 +7,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <iterator>
-#include <string>
-#include <utility>
 #include <vector>
 
 #include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
-#include "yggdrasil_decision_forests/utils/concurrency.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 
 namespace yggdrasil_decision_forests::model::decision_tree {
@@ -53,20 +49,6 @@ size_t Dw1BlockFloats() {
                         : static_cast<size_t>(64) << 20;
   }();
   return value;
-}
-
-// Override for dw1's internal parallelism. The caller passes
-// deployment.num_threads(), but when random_forest already trains
-// num_threads trees concurrently, each tree spawning its own per-depth
-// ThreadPool oversubscribes the machine (num_threads^2 runnable threads +
-// a sync barrier per depth). YDF_DW1_THREADS=1 forces the serial kernel
-// within each tree; unset keeps the caller's value.
-int Dw1ThreadsOverride(int num_threads) {
-  static const int value = [] {
-    const char* e = std::getenv("YDF_DW1_THREADS");
-    return e != nullptr ? static_cast<int>(std::strtol(e, nullptr, 10)) : -1;
-  }();
-  return value > 0 ? value : num_threads;
 }
 
 struct ColEntry {
@@ -153,14 +135,15 @@ inline void EvaluateProjectionRowsGeneric(
 
 }  // namespace
 
+
+// TODO avoid entirely for big nodes - only run in mid-tree
 absl::Status ApplyProjectionsDepthwise1Pass(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
-    absl::Span<std::vector<float>> out_projected, int num_threads) {
-  num_threads = Dw1ThreadsOverride(num_threads);
+    absl::Span<std::vector<float>> out_projected) {
   const size_t N = selected_examples_per_node.size();
   DCHECK_EQ(N, projections_per_node.size());
   DCHECK_EQ(N, out_projected.size());
@@ -303,21 +286,13 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       }
     };
 
-    if (num_threads <= 1 || tasks.size() == 1) {
-      Dw1Scratch scratch;
-      for (const auto& task : tasks) run_task(task, scratch);
-    } else {
-      const size_t num_blocks =
-          std::min<size_t>(static_cast<size_t>(num_threads), tasks.size());
-      utils::concurrency::ThreadPool pool(
-          num_threads, {.name_prefix = std::string("depthwise_1pass")});
-      utils::concurrency::ConcurrentForLoop(
-          num_blocks, &pool, tasks.size(),
-          [&](size_t /*block_idx*/, size_t begin, size_t end) {
-            Dw1Scratch scratch;
-            for (size_t t = begin; t < end; ++t) run_task(tasks[t], scratch);
-          });
-    }
+    // Single-threaded by design: RandomForest already trains one tree per
+    // thread, so the cores are busy with sibling trees. dw1 runs inline on
+    // the caller thread like every other tree-internal kernel — spawning a
+    // per-depth pool here would only oversubscribe (num_threads^2 runnable
+    // threads + a barrier per depth).
+    Dw1Scratch scratch;
+    for (const auto& task : tasks) run_task(task, scratch);
   }
 
   return absl::OkStatus();

@@ -5443,8 +5443,7 @@ absl::Status GrowTreeLocalBFS(
       RETURN_IF_ERROR(ApplyProjectionsDepthwise1Pass(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),
-          absl::MakeConstSpan(all_node_projs), absl::MakeSpan(projected),
-          deployment.num_threads()));
+          absl::MakeConstSpan(all_node_projs), absl::MakeSpan(projected)));
 #endif
 
       for (int n = 0; n < num_nodes; ++n) {

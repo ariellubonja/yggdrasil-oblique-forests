@@ -9,12 +9,11 @@
 // (ApplyProjectionsProjectionMatrixControl,
 // oblique_cpu_projection_matrix_control.h): the control walks the level's nodes
 // serially on one thread, filling a per-node projected-value slab in each
-// iteration. Depthwise flattens the level's (node, projection) pairs into
-// a prefix-summed task range so every (node, projection) maps to a unique
-// global task index. A thread pool iterates that task range; each task
-// processes all rows of one (node, projection) pair and writes into its own
-// contention-free per-node slab slot. Node-level parallelism falls out
-// implicitly -- no special-case logic for N == 1 vs. N large.
+// iteration. Depthwise instead groups the level's nodes into blocks and
+// buckets every (node, projection, weight) reference by column, then sweeps
+// each touched column once across the block (column sharing across nodes).
+// It runs single-threaded on the caller thread: RandomForest already trains
+// one tree per thread, so an internal pool here would only oversubscribe.
 //
 // Mutually exclusive at build time with the projection-matrix control
 // (PROJECTION_MATRIX_CONTROL) and
@@ -42,17 +41,17 @@
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
-// Fused-per-level Apply. `num_threads <= 1` runs the kernel inline on the
-// caller thread (no thread pool); larger values dispatch (node, projection)
-// tasks across a thread pool with contention-free per-slab writes.
+// Fused-per-level Apply. Runs single-threaded on the caller thread:
+// RandomForest already trains one tree per thread, so parallelizing here
+// would oversubscribe the machine. The whole level's (node, projection)
+// work is processed inline.
 absl::Status ApplyProjectionsDepthwise1Pass(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
-    absl::Span<std::vector<float>> out_projected,
-    int num_threads);
+    absl::Span<std::vector<float>> out_projected);
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
