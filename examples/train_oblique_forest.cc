@@ -74,7 +74,7 @@ ABSL_FLAG(float, projection_density_factor, 1.5f,
           "Projection density factor.");
 ABSL_FLAG(float, num_projections_exponent, .5,
           "Exponent to determine number of projections.");
-ABSL_FLAG(int, dynamic_split_threshold, 350,
+ABSL_FLAG(int, dynamic_split_threshold, 250,
           "When using dynamic histogram splits, switch to exact splitting if "
           "the number of examples at a node is below this threshold. "
           "Set to -1 to disable.");
