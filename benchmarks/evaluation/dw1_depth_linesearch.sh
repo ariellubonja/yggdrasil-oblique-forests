@@ -53,14 +53,11 @@ if [[ -z "$SUFFIX" ]]; then
   exit 2
 fi
 
-###### Fixed parameters (reused from runtime.sh defaults; not configurable here)
+###### Fixed parameters (not configurable here)
 
 DEPTH_STEP=4                       # line-search granularity
-NUM_THREADS=-1
-COMPUTE_OOB_PERFORMANCES=false
-histogram_num_bins=64              # 64 -> AVX2-friendly bin count
-METHOD="Dynamic Random Histogram"  # the single uncommented method in runtime.sh
-DYNAMIC_SPLIT_THRESHOLD=1350       # DYNAMIC_SPLIT_THRESHOLD_DEFAULT in runtime.sh
+NUM_THREADS=-1                     # train_oblique_forest.cc default is 1, so passed
+# Other arguments will use the defaults from train_oblique_forest.cc
 
 # Datasets: the uncommented entries in runtime.sh, each tagged with its
 # approximate deepest tree level (the line-search upper bound).
@@ -80,6 +77,7 @@ DATASETS=(
 BUILD_TARGET="//examples:train_oblique_forest"
 BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --repo_env=CXX=icpx)
 DW1_CONFIG="--config=depthwise_1_pass"
+VEC_CONFIG="--config=enable_std_upper_bound_avx2"   # vectorized_avx2 split-finding
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
@@ -124,15 +122,14 @@ for f in "$logfile" "$csvfile"; do
   fi
 done
 
-# Build the depthwise_1pass binary once.
-bazel_build "${BAZEL_FLAGS[@]}" "$DW1_CONFIG" "$BUILD_TARGET"
+# Build the depthwise_1pass + AVX2-vectorized binary once.
+bazel_build "${BAZEL_FLAGS[@]}" "$DW1_CONFIG" "$VEC_CONFIG" "$BUILD_TARGET"
 BINARY="./bazel-bin/examples/train_oblique_forest"
 
 # E-cores now disabled. Compute NUM_TREES from runtime nproc (P-cores only).
 NUM_TREES=$(( $(nproc) * 5 ))   # 5x cores to reduce scheduling skew
-BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_performances=$COMPUTE_OOB_PERFORMANCES"
-EXTRA="--histogram_num_bins=$histogram_num_bins"
-THRESH_ARG="--dynamic_split_threshold=$DYNAMIC_SPLIT_THRESHOLD"
+# Only flags that DIFFER from train_oblique_forest.cc defaults are passed.
+BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS"
 
 # Provenance sidecar (survives even after the log is removed).
 {
@@ -141,7 +138,7 @@ THRESH_ARG="--dynamic_split_threshold=$DYNAMIC_SPLIT_THRESHOLD"
   echo "git_sha: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)$(git diff --quiet 2>/dev/null || echo '-dirty')"
   echo "git_branch: $(git branch --show-current 2>/dev/null || echo unknown)"
   echo "machine: $(lscpu | grep 'Model name' | sed 's/Model name:[[:space:]]*//') (nproc=$(nproc))"
-  echo "build_config: $DW1_CONFIG"
+  echo "build_config: $DW1_CONFIG $VEC_CONFIG"
   echo "method: $METHOD  threshold: $DYNAMIC_SPLIT_THRESHOLD  bins: $histogram_num_bins"
   echo "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  DEPTH_STEP: $DEPTH_STEP"
   echo "===================="
@@ -209,10 +206,10 @@ for entry in "${DATASETS[@]}"; do
 
   if [[ "$kind" == "csv" ]]; then
     dataset_label="$(basename "${a%.csv}")"
-    cmd_base="$BINARY --input_mode csv --train_csv \"$a\" --label_col \"$b\" --feature_split_type \"Oblique\" --numerical_split_type \"$METHOD\" $BASE_ARGS $EXTRA $THRESH_ARG"
+    cmd_base="$BINARY --input_mode csv --train_csv \"$a\" --label_col \"$b\" $BASE_ARGS"
   else
     dataset_label="trunk_${a}_x_${b}"
-    cmd_base="$BINARY --input_mode trunk --rows $a --cols $b --feature_split_type \"Oblique\" --numerical_split_type \"$METHOD\" $BASE_ARGS $EXTRA $THRESH_ARG"
+    cmd_base="$BINARY --input_mode trunk --rows $a --cols $b $BASE_ARGS"
   fi
 
   # Depth grid: 0..maxdepth by DEPTH_STEP, with maxdepth appended if the step
