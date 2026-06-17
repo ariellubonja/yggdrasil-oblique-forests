@@ -30,10 +30,10 @@ def get_base_parser():
     parser.add_argument("--vectorized", choices=["None", "avx2", "avx512"], default="avx2")
     parser.add_argument("--tree_depth", type=int, default=-1)
     parser.add_argument("--num_threads", type=int, default=1)
-    parser.add_argument("--num_trees", type=int, default=1)  # Note: different defaults in your files
+    parser.add_argument("--num_trees", type=int, default=1)
     parser.add_argument("--projection_density_factor", type=int)
     parser.add_argument("--max_num_projections", type=int)
-    parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast")
+    parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast") # TODO deprecate
     parser.add_argument("--fixed_1000_projections", action="store_true")
     parser.add_argument("--projection_matrix_control", action="store_true",
                         help="Build with -DPROJECTION_MATRIX_CONTROL=1: "
