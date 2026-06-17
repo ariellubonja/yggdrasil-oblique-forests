@@ -114,7 +114,7 @@ ABSL_FLAG(std::string, dataset_layout, "column",
           "is a deprecated alias.");
 
 // Histogram-based splits - Updated to match Yggdrasil implementation
-ABSL_FLAG(std::string, numerical_split_type, "Exact",
+ABSL_FLAG(std::string, numerical_split_type, "Dynamic Random Histogram",
           "Type of histogram splitting: 'Exact (no histogramming)', 'Random', 'Equal Width', 'Dynamic Random Histogram' or 'Dynamic Equal Width Histogram.");
 ABSL_FLAG(int, histogram_num_bins, 64,
           "Number of bins for histogram splitting.");
