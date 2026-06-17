@@ -27,6 +27,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -5354,6 +5355,22 @@ absl::Status GrowTreeLocal(
   return absl::OkStatus();
 }
 
+#if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS)
+// Depth at which the fused-per-level Apply (depthwise_1pass /
+// projection-matrix control) switches on. Levels shallower than this run the
+// plain per-node BFS fallback; levels at or below (deeper than) it run the
+// fused kernel. Read once from YDF_DW1_MIN_DEPTH (default 0 = fused everywhere,
+// the pre-existing behavior). Intended for a depth line-search: BFS above the
+// cut, depthwise_1pass after.
+int32_t Depthwise1PassMinDepth() {
+  static const int32_t value = [] {
+    const char* e = std::getenv("YDF_DW1_MIN_DEPTH");
+    return e != nullptr ? static_cast<int32_t>(std::strtol(e, nullptr, 10)) : 0;
+  }();
+  return value;
+}
+#endif
+
 // BFS (level-order) variant of GrowTreeLocal. Uses a FIFO deque, collects all
 // nodes at the current depth into a `depth_batch`, then dispatches each node
 // through NodeTrain. The depth-batch collection is the seam where the
@@ -5387,7 +5404,8 @@ absl::Status GrowTreeLocalBFS(
     }
 
 #if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS)
-    if (dt_config.has_sparse_oblique_split() && depth_batch.size() > 1) {
+    if (dt_config.has_sparse_oblique_split() && depth_batch.size() > 1 &&
+        current_depth >= Depthwise1PassMinDepth()) {
       // Fused-per-level CPU Apply. Sample projections per node, preserving
       // ordinary Sparse Oblique RF semantics, then precompute each node's
       // projected-value slab before per-node split search.
