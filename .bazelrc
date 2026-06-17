@@ -97,6 +97,14 @@ build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
 build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
 build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
 
+# Default ON: tune for the host CPU and enable std::upper_bound AVX2 vectorization
+# for every build (no --config needed). -march=native already implies -mavx2/-mfma
+# on AVX2-capable hosts, so only the vectorization define is added here.
+# NOTE: -march=native is host-specific and will break cross-compiles (e.g. wasm);
+# scope these under build:linux/build:macos if you ever cross-compile.
+build --copt=-march=native
+build --cxxopt=-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1
+
 
 # DEFAULTS
 
