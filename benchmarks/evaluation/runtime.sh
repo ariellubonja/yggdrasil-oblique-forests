@@ -199,6 +199,12 @@ fi
 finalize_log() {
   echo "Parsing log -> CSV..."
   if python3 benchmarks/utils/parse_log_to_csv.py "$logfile" "$csvfile" runtime; then
+    # Prepend the .meta provenance to the top of the CSV. This makes the result
+    # self-describing; the leading lines are intentionally not well-formed CSV.
+    if [[ -f "$metafile" ]]; then
+      tmp=$(mktemp)
+      cat "$metafile" "$csvfile" >"$tmp" && mv "$tmp" "$csvfile"
+    fi
     rm -f "$logfile"
     echo "CSV: $csvfile  (log deleted on success)"
   else
@@ -228,12 +234,18 @@ BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_perfo
 # Written to the log AND a .meta sidecar next to the CSV — the log is
 # deleted after a successful parse, the sidecar survives.
 metafile="${csvfile%.csv}.meta"
+# Hardware serial for traceability. dmidecode needs root and is Linux-only; if
+# it fails (no sudo, not installed, non-Linux), keep the error text in the field
+# rather than aborting -- provenance is best-effort.
+machine_serial=$(sudo dmidecode -s system-serial-number 2>&1) \
+  || machine_serial="dmidecode failed: $machine_serial"
 {
   echo "==== PROVENANCE ===="
   echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "git_sha: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)$(git diff --quiet 2>/dev/null || echo '-dirty')"
   echo "git_branch: $(git branch --show-current 2>/dev/null || echo unknown)"
   echo "machine: $(lscpu | grep 'Model name' | sed 's/Model name:[[:space:]]*//') (nproc=$(nproc))"
+  echo "machine_serial: $machine_serial"
   echo "EXTRA_BAZEL_CONFIGS: ${EXTRA_BAZEL_CONFIGS:-<none>}"
   echo "EXTRA_TRAIN_ARGS: ${EXTRA_TRAIN_ARGS:-<none>}"
   echo "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  bins: $histogram_num_bins"
