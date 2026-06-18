@@ -114,7 +114,6 @@ logdir="benchmarks/results"
 mkdir -p "$logdir"
 logfile="${logdir}/depth_linesearch_${NUM_RUNS}runs_${SUFFIX}.log"
 csvfile="${logdir}/depth_linesearch_${NUM_RUNS}runs_${SUFFIX}.csv"
-metafile="${csvfile%.csv}.meta"
 for f in "$logfile" "$csvfile"; do
   if [[ -e "$f" ]]; then
     echo "ERROR: $f already exists. Use a different suffix or remove it." >&2
@@ -131,21 +130,27 @@ NUM_TREES=$(( $(nproc) * 5 ))   # 5x cores to reduce scheduling skew
 # Only flags that DIFFER from train_oblique_forest.cc defaults are passed.
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS"
 
-# Provenance sidecar (survives even after the log is removed).
+# Provenance: prepended to the top of the CSV so the result is self-describing.
+# The leading lines are intentionally not well-formed CSV. Also tee'd to the log.
+# Hardware serial for traceability. dmidecode needs root and is Linux-only; if
+# it fails (no sudo, not installed, non-Linux), keep the error text in the field
+# rather than aborting -- provenance is best-effort.
+machine_serial=$(sudo dmidecode -s system-serial-number 2>&1) \
+  || machine_serial="dmidecode failed: $machine_serial"
 {
   echo "==== PROVENANCE ===="
   echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "git_sha: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)$(git diff --quiet 2>/dev/null || echo '-dirty')"
   echo "git_branch: $(git branch --show-current 2>/dev/null || echo unknown)"
   echo "machine: $(lscpu | grep 'Model name' | sed 's/Model name:[[:space:]]*//') (nproc=$(nproc))"
+  echo "machine_serial: $machine_serial"
   echo "build_config: $DW1_CONFIG $VEC_CONFIG"
-  echo "method: $METHOD  threshold: $DYNAMIC_SPLIT_THRESHOLD  bins: $histogram_num_bins"
   echo "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  DEPTH_STEP: $DEPTH_STEP"
   echo "===================="
-} | tee -a "$logfile" "$metafile"
+} | tee -a "$logfile" > "$csvfile"
 
-# CSV header.
-echo "dataset,dw1_min_depth,median_s,stddev_s,n_ok,samples" > "$csvfile"
+# CSV header (appended below the provenance block).
+echo "dataset,dw1_min_depth,median_s,stddev_s,n_ok,samples" >> "$csvfile"
 
 # Run one (dataset, depth) point: NUM_RUNS reps, median + sample stddev, append
 # a CSV row. Mirrors runtime.sh's run_cmd timing/median math.
@@ -224,6 +229,5 @@ for entry in "${DATASETS[@]}"; do
   done
 done
 
-echo "CSV: $csvfile"
-echo "Provenance: $metafile"
+echo "CSV: $csvfile  (provenance prepended at top)"
 # Log kept (no separate parse step). CPU features re-enabled by EXIT trap.
