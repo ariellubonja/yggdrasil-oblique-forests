@@ -51,7 +51,6 @@ fi
 # Repetitions per command; median runtime is reported in the CSV.
 # Controlled by --runs (default 3); NUM_RUNS is already set during arg parsing.
 NUM_THREADS=-1
-COMPUTE_OOB_PERFORMANCES=false  # set true to compute OOB metrics
 # Ariel - ENSURE compute_oob_performances===== - it has an equal sign, not a blank space
 # NUM_TREES and BASE_ARGS are set later, AFTER e-cores are disabled, so that
 # nproc reflects the runtime CPU topology (P-cores only).
@@ -184,14 +183,28 @@ mkdir -p "$logdir"
 logfile="${logdir}/${NUM_RUNS}runs_${SUFFIX}.log"
 csvfile="${logdir}/${NUM_RUNS}runs_${SUFFIX}.csv"
 
-if [[ -e "$logfile" ]]; then
-  echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2
-  exit 1
-fi
-if [[ -e "$csvfile" ]]; then
-  echo "ERROR: $csvfile already exists. Use a different suffix or remove it." >&2
-  exit 1
-fi
+# If an output file already exists, ask before clobbering it instead of
+# aborting outright. Reads from the terminal (/dev/tty) so the prompt works
+# even when stdin is piped; a non-interactive run (no tty) keeps the old
+# fail-safe behavior rather than silently overwriting.
+confirm_overwrite() {
+  local f="$1"
+  [[ -e "$f" ]] || return 0
+  if [[ ! -t 0 && ! -e /dev/tty ]]; then
+    echo "ERROR: $f already exists (no terminal to confirm overwrite). Use a different suffix or remove it." >&2
+    exit 1
+  fi
+  local reply
+  read -r -p "$f already exists. Overwrite? [y/N] " reply </dev/tty
+  if [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+    rm -f "$f"
+  else
+    echo "Aborting; not overwriting $f. Use a different suffix or remove it." >&2
+    exit 1
+  fi
+}
+confirm_overwrite "$logfile"
+confirm_overwrite "$csvfile"
 
 # Parse log -> CSV. On parser success the log is deleted; if the parser fails
 # the log is kept for debugging. The log is also kept implicitly when the
@@ -228,7 +241,7 @@ BINARY="./bazel-bin/examples/train_oblique_forest"
 # E-cores are now disabled (bazel_build did the disable, or the else branch did).
 # Compute NUM_TREES from the *runtime* nproc so it reflects P-core count.
 NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
-BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_performances=$COMPUTE_OOB_PERFORMANCES"
+BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS"
 
 # Provenance: without this, a result CSV cannot be traced back to the build
 # that produced it (bazel configs are invisible in the binary command line).

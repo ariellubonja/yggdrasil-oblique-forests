@@ -114,11 +114,28 @@ logdir="benchmarks/results"
 mkdir -p "$logdir"
 logfile="${logdir}/depth_linesearch_${NUM_RUNS}runs_${SUFFIX}.log"
 csvfile="${logdir}/depth_linesearch_${NUM_RUNS}runs_${SUFFIX}.csv"
-for f in "$logfile" "$csvfile"; do
-  if [[ -e "$f" ]]; then
-    echo "ERROR: $f already exists. Use a different suffix or remove it." >&2
+# If an output file already exists, ask before clobbering it instead of
+# aborting outright. Reads from the terminal (/dev/tty) so the prompt works
+# even when stdin is piped; a non-interactive run (no tty) keeps the old
+# fail-safe behavior rather than silently overwriting.
+confirm_overwrite() {
+  local f="$1"
+  [[ -e "$f" ]] || return 0
+  if [[ ! -t 0 && ! -e /dev/tty ]]; then
+    echo "ERROR: $f already exists (no terminal to confirm overwrite). Use a different suffix or remove it." >&2
     exit 1
   fi
+  local reply
+  read -r -p "$f already exists. Overwrite? [y/N] " reply </dev/tty
+  if [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+    rm -f "$f"
+  else
+    echo "Aborting; not overwriting $f. Use a different suffix or remove it." >&2
+    exit 1
+  fi
+}
+for f in "$logfile" "$csvfile"; do
+  confirm_overwrite "$f"
 done
 
 # Build the depthwise_1pass + AVX2-vectorized binary once.
