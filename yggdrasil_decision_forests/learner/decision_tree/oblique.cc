@@ -1480,7 +1480,7 @@ absl::Status ProjectionEvaluator::Evaluate(
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
   // Dynamic_Row_Col_Major on the DFS/nodewise path: when both fp32 stores are
   // live, pick per node with the same YDF_RM_MAX_ROWS threshold as the BFS
-  // (PROJECTION_MATRIX_CONTROL) kernel. Without this, AttributeValue's static
+  // (DEPTHWISE_1_PASS) kernel. Without this, AttributeValue's static
   // store priority would read the column store for every node. Both branches
   // keep the generic loop shape below (only the store is fixed), so timings
   // stay comparable with the single-layout 'row' / 'flat_column' runs.

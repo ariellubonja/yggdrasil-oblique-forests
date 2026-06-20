@@ -2,21 +2,6 @@ build --disk_cache=~/.cache/bazel-disk
 
 # APPLYPROJECTION EXPERIMENTS
 
-# Projection-matrix control: the CONTROL for depthwise_1_pass — dw1's exact
-# kernel work (same depth-batch driver, same slab mechanism, same direct
-# column pointers, same big/small node split via YDF_DW1_BLOCK_FLOATS, same
-# feature-major accumulate inner loop) but executed in (node, projection,
-# feature) order with no cross-node column grouping. dw1 minus PMC = the
-# column-sharing benefit; the entry build + counting sort stay charged to
-# dw1 as intrinsic costs of sharing.
-# NOTE (2026-06-10): before this date the fallback kernel was rows-outer via
-# AttributeValue — a different memory-access order than either Nodewise or
-# dw1. "Nodewise AP (Control)" results measured with it are invalid and need
-# re-running. Under the alternate dataset layouts (dynamic_row_col_major*)
-# this config additionally carries the Dynamic_Row_Col_Major treatment
-# kernels.
-build:projection_matrix_control --cxxopt="-DPROJECTION_MATRIX_CONTROL=1"
-
 # Depthwise fused ApplyProjection: one depth-batch scheduler over all node/projection
 # tasks, preserving ordinary per-node Sparse Oblique RF projection sampling.
 build:depthwise_1_pass --cxxopt="-DDEPTHWISE_1_PASS=1"

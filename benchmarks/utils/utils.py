@@ -35,11 +35,6 @@ def get_base_parser():
     parser.add_argument("--max_num_projections", type=int)
     parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast") # TODO deprecate
     parser.add_argument("--fixed_1000_projections", action="store_true")
-    parser.add_argument("--projection_matrix_control", action="store_true",
-                        help="Build with -DPROJECTION_MATRIX_CONTROL=1: "
-                             "per-level projected-value slab control "
-                             "(per-node rows-outer / projections-inner matrix "
-                             "fill; serial across nodes).")
     parser.add_argument("--depthwise_1_pass", action="store_true",
                         help="Build with -DDEPTHWISE_1_PASS=1: Depthwise fused "
                              "per-level CPU ApplyProjection (single-pass "
@@ -62,7 +57,7 @@ def get_base_parser():
                        help="Extra --config=NAME to pass to the bazel build. Repeatable: "
                             "--bazel_config=enable_applyprojection_isnan. "
                             "Applied after the flag-driven configs (avx2, "
-                            "projection_matrix_control, depthwise_1_pass, ...).")
+                            "depthwise_1_pass, ...).")
 
     return parser
 
@@ -185,8 +180,6 @@ def build_binary(args, chrono_mode):
         finished_cmd.append('--config=oblique_gpu')
 
     _ap_variants = [
-        ('--projection_matrix_control',
-         getattr(args, 'projection_matrix_control', False)),
         ('--depthwise_1_pass',
          getattr(args, 'depthwise_1_pass', False)),
         ('--symmetric_depthwise_ap',
@@ -197,8 +190,6 @@ def build_binary(args, chrono_mode):
         raise ValueError(
             f"{' / '.join(_on)} are mutually exclusive "
             "(matches the C++ #error in label.h).")
-    if getattr(args, 'projection_matrix_control', False):
-        finished_cmd.append('--config=projection_matrix_control')
     if getattr(args, 'depthwise_1_pass', False):
         finished_cmd.append('--config=depthwise_1_pass')
     if getattr(args, 'symmetric_depthwise_ap', False):

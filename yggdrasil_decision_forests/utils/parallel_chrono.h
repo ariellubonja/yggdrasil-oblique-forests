@@ -73,14 +73,17 @@ enum FuncId {
   kDw1PreSize,    // proj_prefix sum + per-node out_projected[n].assign(...)
   kDw1Sweep,      // ProjectionEvaluator ctor + kernel dispatch (Q tasks)
 
-  // Sub-phases of ApplyProjectionsProjectionMatrixControl. Only emitted when
-  // compiled with -DPROJECTION_MATRIX_CONTROL; zero otherwise. The PMC path
-  // interleaves PreSize and Sweep per-node (unlike Dw1, which does PreSize
-  // for all nodes up front, then Sweep for all nodes), so both scopes are
-  // accumulated across the per-node loop. The ProjectionEvaluator ctor is
-  // not covered by either sub-phase, only by the outer kProjectionEvaluate.
-  kPmcPreSize,    // per-node out_projected[n].assign(...)
-  kPmcSweep,      // per-node rows-outer / projs-inner triple loop
+  // Sub-phases of the Dw1 Sweep, nested inside kDw1Sweep so the children sum
+  // back to it (same convention as kEvaluateProj ≈ kCartPath + kHistoPath).
+  // All fire once per task (≈ tasks.size() times), never per-row, so the
+  // ScopedTimer clock-read overhead stays negligible. Splits the column-centric
+  // block into bucketing vs. the gather/FMA hot loop to locate the 93%.
+  kDw1SweepCtor,     // ProjectionEvaluator ctor (fires once per call)
+  kDw1SweepBucket,   // entries push + col_count histogram + touched + sort
+  kDw1SweepScatter,  // prefix-sum offsets + counting-sort into `sorted`
+  kDw1SweepColWalk,  // gather/FMA hot loop: o[i] += w * col[sel_ptr[i]]
+  kDw1SweepBig,      // EvaluateNodeProjMajor path (oversized single node)
+  kDw1SweepGeneric,  // !direct fallback (EvaluateProjectionRowsGeneric)
 
   // Per-node bookkeeping scopes inside NodeTrain /
   // FindBestConditionSparseObliqueTemplate.

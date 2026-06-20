@@ -159,6 +159,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
   // ── Phase 1: PreSize ──────────────────────────────────────────────
   // Slab pre-size (zero-init: the column sweep accumulates) + task build.
+  // Takes a tiny amount of time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
   std::vector<Dw1Task> tasks;
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1PreSize);
@@ -186,9 +187,12 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   }
 
   // ── Phase 2: Sweep ────────────────────────────────────────────────
+  // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1Sweep);
+    CHRONO_BEGIN(dw1_ctor);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
+    CHRONO_END(dw1_ctor, ::yggdrasil_decision_forests::chrono_prof::kDw1SweepCtor); // ~0% of ApplyProjection time
 
     // Direct column pointers exist only for the default VerticalDataset
     // layout; alternate trunk layouts fall back to the generic kernel.
@@ -202,6 +206,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
     const auto run_task = [&](const Dw1Task& task, Dw1Scratch& scratch) {
       if (!direct) {
+        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SweepGeneric);
         for (size_t n = task.begin_node; n < task.end_node; ++n) {
           const auto sel = selected_examples_per_node[n];
           const auto& projs = projections_per_node[n];
@@ -214,6 +219,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         return;
       }
       if (task.big) {
+        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SweepBig);
         const size_t n = task.begin_node;
         const auto sel = selected_examples_per_node[n];
         EvaluateNodeProjMajor(evaluator, projections_per_node[n], sel.data(),
@@ -233,6 +239,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       entries.clear();
       touched.clear();
 
+      CHRONO_BEGIN(dw1_bucket);
       for (size_t n = task.begin_node; n < task.end_node; ++n) {
         const auto& projs = projections_per_node[n];
         for (size_t p = 0; p < projs.size(); ++p) {
@@ -247,8 +254,11 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         }
       }
       std::sort(touched.begin(), touched.end());
+      CHRONO_END(dw1_bucket,
+                 ::yggdrasil_decision_forests::chrono_prof::kDw1SweepBucket);
 
       // Counting sort by column: col_count becomes the running fill cursor.
+      CHRONO_BEGIN(dw1_scatter);
       size_t offset = 0;
       for (const int32_t c : touched) {
         const int32_t cnt = col_count[c];
@@ -259,31 +269,34 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       for (const auto& e : entries) {
         sorted[col_count[e.col]++] = e;
       }
+      CHRONO_END(dw1_scatter,
+                 ::yggdrasil_decision_forests::chrono_prof::kDw1SweepScatter);
 
+      CHRONO_BEGIN(dw1_colwalk); // This takes 90% of the ApplyProjection time. The only thing worth optimizing
       size_t pos = 0;
       for (const int32_t c : touched) {
         const float* col = evaluator.AttributeData(c);
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
-        const float na = evaluator.NaReplacementValue(c);
-#endif
         const size_t end = static_cast<size_t>(col_count[c]);
         for (; pos < end; ++pos) {
           const ColEntry& e = sorted[pos];
           const auto sel = selected_examples_per_node[e.node];
           const size_t rows_n = sel.size();
           const UnsignedExampleIdx* sel_ptr = sel.data();
+
           float* o = out_projected[e.node].data() + e.proj * rows_n;
           const float w = e.weight;
-          for (size_t i = 0; i < rows_n; ++i) {
+
+          for (size_t i = 0; i < rows_n; ++i) { // Critical section. check access patterns here
+            // Specifically check access patterns on col, sel_ptr and o
             float v = col[sel_ptr[i]];
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
-            if (std::isnan(v)) v = na;
-#endif
             o[i] += w * v;
+            // TODO leverage SIMD here
           }
         }
         col_count[c] = 0;  // reset for the next block
       }
+      CHRONO_END(dw1_colwalk,
+                 ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
     };
 
     // Single-threaded by design: RandomForest already trains one tree per

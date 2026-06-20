@@ -73,10 +73,14 @@ _GPU_TAIL_RX = (
     # when the binary is built with -DDEPTHWISE_1_PASS.
     r"(?:\s+Dw1PreSize\s+([0-9.eE+-]+)s)?"
     r"(?:\s+Dw1Sweep\s+([0-9.eE+-]+)s)?"
-    # ApplyProjectionsProjectionMatrixControl sub-phases. Optional — only
-    # emitted when the binary is built with -DPROJECTION_MATRIX_CONTROL.
-    r"(?:\s+PmcPreSize\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+PmcSweep\s+([0-9.eE+-]+)s)?"
+    # Sub-phases of Dw1Sweep. Optional — only emitted under -DDEPTHWISE_1_PASS.
+    # ColWalk (gather/FMA) vs Bucket+Scatter (counting-sort) splits the 93%.
+    r"(?:\s+Dw1SweepCtor\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+Dw1SweepBucket\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+Dw1SweepScatter\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+Dw1SweepColWalk\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+Dw1SweepBig\s+([0-9.eE+-]+)s)?"
+    r"(?:\s+Dw1SweepGeneric\s+([0-9.eE+-]+)s)?"
     # Per-node bookkeeping scopes inside NodeTrain / FindBestConditionSparseOblique.
     # Always emitted (no #ifdef). Close the BfsNodeLoop residual gap.
     r"(?:\s+NodeTrain\s+([0-9.eE+-]+)s)?"
@@ -185,7 +189,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
-             pmc_presize, pmc_sweep,
+             dw1_sweep_ctor, dw1_sweep_bucket, dw1_sweep_scatter,
+             dw1_sweep_colwalk, dw1_sweep_big, dw1_sweep_generic,
              node_train, find_best_condition, oblique_split_search,
              find_oblique_setup, evaluate_proj, entropy_table_setup,
              cart_path, cart_setup, histo_path,
@@ -233,8 +238,12 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
-                PmcPreSize                   = opt_float(pmc_presize),
-                PmcSweep                     = opt_float(pmc_sweep),
+                Dw1SweepCtor                 = opt_float(dw1_sweep_ctor),
+                Dw1SweepBucket               = opt_float(dw1_sweep_bucket),
+                Dw1SweepScatter              = opt_float(dw1_sweep_scatter),
+                Dw1SweepColWalk              = opt_float(dw1_sweep_colwalk),
+                Dw1SweepBig                  = opt_float(dw1_sweep_big),
+                Dw1SweepGeneric              = opt_float(dw1_sweep_generic),
                 NodeTrain                    = opt_float(node_train),
                 FindBestCondition            = opt_float(find_best_condition),
                 ObliqueSplitSearch           = opt_float(oblique_split_search),
@@ -262,7 +271,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
-             pmc_presize, pmc_sweep,
+             dw1_sweep_ctor, dw1_sweep_bucket, dw1_sweep_scatter,
+             dw1_sweep_colwalk, dw1_sweep_big, dw1_sweep_generic,
              node_train, find_best_condition, oblique_split_search,
              find_oblique_setup, evaluate_proj, entropy_table_setup,
              cart_path, cart_setup, histo_path,
@@ -304,8 +314,12 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
-                PmcPreSize                   = opt_float(pmc_presize),
-                PmcSweep                     = opt_float(pmc_sweep),
+                Dw1SweepCtor                 = opt_float(dw1_sweep_ctor),
+                Dw1SweepBucket               = opt_float(dw1_sweep_bucket),
+                Dw1SweepScatter              = opt_float(dw1_sweep_scatter),
+                Dw1SweepColWalk              = opt_float(dw1_sweep_colwalk),
+                Dw1SweepBig                  = opt_float(dw1_sweep_big),
+                Dw1SweepGeneric              = opt_float(dw1_sweep_generic),
                 NodeTrain                    = opt_float(node_train),
                 FindBestCondition            = opt_float(find_best_condition),
                 ObliqueSplitSearch           = opt_float(oblique_split_search),
@@ -373,11 +387,14 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # ApplyProjection, mutually exclusive with Sym* by build mode).
             "Dw1PreSize":                   "-Dw1PreSize",
             "Dw1Sweep":                     "-Dw1Sweep",
-            # ApplyProjectionsProjectionMatrixControl sub-phases (sum to
-            # ApplyProjection minus the ctor; mutually exclusive with the
-            # Sym*/Dw1 paths by build mode).
-            "PmcPreSize":                   "-PmcPreSize",
-            "PmcSweep":                     "-PmcSweep",
+            # Sub-phases of Dw1Sweep (nest under it — they sum to Dw1Sweep
+            # modulo the evaluator ctor and per-task loop glue).
+            "Dw1SweepCtor":                 "--Dw1SweepCtor",
+            "Dw1SweepBucket":               "--Dw1SweepBucket",
+            "Dw1SweepScatter":              "--Dw1SweepScatter",
+            "Dw1SweepColWalk":              "--Dw1SweepColWalk",
+            "Dw1SweepBig":                  "--Dw1SweepBig",
+            "Dw1SweepGeneric":              "--Dw1SweepGeneric",
             # BFS-only scheduler scope (top-level, not nested under
             # ApplyProjection). BfsNodeLoop = per-node NodeTrain
             # dispatch in the BFS_ONLY fallback path.
@@ -446,8 +463,13 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "-SymSweep",
             "-Dw1PreSize",
             "-Dw1Sweep",
-            "-PmcPreSize",
-            "-PmcSweep",
+            # Sub-phases of Dw1Sweep.
+            "--Dw1SweepCtor",
+            "--Dw1SweepBucket",
+            "--Dw1SweepScatter",
+            "--Dw1SweepColWalk",
+            "--Dw1SweepBig",
+            "--Dw1SweepGeneric",
             "---EvaluateProj",
             # --- CART path inside EvaluateProj ---
             "----CartPath",
