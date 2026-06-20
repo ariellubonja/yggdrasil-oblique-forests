@@ -278,10 +278,15 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         const float* col = evaluator.AttributeData(c);
         const size_t end = static_cast<size_t>(col_count[c]);
         for (; pos < end; ++pos) {
+          // TODO sorted carries the weight. But we can simply sample the weight when we need it
+          //  TODO would dropping the weight make it more cache friendly?
+
+          // Sorted : sorted by selected column, regardless of node/projection
           const ColEntry& e = sorted[pos];
           const auto sel = selected_examples_per_node[e.node];
           const size_t rows_n = sel.size();
-          const UnsignedExampleIdx* sel_ptr = sel.data();
+          // TODO check whether the row sparsity here is the reason for misses
+          const UnsignedExampleIdx* sel_ptr = sel.puldata();
 
           float* o = out_projected[e.node].data() + e.proj * rows_n;
           const float w = e.weight;
