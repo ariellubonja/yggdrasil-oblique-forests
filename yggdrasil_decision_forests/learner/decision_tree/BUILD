@@ -65,7 +65,6 @@ cc_library_ydf(
     srcs = [
         "oblique.cc",
         "oblique_cpu_depthwise_1pass.cc",
-        "oblique_cpu_projection_matrix_control.cc",
         "oblique_cpu_symmetric_depthwise_ap.cc",
         "training.cc",
         "vector_sequence.cc",
@@ -73,7 +72,6 @@ cc_library_ydf(
     hdrs = [
         "oblique.h",
         "oblique_cpu_depthwise_1pass.h",
-        "oblique_cpu_projection_matrix_control.h",
         "oblique_cpu_symmetric_depthwise_ap.h",
         "training.h",
         "vector_sequence.h",

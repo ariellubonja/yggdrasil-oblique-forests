@@ -16,13 +16,10 @@
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_CONFIG_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_CONFIG_H_
 
-#if defined(PROJECTION_MATRIX_CONTROL) && defined(DEPTHWISE_1_PASS)
-#error "PROJECTION_MATRIX_CONTROL and DEPTHWISE_1_PASS are mutually exclusive"
-#endif
-#if (defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS)) &&    \
+#if defined(DEPTHWISE_1_PASS) &&                                            \
     (defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL) || \
      defined(BFS_ONLY))
-#error "Projection-matrix/Depthwise oblique modes and symmetric/BFS oblique modes are mutually exclusive"
+#error "Depthwise oblique mode and symmetric/BFS oblique modes are mutually exclusive"
 #endif
 // The three depthwise scheduler modes are mutually exclusive: each one is a
 // distinct control / treatment in the symmetric-trees ablation series.
@@ -37,7 +34,7 @@
 #if defined(ROW_MAJOR_DATASET_LAYOUT) && defined(FLAT_COL_DATASET_LAYOUT)
 #error "ROW_MAJOR_DATASET_LAYOUT and FLAT_COL_DATASET_LAYOUT are mutually exclusive"
 #endif
-#if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS)
+#if defined(DEPTHWISE_1_PASS)
 #define OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS 1
 #endif
 

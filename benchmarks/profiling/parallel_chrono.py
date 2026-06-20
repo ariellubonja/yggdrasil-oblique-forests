@@ -73,10 +73,6 @@ _GPU_TAIL_RX = (
     # when the binary is built with -DDEPTHWISE_1_PASS.
     r"(?:\s+Dw1PreSize\s+([0-9.eE+-]+)s)?"
     r"(?:\s+Dw1Sweep\s+([0-9.eE+-]+)s)?"
-    # ApplyProjectionsProjectionMatrixControl sub-phases. Optional — only
-    # emitted when the binary is built with -DPROJECTION_MATRIX_CONTROL.
-    r"(?:\s+PmcPreSize\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+PmcSweep\s+([0-9.eE+-]+)s)?"
     # Per-node bookkeeping scopes inside NodeTrain / FindBestConditionSparseOblique.
     # Always emitted (no #ifdef). Close the BfsNodeLoop residual gap.
     r"(?:\s+NodeTrain\s+([0-9.eE+-]+)s)?"
@@ -185,7 +181,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
-             pmc_presize, pmc_sweep,
              node_train, find_best_condition, oblique_split_search,
              find_oblique_setup, evaluate_proj, entropy_table_setup,
              cart_path, cart_setup, histo_path,
@@ -233,8 +228,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
-                PmcPreSize                   = opt_float(pmc_presize),
-                PmcSweep                     = opt_float(pmc_sweep),
                 NodeTrain                    = opt_float(node_train),
                 FindBestCondition            = opt_float(find_best_condition),
                 ObliqueSplitSearch           = opt_float(oblique_split_search),
@@ -262,7 +255,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
-             pmc_presize, pmc_sweep,
              node_train, find_best_condition, oblique_split_search,
              find_oblique_setup, evaluate_proj, entropy_table_setup,
              cart_path, cart_setup, histo_path,
@@ -304,8 +296,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
-                PmcPreSize                   = opt_float(pmc_presize),
-                PmcSweep                     = opt_float(pmc_sweep),
                 NodeTrain                    = opt_float(node_train),
                 FindBestCondition            = opt_float(find_best_condition),
                 ObliqueSplitSearch           = opt_float(oblique_split_search),
@@ -373,11 +363,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # ApplyProjection, mutually exclusive with Sym* by build mode).
             "Dw1PreSize":                   "-Dw1PreSize",
             "Dw1Sweep":                     "-Dw1Sweep",
-            # ApplyProjectionsProjectionMatrixControl sub-phases (sum to
-            # ApplyProjection minus the ctor; mutually exclusive with the
-            # Sym*/Dw1 paths by build mode).
-            "PmcPreSize":                   "-PmcPreSize",
-            "PmcSweep":                     "-PmcSweep",
             # BFS-only scheduler scope (top-level, not nested under
             # ApplyProjection). BfsNodeLoop = per-node NodeTrain
             # dispatch in the BFS_ONLY fallback path.
@@ -446,8 +431,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "-SymSweep",
             "-Dw1PreSize",
             "-Dw1Sweep",
-            "-PmcPreSize",
-            "-PmcSweep",
             "---EvaluateProj",
             # --- CART path inside EvaluateProj ---
             "----CartPath",

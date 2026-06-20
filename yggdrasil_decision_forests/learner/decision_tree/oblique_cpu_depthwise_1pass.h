@@ -5,22 +5,16 @@
 // depth scheduler only; row-block inner-kernel unrolling is a separate possible
 // implementation improvement and is intentionally not included here.
 //
-// Design contrasted with the projection-matrix control
-// (ApplyProjectionsProjectionMatrixControl,
-// oblique_cpu_projection_matrix_control.h): the control walks the level's nodes
-// serially on one thread, filling a per-node projected-value slab in each
-// iteration. Depthwise instead groups the level's nodes into blocks and
+// Depthwise groups the level's nodes into blocks and
 // buckets every (node, projection, weight) reference by column, then sweeps
 // each touched column once across the block (column sharing across nodes).
 // It runs single-threaded on the caller thread: RandomForest already trains
 // one tree per thread, so an internal pool here would only oversubscribe.
 //
-// Mutually exclusive at build time with the projection-matrix control
-// (PROJECTION_MATRIX_CONTROL) and
-// with the symmetric-trees variants (SYMMETRIC_DEPTHWISE_AP /
-// SYMMETRIC_NODEWISE_CONTROL).
+// Mutually exclusive at build time with the symmetric-trees variants
+// (SYMMETRIC_DEPTHWISE_AP / SYMMETRIC_NODEWISE_CONTROL).
 //
-// Output contract (shared with the projection-matrix control and the symmetric kernel):
+// Output contract (shared with the symmetric kernel):
 // out_projected[n] is a (P_n * rows_n)-float slab, row-minor within
 // projection -- slab[p * rows_n + i] = <projections_per_node[n][p],
 // features[selected_examples_per_node[n][i]]>, with NaN inputs replaced

@@ -58,7 +58,6 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/label.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_1pass.h"
-#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_projection_matrix_control.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_symmetric_depthwise_ap.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_accumulator.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h"
@@ -5082,9 +5081,8 @@ absl::Status DecisionTreeCoreTrain(
   switch (dt_config.growing_strategy_case()) {
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyLocal: {
       const auto constraints = NodeConstraints::CreateNodeConstraints();
-#if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS) ||      \
-    defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL) || \
-    defined(BFS_ONLY)
+#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_DEPTHWISE_AP) ||         \
+    defined(SYMMETRIC_NODEWISE_CONTROL) || defined(BFS_ONLY)
       return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                               deployment, weights, 1, internal_config,
                               constraints, false, dt->mutable_root(), random,
@@ -5355,9 +5353,9 @@ absl::Status GrowTreeLocal(
   return absl::OkStatus();
 }
 
-#if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS)
-// Depth at which the fused-per-level Apply (depthwise_1pass /
-// projection-matrix control) switches on. Levels shallower than this run the
+#if defined(DEPTHWISE_1_PASS)
+// Depth at which the fused-per-level Apply (depthwise_1pass) switches on.
+// Levels shallower than this run the
 // plain per-node BFS fallback; levels at or below (deeper than) it run the
 // fused kernel. Read once from YDF_DW1_MIN_DEPTH (default 0 = fused everywhere,
 // the pre-existing behavior). Intended for a depth line-search: BFS above the
@@ -5403,7 +5401,7 @@ absl::Status GrowTreeLocalBFS(
       node_queue.pop_front();
     }
 
-#if defined(PROJECTION_MATRIX_CONTROL) || defined(DEPTHWISE_1_PASS)
+#if defined(DEPTHWISE_1_PASS)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() > 1 &&
         current_depth >= Depthwise1PassMinDepth()) {
       // Fused-per-level CPU Apply. Sample projections per node, preserving
@@ -5452,17 +5450,10 @@ absl::Status GrowTreeLocalBFS(
       }
 
       std::vector<std::vector<float>> projected(num_nodes);
-#ifdef PROJECTION_MATRIX_CONTROL
-      RETURN_IF_ERROR(ApplyProjectionsProjectionMatrixControl(
-          train_dataset, config_link.numerical_features(),
-          absl::MakeConstSpan(sel_spans),
-          absl::MakeConstSpan(all_node_projs), absl::MakeSpan(projected)));
-#else
       RETURN_IF_ERROR(ApplyProjectionsDepthwise1Pass(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),
           absl::MakeConstSpan(all_node_projs), absl::MakeSpan(projected)));
-#endif
 
       for (int n = 0; n < num_nodes; ++n) {
         auto node_config = internal_config;

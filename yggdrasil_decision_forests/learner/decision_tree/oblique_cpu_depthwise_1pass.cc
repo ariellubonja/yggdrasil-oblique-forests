@@ -159,6 +159,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
   // ── Phase 1: PreSize ──────────────────────────────────────────────
   // Slab pre-size (zero-init: the column sweep accumulates) + task build.
+  // Takes a tiny amount of time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
   std::vector<Dw1Task> tasks;
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1PreSize);
@@ -186,6 +187,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   }
 
   // ── Phase 2: Sweep ────────────────────────────────────────────────
+  // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1Sweep);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);

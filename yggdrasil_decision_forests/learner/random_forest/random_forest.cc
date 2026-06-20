@@ -1054,13 +1054,6 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
 #endif
-#ifdef PROJECTION_MATRIX_CONTROL
-                  // Sub-phases of ApplyProjectionsProjectionMatrixControl.
-                  // PmcPreSize + PmcSweep + ProjectionEvaluator ctor ≈ ProjEval.
-                  // (ProjEval − PmcPreSize − PmcSweep) ≈ ctor cost.
-                  << " PmcPreSize " << arr[kPmcPreSize] * 1e-9 << "s"
-                  << " PmcSweep " << arr[kPmcSweep] * 1e-9 << "s"
-#endif
                   // Per-node bookkeeping scopes inside NodeTrain /
                   // FindBestConditionSparseObliqueTemplate. Always emitted;
                   // these close the BfsNodeLoop − Σ(splitter scopes) gap.
@@ -1155,13 +1148,6 @@ RandomForestLearner::TrainWithStatusImpl(
                   // ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
-#endif
-#ifdef PROJECTION_MATRIX_CONTROL
-                  // Sub-phases of ApplyProjectionsProjectionMatrixControl.
-                  // PmcPreSize + PmcSweep + ProjectionEvaluator ctor ≈ ProjEval.
-                  // (ProjEval − PmcPreSize − PmcSweep) ≈ ctor cost.
-                  << " PmcPreSize " << arr[kPmcPreSize] * 1e-9 << "s"
-                  << " PmcSweep " << arr[kPmcSweep] * 1e-9 << "s"
 #endif
                   // Per-node bookkeeping scopes inside NodeTrain /
                   // FindBestConditionSparseObliqueTemplate. Always emitted;
