@@ -192,7 +192,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1Sweep);
     CHRONO_BEGIN(dw1_ctor);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
-    CHRONO_END(dw1_ctor, ::yggdrasil_decision_forests::chrono_prof::kDw1SweepCtor);
+    CHRONO_END(dw1_ctor, ::yggdrasil_decision_forests::chrono_prof::kDw1SweepCtor); // ~0% of ApplyProjection time
 
     // Direct column pointers exist only for the default VerticalDataset
     // layout; alternate trunk layouts fall back to the generic kernel.
@@ -206,7 +206,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
     const auto run_task = [&](const Dw1Task& task, Dw1Scratch& scratch) {
       if (!direct) {
-        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SweepGeneric);
+        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SweepGeneric); // 
         for (size_t n = task.begin_node; n < task.end_node; ++n) {
           const auto sel = selected_examples_per_node[n];
           const auto& projs = projections_per_node[n];
@@ -272,13 +272,10 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       CHRONO_END(dw1_scatter,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepScatter);
 
-      CHRONO_BEGIN(dw1_colwalk);
+      CHRONO_BEGIN(dw1_colwalk); // This takes 90% of the ApplyProjection time. The only thing worth optimizing
       size_t pos = 0;
       for (const int32_t c : touched) {
         const float* col = evaluator.AttributeData(c);
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
-        const float na = evaluator.NaReplacementValue(c);
-#endif
         const size_t end = static_cast<size_t>(col_count[c]);
         for (; pos < end; ++pos) {
           const ColEntry& e = sorted[pos];
@@ -289,9 +286,6 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           const float w = e.weight;
           for (size_t i = 0; i < rows_n; ++i) {
             float v = col[sel_ptr[i]];
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
-            if (std::isnan(v)) v = na;
-#endif
             o[i] += w * v;
           }
         }

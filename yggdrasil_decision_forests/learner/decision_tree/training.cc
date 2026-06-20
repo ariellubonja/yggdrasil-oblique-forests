@@ -5433,6 +5433,9 @@ absl::Status GrowTreeLocalBFS(
         CHRONO_SCOPE(
             ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
         for (int n = 0; n < num_nodes; ++n) {
+          // TODO Ariel I think resize and assign-0 are unnecessary.
+          //    Resize: num of projections/features is known in advance. dont resize per node
+          //    Assign-0: depends whether SampleProjection fully writes column, or just nonzeros
           all_node_projs[n].resize(num_proj);
           all_node_mono[n].assign(num_proj, 0);
           for (int p = 0; p < num_proj; ++p) {
