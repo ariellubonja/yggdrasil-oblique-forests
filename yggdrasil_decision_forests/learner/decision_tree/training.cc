@@ -5415,8 +5415,16 @@ absl::Status GrowTreeLocalBFS(
           0.f, 1.f);
 
       const int num_nodes = depth_batch.size();
-      std::vector<std::vector<internal::Projection>> all_node_projs(num_nodes);
-      std::vector<std::vector<int8_t>> all_node_mono(num_nodes);
+      // Both dimensions are known on entry to the depth level: num_nodes is the
+      // frontier size and num_proj is static. Size the full 2D structure once
+      // here (outside the CHRONO_SCOPE below) so the allocation is not billed to
+      // kSampleProjection and the per-node resize/assign vanishes from the hot
+      // loop. SampleProjection self-clears each Projection (sparse list) and
+      // unconditionally writes monotonic_direction, so no pre-zeroing is needed.
+      std::vector<std::vector<internal::Projection>> all_node_projs(
+          num_nodes, std::vector<internal::Projection>(num_proj));
+      std::vector<std::vector<int8_t>> all_node_mono(
+          num_nodes, std::vector<int8_t>(num_proj));
 #ifdef CHRONO_ENABLED
       // BFS does this depth-level work *before* the per-node NodeTrain at
       // this depth, so tls_ctx.cur_depth is still the *previous* depth's
@@ -5433,11 +5441,6 @@ absl::Status GrowTreeLocalBFS(
         CHRONO_SCOPE(
             ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
         for (int n = 0; n < num_nodes; ++n) {
-          // TODO Ariel I think resize and assign-0 are unnecessary.
-          //    Resize: num of projections/features is known in advance. dont resize per node
-          //    Assign-0: depends whether SampleProjection fully writes column, or just nonzeros
-          all_node_projs[n].resize(num_proj);
-          all_node_mono[n].assign(num_proj, 0);
           for (int p = 0; p < num_proj; ++p) {
             internal::SampleProjection(
                 config_link.numerical_features(), dt_config,
