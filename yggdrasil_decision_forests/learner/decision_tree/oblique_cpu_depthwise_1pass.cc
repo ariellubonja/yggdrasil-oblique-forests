@@ -206,7 +206,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
     const auto run_task = [&](const Dw1Task& task, Dw1Scratch& scratch) {
       if (!direct) {
-        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SweepGeneric); // 
+        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SweepGeneric);
         for (size_t n = task.begin_node; n < task.end_node; ++n) {
           const auto sel = selected_examples_per_node[n];
           const auto& projs = projections_per_node[n];
@@ -282,11 +282,15 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           const auto sel = selected_examples_per_node[e.node];
           const size_t rows_n = sel.size();
           const UnsignedExampleIdx* sel_ptr = sel.data();
+
           float* o = out_projected[e.node].data() + e.proj * rows_n;
           const float w = e.weight;
-          for (size_t i = 0; i < rows_n; ++i) {
+
+          for (size_t i = 0; i < rows_n; ++i) { // Critical section. check access patterns here
+            // Specifically check access patterns on col, sel_ptr and o
             float v = col[sel_ptr[i]];
             o[i] += w * v;
+            // TODO leverage SIMD here
           }
         }
         col_count[c] = 0;  // reset for the next block
