@@ -1053,6 +1053,14 @@ RandomForestLearner::TrainWithStatusImpl(
                   // ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
+                  // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
+                  // evaluator ctor and per-task loop glue.
+                  << " Dw1SweepCtor " << arr[kDw1SweepCtor] * 1e-9 << "s"
+                  << " Dw1SweepBucket " << arr[kDw1SweepBucket] * 1e-9 << "s"
+                  << " Dw1SweepScatter " << arr[kDw1SweepScatter] * 1e-9 << "s"
+                  << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
+                  << " Dw1SweepBig " << arr[kDw1SweepBig] * 1e-9 << "s"
+                  << " Dw1SweepGeneric " << arr[kDw1SweepGeneric] * 1e-9 << "s"
 #endif
                   // Per-node bookkeeping scopes inside NodeTrain /
                   // FindBestConditionSparseObliqueTemplate. Always emitted;
@@ -1148,6 +1156,14 @@ RandomForestLearner::TrainWithStatusImpl(
                   // ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
+                  // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
+                  // evaluator ctor and per-task loop glue.
+                  << " Dw1SweepCtor " << arr[kDw1SweepCtor] * 1e-9 << "s"
+                  << " Dw1SweepBucket " << arr[kDw1SweepBucket] * 1e-9 << "s"
+                  << " Dw1SweepScatter " << arr[kDw1SweepScatter] * 1e-9 << "s"
+                  << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
+                  << " Dw1SweepBig " << arr[kDw1SweepBig] * 1e-9 << "s"
+                  << " Dw1SweepGeneric " << arr[kDw1SweepGeneric] * 1e-9 << "s"
 #endif
                   // Per-node bookkeeping scopes inside NodeTrain /
                   // FindBestConditionSparseObliqueTemplate. Always emitted;
