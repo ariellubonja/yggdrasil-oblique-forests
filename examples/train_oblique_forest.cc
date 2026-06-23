@@ -88,6 +88,8 @@ ABSL_FLAG(float, shrinkage, 0.1f,
 ABSL_FLAG(std::string, growing_strategy, "Local",
           "Type of Tree Growing Strategy: 'Local' - depth-first using NodeTrain or 'GlobalBestFirst' - PriorityQueue the nodes based on Score() Gain.");
 
+ABSL_FLAG(bool, bootstrap_training_dataset, false,
+          "Whether to use bootstrap sampling of the training dataset (Bagging only).");
 ABSL_FLAG(bool, compute_oob_performances, false,
           "Whether to compute out-of-bag performances (only for csv mode).");
 
@@ -673,7 +675,7 @@ int main(int argc, char** argv) {
     auto& rf = *train_config.MutableExtension(
         model::random_forest::proto::random_forest_config);
     rf.set_num_trees(absl::GetFlag(FLAGS_num_trees));
-    rf.set_bootstrap_training_dataset(true);
+    rf.set_bootstrap_training_dataset(absl::GetFlag(FLAGS_bootstrap_training_dataset));
     rf.set_bootstrap_size_ratio(1.0);
     rf.set_winner_take_all_inference(false);
     rf.set_compute_oob_performances(
