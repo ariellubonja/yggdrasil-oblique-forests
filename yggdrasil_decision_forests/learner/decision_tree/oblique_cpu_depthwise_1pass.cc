@@ -286,7 +286,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           const auto sel = selected_examples_per_node[e.node];
           const size_t rows_n = sel.size();
           // TODO check whether the row sparsity here is the reason for misses
-          const UnsignedExampleIdx* sel_ptr = sel.puldata();
+          const UnsignedExampleIdx* sel_ptr = sel.data();
 
           float* o = out_projected[e.node].data() + e.proj * rows_n;
           const float w = e.weight;
