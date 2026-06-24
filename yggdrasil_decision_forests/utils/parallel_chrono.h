@@ -1,5 +1,18 @@
 #pragma once
-#ifdef CHRONO_ENABLED
+// CHRONO_PROFILE selects the profiling tier. It is set by the bazel build flag
+// (see .bazelrc): --config=chrono_profile defines CHRONO_PROFILE=2 and
+// --config=chrono_profile_coarse defines CHRONO_PROFILE=1.
+//   undefined : no profiling — every macro below compiles to nothing.
+//   1 (coarse): only the top-level scopes fire, for minimal measurement
+//               overhead — TreeTrain, NodeTrain, FindBestCondition,
+//               ObliqueSplitSearch, FindObliqueSetup, EvaluateProj,
+//               ProjectionEvaluate (ProjEval) and BfsNodeLoop. Those call sites
+//               use the CHRONO_*_COARSE macro family.
+//   2 (fine)  : every scope fires (coarse + all sub-scopes). The fine-only call
+//               sites use the plain CHRONO_SCOPE / CHRONO_BEGIN family and raw
+//               `#if CHRONO_PROFILE >= 2` blocks.
+#ifdef CHRONO_PROFILE
+
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -270,6 +283,35 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 // ---------- small macros ------------------------------------------
 #define YDF_PP_CAT_INNER(a,b) a##b
 #define YDF_PP_CAT(a,b)       YDF_PP_CAT_INNER(a,b)
+
+// ===== Coarse tier ================================================
+// Active whenever CHRONO_PROFILE is defined (levels 1 and 2). Only the
+// top-level scopes listed in the file header use these, so the coarse build
+// keeps just enough instrumentation to attribute time per (tree, depth)
+// without the per-sub-scope clock-read overhead.
+#define CHRONO_SCOPE_COARSE(ID) \
+  yggdrasil_decision_forests::chrono_prof::ScopedTimer \
+      YDF_PP_CAT(_chrono_ctimer_, __LINE__)(ID)
+#define CHRONO_SCOPE_COARSE_TOP(ID) \
+  yggdrasil_decision_forests::chrono_prof::ScopedTopTimer \
+      YDF_PP_CAT(_chrono_ctop_timer_, __LINE__)(ID)
+#define CHRONO_BEGIN_COARSE(name)                                       \
+  const auto YDF_PP_CAT(_chrono_cbegin_, name) =                        \
+      std::chrono::steady_clock::now()
+#define CHRONO_END_COARSE(name, id)                                     \
+  ::yggdrasil_decision_forests::chrono_prof::add_time(                  \
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_tree,      \
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth,     \
+      (id),                                                             \
+      std::chrono::duration_cast<std::chrono::nanoseconds>(             \
+          std::chrono::steady_clock::now() -                            \
+          YDF_PP_CAT(_chrono_cbegin_, name))                            \
+          .count())
+
+// ===== Fine tier ==================================================
+// Active only at level >= 2. At level 1 (coarse) these collapse to nothing, so
+// the fine-grained sub-scopes add zero overhead.
+#if CHRONO_PROFILE >= 2
 #define CHRONO_SCOPE(ID) \
   yggdrasil_decision_forests::chrono_prof::ScopedTimer \
       YDF_PP_CAT(_chrono_timer_, __LINE__)(ID)
@@ -297,12 +339,23 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
           std::chrono::steady_clock::now() -                            \
           YDF_PP_CAT(_chrono_begin_, name))                             \
           .count())
-
-}  // namespace yggdrasil_decision_forests::chrono_prof
-#else
+#else  // coarse build: fine-grained scopes are inert
 #define CHRONO_SCOPE(ID)
 #define CHRONO_SCOPE_TOP(ID)
 #define CHRONO_SCOPE_IF(COND, ID)
 #define CHRONO_BEGIN(name)
 #define CHRONO_END(name, id)
+#endif  // CHRONO_PROFILE >= 2
+
+}  // namespace yggdrasil_decision_forests::chrono_prof
+#else  // CHRONO_PROFILE undefined: no profiling at all
+#define CHRONO_SCOPE(ID)
+#define CHRONO_SCOPE_TOP(ID)
+#define CHRONO_SCOPE_IF(COND, ID)
+#define CHRONO_BEGIN(name)
+#define CHRONO_END(name, id)
+#define CHRONO_SCOPE_COARSE(ID)
+#define CHRONO_SCOPE_COARSE_TOP(ID)
+#define CHRONO_BEGIN_COARSE(name)
+#define CHRONO_END_COARSE(name, id)
 #endif

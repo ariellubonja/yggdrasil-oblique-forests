@@ -28,7 +28,7 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
   // Outer scope: total ProjectionEvaluate budget. Sub-phase scopes below
   // partition this into BuildBag / SortBag / Sweep so parallel_chrono.py
   // can break ApplyProjection down per depth.
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
+  CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
 
   const size_t N = selected_examples_per_node.size();
   DCHECK_EQ(N, out_projected.size());

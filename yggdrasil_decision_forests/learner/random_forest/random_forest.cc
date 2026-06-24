@@ -666,7 +666,7 @@ RandomForestLearner::TrainWithStatusImpl(
 
   LOG(INFO) << "num_threads being used: " << deployment().num_threads();
 
-#ifdef CHRONO_ENABLED
+#ifdef CHRONO_PROFILE
   using namespace yggdrasil_decision_forests::chrono_prof;
 
   time_ns().resize(rf_config.num_trees());
@@ -682,9 +682,9 @@ RandomForestLearner::TrainWithStatusImpl(
 
     for (int tree_idx = 0; tree_idx < rf_config.num_trees(); tree_idx++) {
       pool.Schedule([&, tree_idx]() {
-#ifdef CHRONO_ENABLED
+#ifdef CHRONO_PROFILE
         yggdrasil_decision_forests::chrono_prof::TreeScope tree_guard(tree_idx);
-        CHRONO_SCOPE_TOP(
+        CHRONO_SCOPE_COARSE_TOP(
             yggdrasil_decision_forests::chrono_prof::kTreeTrain);
 #endif
 
@@ -971,7 +971,7 @@ RandomForestLearner::TrainWithStatusImpl(
 
 // Print all Timing info after done MultiThreading (must run BEFORE the
 // early-exit below so chrono logs reach stdout before process exits).
-#ifdef CHRONO_ENABLED
+#ifdef CHRONO_PROFILE
   using namespace yggdrasil_decision_forests::chrono_prof;
 
   // One-shot call-count totals (call_cnt() is filled by add_time but never

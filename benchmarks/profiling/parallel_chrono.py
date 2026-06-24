@@ -27,6 +27,12 @@ def get_args():
     p.add_argument("--rows", type=int, default=3000000)
     p.add_argument("--cols", type=int, default=4096)
     p.add_argument("--save_log", action="store_true")
+    p.add_argument("--chrono_level", type=int, choices=[1, 2], default=2,
+                   help="CHRONO profiling tier (see .bazelrc / parallel_chrono.h): "
+                        "2=fine (every scope, default), 1=coarse (only the top-level "
+                        "scopes — NodeTrain, FindBestCondition, ObliqueSplitSearch, "
+                        "FindObliqueSetup, EvaluateProj, ProjEval, BfsNodeLoop, "
+                        "TreeTrain — for lower measurement overhead).")
     p.add_argument("--skip_build", help="Skip building target. Use whatever's in .bazel-bin", action="store_true")
     p.add_argument("--disable_ecores", action=argparse.BooleanOptionalAction, default=True,
                    help="Disable Intel E-cores for stable measurements (default: disabled; pass --no-disable_ecores to keep them on)")

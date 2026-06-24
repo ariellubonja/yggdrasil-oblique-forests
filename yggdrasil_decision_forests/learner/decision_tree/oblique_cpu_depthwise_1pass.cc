@@ -148,7 +148,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   DCHECK_EQ(N, projections_per_node.size());
   DCHECK_EQ(N, out_projected.size());
 
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
+  CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
 
   if (N == 0) return absl::OkStatus();
 

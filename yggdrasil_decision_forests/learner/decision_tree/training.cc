@@ -1402,7 +1402,7 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
     case proto::DecisionTreeTrainingConfig::kSparseObliqueSplit:
     case proto::DecisionTreeTrainingConfig::kMhldObliqueSplit:
       {
-        CHRONO_SCOPE(
+        CHRONO_SCOPE_COARSE(
             ::yggdrasil_decision_forests::chrono_prof::kObliqueSplitSearch);
         ASSIGN_OR_RETURN(
             found_good_condition,
@@ -5121,12 +5121,12 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
   const auto& constraints = node_and_examples.constraints;
   const auto set_leaf_already_set = node_and_examples.set_leaf_already_set;
   auto node = node_and_examples.node;
-#ifdef CHRONO_ENABLED
+#ifdef CHRONO_PROFILE
   using namespace yggdrasil_decision_forests::chrono_prof;
   // Set depth explicitly from the struct. Works for both BFS (flat
   // iteration) and DFS (recursion overwrites depth on each entry).
   tls_ctx.cur_depth = depth;
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kNodeTrain);
+  CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kNodeTrain);
 
   const int t = tls_ctx.cur_tree;
   const int d = depth;
@@ -5219,7 +5219,7 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
 
   bool has_better_condition;
   {
-    CHRONO_SCOPE(
+    CHRONO_SCOPE_COARSE(
         ::yggdrasil_decision_forests::chrono_prof::kFindBestCondition);
     ASSIGN_OR_RETURN(
         has_better_condition,
@@ -5425,7 +5425,7 @@ absl::Status GrowTreeLocalBFS(
           num_nodes, std::vector<internal::Projection>(num_proj));
       std::vector<std::vector<int8_t>> all_node_mono(
           num_nodes, std::vector<int8_t>(num_proj));
-#ifdef CHRONO_ENABLED
+#ifdef CHRONO_PROFILE
       // BFS does this depth-level work *before* the per-node NodeTrain at
       // this depth, so tls_ctx.cur_depth is still the *previous* depth's
       // value (set by the last NodeTrain). Pin it to current_depth so
@@ -5489,7 +5489,7 @@ absl::Status GrowTreeLocalBFS(
 
       std::vector<internal::Projection> shared_projections(num_proj);
       std::vector<int8_t> shared_monotonic(num_proj, 0);
-#if defined(CHRONO_ENABLED) && defined(SYMMETRIC_DEPTHWISE_AP)
+#if defined(CHRONO_PROFILE) && defined(SYMMETRIC_DEPTHWISE_AP)
       // BFS does this depth-level work *before* the per-node NodeTrain at
       // this depth, so tls_ctx.cur_depth is still the *previous* depth's
       // value (set by the last NodeTrain). Pin it to current_depth so
@@ -5509,7 +5509,7 @@ absl::Status GrowTreeLocalBFS(
             train_dataset.data_spec(), config_link, projection_density,
             &shared_projections[p], &shared_monotonic[p], random);
       }
-#if defined(CHRONO_ENABLED) && defined(SYMMETRIC_DEPTHWISE_AP)
+#if defined(CHRONO_PROFILE) && defined(SYMMETRIC_DEPTHWISE_AP)
       CHRONO_END(sym_sample_proj,
                  ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
 #endif
@@ -5578,7 +5578,7 @@ absl::Status GrowTreeLocalBFS(
       // BFS-routed configs (depthwise_1pass, symmetric_*) consume the
       // depth_batch in their own branches above and never reach here.
 #ifdef BFS_ONLY
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kBfsNodeLoop);
+      CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kBfsNodeLoop);
 #endif
 // TODO Ariel - make this use GrowTreeLocal.
 // Or is GrowTreeLocal even mandatory for Depthwise 1-pass? It has a performance penalty

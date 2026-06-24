@@ -166,11 +166,11 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsNodewise(
     absl::Span<float> min_vals,
     absl::Span<float> max_vals) {
   if (use_gpu_) {
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
     auto wait_start = std::chrono::steady_clock::now();
 #endif
     utils::concurrency::MutexLock l(&gpu_mutex_);
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
     chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
         chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
         std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -192,11 +192,11 @@ absl::Status ObliqueGpuComputer::FindBestSplitNodewise(
     return absl::FailedPreconditionError(
         "FindBestSplitNodewise: GPU / labels not available");
   }
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   auto wait_start = std::chrono::steady_clock::now();
 #endif
   utils::concurrency::MutexLock l(&gpu_mutex_);
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
       chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -219,11 +219,11 @@ absl::Status ObliqueGpuComputer::FindBestSplitDepthwise(
     return absl::InvalidArgumentError(
         "FindBestSplitDepthwise: results span size mismatch");
   }
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   auto wait_start = std::chrono::steady_clock::now();
 #endif
   utils::concurrency::MutexLock l(&gpu_mutex_);
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
       chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -241,11 +241,11 @@ absl::Status ObliqueGpuComputer::FindBestSplitNodewiseExact(
     return absl::FailedPreconditionError(
         "FindBestSplitNodewiseExact: GPU / labels not available");
   }
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   auto wait_start = std::chrono::steady_clock::now();
 #endif
   utils::concurrency::MutexLock l(&gpu_mutex_);
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
       chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -266,11 +266,11 @@ absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseExact(
     return absl::InvalidArgumentError(
         "FindBestSplitDepthwiseExact: results span size mismatch");
   }
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   auto wait_start = std::chrono::steady_clock::now();
 #endif
   utils::concurrency::MutexLock l(&gpu_mutex_);
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
       chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuMutexWait,
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -449,7 +449,7 @@ absl::Status ObliqueGpuComputer::ApplyProjectionsNodewiseGPU(
         absl::StrCat("GPU ApplyProjections failed with CUDA error ", cuda_err));
   }
 
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
       chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuApplyColumnADD,
       static_cast<uint64_t>(ms_apply * 1e6));
@@ -527,7 +527,7 @@ absl::Status ObliqueGpuComputer::FindBestSplitNodewiseGPU(
         "GPU FindBestSplitNodewise failed: CUDA error ", cuda_err));
   }
 
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   // Flat disjoint partition of GPU bridge time. All cuEvent-measured
   // inside the bridge with a single sync at the end.
   chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
@@ -672,7 +672,7 @@ absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseGPU(
         "GPU FindBestSplitDepthwise failed: CUDA error ", cuda_err));
   }
 
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
       chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuApplyColumnADDMultiNode,
       static_cast<uint64_t>(ms_apply * 1e6));
@@ -767,7 +767,7 @@ absl::Status ObliqueGpuComputer::FindBestSplitNodewiseExactGPU(
         "GPU FindBestSplitNodewiseExact failed: CUDA error ", cuda_err));
   }
 
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
       chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuApplyColumnADD,
       static_cast<uint64_t>(ms_apply * 1e6));
@@ -840,7 +840,7 @@ absl::Status ObliqueGpuComputer::FindBestSplitDepthwiseExactGPU(
           " failed: CUDA error ", cuda_err));
     }
 
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
     chrono_prof::add_time(chrono_prof::tls_ctx.cur_tree,
         chrono_prof::tls_ctx.cur_depth, chrono_prof::kGpuApplyColumnADD,
         static_cast<uint64_t>(ms_apply * 1e6));

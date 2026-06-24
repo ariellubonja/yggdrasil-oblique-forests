@@ -68,7 +68,12 @@ build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 # INSTRUMENTATION & DEFAULTS
 
 
-build:chrono_profile --cxxopt="-DCHRONO_ENABLED"
+# Two-tier chrono profiling. CHRONO_PROFILE=2 is the fine tier (every scope);
+# CHRONO_PROFILE=1 is the coarse tier (only the top-level scopes — TreeTrain,
+# NodeTrain, FindBestCondition, ObliqueSplitSearch, FindObliqueSetup,
+# EvaluateProj, ProjectionEvaluate, BfsNodeLoop) for lower measurement overhead.
+build:chrono_profile --cxxopt="-DCHRONO_PROFILE=2"
+build:chrono_profile_coarse --cxxopt="-DCHRONO_PROFILE=1"
 # Don't Inlining ApplyProjection for more accurate profiling by Default. Very small cost: <2% e2e
 build:inline_projection_evaluate --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
 # Skip the std::isnan branch in ProjectionEvaluator::Evaluate. by default. again small cost but possible cache misbehavior

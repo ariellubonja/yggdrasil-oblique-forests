@@ -1796,7 +1796,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   CHRONO_END(gbt_finalize,
              ::yggdrasil_decision_forests::chrono_prof::kGbtFinalize);
 
-#ifdef CHRONO_ENABLED
+#if CHRONO_PROFILE >= 2
   // Dump GBT-level chrono accumulators (in global_stats because no
   // TreeScope wraps GBT-side work). Format keeps each line greppable.
   {

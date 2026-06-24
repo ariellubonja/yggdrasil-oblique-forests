@@ -135,7 +135,7 @@ benchmarks/
 │   └── e2e_a-b_test.py                      # A/B verdict driver: builds two configs,
 │         runs trunk + natural + CC18, writes summary.md + raw.json.
 ├── profiling/
-│   └── parallel_chrono.py                   # Python driver: builds with CHRONO_ENABLED,
+│   └── parallel_chrono.py                   # Python driver: builds with CHRONO_PROFILE (1=coarse, 2=fine),
 │         runs training, parses per-tree-depth timing into CSV.
 │         Columns: thread, tree, depth, nodes, samples, then per-function times
 │         (SampleProj, ProjEval, EvalProj, sort/histogram phases).
@@ -174,8 +174,10 @@ benchmarks/
 # Standard optimized build
 bazel build -c opt //yggdrasil_decision_forests/learner/decision_tree:training
 
-# With CHRONO per-function timing (enables CHRONO_ENABLED define)
+# With CHRONO per-function timing (fine tier: defines CHRONO_PROFILE=2)
 bazel build -c opt --config=chrono_profile //examples:train_oblique_forest
+# Coarse tier (defines CHRONO_PROFILE=1, only top-level scopes, lower overhead)
+bazel build -c opt --config=chrono_profile_coarse //examples:train_oblique_forest
 
 # Intel VTune profiling (-O2 + DWARF symbols)
 bazel build -c opt --config=intel_profiler //examples:train_oblique_forest

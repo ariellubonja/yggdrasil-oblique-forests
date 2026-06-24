@@ -171,7 +171,12 @@ def build_binary(args, chrono_mode):
         finished_cmd.append('--config=slow_sample_projections')
     
     if chrono_mode:
-        finished_cmd.append('--config=chrono_profile')
+        # Two-tier chrono: level 2 (fine, default) instruments every scope;
+        # level 1 (coarse) keeps only the top-level scopes for lower overhead.
+        if getattr(args, 'chrono_level', 2) == 1:
+            finished_cmd.append('--config=chrono_profile_coarse')
+        else:
+            finished_cmd.append('--config=chrono_profile')
 
     # --use_gpu=true requires the GPU code paths to be compiled in. Without
     # --config=oblique_gpu the OBLIQUE_GPU_ENABLED macro is undefined and
