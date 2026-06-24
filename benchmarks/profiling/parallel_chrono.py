@@ -27,7 +27,7 @@ def get_args():
     p.add_argument("--rows", type=int, default=3000000)
     p.add_argument("--cols", type=int, default=4096)
     p.add_argument("--save_log", action="store_true")
-    p.add_argument("--chrono_level", type=int, choices=[1, 2], default=2,
+    p.add_argument("--chrono_level", type=int, choices=[1, 2], default=1,
                    help="CHRONO profiling tier (see .bazelrc / parallel_chrono.h): "
                         "2=fine (every scope, default), 1=coarse (only the top-level "
                         "scopes — NodeTrain, FindBestCondition, ObliqueSplitSearch, "
