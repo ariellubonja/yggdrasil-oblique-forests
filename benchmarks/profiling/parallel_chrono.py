@@ -770,6 +770,9 @@ if __name__ == "__main__":
             ("Helper invocation", helper_invocation),
             ("Bazel build", utils.last_build_cmd if utils.last_build_cmd else "(build skipped)"),
             ("Binary command", binary_cmd_str),
+            ("Binary execution time (Training block, s)",
+             f"{train_block:.4f}" if train_block is not None else "(marker not found)"),
+            ("Binary subprocess wall time (s)", f"{dt:.4f}"),
         ]
 
         write_csv(table, cmd_lines, out_fp)
