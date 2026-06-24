@@ -190,6 +190,10 @@ csvfile="${logdir}/${NUM_RUNS}runs_${SUFFIX}.csv"
 confirm_overwrite() {
   local f="$1"
   [[ -e "$f" ]] || return 0
+  if [[ "$f" != *.csv ]]; then
+    rm -f "$f"
+    return 0
+  fi
   if [[ ! -t 0 && ! -e /dev/tty ]]; then
     echo "ERROR: $f already exists (no terminal to confirm overwrite). Use a different suffix or remove it." >&2
     exit 1
