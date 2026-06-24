@@ -753,7 +753,10 @@ if __name__ == "__main__":
 
         print(log_plain[:1000])
 
+        t_parse = time.perf_counter()
         table = parse_parallel_chrono(log_plain)
+        parse_dt = time.perf_counter() - t_parse
+        print(f"\n⏱  Result parsing took {parse_dt:.4f} s\n")
 
         # experiment_name sets the filename; fall back to Depth/Threads label.
         if a.experiment_name:
