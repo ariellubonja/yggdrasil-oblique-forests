@@ -54,6 +54,14 @@ def get_args():
     return args
 
 
+def chrono_level_name(chrono_level: int) -> str:
+    if chrono_level == 1:
+        return "COARSE"
+    if chrono_level == 2:
+        return "FINE"
+    raise ValueError(f"Unsupported chrono_level: {chrono_level}")
+
+
 # Tail of the per-depth LOG line: flat per-stage GPU timings (measured via
 # cudaEvent_t bridging in oblique_gpu_kernels.cu.cc). Every capture group is
 # optional so lines from CPU-only or older GPU builds still parse.
@@ -634,7 +642,13 @@ if __name__ == "__main__":
         device_name = utils.get_gpu_name() or "Unknown_GPU"
     else:
         device_name = utils.get_cpu_model_proc()
-    out_dir = Path("benchmarks/results/per_function_timing") / device_name / exp / dataset_name
+    out_dir = (
+        Path("benchmarks/results/per_function_timing")
+        / chrono_level_name(a.chrono_level)
+        / device_name
+        / exp
+        / dataset_name
+    )
     out_dir.mkdir(parents=True, exist_ok=True)   
 
     binary_cmd_str = " ".join(cmd)
