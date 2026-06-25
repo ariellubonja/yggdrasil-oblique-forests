@@ -109,6 +109,20 @@ TRUNK_DATASETS=(
   "15000|400000"
 )
 
+# Optional per-invocation dataset overrides. Used to isolate ONE dataset per run
+# so that an OOM (common for immature full-depth/row-major paths) costs only that
+# dataset instead of aborting the whole experiment under `set -e` before any CSV
+# is written. Setting a var to the empty string selects ZERO datasets of that
+# kind; use ';' to separate multiple entries. Unset => the defaults above.
+if [[ "${CSV_DATASETS_OVERRIDE+x}" == "x" ]]; then
+  CSV_DATASETS=()
+  [[ -n "$CSV_DATASETS_OVERRIDE" ]] && IFS=';' read -r -a CSV_DATASETS <<<"$CSV_DATASETS_OVERRIDE"
+fi
+if [[ "${TRUNK_DATASETS_OVERRIDE+x}" == "x" ]]; then
+  TRUNK_DATASETS=()
+  [[ -n "$TRUNK_DATASETS_OVERRIDE" ]] && IFS=';' read -r -a TRUNK_DATASETS <<<"$TRUNK_DATASETS_OVERRIDE"
+fi
+
 # =========================
 # Main Script
 # =========================
@@ -182,6 +196,9 @@ logdir="benchmarks/results"
 mkdir -p "$logdir"
 logfile="${logdir}/${NUM_RUNS}runs_${SUFFIX}.log"
 csvfile="${logdir}/${NUM_RUNS}runs_${SUFFIX}.csv"
+# Set to 1 by run_cmd when any dataset OOM'd or errored; finalize_log then keeps
+# the log (instead of deleting it on success) so the failure can be inspected.
+DEGRADED=0
 
 # If an output file already exists, ask before clobbering it instead of
 # aborting outright. Reads from the terminal (/dev/tty) so the prompt works
@@ -223,8 +240,13 @@ finalize_log() {
       cat "$metafile" "$csvfile" >"$tmp" && mv "$tmp" "$csvfile"
       rm -f "$metafile"
     fi
-    rm -f "$logfile"
-    echo "CSV: $csvfile  (log deleted on success)"
+    if (( DEGRADED == 1 )); then
+      echo "WARNING: one or more datasets reported OOM/ERROR -- KEEPING log for inspection." >&2
+      echo "CSV: $csvfile  (log kept at $logfile due to OOM/ERROR rows)"
+    else
+      rm -f "$logfile"
+      echo "CSV: $csvfile  (log deleted on success)"
+    fi
   else
     echo "ERROR: parser failed; log kept at $logfile" >&2
     return 1
@@ -274,6 +296,7 @@ run_cmd() {
   echo "$*" | tee -a "$logfile"
   local times=()
   local i out t rc
+  local oom=0 err=0
   for ((i=1; i<=NUM_RUNS; i++)); do
     echo "----- Run $i/$NUM_RUNS -----" | tee -a "$logfile"
     rc=0
@@ -281,17 +304,31 @@ run_cmd() {
     echo "$out" | tee -a "$logfile"
     if (( rc != 0 )); then
       echo "WARNING: command exited with status $rc on run $i (continuing)" | tee -a "$logfile"
+      # 137 = 128 + SIGKILL(9): the OOM-killer reaped the process. An OOM is
+      # deterministic for a given (dataset, config, memory) -- it will recur on
+      # every run -- so stop after the first one instead of wasting NUM_RUNS-1
+      # more OOMs. Record it as OOM (below) and let the caller move to the next
+      # dataset/experiment.
+      if (( rc == 137 )); then
+        oom=1
+        echo "WARNING: OOM-killed (137) on run $i; skipping remaining runs of this dataset" | tee -a "$logfile"
+        break
+      else
+        err=1
+      fi
     fi
     # Parse "random_forest.cc Training block took: <X> s". A missing line means
-    # the binary crashed before training; under set -euo pipefail this kills
-    # the script -- intentional, so a broken dataset surfaces immediately
-    # instead of silently producing empty CSV rows.
+    # the binary crashed (OOM or otherwise) before training. The grep pipeline
+    # then fails; the trailing `|| true` keeps `set -euo pipefail` from aborting
+    # the whole script, so the remaining datasets still run and the failing one
+    # is recorded as OOM/ERROR below instead of silently killing everything.
     t=$(echo "$out" | grep -oE 'Training block took:[[:space:]]*[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' \
-        | grep -oE '[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' | tail -1)
+        | grep -oE '[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' | tail -1) || true
     if [[ -n "$t" ]]; then
       times+=("$t")
     else
       echo "WARNING: Could not parse 'Training block took' from run $i" | tee -a "$logfile"
+      if (( rc == 0 )); then err=1; fi  # clean exit but no timing => a real error
     fi
   done
   if [[ "${#times[@]}" -gt 0 ]]; then
@@ -318,7 +355,13 @@ run_cmd() {
     fi
     echo "MEDIAN of ${#times[@]}/${NUM_RUNS} runs: ${median} s  STDDEV: ${stddev} s  (samples: ${times[*]})" | tee -a "$logfile"
   else
-    echo "MEDIAN of 0/${NUM_RUNS} runs: N/A" | tee -a "$logfile"
+    # No run produced a timing. Record OOM (process was OOM-killed) or ERROR
+    # (any other failure) so this dataset surfaces as a labelled cell in the CSV
+    # instead of crashing the run. DEGRADED tells finalize_log to keep the log.
+    local status="ERROR"
+    (( oom == 1 )) && status="OOM"
+    echo "MEDIAN of 0/${NUM_RUNS} runs: ${status}" | tee -a "$logfile"
+    DEGRADED=1
   fi
 }
 
