@@ -88,8 +88,8 @@ ABSL_FLAG(float, shrinkage, 0.1f,
 ABSL_FLAG(std::string, growing_strategy, "Local",
           "Type of Tree Growing Strategy: 'Local' - depth-first using NodeTrain or 'GlobalBestFirst' - PriorityQueue the nodes based on Score() Gain.");
 
-ABSL_FLAG(bool, bootstrap_training_dataset, false,
-          "Whether to use bootstrap sampling of the training dataset (Bagging only).");
+ABSL_FLAG(bool, bootstrap_training_dataset, true,
+          "Whether to use bootstrap sampling of the training dataset (Bagging only). NOTE: NO BOOTSTRAP USES ~50% MORE MEMORY. POSSIBLE BUG");
 ABSL_FLAG(bool, compute_oob_performances, false,
           "Whether to compute out-of-bag performances (only for csv mode).");
 
