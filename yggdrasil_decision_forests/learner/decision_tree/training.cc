@@ -1402,7 +1402,7 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
     case proto::DecisionTreeTrainingConfig::kSparseObliqueSplit:
     case proto::DecisionTreeTrainingConfig::kMhldObliqueSplit:
       {
-        CHRONO_SCOPE_COARSE(
+        CHRONO_SCOPE(
             ::yggdrasil_decision_forests::chrono_prof::kObliqueSplitSearch);
         ASSIGN_OR_RETURN(
             found_good_condition,
@@ -5219,7 +5219,7 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
 
   bool has_better_condition;
   {
-    CHRONO_SCOPE_COARSE(
+    CHRONO_SCOPE(
         ::yggdrasil_decision_forests::chrono_prof::kFindBestCondition);
     ASSIGN_OR_RETURN(
         has_better_condition,
@@ -5438,7 +5438,7 @@ absl::Status GrowTreeLocalBFS(
         // Per-node sampling (2^d nodes x K projections) runs at depth level,
         // outside NodeTrain — without this scope it is invisible to the
         // TreeTrain = NodeTrain + ApplyProjection + SampleProjection sum.
-        CHRONO_SCOPE(
+        CHRONO_SCOPE_COARSE(
             ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
         for (int n = 0; n < num_nodes; ++n) {
           for (int p = 0; p < num_proj; ++p) {
@@ -5501,7 +5501,7 @@ absl::Status GrowTreeLocalBFS(
           current_depth;
       // K shared samples per depth — tiny, but scoped so the depth-level
       // sum (NodeTrain + ApplyProjection + SampleProjection) is complete.
-      CHRONO_BEGIN(sym_sample_proj);
+      CHRONO_BEGIN_COARSE(sym_sample_proj);
 #endif
       for (int p = 0; p < num_proj; ++p) {
         internal::SampleProjection(
@@ -5510,7 +5510,7 @@ absl::Status GrowTreeLocalBFS(
             &shared_projections[p], &shared_monotonic[p], random);
       }
 #if defined(CHRONO_PROFILE) && defined(SYMMETRIC_DEPTHWISE_AP)
-      CHRONO_END(sym_sample_proj,
+      CHRONO_END_COARSE(sym_sample_proj,
                  ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
 #endif
 

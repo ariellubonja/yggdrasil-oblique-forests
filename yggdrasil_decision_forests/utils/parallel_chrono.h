@@ -4,10 +4,9 @@
 // --config=chrono_profile_coarse defines CHRONO_PROFILE=1.
 //   undefined : no profiling — every macro below compiles to nothing.
 //   1 (coarse): only the top-level scopes fire, for minimal measurement
-//               overhead — TreeTrain, NodeTrain, FindBestCondition,
-//               ObliqueSplitSearch, FindObliqueSetup, EvaluateProj,
-//               ProjectionEvaluate (ProjEval) and BfsNodeLoop. Those call sites
-//               use the CHRONO_*_COARSE macro family.
+//               overhead — TreeTrain, NodeTrain, SampleProjection,
+//               EvaluateProj, ProjectionEvaluate (ProjEval) and BfsNodeLoop.
+//               Those call sites use the CHRONO_*_COARSE macro family.
 //   2 (fine)  : every scope fires (coarse + all sub-scopes). The fine-only call
 //               sites use the plain CHRONO_SCOPE / CHRONO_BEGIN family and raw
 //               `#if CHRONO_PROFILE >= 2` blocks.

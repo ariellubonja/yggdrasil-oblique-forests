@@ -29,10 +29,10 @@ def get_args():
     p.add_argument("--save_log", action="store_true")
     p.add_argument("--chrono_level", type=int, choices=[1, 2], default=1,
                    help="CHRONO profiling tier (see .bazelrc / parallel_chrono.h): "
-                        "2=fine (every scope, default), 1=coarse (only the top-level "
-                        "scopes — NodeTrain, FindBestCondition, ObliqueSplitSearch, "
-                        "FindObliqueSetup, EvaluateProj, ProjEval, BfsNodeLoop, "
-                        "TreeTrain — for lower measurement overhead).")
+                        "1=coarse (default; only the top-level scopes — "
+                        "TreeTrain, NodeTrain, SampleProjection, EvaluateProj, "
+                        "ProjEval, BfsNodeLoop — for lower measurement overhead), "
+                        "2=fine (coarse scopes plus all sub-scopes).")
     p.add_argument("--skip_build", help="Skip building target. Use whatever's in .bazel-bin", action="store_true")
     p.add_argument("--disable_ecores", action=argparse.BooleanOptionalAction, default=True,
                    help="Disable Intel E-cores for stable measurements (default: disabled; pass --no-disable_ecores to keep them on)")
