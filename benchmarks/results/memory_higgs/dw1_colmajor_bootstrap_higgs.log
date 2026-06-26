@@ -1,0 +1,83 @@
+### dw1_colmajor_bootstrap_higgs
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv benchmarks/data/HIGGS_with_header.csv --label_col class --feature_split_type Oblique --numerical_split_type Dynamic Random Histogram --num_trees=240 --num_threads=-1 --histogram_num_bins=64 --dynamic_split_threshold=250 --bootstrap_training_dataset=true 
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1782481322.138074   10712 train_oblique_forest.cc:461] Inferring DataSpec from CSV: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1782481322.143115   10712 csv_example_reader.cc:216] 0 row(s) processed
+I0000 00:00:1782481322.154108   10712 csv_example_reader.cc:225] Stop scanning the csv file to infer the type. Some records were not considered.
+I0000 00:00:1782481322.154125   10712 data_spec_inference.cc:518] 29 column(s) found
+I0000 00:00:1782481322.154140   10712 csv_example_reader.cc:320] 0 row(s) processed
+I0000 00:00:1782481352.154199   10712 csv_example_reader.cc:320] 5457761 row(s) processed
+I0000 00:00:1782481382.154228   10712 csv_example_reader.cc:320] 10760331 row(s) processed
+I0000 00:00:1782481383.488499   10712 data_spec_inference.cc:557] Finalizing [11000000 row(s) found]
+I0000 00:00:1782481383.488550   10712 train_oblique_forest.cc:657] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1782481383.488559   10712 train_oblique_forest.cc:724] Configuring oblique splits
+I0000 00:00:1782481383.488562   10712 train_oblique_forest.cc:809] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1782481383.488599   10712 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1782481383.488602   10712 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1782481383.489163   10712 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1782481413.489504   10712 vertical_dataset_io.cc:82] 7254300 examples scanned.
+I0000 00:00:1782481429.671270   10712 vertical_dataset_io.cc:91] 11000000 examples read. Memory: usage:1276MB allocated:1276MB. 0 (0%) examples have been skipped.
+I0000 00:00:1782481429.671353   10712 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1782481429.671356   10712 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1782481429.671376   10712 random_forest.cc:498] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1782481429.671387   10712 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1782481429.671580   10712 random_forest.cc:667] num_threads being used: 48
+W0000 00:00:1782481437.827696   11037 training.cc:5816] [This message is only shown once] The effective split of examples does not match the expected split returned by the splitter algorithm. This problem can be caused by (1) large floating point values (e.g. value>=10e30) or (2) a bug in the software. You can turn this error in a warning with internal_error_on_wrong_splitter_statistics=false.
+
+Details:
+Num examples: 6309149
+Num positive examples (from split evaluation): 619667
+Num positive examples (from split learning): 619666
+Num negative examples (from split evaluation): 5689482
+
+Condition: goo.gle/debugstr   
+na_value: false
+attribute: 8
+condition {
+  oblique_condition {
+    attributes: 8
+    attributes: 18
+    attributes: 20
+    attributes: 21
+    attributes: 22
+    attributes: 25
+    weights: 1
+    weights: -1
+    weights: -1
+    weights: 1
+    weights: -1
+    weights: 1
+    threshold: 2.46175694
+    na_replacements: 7.71619943e-06
+    na_replacements: 0.986108661
+    na_replacements: 1.74490342e-05
+    na_replacements: 1.00000012
+    na_replacements: 1.03429031
+    na_replacements: 1.00974178
+  }
+}
+num_training_examples_without_weight: 6309149
+num_training_examples_with_weight: 6309149
+split_score: 0.000988735701
+num_pos_training_examples_without_weight: 619666
+num_pos_training_examples_with_weight: 619666
+
+Attribute spec: goo.gle/debugstr   
+type: NUMERICAL
+name: "feature8"
+is_manual_type: false
+numerical {
+  mean: 7.71619920710906e-06
+  min_value: -1.7412374
+  max_value: 1.74145377
+  standard_deviation: 1.0059010875653387
+}
+
+I0000 00:00:1782481515.184089   11065 random_forest.cc:962] Train tree 1/240 [index:42 total:1m25.51s tree:1m25.51s]
+I0000 00:00:1782481607.629138   11075 random_forest.cc:962] Train tree 49/240 [index:58 total:2m57.96s tree:1m31.28s]
+I0000 00:00:1782481700.381629   11060 random_forest.cc:962] Train tree 97/240 [index:115 total:4m30.71s tree:1m31.76s]
+I0000 00:00:1782481794.891523   11041 random_forest.cc:962] Train tree 145/240 [index:146 total:6m5.22s tree:1m33.93s]
+I0000 00:00:1782481889.895396   11041 random_forest.cc:962] Train tree 193/240 [index:192 total:7m40.22s tree:1m35.00s]
+I0000 00:00:1782481898.878043   10712 random_forest.cc:969] random_forest.cc Training block took: 469.207 s
+W0000 00:00:1782481898.878094   10712 random_forest.cc:1219] EXITING EARLY TO SPEED UP EXPERIMENTS!
+dw1_colmajor_bootstrap_higgs finished with exit_0

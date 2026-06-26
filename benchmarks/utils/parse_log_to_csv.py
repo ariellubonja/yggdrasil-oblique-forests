@@ -28,6 +28,9 @@ MEDIAN_RUN_RE = re.compile(
     r'(?:\s+STDDEV: (?:[\d.eE+\-]+|N/A) s)?'
     r'\s+\(samples: ([0-9. eE+\-]+)\)$'
 )
+# A dataset whose every run failed: the median_s cell carries the failure label
+# (OOM = OOM-killed, ERROR = any other crash) so it is visible in the CSV.
+MEDIAN_FAIL_RE = re.compile(r'^MEDIAN of \d+/\d+ runs: (OOM|ERROR)$')
 
 
 def sample_stddev(samples):
@@ -91,6 +94,13 @@ def parse_runtime(log_path):
                 samples = m.group(2).split()
                 dataset, algo = parse_cmd(cmd)
                 rows.append((dataset, algo, median, samples))
+                cmd = None
+                continue
+            m = MEDIAN_FAIL_RE.match(line)
+            if m and cmd is not None:
+                # Failure label goes in the median_s cell; no samples => empty stddev.
+                dataset, algo = parse_cmd(cmd)
+                rows.append((dataset, algo, m.group(1), []))
                 cmd = None
     return rows
 
