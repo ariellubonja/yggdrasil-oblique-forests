@@ -39,6 +39,67 @@
 #include <utility>
 #include <vector>
 
+#ifdef YDF_CALLGRIND_DEPTH
+#include <cstdio>
+#include <valgrind/callgrind.h>
+#endif
+
+#ifdef YDF_LINECOUNT_A
+// Method A: exact distinct-64B-cache-line counter for the DW1 oblique gather
+// (col[sel_ptr[i]]). Per depth, over every node processed by the depthwise
+// kernel, accumulate rows (= sum of node sizes) and distinct cache lines
+// (= count of distinct sel[i]>>4; sel is sorted ascending so a single pass
+// counting line-index transitions is exact). useful/line = rows/lines. This is
+// the *geometric* per-node metric the cachegrind/callgrind methods (B/C)
+// estimate via D1 misses; here it is computed exactly, natively, multithreaded,
+// so it scales to deep trees (HIGGS ~depth 60). Output dumped at process exit
+// to $YDF_LINECOUNT_OUT (CSV) and stderr. No-op unless YDF_LINECOUNT_A defined.
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
+#include <vector>
+namespace {
+struct Dw1LineCountAccum {
+  std::mutex mu;
+  std::vector<double> rows;   // indexed by tree depth
+  std::vector<double> lines;
+  std::vector<double> nodes;
+  void Add(int depth, double n_nodes, double r, double l) {
+    std::lock_guard<std::mutex> lk(mu);
+    if (depth < 0) return;
+    if (static_cast<int>(rows.size()) <= depth) {
+      rows.resize(depth + 1, 0.0);
+      lines.resize(depth + 1, 0.0);
+      nodes.resize(depth + 1, 0.0);
+    }
+    rows[depth] += r;
+    lines[depth] += l;
+    nodes[depth] += n_nodes;
+  }
+  ~Dw1LineCountAccum() {
+    const char* out = std::getenv("YDF_LINECOUNT_OUT");
+    std::FILE* f = (out != nullptr) ? std::fopen(out, "w") : nullptr;
+    std::fprintf(stderr,
+                 "\n=== Method A: DW1 gather useful-floats per 64B line by "
+                 "depth ===\ndepth,nodes,rows,lines,useful_per_line\n");
+    if (f) std::fprintf(f, "depth,nodes,rows,lines,useful_per_line\n");
+    for (size_t d = 0; d < rows.size(); ++d) {
+      if (nodes[d] == 0.0) continue;
+      const double upl = lines[d] > 0.0 ? rows[d] / lines[d] : 0.0;
+      std::fprintf(stderr, "%zu,%.0f,%.0f,%.0f,%.4f\n", d, nodes[d], rows[d],
+                   lines[d], upl);
+      if (f)
+        std::fprintf(f, "%zu,%.0f,%.0f,%.0f,%.4f\n", d, nodes[d], rows[d],
+                     lines[d], upl);
+    }
+    if (f) std::fclose(f);
+  }
+};
+Dw1LineCountAccum g_dw1_linecount;
+}  // namespace
+#endif  // YDF_LINECOUNT_A
+
 #include "absl/base/optimization.h"
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
@@ -5456,10 +5517,51 @@ absl::Status GrowTreeLocalBFS(
       }
 
       std::vector<std::vector<float>> projected(num_nodes);
+#ifdef YDF_LINECOUNT_A
+      {
+        // Exact per-node distinct-cache-line tally for this depth level. sel is
+        // sorted ascending (DCHECK in SplitExamplesInPlace), so distinct lines =
+        // 1 + number of (id>>4) transitions. Computed lock-free per node; one
+        // locked accumulate per depth-batch keeps contention negligible.
+        double r_sum = 0.0, l_sum = 0.0;
+        for (int n = 0; n < num_nodes; ++n) {
+          const auto sp = sel_spans[n];
+          const size_t rn = sp.size();
+          r_sum += static_cast<double>(rn);
+          if (rn == 0) continue;
+          const UnsignedExampleIdx* p = sp.data();
+          size_t lines = 1;
+          uint64_t prev = static_cast<uint64_t>(p[0]) >> 4;
+          for (size_t i = 1; i < rn; ++i) {
+            const uint64_t cur = static_cast<uint64_t>(p[i]) >> 4;
+            if (cur != prev) {
+              ++lines;
+              prev = cur;
+            }
+          }
+          l_sum += static_cast<double>(lines);
+        }
+        g_dw1_linecount.Add(current_depth, num_nodes, r_sum, l_sum);
+      }
+#endif
+#ifdef YDF_CALLGRIND_DEPTH
+      // Instrument ONLY the kernel: run callgrind with --instr-atstart=no so the
+      // ~8 GB CSV load and all non-kernel training run at light JIT overhead (not
+      // 50-100x cache-sim). Start instrumentation + zero counters here, dump and
+      // stop right after, so each per-depth dump isolates the gather's D1 misses.
+      CALLGRIND_START_INSTRUMENTATION;
+      CALLGRIND_ZERO_STATS;
+#endif
       RETURN_IF_ERROR(ApplyProjectionsDepthwise1Pass(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),
           absl::MakeConstSpan(all_node_projs), absl::MakeSpan(projected)));
+#ifdef YDF_CALLGRIND_DEPTH
+      { char nm[64];
+        std::snprintf(nm, sizeof nm, "dw1_depth_%d", (int)current_depth);
+        CALLGRIND_DUMP_STATS_AT(nm); }
+      CALLGRIND_STOP_INSTRUMENTATION;
+#endif
 
       for (int n = 0; n < num_nodes; ++n) {
         auto node_config = internal_config;
