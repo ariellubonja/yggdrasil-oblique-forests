@@ -96,6 +96,9 @@ enum FuncId {
   kDw1SweepColWalk,  // gather/FMA hot loop: o[i] += w * col[sel_ptr[i]]
   kDw1SweepBig,      // EvaluateNodeProjMajor path (oversized single node)
   kDw1SweepGeneric,  // !direct fallback (EvaluateProjectionRowsGeneric)
+  kDw1SharedBag,     // -DDW1_SHARED_ROWS: per-block merged-bag build + sort
+                     // (the stride-1-read colwalk variant; the sweep itself
+                     //  still accrues to kDw1SweepColWalk for A/B comparison)
 
   // Per-node bookkeeping scopes inside NodeTrain /
   // FindBestConditionSparseObliqueTemplate.

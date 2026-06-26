@@ -6,6 +6,18 @@ build --disk_cache=~/.cache/bazel-disk
 # tasks, preserving ordinary per-node Sparse Oblique RF projection sampling.
 build:depthwise_1_pass --cxxopt="-DDEPTHWISE_1_PASS=1"
 
+# DW1 shared-rows colwalk: a variant of --config=depthwise_1_pass. In the
+# column-centric block, read each touched column ONCE over the block's merged
+# bag (union of its nodes' selected_examples, sorted by row id) and scatter each
+# value to its owning node's projections, instead of re-gathering the column per
+# (node, projection). Trades the per-node sparse gather for a stride-1 read plus
+# sparse writes into the output slabs. A/B against plain --config=depthwise_1_pass:
+# compare the Dw1SweepColWalk chrono line (the new merged-bag prep shows up as
+# Dw1SharedBag). YDF_DW1_BLOCK_FLOATS now bounds the scatter-write working set,
+# so tune it down if the block's output slabs spill LLC.
+build:dw1_shared_rows --config=depthwise_1_pass
+build:dw1_shared_rows --cxxopt="-DDW1_SHARED_ROWS=1"
+
 # Hidden synthetic-layout experiments for ProjectionEvaluator. These change
 # numerical-feature storage for trunk synthetic datasets only; they are
 # scheduler-independent and can be combined with default Nodewise or Depthwise.

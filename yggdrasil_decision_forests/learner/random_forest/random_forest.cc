@@ -1061,6 +1061,7 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
                   << " Dw1SweepBig " << arr[kDw1SweepBig] * 1e-9 << "s"
                   << " Dw1SweepGeneric " << arr[kDw1SweepGeneric] * 1e-9 << "s"
+                  << " Dw1SharedBag " << arr[kDw1SharedBag] * 1e-9 << "s"
 #endif
                   // Per-node bookkeeping scopes inside NodeTrain /
                   // FindBestConditionSparseObliqueTemplate. Always emitted;
@@ -1164,6 +1165,7 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
                   << " Dw1SweepBig " << arr[kDw1SweepBig] * 1e-9 << "s"
                   << " Dw1SweepGeneric " << arr[kDw1SweepGeneric] * 1e-9 << "s"
+                  << " Dw1SharedBag " << arr[kDw1SharedBag] * 1e-9 << "s"
 #endif
                   // Per-node bookkeeping scopes inside NodeTrain /
                   // FindBestConditionSparseObliqueTemplate. Always emitted;

@@ -58,6 +58,19 @@ struct ColEntry {
   float weight;
 };
 
+#ifdef DW1_SHARED_ROWS
+// One row of a block's merged bag: a global example id, the node that owns it
+// (index within the depth batch) and that row's local slot within the node's
+// output slab. The block's bag is the union of its nodes' selected_examples,
+// sorted by example id so each touched column is read in one ascending pass
+// (stride-1 when the union covers the row range) instead of a per-node gather.
+struct BagRow {
+  UnsignedExampleIdx row;
+  int32_t node;
+  int32_t local;
+};
+#endif
+
 struct Dw1Task {
   size_t begin_node;
   size_t end_node;  // exclusive; big nodes come as [n, n+1) with big=true
@@ -70,6 +83,14 @@ struct Dw1Scratch {
   std::vector<ColEntry> sorted;
   std::vector<int32_t> touched;    // touched column ids, sorted ascending
   std::vector<int32_t> col_count;  // per-column counters, sized max_attr+1
+#ifdef DW1_SHARED_ROWS
+  std::vector<BagRow> bag;             // block's merged bag, sorted by row id
+  std::vector<int32_t> node_ref_off;   // per block-node: start in ref_*, else -1
+  std::vector<int32_t> node_ref_cnt;   // per block-node: #refs to current column
+  std::vector<int32_t> ref_proj;       // current column's (proj, weight) runs,
+  std::vector<float> ref_w;            //   grouped by node (node-ascending)
+  std::vector<int32_t> col_touched;    // block-node ids touched this column
+#endif
 };
 
 // Projection-major kernel for one node (big nodes / fallback). Direct column
@@ -272,10 +293,107 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       CHRONO_END(dw1_scatter,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepScatter);
 
+#ifdef DW1_SHARED_ROWS
+      // Shared-rows colwalk. Build the block's merged bag once (the union of
+      // its nodes' selected_examples, sorted by example id), then read each
+      // touched column in ONE ascending pass over that bag — stride-1 when the
+      // union covers the row range — instead of the per-node gather in the
+      // #else branch. Each value fans out (scatter) to every (node,projection)
+      // of its owning node that references the column: the gather path's
+      // per-(node,proj) sequential writes become random writes into the block's
+      // output slabs. This is the sparse-reads-for-sparse-writes trade; here
+      // YDF_DW1_BLOCK_FLOATS bounds the scatter-write working set rather than
+      // column reuse, so shrink it if the slabs spill LLC.
+      CHRONO_BEGIN(dw1_bag);
+      const int32_t begin_node_i = static_cast<int32_t>(task.begin_node);
+      const size_t block_nodes = task.end_node - task.begin_node;
+      auto& bag = scratch.bag;
+      bag.clear();
+      for (size_t n = task.begin_node; n < task.end_node; ++n) {
+        const auto sel = selected_examples_per_node[n];
+        for (size_t local = 0; local < sel.size(); ++local) {
+          bag.push_back({sel[local], static_cast<int32_t>(n),
+                         static_cast<int32_t>(local)});
+        }
+      }
+      // Rows are disjoint across nodes (the depth frontier partitions the bag),
+      // so ordering by row id alone is a total order.
+      std::sort(bag.begin(), bag.end(),
+                [](const BagRow& a, const BagRow& b) { return a.row < b.row; });
+      auto& node_ref_off = scratch.node_ref_off;
+      auto& node_ref_cnt = scratch.node_ref_cnt;
+      if (node_ref_off.size() < block_nodes) {
+        // -1 == "owning node has no ref to the current column". The per-column
+        // reset below restores every touched slot to -1, so the whole
+        // [0, block_nodes) range is -1 at each column boundary.
+        node_ref_off.assign(block_nodes, -1);
+        node_ref_cnt.assign(block_nodes, 0);
+      }
+      CHRONO_END(dw1_bag,
+                 ::yggdrasil_decision_forests::chrono_prof::kDw1SharedBag);
+
+      CHRONO_BEGIN(dw1_colwalk);
+      {
+        auto& ref_proj = scratch.ref_proj;
+        auto& ref_w = scratch.ref_w;
+        auto& col_touched = scratch.col_touched;
+        size_t pos = 0;
+        for (const int32_t c : touched) {
+          const float* col = evaluator.AttributeData(c);
+          const size_t slice_begin = pos;
+          const size_t slice_end = static_cast<size_t>(col_count[c]);
+          pos = slice_end;
+
+          // Group column c's refs by node. Entries were bucketed node-major, so
+          // within the slice the node id is non-decreasing and each node's refs
+          // form one contiguous run [off, off+cnt) in ref_proj / ref_w.
+          ref_proj.resize(slice_end - slice_begin);
+          ref_w.resize(slice_end - slice_begin);
+          col_touched.clear();
+          int32_t prev_node = -1;
+          for (size_t k = slice_begin; k < slice_end; ++k) {
+            const ColEntry& e = sorted[k];
+            const size_t kk = k - slice_begin;
+            ref_proj[kk] = e.proj;
+            ref_w[kk] = e.weight;
+            const int32_t bn = e.node - begin_node_i;
+            if (e.node != prev_node) {
+              node_ref_off[bn] = static_cast<int32_t>(kk);
+              node_ref_cnt[bn] = 0;
+              col_touched.push_back(bn);
+              prev_node = e.node;
+            }
+            ++node_ref_cnt[bn];
+          }
+
+          // One ascending pass over the bag: dense read of col, scatter write
+          // of each contribution to its node's projections referencing c.
+          for (const BagRow& be : bag) {
+            const int32_t bn = be.node - begin_node_i;
+            const int32_t off = node_ref_off[bn];
+            if (off < 0) continue;  // owning node has no projection on column c
+            const float v = col[be.row];
+            const int32_t cnt = node_ref_cnt[bn];
+            float* slab = out_projected[be.node].data();
+            const size_t rows_n = selected_examples_per_node[be.node].size();
+            for (int32_t t = 0; t < cnt; ++t) {
+              slab[static_cast<size_t>(ref_proj[off + t]) * rows_n + be.local] +=
+                  ref_w[off + t] * v;
+            }
+          }
+
+          for (const int32_t bn : col_touched) node_ref_off[bn] = -1;
+          col_count[c] = 0;  // reset for the next block
+        }
+      }
+      CHRONO_END(dw1_colwalk,
+                 ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
+#else
       CHRONO_BEGIN(dw1_colwalk); // This takes 90% of the ApplyProjection time. The only thing worth optimizing
       size_t pos = 0;
       for (const int32_t c : touched) {
         const float* col = evaluator.AttributeData(c);
+        // What does end do? pos is not reset to 0 after loop termination
         const size_t end = static_cast<size_t>(col_count[c]);
         for (; pos < end; ++pos) {
           // TODO sorted carries the weight. But we can simply sample the weight when we need it
@@ -284,6 +402,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           // Sorted : sorted by selected column, regardless of node/projection
           const ColEntry& e = sorted[pos];
           const auto sel = selected_examples_per_node[e.node];
+          // I think this node's bag size
           const size_t rows_n = sel.size();
           // TODO check whether the row sparsity here is the reason for misses
           const UnsignedExampleIdx* sel_ptr = sel.data();
@@ -292,16 +411,18 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           const float w = e.weight;
 
           for (size_t i = 0; i < rows_n; ++i) { // Critical section. check access patterns here
-            // Specifically check access patterns on col, sel_ptr and o
+            // This read should cache miss each time: sel_ptr is still per-node, not union across nodes
             float v = col[sel_ptr[i]];
+            // This may get impacted by union across nodes. Will no longer be sequential
             o[i] += w * v;
-            // TODO leverage SIMD here
+            // TODO later: leverage SIMD here
           }
         }
         col_count[c] = 0;  // reset for the next block
       }
       CHRONO_END(dw1_colwalk,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
+#endif  // DW1_SHARED_ROWS
     };
 
     // Single-threaded by design: RandomForest already trains one tree per
