@@ -40,7 +40,7 @@ enum FuncId {
   kAssignSamplesToHistogram,
   kSelectBestThresholdHistogram,
   kGetCandidateAttributes,
-  kAxisAlignedColumnFetch,
+  kColumnWithCast,
 
   // GBT-level scopes (set in gradient_boosted_trees.cc). These accumulate
   // to global_stats[id] because GBT does not open a TreeScope around its
@@ -90,7 +90,6 @@ enum FuncId {
   // All fire once per task (≈ tasks.size() times), never per-row, so the
   // ScopedTimer clock-read overhead stays negligible. Splits the column-centric
   // block into bucketing vs. the gather/FMA hot loop to locate the 93%.
-  kDw1SweepCtor,     // ProjectionEvaluator ctor (fires once per call)
   kDw1SweepBucket,   // entries push + col_count histogram + touched + sort
   kDw1SweepScatter,  // prefix-sum offsets + counting-sort into `sorted`
   kDw1SweepColWalk,  // gather/FMA hot loop: o[i] += w * col[sel_ptr[i]]
@@ -223,18 +222,13 @@ inline void add_time(int tree, int depth, FuncId id, uint64_t dt_ns) {
 }
 
 // ---------- ScopedTimer -------------------------------------------
-// When `enabled` is false the timer is inert: no clock reads, no add_time.
-// This lets a call site disable measurement for a code path it doesn't care
-// about (e.g. the axis-aligned splitter that still runs alongside oblique).
+// RAII timer: reads the clock on construction and accumulates the elapsed
+// time into (cur_tree, cur_depth, id) on destruction.
 class ScopedTimer {
  public:
-  explicit ScopedTimer(FuncId id, bool enabled = true)
-      : id_(id),
-        enabled_(enabled),
-        start_(enabled ? std::chrono::steady_clock::now()
-                       : std::chrono::steady_clock::time_point{}) {}
+  explicit ScopedTimer(FuncId id)
+      : id_(id), start_(std::chrono::steady_clock::now()) {}
   ~ScopedTimer() {
-    if (!enabled_) return;
     const uint64_t dt_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now() - start_).count();
@@ -242,20 +236,16 @@ class ScopedTimer {
   }
  private:
   FuncId id_;
-  bool enabled_;
   std::chrono::steady_clock::time_point start_;
 };
 
 class ScopedTopTimer {
  public:
-  explicit ScopedTopTimer(FuncId id, bool enabled = true)
+  explicit ScopedTopTimer(FuncId id)
       : id_(id),
-        enabled_(enabled),
         tree_(tls_ctx.cur_tree),
-        start_(enabled ? std::chrono::steady_clock::now()
-                       : std::chrono::steady_clock::time_point{}) {}
+        start_(std::chrono::steady_clock::now()) {}
   ~ScopedTopTimer() {
-    if (!enabled_) return;
     const uint64_t dt_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now() - start_).count();
@@ -264,7 +254,6 @@ class ScopedTopTimer {
 
  private:
   FuncId id_;
-  bool enabled_;
   int tree_;
   std::chrono::steady_clock::time_point start_;
 };
@@ -320,11 +309,6 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #define CHRONO_SCOPE_TOP(ID) \
   yggdrasil_decision_forests::chrono_prof::ScopedTopTimer \
       YDF_PP_CAT(_chrono_top_timer_, __LINE__)(ID)
-// Like CHRONO_SCOPE, but only measures when COND is true. When false the
-// timer collects nothing (no clock reads, no accumulation).
-#define CHRONO_SCOPE_IF(COND, ID) \
-  yggdrasil_decision_forests::chrono_prof::ScopedTimer \
-      YDF_PP_CAT(_chrono_timer_, __LINE__)((ID), (COND))
 
 // Manual begin/end variant for spans that can't be wrapped in `{}` because
 // variables declared inside need to outlive the scope. Lost on early
@@ -344,7 +328,6 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #else  // coarse build: fine-grained scopes are inert
 #define CHRONO_SCOPE(ID)
 #define CHRONO_SCOPE_TOP(ID)
-#define CHRONO_SCOPE_IF(COND, ID)
 #define CHRONO_BEGIN(name)
 #define CHRONO_END(name, id)
 #endif  // CHRONO_PROFILE >= 2
@@ -353,7 +336,6 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #else  // CHRONO_PROFILE undefined: no profiling at all
 #define CHRONO_SCOPE(ID)
 #define CHRONO_SCOPE_TOP(ID)
-#define CHRONO_SCOPE_IF(COND, ID)
 #define CHRONO_BEGIN(name)
 #define CHRONO_END(name, id)
 #define CHRONO_SCOPE_COARSE(ID)

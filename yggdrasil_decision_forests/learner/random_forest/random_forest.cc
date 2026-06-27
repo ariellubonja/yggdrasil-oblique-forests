@@ -1015,8 +1015,8 @@ RandomForestLearner::TrainWithStatusImpl(
                   << arr[kProjectionEvaluate] * 1e-9 << "s"
                   << " kGetCandidateAttributes "
                   << arr[kGetCandidateAttributes] * 1e-9 << "s"
-                  << " kAxisAlignedColumnFetch "
-                  << arr[kAxisAlignedColumnFetch] * 1e-9 << "s"
+                  << " kColumnWithCast "
+                  << arr[kColumnWithCast] * 1e-9 << "s"
                   << " kSortFillExampleBucketSet "
                   << arr[kSortFillExampleBucketSet] * 1e-9 << "s"
                   << " kSortScanSplits " << arr[kSortScanSplits] * 1e-9 << "s"
@@ -1054,8 +1054,7 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
                   // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
-                  // evaluator ctor and per-task loop glue.
-                  << " Dw1SweepCtor " << arr[kDw1SweepCtor] * 1e-9 << "s"
+                  // per-task loop glue.
                   << " Dw1SweepBucket " << arr[kDw1SweepBucket] * 1e-9 << "s"
                   << " Dw1SweepScatter " << arr[kDw1SweepScatter] * 1e-9 << "s"
                   << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
@@ -1107,8 +1106,8 @@ RandomForestLearner::TrainWithStatusImpl(
                   << arr[kProjectionEvaluate] * 1e-9 << "s"
                   << " kGetCandidateAttributes "
                   << arr[kGetCandidateAttributes] * 1e-9 << "s"
-                  << " kAxisAlignedColumnFetch "
-                  << arr[kAxisAlignedColumnFetch] * 1e-9 << "s"
+                  << " kColumnWithCast "
+                  << arr[kColumnWithCast] * 1e-9 << "s"
                   << " kHistogramSetup " << arr[kHistogramSetup] * 1e-9 << "s"
                   << " kMinMaxNumerical " << arr[kMinMaxNumerical] * 1e-9 << "s"
                   << " kAssignSamplesToHistogram "
@@ -1158,8 +1157,7 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
                   // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
-                  // evaluator ctor and per-task loop glue.
-                  << " Dw1SweepCtor " << arr[kDw1SweepCtor] * 1e-9 << "s"
+                  // per-task loop glue.
                   << " Dw1SweepBucket " << arr[kDw1SweepBucket] * 1e-9 << "s"
                   << " Dw1SweepScatter " << arr[kDw1SweepScatter] * 1e-9 << "s"
                   << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"

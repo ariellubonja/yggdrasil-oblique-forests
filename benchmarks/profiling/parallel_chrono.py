@@ -89,7 +89,6 @@ _GPU_TAIL_RX = (
     r"(?:\s+Dw1Sweep\s+([0-9.eE+-]+)s)?"
     # Sub-phases of Dw1Sweep. Optional — only emitted under -DDEPTHWISE_1_PASS.
     # ColWalk (gather/FMA) vs Bucket+Scatter (counting-sort) splits the 93%.
-    r"(?:\s+Dw1SweepCtor\s+([0-9.eE+-]+)s)?"
     r"(?:\s+Dw1SweepBucket\s+([0-9.eE+-]+)s)?"
     r"(?:\s+Dw1SweepScatter\s+([0-9.eE+-]+)s)?"
     r"(?:\s+Dw1SweepColWalk\s+([0-9.eE+-]+)s)?"
@@ -138,7 +137,7 @@ TIMING_RX_SORT = re.compile(
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
     r"ProjEval\s+([0-9.eE+-]+)s\s+"            #  7
     r"kGetCandidateAttributes\s+([0-9.eE+-]+)s\s+"      #  7a
-    r"kAxisAlignedColumnFetch\s+([0-9.eE+-]+)s\s+"      #  7c
+    r"kColumnWithCast\s+([0-9.eE+-]+)s\s+"              #  7c
     r"kSortFillExampleBucketSet\s+([0-9.eE+-]+)s\s+"   #  9
     r"kSortScanSplits\s+([0-9.eE+-]+)s\s+"             # 10
     r"kSortInitBuckets\s+([0-9.eE+-]+)s\s+"             # 11
@@ -160,7 +159,7 @@ TIMING_RX_HISTO = re.compile(
     r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
     r"ProjEval\s+([0-9.eE+-]+)s\s+"
     r"kGetCandidateAttributes\s+([0-9.eE+-]+)s\s+"
-    r"kAxisAlignedColumnFetch\s+([0-9.eE+-]+)s\s+"
+    r"kColumnWithCast\s+([0-9.eE+-]+)s\s+"
     r"kHistogramSetup\s+([0-9.eE+-]+)s\s+"
     r"kMinMaxNumerical\s+([0-9.eE+-]+)s\s+"
     r"kAssignSamplesToHistogram\s+([0-9.eE+-]+)s\s+"
@@ -193,7 +192,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
 
         if histo_mode:
             (tid, tree, depth, nodes, samples,
-             pe, get_cand, aa_col_fetch,
+             pe, get_cand, col_with_cast,
              setup, minmax, ast, sbt,
              fill_example, scan_splits,
              init_buckets, fill_buckets, finalize_buckets,
@@ -203,7 +202,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
-             dw1_sweep_ctor, dw1_sweep_bucket, dw1_sweep_scatter,
+             dw1_sweep_bucket, dw1_sweep_scatter,
              dw1_sweep_colwalk, dw1_sweep_big, dw1_sweep_generic,
              node_train, find_best_condition, oblique_split_search,
              find_oblique_setup, evaluate_proj, entropy_table_setup,
@@ -220,7 +219,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 samples                      = int(samples),
                 ProjectionEvaluate           = float(pe),
                 GetCandidateAttributes       = float(get_cand),
-                AxisAlignedColumnFetch       = float(aa_col_fetch),
+                ColumnWithCast               = float(col_with_cast),
                 HistogramSetup               = float(setup),
                 MinMaxNumerical              = float(minmax),
                 AssignSamplesToHist          = float(ast),
@@ -252,7 +251,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
-                Dw1SweepCtor                 = opt_float(dw1_sweep_ctor),
                 Dw1SweepBucket               = opt_float(dw1_sweep_bucket),
                 Dw1SweepScatter              = opt_float(dw1_sweep_scatter),
                 Dw1SweepColWalk              = opt_float(dw1_sweep_colwalk),
@@ -276,7 +274,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             ))
         else:
             (tid, tree, depth, nodes, samples,
-             pe, get_cand, aa_col_fetch,
+             pe, get_cand, col_with_cast,
              fill_example, scan_splits,
              init_buckets, fill_buckets, finalize_buckets,
              features, labels, scan_presorted,
@@ -285,7 +283,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
              gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
              sym_build, sym_sort, sym_sweep,
              dw1_presize, dw1_sweep,
-             dw1_sweep_ctor, dw1_sweep_bucket, dw1_sweep_scatter,
+             dw1_sweep_bucket, dw1_sweep_scatter,
              dw1_sweep_colwalk, dw1_sweep_big, dw1_sweep_generic,
              node_train, find_best_condition, oblique_split_search,
              find_oblique_setup, evaluate_proj, entropy_table_setup,
@@ -302,7 +300,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 samples                      = int(samples),
                 ProjectionEvaluate           = float(pe),
                 GetCandidateAttributes       = float(get_cand),
-                AxisAlignedColumnFetch       = float(aa_col_fetch),
+                ColumnWithCast               = float(col_with_cast),
                 SortFillExampleBucketSet     = float(fill_example),
                 SortScanSplits               = float(scan_splits),
                 SortInitBuckets              = float(init_buckets),
@@ -328,7 +326,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 SymSweep                     = opt_float(sym_sweep),
                 Dw1PreSize                   = opt_float(dw1_presize),
                 Dw1Sweep                     = opt_float(dw1_sweep),
-                Dw1SweepCtor                 = opt_float(dw1_sweep_ctor),
                 Dw1SweepBucket               = opt_float(dw1_sweep_bucket),
                 Dw1SweepScatter              = opt_float(dw1_sweep_scatter),
                 Dw1SweepColWalk              = opt_float(dw1_sweep_colwalk),
@@ -375,78 +372,107 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         # Friendlier column names + dashes to show scope nesting. GPU
         # columns are flat (one column per helper stage) — no dashes. CPU
         # split-finder columns retain their nested dashes.
+        # The dash prefix on each renamed column equals the scope's absolute
+        # depth in the CHRONO hierarchy, with TreeTrain at depth 0:
+        #   0  TreeTrain
+        #   1  ├─ NodeTrain (and the BFS-only BfsNodeLoop scheduler scope)
+        #   2  │  ├─ SetLeafValue / FindBestCondition / SplitExamplesInPlace
+        #   3  │  │  ├─ ObliqueSplitSearch / AxisAlignedSplitSearch
+        #   4  │  │  │  ├─ FindObliqueSetup / SampleProjection /
+        #   4  │  │  │  │  ApplyProjection / EvaluateProj
+        #   5  │  │  │  │  ├─ (ApplyProjection) Sym*/Dw1* ; (EvaluateProj) Cart/Histo
+        #   6  │  │  │  │  │  └─ Dw1Sweep* ; Cart/Histo split-finder leaves
+        #   7  │  │  │  │  │     └─ MinMaxNumerical (under HistogramSetup)
+        # GPU helper-stage columns stay flat (no dashes): they are alternative
+        # implementations of ApplyProjection, not nested scopes.
         g = g.rename(columns={
             "samples": "Active Samples",
-            "ProjectionEvaluate": "ApplyProjection",
-            # Inside EvaluateProjection → FindSplitHistogram (CPU histogram)
-            "HistogramSetup":               "--HistogramSetup",
-            "MinMaxNumerical":              "---MinMaxNumerical",
-            "AssignSamplesToHist":          "--AssignSamplesToHist",
-            "SelectBestThresholdHistogram": "--SelectBestThresholdHistogram",
-            # Inside EvaluateProjection (CPU Exact/Sort splitter)
-            "SortFillExampleBucketSet":     "-SortFillExampleBucketSet",
-            "SortInitBuckets":              "--SortInitBuckets",
-            "SortFillBuckets":              "--SortFillBuckets",
-            "SortFinalizeBuckets":          "--SortFinalizeBuckets",
-            "SortFeatures":                 "--SortFeatures",
-            "SortLabels":                   "--SortLabels",
-            "SortScanSplits":               "-SortScanSplits",
-            "ScanPresorted":                "-ScanPresorted",
-            # ApplyProjectionsSymmetricDepthwiseAP sub-phases (nest under
-            # ApplyProjection — they sum to it).
-            "SymBuildBag":                  "-SymBuildBag",
-            "SymSortBag":                   "-SymSortBag",
-            "SymSweep":                     "-SymSweep",
-            # ApplyProjectionsDepthwise1Pass sub-phases (also sum to
-            # ApplyProjection, mutually exclusive with Sym* by build mode).
-            "Dw1PreSize":                   "-Dw1PreSize",
-            "Dw1Sweep":                     "-Dw1Sweep",
-            # Sub-phases of Dw1Sweep (nest under it — they sum to Dw1Sweep
-            # modulo the evaluator ctor and per-task loop glue).
-            "Dw1SweepCtor":                 "--Dw1SweepCtor",
-            "Dw1SweepBucket":               "--Dw1SweepBucket",
-            "Dw1SweepScatter":              "--Dw1SweepScatter",
-            "Dw1SweepColWalk":              "--Dw1SweepColWalk",
-            "Dw1SweepBig":                  "--Dw1SweepBig",
-            "Dw1SweepGeneric":              "--Dw1SweepGeneric",
-            # BFS-only scheduler scope (top-level, not nested under
-            # ApplyProjection). BfsNodeLoop = per-node NodeTrain
-            # dispatch in the BFS_ONLY fallback path.
-            "BfsNodeLoop":                  "BfsNodeLoop",
-            # Per-node bookkeeping scopes inside NodeTrain /
-            # FindBestConditionSparseObliqueTemplate. Close the
-            # BfsNodeLoop − Σ(splitter scopes) gap.
-            "NodeTrain":                    "NodeTrain",
-            "FindBestCondition":            "-FindBestCondition",
-            "ObliqueSplitSearch":           "--ObliqueSplitSearch",
-            "FindObliqueSetup":             "---FindObliqueSetup",
-            "EvaluateProj":                 "---EvaluateProj",
-            "EntropyTableSetup":            "----EntropyTableSetup",
-            "CartPath":                     "----CartPath",
-            "CartSetup":                    "-----CartSetup",
-            "HistoPath":                    "----HistoPath",
-            "AxisAlignedSplitSearch":        "--AxisAlignedSplitSearch",
-            "SampleProjection":             "SampleProjection",
-            "SplitExamplesInPlace":         "SplitExamplesInPlace",
-            "SetLeafValue":                 "SetLeafValue",
-            # Top-level per-tree scope. Non-zero only at depth=0 of each
-            # tree. The DFS analogue of BFS top-level scopes.
+            # depth 0 — top-level per-tree scope (non-zero only at depth=0 of
+            # each tree). The DFS analogue of the BFS top-level scope.
             "TreeTrain":                    "TreeTrain",
+            # depth 1 — under TreeTrain.
+            "BfsNodeLoop":                  "-BfsNodeLoop",
+            "NodeTrain":                    "-NodeTrain",
+            # depth 2 — under NodeTrain.
+            "SetLeafValue":                 "--SetLeafValue",
+            "FindBestCondition":            "--FindBestCondition",
+            "SplitExamplesInPlace":         "--SplitExamplesInPlace",
+            # depth 3 — under FindBestCondition.
+            "ObliqueSplitSearch":           "---ObliqueSplitSearch",
+            "AxisAlignedSplitSearch":       "---AxisAlignedSplitSearch",
+            # depth 4 — under ObliqueSplitSearch (per-node setup + per-K loop).
+            "FindObliqueSetup":             "----FindObliqueSetup",
+            "SampleProjection":             "----SampleProjection",
+            "ProjectionEvaluate":           "----ApplyProjection",
+            "EvaluateProj":                 "----EvaluateProj",
+            # depth 4 — under AxisAlignedSplitSearch (noise on oblique runs).
+            "GetCandidateAttributes":       "----GetCandidateAttributes",
+            "ColumnWithCast":               "----ColumnWithCast",
+            # depth 5 — ApplyProjection sub-phases. SymmetricDepthwiseAP and
+            # Depthwise1Pass are mutually exclusive by build mode; each sums
+            # back to ApplyProjection.
+            "SymBuildBag":                  "-----SymBuildBag",
+            "SymSortBag":                   "-----SymSortBag",
+            "SymSweep":                     "-----SymSweep",
+            "Dw1PreSize":                   "-----Dw1PreSize",
+            "Dw1Sweep":                     "-----Dw1Sweep",
+            # depth 5 — EvaluateProj's two split-finder paths.
+            "CartPath":                     "-----CartPath",
+            "HistoPath":                    "-----HistoPath",
+            # depth 6 — Dw1Sweep sub-phases (sum to Dw1Sweep modulo ctor/glue).
+            "Dw1SweepBucket":               "------Dw1SweepBucket",
+            "Dw1SweepScatter":              "------Dw1SweepScatter",
+            "Dw1SweepColWalk":              "------Dw1SweepColWalk",
+            "Dw1SweepBig":                  "------Dw1SweepBig",
+            "Dw1SweepGeneric":              "------Dw1SweepGeneric",
+            # depth 6 — CartPath leaves (CPU Exact/Sort splitter).
+            "CartSetup":                    "------CartSetup",
+            "SortFillExampleBucketSet":     "------SortFillExampleBucketSet",
+            "SortInitBuckets":              "------SortInitBuckets",
+            "SortFillBuckets":              "------SortFillBuckets",
+            "SortFinalizeBuckets":          "------SortFinalizeBuckets",
+            "SortFeatures":                 "------SortFeatures",
+            "SortLabels":                   "------SortLabels",
+            "SortScanSplits":               "------SortScanSplits",
+            "ScanPresorted":                "------ScanPresorted",
+            # depth 6 — HistoPath leaves (CPU histogram splitter).
+            "EntropyTableSetup":            "------EntropyTableSetup",
+            "HistogramSetup":               "------HistogramSetup",
+            "AssignSamplesToHist":          "------AssignSamplesToHist",
+            "SelectBestThresholdHistogram": "------SelectBestThresholdHistogram",
+            # depth 7 — under HistogramSetup (excluded from the CSV below).
+            "MinMaxNumerical":              "-------MinMaxNumerical",
         })
 
         g = g.drop(columns=["thread"])
 
-        # Reorder columns. ProjEval first, then the flat per-stage GPU
-        # kernel columns + GpuOther residual, then the CPU split-finder
-        # subtree. Columns missing for the current mode are filtered out
-        # below.
-        # Call-stack order from outermost-in. CART and Histogram children
-        # of EvaluateProj are kept in adjacent blocks so each path can be
-        # read top-to-bottom. Columns missing for the current mode are
-        # zero-dropped below.
+        # Reorder columns as a strict pre-order (DFS) traversal of the
+        # CHRONO scope hierarchy, so reading left-to-right walks the call
+        # tree parent→child. Each scope is listed immediately before its
+        # own children; the dash prefixes already encode nesting depth.
+        # GPU kernels and the Sym*/Dw1* fused-Apply phases are placed under
+        # ApplyProjection because they are alternative implementations of
+        # that scope (selected at build/runtime). Columns missing for the
+        # current mode are filtered out below; all-zero columns are
+        # zero-dropped further down.
         desired_order = [
             "tree", "depth", "nodes", "Active Samples",
-            # GPU kernels (run before CPU work in GPU mode).
+
+            # depth 0 — top-level per-tree scope.
+            "TreeTrain",
+            # depth 1 — under TreeTrain.
+            "-BfsNodeLoop",          # BFS-only scheduler scope
+            "-NodeTrain",
+            # depth 2 — under NodeTrain.
+            "--SetLeafValue",
+            "--FindBestCondition",
+            # depth 3 — under FindBestCondition.
+            "---ObliqueSplitSearch",
+            # depth 4 — under ObliqueSplitSearch (per-node setup + per-K loop).
+            "----FindObliqueSetup",
+            "----SampleProjection",
+            "----ApplyProjection",   # kProjectionEvaluate — col-major gather/FMA
+            #   GPU kernels (flat): ApplyProjection replacement on the GPU path.
             "GpuSampleBatch",
             "GpuInit",
             "GpuMutex",
@@ -459,65 +485,52 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "ExactSplit",
             "GpuOther",
             "GpuUnpack",
-            # Top-level ground-truth scope.
-            "TreeTrain",
-            # BFS-only scheduler scope (top-level under TreeTrain).
-            "BfsNodeLoop",
-            # Per-node body.
-            "NodeTrain",
-            "-FindBestCondition",
-            "---FindObliqueSetup",
-            "--ObliqueSplitSearch",
-            "SampleProjection",
-            "--AxisAlignedSplitSearch",
-            "ApplyProjection",
-            # Sub-phases of ApplyProjection.
-            "-SymBuildBag",
-            "-SymSortBag",
-            "-SymSweep",
-            "-Dw1PreSize",
-            "-Dw1Sweep",
-            # Sub-phases of Dw1Sweep.
-            "--Dw1SweepCtor",
-            "--Dw1SweepBucket",
-            "--Dw1SweepScatter",
-            "--Dw1SweepColWalk",
-            "--Dw1SweepBig",
-            "--Dw1SweepGeneric",
-            "---EvaluateProj",
-            # --- CART path inside EvaluateProj ---
-            "----CartPath",
-            "-----CartSetup",
-            "--SortInitBuckets",
-            "--SortFillBuckets",
-            "--SortFeatures",
-            "-SortScanSplits",
-            # --- Histogram path inside EvaluateProj ---
-            "----HistoPath",
-            "----EntropyTableSetup",
-            "--HistogramSetup",
-            "--AssignSamplesToHist",
-            "--SelectBestThresholdHistogram",
-            # Other splitter-related scopes (rare in current modes).
-            "EvaluateProjection",
-            "-SortFillExampleBucketSet",
-            "--SortFinalizeBuckets",
-            "--SortLabels",
-            "-ScanPresorted",
-            "GetCandidateAttributes",
-            "AxisAlignedColumnFetch",
-            # Per-node finish.
-            "SplitExamplesInPlace",
-            "SetLeafValue",
+            #   depth 5 — ApplyProjection sub-phases (Sym*/Dw1*, build-mode
+            #   exclusive), then depth 6 Dw1Sweep children.
+            "-----SymBuildBag",
+            "-----SymSortBag",
+            "-----SymSweep",
+            "-----Dw1PreSize",
+            "-----Dw1Sweep",
+            "------Dw1SweepBucket",
+            "------Dw1SweepScatter",
+            "------Dw1SweepColWalk",
+            "------Dw1SweepBig",
+            "------Dw1SweepGeneric",
+            # depth 4 — EvaluateProj split-finder dispatch.
+            "----EvaluateProj",
+            #   depth 5 — CART path (EXACT, the DFS col-major default), depth 6 leaves.
+            "-----CartPath",
+            "------CartSetup",
+            "------SortFillExampleBucketSet",
+            "------SortInitBuckets",
+            "------SortFillBuckets",
+            "------SortFinalizeBuckets",
+            "------SortFeatures",
+            "------SortLabels",
+            "------SortScanSplits",
+            "------ScanPresorted",
+            #   depth 5 — Histogram path (DYNAMIC_* split types), depth 6 leaves.
+            "-----HistoPath",
+            "------EntropyTableSetup",
+            "------HistogramSetup",
+            "------AssignSamplesToHist",
+            "------SelectBestThresholdHistogram",
+            # depth 3 — axis-aligned splitter tail (timing noise under oblique).
+            "---AxisAlignedSplitSearch",
+            "----GetCandidateAttributes",
+            "----ColumnWithCast",
+            # depth 2 — per-node finish.
+            "--SplitExamplesInPlace",
         ]
         ordered = [c for c in desired_order if c in g.columns]
         remaining = [c for c in g.columns if c not in desired_order]
         g = g[ordered + remaining]
 
         # Columns intentionally excluded from the CSV (still chrono'd in
-        # C++). MinMaxNumerical is nested inside --HistogramSetup, so no
+        # C++). MinMaxNumerical is nested inside ------HistogramSetup, so no
         # coverage is lost.
-        excluded = ["---MinMaxNumerical"]
+        excluded = ["-------MinMaxNumerical"]
         g = g.drop(columns=[c for c in excluded if c in g.columns])
 
         # Drop timing columns that are all-zero for this run (e.g. GPU

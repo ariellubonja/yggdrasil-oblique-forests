@@ -165,6 +165,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
     absl::Span<std::vector<float>> out_projected) {
+
+/* #region Performance minions. All these take <10% of AP time */
+
   const size_t N = selected_examples_per_node.size();
   DCHECK_EQ(N, projections_per_node.size());
   DCHECK_EQ(N, out_projected.size());
@@ -180,7 +183,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
   // ── Phase 1: PreSize ──────────────────────────────────────────────
   // Slab pre-size (zero-init: the column sweep accumulates) + task build.
-  // Takes a tiny amount of time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
+  // ~5% of AP time
   std::vector<Dw1Task> tasks;
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1PreSize);
@@ -211,12 +214,12 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1Sweep);
-    CHRONO_BEGIN(dw1_ctor);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
-    CHRONO_END(dw1_ctor, ::yggdrasil_decision_forests::chrono_prof::kDw1SweepCtor); // ~0% of ApplyProjection time
 
     // Direct column pointers exist only for the default VerticalDataset
     // layout; alternate trunk layouts fall back to the generic kernel.
+
+    // TODO make the code error out if incompatible layout. don't need fallback
     bool direct = true;
     for (const auto attribute_idx : numerical_features) {
       if (evaluator.AttributeData(attribute_idx) == nullptr) {
@@ -239,6 +242,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         }
         return;
       }
+
+      // TODO what is this?
       if (task.big) {
         CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SweepBig);
         const size_t n = task.begin_node;
@@ -260,7 +265,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       entries.clear();
       touched.clear();
 
-      CHRONO_BEGIN(dw1_bucket);
+      CHRONO_BEGIN(dw1_bucket); // <= 2% of AP time
       for (size_t n = task.begin_node; n < task.end_node; ++n) {
         const auto& projs = projections_per_node[n];
         for (size_t p = 0; p < projs.size(); ++p) {
@@ -279,7 +284,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepBucket);
 
       // Counting sort by column: col_count becomes the running fill cursor.
-      CHRONO_BEGIN(dw1_scatter);
+      CHRONO_BEGIN(dw1_scatter); // <1% of AP time
       size_t offset = 0;
       for (const int32_t c : touched) {
         const int32_t cnt = col_count[c];
@@ -293,6 +298,11 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       CHRONO_END(dw1_scatter,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepScatter);
 
+/* #endregion */
+
+/* #region SHARED_ROWS */
+
+// TODO BEFORE ANYTHING! RUN CHRONO ON SHARED_ROWS AP
 #ifdef DW1_SHARED_ROWS
       // Shared-rows colwalk. Build the block's merged bag once (the union of
       // its nodes' selected_examples, sorted by example id), then read each
@@ -318,6 +328,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       }
       // Rows are disjoint across nodes (the depth frontier partitions the bag),
       // so ordering by row id alone is a total order.
+      
+      // TODO IMMEDIATELY! Highway Sort this instead!
+      // TODO step 2: aren't bags individually sorted? if so, a linear scan should be sufficient?
       std::sort(bag.begin(), bag.end(),
                 [](const BagRow& a, const BagRow& b) { return a.row < b.row; });
       auto& node_ref_off = scratch.node_ref_off;
@@ -389,7 +402,10 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       CHRONO_END(dw1_colwalk,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
 #else
-      CHRONO_BEGIN(dw1_colwalk); // This takes 90% of the ApplyProjection time. The only thing worth optimizing
+/* #endregion */
+
+/* #region Col sharing only */
+      CHRONO_BEGIN(dw1_colwalk); // ~93% of the ApplyProjection time
       size_t pos = 0;
       for (const int32_t c : touched) {
         const float* col = evaluator.AttributeData(c);
@@ -420,6 +436,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         }
         col_count[c] = 0;  // reset for the next block
       }
+/* #endregion */
       CHRONO_END(dw1_colwalk,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
 #endif  // DW1_SHARED_ROWS

@@ -515,7 +515,7 @@ absl::StatusOr<SplitSearchResult> FindBestConditionClassification(
       const auto na_replacement = attribute_column_spec.numerical().mean();
       CHRONO_END(
           col_fetch,
-          ::yggdrasil_decision_forests::chrono_prof::kAxisAlignedColumnFetch);
+          ::yggdrasil_decision_forests::chrono_prof::kColumnWithCast);
 
       if (dt_config.numerical_split().type() == proto::NumericalSplit::EXACT) {
         ASSIGN_OR_RETURN(
@@ -1463,7 +1463,7 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
     case proto::DecisionTreeTrainingConfig::kSparseObliqueSplit:
     case proto::DecisionTreeTrainingConfig::kMhldObliqueSplit:
       {
-        CHRONO_SCOPE(
+        CHRONO_SCOPE_COARSE(
             ::yggdrasil_decision_forests::chrono_prof::kObliqueSplitSearch);
         ASSIGN_OR_RETURN(
             found_good_condition,
@@ -1491,12 +1491,8 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
           proto::DecisionTreeTrainingConfig::kMhldObliqueSplit;
 
   {
-    CHRONO_SCOPE_IF(
-        is_oblique,
-        ::yggdrasil_decision_forests::chrono_prof::kAxisAlignedSplitSearch);
-    CHRONO_SCOPE_IF(
-        !is_oblique,
-        ::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
+    CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
+    
     GetCandidateAttributes(config, config_link, dt_config,
                            &remaining_attributes_to_test, &candidate_attributes,
                            random);

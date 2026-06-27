@@ -167,7 +167,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   Projection current_projection;
   auto& projection_values = cache->projection_values;
 
-  CHRONO_BEGIN(find_oblique_setup);
+  CHRONO_BEGIN_COARSE(find_oblique_setup);
 #ifdef CACHE_PROJECTION_EVALUATOR
   // ProjectionEvaluator only depends on (dataset, numerical_features), both
   // constant across every node of every tree under GLOBAL_IMPUTATION, so
@@ -208,7 +208,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
   std::vector<UnsignedExampleIdx> dense_example_idxs(selected_examples.size());
   std::iota(dense_example_idxs.begin(), dense_example_idxs.end(), 0);
-  CHRONO_END(find_oblique_setup,
+  CHRONO_END_COARSE(find_oblique_setup,
              ::yggdrasil_decision_forests::chrono_prof::kFindObliqueSetup);
 
   /* #region Dynamic histogram downgrade */
@@ -313,6 +313,8 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   const bool sg_active = internal::PrepareSubtreeGatherNode(
       selected_examples, train_dataset.nrow(), sg);
 #endif
+
+// MAIN LOOP
   for (int projection_idx = 0; projection_idx < num_projections;
        projection_idx++) {
     // Generate a current_projection.
