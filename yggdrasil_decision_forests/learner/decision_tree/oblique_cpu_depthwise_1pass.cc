@@ -322,7 +322,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 /* #region SHARED_ROWS */
 
 // TODO BEFORE ANYTHING! RUN CHRONO ON SHARED_ROWS AP
-#ifdef DW1_SHARED_ROWS // ~33% of AP time in Shared-rows version
+#ifdef DW1_SHARED_ROWS // ~25% of AP time in Shared-rows version
       // Shared-rows colwalk. Build the block's merged bag once (the union of
       // its nodes' selected_examples, sorted by example id), then read each
       // touched column in ONE ascending pass over that bag — stride-1 when the
@@ -363,7 +363,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       CHRONO_END(dw1_shared_bag,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SharedBag);
 
-      CHRONO_BEGIN(dw1_sweep_colwalk);
+      CHRONO_BEGIN(dw1_sweep_colwalk); // ~72% of AP runtime
       {
         auto& ref_proj = scratch.ref_proj;
         auto& ref_w = scratch.ref_w;
