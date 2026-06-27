@@ -1348,14 +1348,14 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
              ::yggdrasil_decision_forests::chrono_prof::kGbtStartup);
 
   // kGbtPreprocessDataset: presort indices + feature stats. One-shot.
-  CHRONO_BEGIN(gbt_preprocess);
+  CHRONO_BEGIN(gbt_preprocess_dataset);
   ASSIGN_OR_RETURN(
       const auto preprocessing,
       decision_tree::PreprocessTrainingDataset(
           gradient_sub_train_dataset, config.train_config,
           config.train_config_link, config.gbt_config->decision_tree(),
           deployment_.num_threads()));
-  CHRONO_END(gbt_preprocess,
+  CHRONO_END(gbt_preprocess_dataset,
              ::yggdrasil_decision_forests::chrono_prof::kGbtPreprocessDataset);
 
   // kGbtStartup (reopens): post-preprocess init (vector_sequence_computer,

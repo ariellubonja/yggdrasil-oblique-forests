@@ -62,67 +62,55 @@ def chrono_level_name(chrono_level: int) -> str:
     raise ValueError(f"Unsupported chrono_level: {chrono_level}")
 
 
-# Tail of the per-depth LOG line: flat per-stage GPU timings (measured via
-# cudaEvent_t bridging in oblique_gpu_kernels.cu.cc). Every capture group is
-# optional so lines from CPU-only or older GPU builds still parse.
-_GPU_TAIL_RX = (
-    r"(?:\s+GpuInit\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuCsrFlatten\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuUnpack\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuMutex\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuSampleBatch\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+ApplyColumnADD\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+ApplyColumnADDMultiNode\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+RandomHistogram\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+SplitHistogram\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+SortIndices\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+ExactSplit\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+GpuOther\s+([0-9.eE+-]+)s)?"
-    # ApplyProjectionsSymmetricDepthwiseAP sub-phases. Optional — only
-    # emitted when the binary is built with -DSYMMETRIC_DEPTHWISE_AP.
-    r"(?:\s+SymBuildBag\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+SymSortBag\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+SymSweep\s+([0-9.eE+-]+)s)?"
-    # ApplyProjectionsDepthwise1Pass sub-phases. Optional — only emitted
-    # when the binary is built with -DDEPTHWISE_1_PASS.
-    r"(?:\s+Dw1PreSize\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+Dw1Sweep\s+([0-9.eE+-]+)s)?"
-    # Sub-phases of Dw1Sweep. Optional — only emitted under -DDEPTHWISE_1_PASS.
-    # ColWalk (gather/FMA) vs Bucket+Scatter (counting-sort) splits the 93%.
-    r"(?:\s+Dw1SweepBucket\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+Dw1SweepScatter\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+Dw1SweepColWalk\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+Dw1SweepBig\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+Dw1SweepGeneric\s+([0-9.eE+-]+)s)?"
-    # Per-node bookkeeping scopes inside NodeTrain / FindBestConditionSparseOblique.
-    # Always emitted (no #ifdef). Close the BfsNodeLoop residual gap.
-    r"(?:\s+NodeTrain\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+FindBestCondition\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+ObliqueSplitSearch\s+([0-9.eE+-]+)s)?"
-    # Sub-scopes of ObliqueSplitSearch closing the FBC residual gap.
-    r"(?:\s+FindObliqueSetup\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+EvaluateProj\s+([0-9.eE+-]+)s)?"
-    # Sub-scope of EvaluateProj — BuildCountLogCountTable(N_node).
-    r"(?:\s+EntropyTableSetup\s+([0-9.eE+-]+)s)?"
-    # Sub-scope of EvaluateProj — FindSplitLabelClassificationFeatureNumericalCart.
-    r"(?:\s+CartPath\s+([0-9.eE+-]+)s)?"
-    # Sub-scope of CartPath — feature_filler lambda (EffectiveStrategy etc.).
-    r"(?:\s+CartSetup\s+([0-9.eE+-]+)s)?"
-    # Sub-scope of EvaluateProj — whole histogram split-finder body (symmetric
-    # to CartPath; includes the reverse cumulative sweep and local destructors).
-    r"(?:\s+HistoPath\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+AxisAlignedSplitSearch\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+SampleProjection\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+SplitExamplesInPlace\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+SetLeafValue\s+([0-9.eE+-]+)s)?"
-    # BFS-only scheduler scope. BfsNodeLoop only fires under -DBFS_ONLY.
-    # Zero on DFS builds.
-    r"(?:\s+BfsNodeLoop\s+([0-9.eE+-]+)s)?"
-    # Top-level per-tree scope. Only depth=0 of each tree is non-zero —
-    # the entire tree-train accumulates there. Works as the DFS-build
-    # analogue of BfsNodeLoop for CHRONO-coverage comparison.
-    r"(?:\s+TreeTrain\s+([0-9.eE+-]+)s)?"
+# Log token (as printed by random_forest.cc's per-depth LOG line) -> internal
+# column name. Only tokens whose printed spelling differs from the internal
+# name need an entry; every other token passes through unchanged, so a CHRONO
+# scope newly added on the C++ side is captured automatically instead of being
+# silently dropped.
+_LOG_TOKEN_TO_COL = {
+    "ProjEval":                      "ProjectionEvaluate",
+    "kGetCandidateAttributes":       "GetCandidateAttributes",
+    "kColumnWithCast":               "ColumnWithCast",
+    "kHistogramSetup":               "HistogramSetup",
+    "kMinMaxNumerical":              "MinMaxNumerical",
+    "kAssignSamplesToHistogram":     "AssignSamplesToHist",
+    "kSelectBestThresholdHistogram": "SelectBestThresholdHistogram",
+    "kSortFillExampleBucketSet":     "SortFillExampleBucketSet",
+    "kSortScanSplits":               "SortScanSplits",
+    "kSortInitBuckets":              "SortInitBuckets",
+    "kSortFillBuckets":              "SortFillBuckets",
+    "kSortFinalizeBuckets":          "SortFinalizeBuckets",
+    "kSortFeatures":                 "SortFeatures",
+    "kSortLabels":                   "SortLabels",
+    "kScanPresorted":                "ScanPresorted",
+}
+
+# Every timing column the downstream pipeline knows about, seeded to 0.0 on
+# each row so a thread/depth that never emitted a given token still carries the
+# column (the old fixed-schema behaviour). Tokens captured but absent here
+# (e.g. a brand-new scope) are still added per row and surface as trailing
+# "unordered" CSV columns -- never dropped.
+_TIMING_COLS = (
+    "ProjectionEvaluate", "GetCandidateAttributes", "ColumnWithCast",
+    "HistogramSetup", "MinMaxNumerical", "AssignSamplesToHist",
+    "SelectBestThresholdHistogram",
+    "SortFillExampleBucketSet", "SortScanSplits", "SortInitBuckets",
+    "SortFillBuckets", "SortFinalizeBuckets", "SortFeatures", "SortLabels",
+    "ScanPresorted",
+    "GpuInit", "GpuCsrFlatten", "GpuUnpack", "GpuMutex", "GpuSampleBatch",
+    "ApplyColumnADD", "ApplyColumnADDMultiNode", "RandomHistogram",
+    "SplitHistogram", "SortIndices", "ExactSplit", "GpuOther",
+    "SymBuildBag", "SymSortBag", "SymSweep",
+    "Dw1PreSize", "Dw1Sweep", "Dw1SweepBucket", "Dw1SweepScatter",
+    "Dw1SweepColWalk", "Dw1SweepBig", "Dw1SweepGeneric", "Dw1SharedBag",
+    "NodeTrain", "FindBestCondition", "ObliqueSplitSearch",
+    "FindObliqueSetup", "EvaluateProj", "EntropyTableSetup", "CartPath",
+    "CartSetup", "HistoPath", "AxisAlignedSplitSearch", "SampleProjection",
+    "SplitExamplesInPlace", "SetLeafValue", "BfsNodeLoop", "TreeTrain",
 )
+
+# One "<Token> <seconds>s" timing pair on a per-depth LOG line.
+_TIMING_PAIR_RX = re.compile(r"([A-Za-z_]\w*)\s+(-?[0-9.eE+-]+)s")
 
 # Thread identifier printed by random_forest.cc is `std::this_thread::get_id()`
 # streamed via operator<<. That representation is implementation-defined:
@@ -131,222 +119,37 @@ _GPU_TAIL_RX = (
 # on both — the value is only used as a per-thread grouping key.
 _THREAD_ID_RX = r"(0x[0-9a-fA-F]+|\d+)"
 
-# "Classic" (Exact / sort-based CPU split)
-TIMING_RX_SORT = re.compile(
-    r"thread\s+" + _THREAD_ID_RX + r"\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
-    r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
-    r"ProjEval\s+([0-9.eE+-]+)s\s+"            #  7
-    r"kGetCandidateAttributes\s+([0-9.eE+-]+)s\s+"      #  7a
-    r"kColumnWithCast\s+([0-9.eE+-]+)s\s+"              #  7c
-    r"kSortFillExampleBucketSet\s+([0-9.eE+-]+)s\s+"   #  9
-    r"kSortScanSplits\s+([0-9.eE+-]+)s\s+"             # 10
-    r"kSortInitBuckets\s+([0-9.eE+-]+)s\s+"             # 11
-    r"kSortFillBuckets\s+([0-9.eE+-]+)s\s+"             # 12
-    r"kSortFinalizeBuckets\s+([0-9.eE+-]+)s\s+"         # 13
-    r"kSortFeatures\s+([0-9.eE+-]+)s\s+"                # 14
-    r"kSortLabels\s+([0-9.eE+-]+)s\s+"                  # 15
-    r"kScanPresorted\s+([0-9.eE+-]+)s"                  # 16
-    + _GPU_TAIL_RX
-)
-
-# Extended with the histogram-based CPU split phases. The 8 Exact / sort-path
-# fields are optional: a pure-histogram run leaves them at zero, but
-# DYNAMIC_RANDOM_HISTOGRAM / DYNAMIC_EQUAL_WIDTH_HISTOGRAM downgrade per-node
-# to EXACT below dynamic_split_threshold (oblique.cc:194-203), so this branch
-# can carry non-zero Sort-path values on Dynamic runs.
-TIMING_RX_HISTO = re.compile(
-    r"thread\s+" + _THREAD_ID_RX + r"\s+tree\s+(\d+)\s+depth\s+(\d+)\s+"
-    r"nodes\s+(\d+)\s+samples\s+(\d+)\s+"
-    r"ProjEval\s+([0-9.eE+-]+)s\s+"
-    r"kGetCandidateAttributes\s+([0-9.eE+-]+)s\s+"
-    r"kColumnWithCast\s+([0-9.eE+-]+)s\s+"
-    r"kHistogramSetup\s+([0-9.eE+-]+)s\s+"
-    r"kMinMaxNumerical\s+([0-9.eE+-]+)s\s+"
-    r"kAssignSamplesToHistogram\s+([0-9.eE+-]+)s\s+"
-    r"kSelectBestThresholdHistogram\s+([0-9.eE+-]+)s"
-    # Dynamic-fallback Exact-path scopes. Optional — zero on pure-histogram
-    # builds, non-zero when DYNAMIC_* downgrades small nodes to EXACT.
-    r"(?:\s+kSortFillExampleBucketSet\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+kSortScanSplits\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+kSortInitBuckets\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+kSortFillBuckets\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+kSortFinalizeBuckets\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+kSortFeatures\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+kSortLabels\s+([0-9.eE+-]+)s)?"
-    r"(?:\s+kScanPresorted\s+([0-9.eE+-]+)s)?"
-    + _GPU_TAIL_RX
+# Per-depth LOG line emitted by random_forest.cc (one per thread x tree x
+# depth). Capture the fixed prefix; the trailing timing pairs are scanned
+# separately with _TIMING_PAIR_RX. This is order-independent and forward
+# compatible -- a new CHRONO scope no longer truncates the line. (The old
+# positional regex stopped at the first unrecognized token, so the
+# DW1_SHARED_ROWS `Dw1SharedBag` token hid SampleProjection and the whole
+# NodeTrain tail emitted after it.)
+_PER_DEPTH_RX = re.compile(
+    r"thread\s+" + _THREAD_ID_RX +
+    r"\s+tree\s+(\d+)\s+depth\s+(\d+)\s+nodes\s+(\d+)\s+samples\s+(\d+)"
+    r"([^\n]*)"
 )
 
 
 def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
-    histo_mode = "kSelectBestThresholdHistogram" in raw_log
-    rx = TIMING_RX_HISTO if histo_mode else TIMING_RX_SORT
-
     rows = []
-    for m in rx.finditer(raw_log):
-        g = m.groups()
+    for m in _PER_DEPTH_RX.finditer(raw_log):
+        tid, tree, depth, nodes, samples, rest = m.groups()
 
-        # Helper for optional GPU fields (None → 0.0)
-        def opt_float(val):
-            return float(val) if val is not None else 0.0
-
-        if histo_mode:
-            (tid, tree, depth, nodes, samples,
-             pe, get_cand, col_with_cast,
-             setup, minmax, ast, sbt,
-             fill_example, scan_splits,
-             init_buckets, fill_buckets, finalize_buckets,
-             features, labels, scan_presorted,
-             gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
-             gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
-             gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
-             sym_build, sym_sort, sym_sweep,
-             dw1_presize, dw1_sweep,
-             dw1_sweep_bucket, dw1_sweep_scatter,
-             dw1_sweep_colwalk, dw1_sweep_big, dw1_sweep_generic,
-             node_train, find_best_condition, oblique_split_search,
-             find_oblique_setup, evaluate_proj, entropy_table_setup,
-             cart_path, cart_setup, histo_path,
-             axis_aligned_split_search,
-             sample_proj, split_in_place, set_leaf_value,
-             bfs_node_loop, tree_train) = g
-
-            rows.append(dict(
-                thread                       = int(tid, 0),  # 0x… (libc++) or decimal (libstdc++)
-                tree                         = int(tree),
-                depth                        = int(depth),
-                nodes                        = int(nodes),
-                samples                      = int(samples),
-                ProjectionEvaluate           = float(pe),
-                GetCandidateAttributes       = float(get_cand),
-                ColumnWithCast               = float(col_with_cast),
-                HistogramSetup               = float(setup),
-                MinMaxNumerical              = float(minmax),
-                AssignSamplesToHist          = float(ast),
-                SelectBestThresholdHistogram = float(sbt),
-                # Exact / sort-path fields. Non-zero only when a DYNAMIC_*
-                # histogram run falls back to EXACT for small nodes.
-                SortFillExampleBucketSet     = opt_float(fill_example),
-                SortScanSplits               = opt_float(scan_splits),
-                SortInitBuckets              = opt_float(init_buckets),
-                SortFillBuckets              = opt_float(fill_buckets),
-                SortFinalizeBuckets          = opt_float(finalize_buckets),
-                SortFeatures                 = opt_float(features),
-                SortLabels                   = opt_float(labels),
-                ScanPresorted                = opt_float(scan_presorted),
-                GpuInit                      = opt_float(gpu_init),
-                GpuCsrFlatten                = opt_float(gpu_csr),
-                GpuUnpack                    = opt_float(gpu_unpack),
-                GpuMutex                     = opt_float(gpu_mutex),
-                GpuSampleBatch               = opt_float(gpu_sample),
-                ApplyColumnADD               = opt_float(gpu_apply_cad),
-                ApplyColumnADDMultiNode      = opt_float(gpu_apply_cad_mn),
-                RandomHistogram              = opt_float(gpu_random_hist),
-                SplitHistogram               = opt_float(gpu_split_hist),
-                SortIndices                  = opt_float(gpu_sort_idx),
-                ExactSplit                   = opt_float(gpu_exact_split),
-                GpuOther                     = opt_float(gpu_other),
-                SymBuildBag                  = opt_float(sym_build),
-                SymSortBag                   = opt_float(sym_sort),
-                SymSweep                     = opt_float(sym_sweep),
-                Dw1PreSize                   = opt_float(dw1_presize),
-                Dw1Sweep                     = opt_float(dw1_sweep),
-                Dw1SweepBucket               = opt_float(dw1_sweep_bucket),
-                Dw1SweepScatter              = opt_float(dw1_sweep_scatter),
-                Dw1SweepColWalk              = opt_float(dw1_sweep_colwalk),
-                Dw1SweepBig                  = opt_float(dw1_sweep_big),
-                Dw1SweepGeneric              = opt_float(dw1_sweep_generic),
-                NodeTrain                    = opt_float(node_train),
-                FindBestCondition            = opt_float(find_best_condition),
-                ObliqueSplitSearch           = opt_float(oblique_split_search),
-                FindObliqueSetup             = opt_float(find_oblique_setup),
-                EvaluateProj                 = opt_float(evaluate_proj),
-                EntropyTableSetup            = opt_float(entropy_table_setup),
-                CartPath                     = opt_float(cart_path),
-                CartSetup                    = opt_float(cart_setup),
-                HistoPath                    = opt_float(histo_path),
-                AxisAlignedSplitSearch       = opt_float(axis_aligned_split_search),
-                SampleProjection             = opt_float(sample_proj),
-                SplitExamplesInPlace         = opt_float(split_in_place),
-                SetLeafValue                 = opt_float(set_leaf_value),
-                BfsNodeLoop                  = opt_float(bfs_node_loop),
-                TreeTrain                    = opt_float(tree_train),
-            ))
-        else:
-            (tid, tree, depth, nodes, samples,
-             pe, get_cand, col_with_cast,
-             fill_example, scan_splits,
-             init_buckets, fill_buckets, finalize_buckets,
-             features, labels, scan_presorted,
-             gpu_init, gpu_csr, gpu_unpack, gpu_mutex, gpu_sample,
-             gpu_apply_cad, gpu_apply_cad_mn, gpu_random_hist,
-             gpu_split_hist, gpu_sort_idx, gpu_exact_split, gpu_other,
-             sym_build, sym_sort, sym_sweep,
-             dw1_presize, dw1_sweep,
-             dw1_sweep_bucket, dw1_sweep_scatter,
-             dw1_sweep_colwalk, dw1_sweep_big, dw1_sweep_generic,
-             node_train, find_best_condition, oblique_split_search,
-             find_oblique_setup, evaluate_proj, entropy_table_setup,
-             cart_path, cart_setup, histo_path,
-             axis_aligned_split_search,
-             sample_proj, split_in_place, set_leaf_value,
-             bfs_node_loop, tree_train) = g
-
-            rows.append(dict(
-                thread                       = int(tid, 0),  # 0x… (libc++) or decimal (libstdc++)
-                tree                         = int(tree),
-                depth                        = int(depth),
-                nodes                        = int(nodes),
-                samples                      = int(samples),
-                ProjectionEvaluate           = float(pe),
-                GetCandidateAttributes       = float(get_cand),
-                ColumnWithCast               = float(col_with_cast),
-                SortFillExampleBucketSet     = float(fill_example),
-                SortScanSplits               = float(scan_splits),
-                SortInitBuckets              = float(init_buckets),
-                SortFillBuckets              = float(fill_buckets),
-                SortFinalizeBuckets          = float(finalize_buckets),
-                SortFeatures                 = float(features),
-                SortLabels                   = float(labels),
-                ScanPresorted                = float(scan_presorted),
-                GpuInit                      = opt_float(gpu_init),
-                GpuCsrFlatten                = opt_float(gpu_csr),
-                GpuUnpack                    = opt_float(gpu_unpack),
-                GpuMutex                     = opt_float(gpu_mutex),
-                GpuSampleBatch               = opt_float(gpu_sample),
-                ApplyColumnADD               = opt_float(gpu_apply_cad),
-                ApplyColumnADDMultiNode      = opt_float(gpu_apply_cad_mn),
-                RandomHistogram              = opt_float(gpu_random_hist),
-                SplitHistogram               = opt_float(gpu_split_hist),
-                SortIndices                  = opt_float(gpu_sort_idx),
-                ExactSplit                   = opt_float(gpu_exact_split),
-                GpuOther                     = opt_float(gpu_other),
-                SymBuildBag                  = opt_float(sym_build),
-                SymSortBag                   = opt_float(sym_sort),
-                SymSweep                     = opt_float(sym_sweep),
-                Dw1PreSize                   = opt_float(dw1_presize),
-                Dw1Sweep                     = opt_float(dw1_sweep),
-                Dw1SweepBucket               = opt_float(dw1_sweep_bucket),
-                Dw1SweepScatter              = opt_float(dw1_sweep_scatter),
-                Dw1SweepColWalk              = opt_float(dw1_sweep_colwalk),
-                Dw1SweepBig                  = opt_float(dw1_sweep_big),
-                Dw1SweepGeneric              = opt_float(dw1_sweep_generic),
-                NodeTrain                    = opt_float(node_train),
-                FindBestCondition            = opt_float(find_best_condition),
-                ObliqueSplitSearch           = opt_float(oblique_split_search),
-                FindObliqueSetup             = opt_float(find_oblique_setup),
-                EvaluateProj                 = opt_float(evaluate_proj),
-                EntropyTableSetup            = opt_float(entropy_table_setup),
-                CartPath                     = opt_float(cart_path),
-                CartSetup                    = opt_float(cart_setup),
-                HistoPath                    = opt_float(histo_path),
-                AxisAlignedSplitSearch       = opt_float(axis_aligned_split_search),
-                SampleProjection             = opt_float(sample_proj),
-                SplitExamplesInPlace         = opt_float(split_in_place),
-                SetLeafValue                 = opt_float(set_leaf_value),
-                BfsNodeLoop                  = opt_float(bfs_node_loop),
-                TreeTrain                    = opt_float(tree_train),
-            ))
+        # Seed every known column to 0.0, then overlay whatever timing pairs
+        # this line actually carries. Unknown tokens map to themselves, so
+        # nothing is ever dropped -- order and presence are both irrelevant.
+        row = dict.fromkeys(_TIMING_COLS, 0.0)
+        row["thread"]  = int(tid, 0)   # 0x.. (libc++) or decimal (libstdc++)
+        row["tree"]    = int(tree)
+        row["depth"]   = int(depth)
+        row["nodes"]   = int(nodes)
+        row["samples"] = int(samples)
+        for tok, val in _TIMING_PAIR_RX.findall(rest):
+            row[_LOG_TOKEN_TO_COL.get(tok, tok)] = float(val)
+        rows.append(row)
 
     if not rows:
         raise ValueError("no parallel-chrono lines found in log")
@@ -422,6 +225,9 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # depth 6 — Dw1Sweep sub-phases (sum to Dw1Sweep modulo ctor/glue).
             "Dw1SweepBucket":               "------Dw1SweepBucket",
             "Dw1SweepScatter":              "------Dw1SweepScatter",
+            # -DDW1_SHARED_ROWS: merged per-block bag build + sort (replaces the
+            # per-node gather; sits beside the Bucket/Scatter/ColWalk siblings).
+            "Dw1SharedBag":                 "------Dw1SharedBag",
             "Dw1SweepColWalk":              "------Dw1SweepColWalk",
             "Dw1SweepBig":                  "------Dw1SweepBig",
             "Dw1SweepGeneric":              "------Dw1SweepGeneric",
@@ -494,6 +300,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "-----Dw1Sweep",
             "------Dw1SweepBucket",
             "------Dw1SweepScatter",
+            "------Dw1SharedBag",
             "------Dw1SweepColWalk",
             "------Dw1SweepBig",
             "------Dw1SweepGeneric",

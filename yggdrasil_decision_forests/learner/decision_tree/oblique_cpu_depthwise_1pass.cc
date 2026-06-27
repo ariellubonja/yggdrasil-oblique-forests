@@ -265,7 +265,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       entries.clear();
       touched.clear();
 
-      CHRONO_BEGIN(dw1_bucket); // <= 2% of AP time
+      CHRONO_BEGIN(dw1_sweep_bucket); // <= 2% of AP time
       for (size_t n = task.begin_node; n < task.end_node; ++n) {
         const auto& projs = projections_per_node[n];
         for (size_t p = 0; p < projs.size(); ++p) {
@@ -280,11 +280,11 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         }
       }
       std::sort(touched.begin(), touched.end());
-      CHRONO_END(dw1_bucket,
+      CHRONO_END(dw1_sweep_bucket,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepBucket);
 
       // Counting sort by column: col_count becomes the running fill cursor.
-      CHRONO_BEGIN(dw1_scatter); // <1% of AP time
+      CHRONO_BEGIN(dw1_sweep_scatter); // <1% of AP time
       size_t offset = 0;
       for (const int32_t c : touched) {
         const int32_t cnt = col_count[c];
@@ -295,7 +295,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       for (const auto& e : entries) {
         sorted[col_count[e.col]++] = e;
       }
-      CHRONO_END(dw1_scatter,
+      CHRONO_END(dw1_sweep_scatter,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepScatter);
 
 /* #endregion */
@@ -314,7 +314,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       // output slabs. This is the sparse-reads-for-sparse-writes trade; here
       // YDF_DW1_BLOCK_FLOATS bounds the scatter-write working set rather than
       // column reuse, so shrink it if the slabs spill LLC.
-      CHRONO_BEGIN(dw1_bag);
+      CHRONO_BEGIN(dw1_shared_bag);
       const int32_t begin_node_i = static_cast<int32_t>(task.begin_node);
       const size_t block_nodes = task.end_node - task.begin_node;
       auto& bag = scratch.bag;
@@ -342,10 +342,10 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         node_ref_off.assign(block_nodes, -1);
         node_ref_cnt.assign(block_nodes, 0);
       }
-      CHRONO_END(dw1_bag,
+      CHRONO_END(dw1_shared_bag,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SharedBag);
 
-      CHRONO_BEGIN(dw1_colwalk);
+      CHRONO_BEGIN(dw1_sweep_colwalk);
       {
         auto& ref_proj = scratch.ref_proj;
         auto& ref_w = scratch.ref_w;
@@ -399,13 +399,13 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           col_count[c] = 0;  // reset for the next block
         }
       }
-      CHRONO_END(dw1_colwalk,
+      CHRONO_END(dw1_sweep_colwalk,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
 #else
 /* #endregion */
 
 /* #region Col sharing only */
-      CHRONO_BEGIN(dw1_colwalk); // ~93% of the ApplyProjection time
+      CHRONO_BEGIN(dw1_sweep_colwalk); // ~93% of the ApplyProjection time
       size_t pos = 0;
       for (const int32_t c : touched) {
         const float* col = evaluator.AttributeData(c);
@@ -437,7 +437,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         col_count[c] = 0;  // reset for the next block
       }
 /* #endregion */
-      CHRONO_END(dw1_colwalk,
+      CHRONO_END(dw1_sweep_colwalk,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
 #endif  // DW1_SHARED_ROWS
     };

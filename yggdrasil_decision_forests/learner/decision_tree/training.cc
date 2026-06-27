@@ -506,7 +506,7 @@ absl::StatusOr<SplitSearchResult> FindBestConditionClassification(
         return SplitSearchResult::kNoBetterSplitFound;
       }
 
-      CHRONO_BEGIN(col_fetch);
+      CHRONO_BEGIN(column_with_cast);
       ASSIGN_OR_RETURN(
           const auto& attribute_data,
           train_dataset.ColumnWithCastWithStatus<
@@ -514,7 +514,7 @@ absl::StatusOr<SplitSearchResult> FindBestConditionClassification(
 
       const auto na_replacement = attribute_column_spec.numerical().mean();
       CHRONO_END(
-          col_fetch,
+          column_with_cast,
           ::yggdrasil_decision_forests::chrono_prof::kColumnWithCast);
 
       if (dt_config.numerical_split().type() == proto::NumericalSplit::EXACT) {
@@ -5298,14 +5298,14 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
                           dt_config.store_detailed_label_distribution());
 
   // Separate the positive and negative examples.
-  CHRONO_BEGIN(split_examples_in_place_s);
+  CHRONO_BEGIN(split_examples_in_place);
   ASSIGN_OR_RETURN(
       auto example_split,
       internal::SplitExamplesInPlace(
           *train_dataset_for_splitter, selected_examples,
           node->node().condition(), splitter_dataset_is_compact,
           dt_config.internal_error_on_wrong_splitter_statistics()));
-  CHRONO_END(split_examples_in_place_s,
+  CHRONO_END(split_examples_in_place,
              ::yggdrasil_decision_forests::chrono_prof::kSplitExamplesInPlace);
 
   if (example_split.positive_examples.empty() ||
@@ -5599,7 +5599,7 @@ absl::Status GrowTreeLocalBFS(
           current_depth;
       // K shared samples per depth — tiny, but scoped so the depth-level
       // sum (NodeTrain + ApplyProjection + SampleProjection) is complete.
-      CHRONO_BEGIN_COARSE(sym_sample_proj);
+      CHRONO_BEGIN_COARSE(sample_projection);
 #endif
       for (int p = 0; p < num_proj; ++p) {
         internal::SampleProjection(
@@ -5608,7 +5608,7 @@ absl::Status GrowTreeLocalBFS(
             &shared_projections[p], &shared_monotonic[p], random);
       }
 #if defined(CHRONO_PROFILE) && defined(SYMMETRIC_DEPTHWISE_AP)
-      CHRONO_END_COARSE(sym_sample_proj,
+      CHRONO_END_COARSE(sample_projection,
                  ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
 #endif
 
