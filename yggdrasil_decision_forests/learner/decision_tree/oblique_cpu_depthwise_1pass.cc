@@ -12,6 +12,8 @@
 #include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
+#include "hwy/base.h"
+#include "hwy/contrib/sort/vqsort.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 
@@ -59,16 +61,33 @@ struct ColEntry {
 };
 
 #ifdef DW1_SHARED_ROWS
-// One row of a block's merged bag: a global example id, the node that owns it
-// (index within the depth batch) and that row's local slot within the node's
-// output slab. The block's bag is the union of its nodes' selected_examples,
-// sorted by example id so each touched column is read in one ascending pass
-// (stride-1 when the union covers the row range) instead of a per-node gather.
-struct BagRow {
-  UnsignedExampleIdx row;
-  int32_t node;
-  int32_t local;
-};
+// One row of a block's merged bag, packed for hwy::VQSort. The block's bag is
+// the union of its nodes' selected_examples; we sort it by example id so each
+// touched column is read in one ascending pass (stride-1 when the union covers
+// the row range) instead of a per-node gather.
+//
+// hwy::K64V64 orders by `key` only, so the global example id (row) is the key.
+// The 64-bit `value` carries the payload: the owning node (index within the
+// depth batch) in the high 32 bits and that row's local slot within the node's
+// output slab in the low 32 bits. Both are int32_t and fit losslessly.
+using BagRow = hwy::K64V64;
+
+inline BagRow MakeBagRow(UnsignedExampleIdx row, int32_t node, int32_t local) {
+  BagRow e;
+  e.key = static_cast<uint64_t>(row);
+  e.value = (static_cast<uint64_t>(static_cast<uint32_t>(node)) << 32) |
+            static_cast<uint32_t>(local);
+  return e;
+}
+inline UnsignedExampleIdx BagRowExample(const BagRow& e) {
+  return static_cast<UnsignedExampleIdx>(e.key);
+}
+inline int32_t BagRowNode(const BagRow& e) {
+  return static_cast<int32_t>(e.value >> 32);
+}
+inline int32_t BagRowLocal(const BagRow& e) {
+  return static_cast<int32_t>(e.value & 0xFFFFFFFFu);
+}
 #endif
 
 struct Dw1Task {
@@ -303,7 +322,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 /* #region SHARED_ROWS */
 
 // TODO BEFORE ANYTHING! RUN CHRONO ON SHARED_ROWS AP
-#ifdef DW1_SHARED_ROWS
+#ifdef DW1_SHARED_ROWS // ~33% of AP time in Shared-rows version
       // Shared-rows colwalk. Build the block's merged bag once (the union of
       // its nodes' selected_examples, sorted by example id), then read each
       // touched column in ONE ascending pass over that bag — stride-1 when the
@@ -322,17 +341,16 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       for (size_t n = task.begin_node; n < task.end_node; ++n) {
         const auto sel = selected_examples_per_node[n];
         for (size_t local = 0; local < sel.size(); ++local) {
-          bag.push_back({sel[local], static_cast<int32_t>(n),
-                         static_cast<int32_t>(local)});
+          bag.push_back(MakeBagRow(sel[local], static_cast<int32_t>(n),
+                                   static_cast<int32_t>(local)));
         }
       }
       // Rows are disjoint across nodes (the depth frontier partitions the bag),
-      // so ordering by row id alone is a total order.
-      
-      // TODO IMMEDIATELY! Highway Sort this instead!
-      // TODO step 2: aren't bags individually sorted? if so, a linear scan should be sufficient?
-      std::sort(bag.begin(), bag.end(),
-                [](const BagRow& a, const BagRow& b) { return a.row < b.row; });
+      // so ordering by row id (the K64V64 key) alone is a total order.
+      //
+      // TODO step 2: aren't bags individually sorted? if so, a linear scan
+      // (merge of the already-sorted per-node runs) should be sufficient?
+      hwy::VQSort(bag.data(), bag.size(), hwy::SortAscending());
       auto& node_ref_off = scratch.node_ref_off;
       auto& node_ref_cnt = scratch.node_ref_cnt;
       if (node_ref_off.size() < block_nodes) {
@@ -382,15 +400,17 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           // One ascending pass over the bag: dense read of col, scatter write
           // of each contribution to its node's projections referencing c.
           for (const BagRow& be : bag) {
-            const int32_t bn = be.node - begin_node_i;
+            const int32_t node = BagRowNode(be);
+            const int32_t bn = node - begin_node_i;
             const int32_t off = node_ref_off[bn];
             if (off < 0) continue;  // owning node has no projection on column c
-            const float v = col[be.row];
+            const float v = col[BagRowExample(be)];
             const int32_t cnt = node_ref_cnt[bn];
-            float* slab = out_projected[be.node].data();
-            const size_t rows_n = selected_examples_per_node[be.node].size();
+            const int32_t local = BagRowLocal(be);
+            float* slab = out_projected[node].data();
+            const size_t rows_n = selected_examples_per_node[node].size();
             for (int32_t t = 0; t < cnt; ++t) {
-              slab[static_cast<size_t>(ref_proj[off + t]) * rows_n + be.local] +=
+              slab[static_cast<size_t>(ref_proj[off + t]) * rows_n + local] +=
                   ref_w[off + t] * v;
             }
           }
@@ -405,7 +425,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 /* #endregion */
 
 /* #region Col sharing only */
-      CHRONO_BEGIN(dw1_sweep_colwalk); // ~93% of the ApplyProjection time
+      CHRONO_BEGIN(dw1_sweep_colwalk); // ~93% of the ApplyProjection time in non-Shared-Rows. In Shared-rows, ~66%
       size_t pos = 0;
       for (const int32_t c : touched) {
         const float* col = evaluator.AttributeData(c);
