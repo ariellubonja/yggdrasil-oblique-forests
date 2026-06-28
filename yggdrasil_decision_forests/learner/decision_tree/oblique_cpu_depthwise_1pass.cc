@@ -315,7 +315,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       entries.clear();
       touched.clear();
 
-      CHRONO_BEGIN(dw1_sweep_bucket); // <= 2% of AP time
+      // <= 2% of AP time
       for (size_t n = task.begin_node; n < task.end_node; ++n) {
         const auto& projs = projections_per_node[n];
         for (size_t p = 0; p < projs.size(); ++p) {
@@ -330,11 +330,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         }
       }
       std::sort(touched.begin(), touched.end());
-      CHRONO_END(dw1_sweep_bucket,
-                 ::yggdrasil_decision_forests::chrono_prof::kDw1SweepBucket);
 
       // Counting sort by column: col_count becomes the running fill cursor.
-      CHRONO_BEGIN(dw1_sweep_scatter); // <1% of AP time
+      // <1% of AP time
       size_t offset = 0;
       for (const int32_t c : touched) {
         const int32_t cnt = col_count[c];
@@ -345,8 +343,6 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       for (const auto& e : entries) {
         sorted[col_count[e.col]++] = e;
       }
-      CHRONO_END(dw1_sweep_scatter,
-                 ::yggdrasil_decision_forests::chrono_prof::kDw1SweepScatter);
 
 /* #endregion */
 
@@ -428,6 +424,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           ref_w.resize(slice_end - slice_begin);
           col_touched.clear();
           int32_t prev_node = -1;
+          CHRONO_BEGIN(dw1_colwalk_group_by_node);
           for (size_t k = slice_begin; k < slice_end; ++k) {
             const ColEntry& e = sorted[k];
             const size_t kk = k - slice_begin;
@@ -445,9 +442,12 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             }
             ++node_ref_cnt[bn];
           }
+          CHRONO_END(dw1_colwalk_group_by_node,
+                     ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkGroupByNode);
 
           // One ascending pass over the bag: dense read of col, scatter write
           // of each contribution to its node's projections referencing c.
+          CHRONO_BEGIN(dw1_colwalk_bag_scatter);
           for (const BagRow& be : bag) {
             const int32_t node = BagRowNode(be);
             const int32_t bn = node - begin_node_i;
@@ -471,6 +471,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
                   ref_w[off + t] * v;
             }
           }
+
+          CHRONO_END(dw1_colwalk_bag_scatter,
+                     ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkBagScatter);
 
           for (const int32_t bn : col_touched) node_ref_off[bn] = -1;
           col_count[c] = 0;  // reset for the next block

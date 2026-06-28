@@ -101,8 +101,9 @@ _TIMING_COLS = (
     "ApplyColumnADD", "ApplyColumnADDMultiNode", "RandomHistogram",
     "SplitHistogram", "SortIndices", "ExactSplit", "GpuOther",
     "SymBuildBag", "SymSortBag", "SymSweep",
-    "Dw1PreSize", "Dw1Sweep", "Dw1SweepBucket", "Dw1SweepScatter",
-    "Dw1SweepColWalk", "Dw1SweepBig", "Dw1SweepGeneric", "Dw1SharedBag",
+    "Dw1PreSize", "Dw1Sweep",
+    "Dw1SweepColWalk", "Dw1ColWalkGroupByNode", "Dw1ColWalkBagScatter",
+    "Dw1SweepBig", "Dw1SweepGeneric", "Dw1SharedBag",
     "NodeTrain", "FindBestCondition", "ObliqueSplitSearch",
     "FindObliqueSetup", "EvaluateProj", "EntropyTableSetup", "CartPath",
     "CartSetup", "HistoPath", "AxisAlignedSplitSearch", "SampleProjection",
@@ -223,12 +224,13 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "CartPath":                     "-----CartPath",
             "HistoPath":                    "-----HistoPath",
             # depth 6 — Dw1Sweep sub-phases (sum to Dw1Sweep modulo ctor/glue).
-            "Dw1SweepBucket":               "------Dw1SweepBucket",
-            "Dw1SweepScatter":              "------Dw1SweepScatter",
             # -DDW1_SHARED_ROWS: merged per-block bag build + sort (replaces the
             # per-node gather; sits beside the Bucket/Scatter/ColWalk siblings).
             "Dw1SharedBag":                 "------Dw1SharedBag",
             "Dw1SweepColWalk":              "------Dw1SweepColWalk",
+            # depth 7 — ColWalk sub-loops (group-by-node pass + bag scatter pass).
+            "Dw1ColWalkGroupByNode":        "-------Dw1ColWalkGroupByNode",
+            "Dw1ColWalkBagScatter":         "-------Dw1ColWalkBagScatter",
             "Dw1SweepBig":                  "------Dw1SweepBig",
             "Dw1SweepGeneric":              "------Dw1SweepGeneric",
             # depth 6 — CartPath leaves (CPU Exact/Sort splitter).
@@ -298,10 +300,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "-----SymSweep",
             "-----Dw1PreSize",
             "-----Dw1Sweep",
-            "------Dw1SweepBucket",
-            "------Dw1SweepScatter",
             "------Dw1SharedBag",
             "------Dw1SweepColWalk",
+            "-------Dw1ColWalkGroupByNode",
+            "-------Dw1ColWalkBagScatter",
             "------Dw1SweepBig",
             "------Dw1SweepGeneric",
             # depth 4 — EvaluateProj split-finder dispatch.

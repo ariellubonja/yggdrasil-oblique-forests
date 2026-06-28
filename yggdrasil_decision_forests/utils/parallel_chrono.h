@@ -90,9 +90,9 @@ enum FuncId {
   // All fire once per task (≈ tasks.size() times), never per-row, so the
   // ScopedTimer clock-read overhead stays negligible. Splits the column-centric
   // block into bucketing vs. the gather/FMA hot loop to locate the 93%.
-  kDw1SweepBucket,   // entries push + col_count histogram + touched + sort
-  kDw1SweepScatter,  // prefix-sum offsets + counting-sort into `sorted`
   kDw1SweepColWalk,  // gather/FMA hot loop: o[i] += w * col[sel_ptr[i]]
+  kDw1ColWalkGroupByNode,  // inner loop 1: group sorted entries by node into ref_proj/ref_w
+  kDw1ColWalkBagScatter,   // inner loop 2: bag pass scatter-accumulate into out_projected
   kDw1SweepBig,      // EvaluateNodeProjMajor path (oversized single node)
   kDw1SweepGeneric,  // !direct fallback (EvaluateProjectionRowsGeneric)
   kDw1SharedBag,     // -DDW1_SHARED_ROWS: per-block merged-bag build + sort

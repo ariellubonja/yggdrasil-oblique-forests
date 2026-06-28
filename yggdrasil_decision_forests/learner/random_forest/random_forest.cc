@@ -1055,9 +1055,9 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
                   // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
                   // per-task loop glue.
-                  << " Dw1SweepBucket " << arr[kDw1SweepBucket] * 1e-9 << "s"
-                  << " Dw1SweepScatter " << arr[kDw1SweepScatter] * 1e-9 << "s"
                   << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
+                  << " Dw1ColWalkGroupByNode " << arr[kDw1ColWalkGroupByNode] * 1e-9 << "s"
+                  << " Dw1ColWalkBagScatter " << arr[kDw1ColWalkBagScatter] * 1e-9 << "s"
                   << " Dw1SweepBig " << arr[kDw1SweepBig] * 1e-9 << "s"
                   << " Dw1SweepGeneric " << arr[kDw1SweepGeneric] * 1e-9 << "s"
                   << " Dw1SharedBag " << arr[kDw1SharedBag] * 1e-9 << "s"
@@ -1158,9 +1158,9 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
                   // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
                   // per-task loop glue.
-                  << " Dw1SweepBucket " << arr[kDw1SweepBucket] * 1e-9 << "s"
-                  << " Dw1SweepScatter " << arr[kDw1SweepScatter] * 1e-9 << "s"
                   << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
+                  << " Dw1ColWalkGroupByNode " << arr[kDw1ColWalkGroupByNode] * 1e-9 << "s"
+                  << " Dw1ColWalkBagScatter " << arr[kDw1ColWalkBagScatter] * 1e-9 << "s"
                   << " Dw1SweepBig " << arr[kDw1SweepBig] * 1e-9 << "s"
                   << " Dw1SweepGeneric " << arr[kDw1SweepGeneric] * 1e-9 << "s"
                   << " Dw1SharedBag " << arr[kDw1SharedBag] * 1e-9 << "s"
