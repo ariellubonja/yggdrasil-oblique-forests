@@ -65,7 +65,34 @@ struct ColEntry {
 // the union of its nodes' selected_examples; we sort it by example id so each
 // touched column is read in one ascending pass (stride-1 when the union covers
 // the row range) instead of a per-node gather.
-//
+#ifdef DW1_SHARED_ROWS_K32
+// 8-byte entry: VQSort orders by the 32-bit example id (the K32V32 `key`); the
+// 32-bit `value` carries ONLY the owning node (index within the depth batch).
+// The row's local slot in the node's output slab is NOT stored: each node's
+// selected_examples is sorted ascending (DCHECK in SplitExamplesInPlace), so
+// within the row-sorted bag a node's rows appear in slab order, and `local` is
+// recovered as a per-node running counter during the colwalk. Half the
+// footprint of the K64V64 entry, so the colwalk's once-per-column bag stream
+// moves 8 B/row instead of 16 B (and beats the old 12 B {row,node,local} AoS).
+static_assert(sizeof(UnsignedExampleIdx) <= sizeof(uint32_t),
+              "DW1_SHARED_ROWS_K32 packs the example id into a 32-bit K32V32 "
+              "key; rebuild without --define=ydf_example_idx_num_bits=64.");
+using BagRow = hwy::K32V32;
+
+inline BagRow MakeBagRow(UnsignedExampleIdx row, int32_t node,
+                         int32_t /*local: derived from scan order*/) {
+  BagRow e;
+  e.key = static_cast<uint32_t>(row);
+  e.value = static_cast<uint32_t>(node);
+  return e;
+}
+inline UnsignedExampleIdx BagRowExample(const BagRow& e) {
+  return static_cast<UnsignedExampleIdx>(e.key);
+}
+inline int32_t BagRowNode(const BagRow& e) {
+  return static_cast<int32_t>(e.value);
+}
+#else
 // hwy::K64V64 orders by `key` only, so the global example id (row) is the key.
 // The 64-bit `value` carries the payload: the owning node (index within the
 // depth batch) in the high 32 bits and that row's local slot within the node's
@@ -88,6 +115,7 @@ inline int32_t BagRowNode(const BagRow& e) {
 inline int32_t BagRowLocal(const BagRow& e) {
   return static_cast<int32_t>(e.value & 0xFFFFFFFFu);
 }
+#endif  // DW1_SHARED_ROWS_K32
 #endif
 
 struct Dw1Task {
@@ -106,6 +134,9 @@ struct Dw1Scratch {
   std::vector<BagRow> bag;             // block's merged bag, sorted by row id
   std::vector<int32_t> node_ref_off;   // per block-node: start in ref_*, else -1
   std::vector<int32_t> node_ref_cnt;   // per block-node: #refs to current column
+#ifdef DW1_SHARED_ROWS_K32
+  std::vector<int32_t> node_local;     // per block-node: rows seen this column
+#endif
   std::vector<int32_t> ref_proj;       // current column's (proj, weight) runs,
   std::vector<float> ref_w;            //   grouped by node (node-ascending)
   std::vector<int32_t> col_touched;    // block-node ids touched this column
@@ -340,13 +371,22 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       bag.clear();
       for (size_t n = task.begin_node; n < task.end_node; ++n) {
         const auto sel = selected_examples_per_node[n];
+#ifdef DW1_SHARED_ROWS_K32
+        // K32V32 does not store `local`; the colwalk recovers it from the order
+        // in which this node's rows appear in the row-sorted bag. That only
+        // matches the slab slot if sel is sorted ascending (the upstream
+        // SplitExamplesInPlace DCHECK guarantees this, but that DCHECK is
+        // compiled out in opt, so re-assert it next to the code that relies on
+        // it). If this ever fires, the bag entry must carry `local` (K64V64).
+        DCHECK(std::is_sorted(sel.begin(), sel.end()));
+#endif
         for (size_t local = 0; local < sel.size(); ++local) {
           bag.push_back(MakeBagRow(sel[local], static_cast<int32_t>(n),
                                    static_cast<int32_t>(local)));
         }
       }
       // Rows are disjoint across nodes (the depth frontier partitions the bag),
-      // so ordering by row id (the K64V64 key) alone is a total order.
+      // so ordering by row id (the sort key) alone is a total order.
       //
       // TODO step 2: aren't bags individually sorted? if so, a linear scan
       // (merge of the already-sorted per-node runs) should be sufficient?
@@ -359,6 +399,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         // [0, block_nodes) range is -1 at each column boundary.
         node_ref_off.assign(block_nodes, -1);
         node_ref_cnt.assign(block_nodes, 0);
+#ifdef DW1_SHARED_ROWS_K32
+        scratch.node_local.assign(block_nodes, 0);
+#endif
       }
       CHRONO_END(dw1_shared_bag,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SharedBag);
@@ -368,6 +411,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         auto& ref_proj = scratch.ref_proj;
         auto& ref_w = scratch.ref_w;
         auto& col_touched = scratch.col_touched;
+#ifdef DW1_SHARED_ROWS_K32
+        auto& node_local = scratch.node_local;
+#endif
         size_t pos = 0;
         for (const int32_t c : touched) {
           const float* col = evaluator.AttributeData(c);
@@ -391,6 +437,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             if (e.node != prev_node) {
               node_ref_off[bn] = static_cast<int32_t>(kk);
               node_ref_cnt[bn] = 0;
+#ifdef DW1_SHARED_ROWS_K32
+              node_local[bn] = 0;  // restart this node's row counter for col c
+#endif
               col_touched.push_back(bn);
               prev_node = e.node;
             }
@@ -406,7 +455,15 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             if (off < 0) continue;  // owning node has no projection on column c
             const float v = col[BagRowExample(be)];
             const int32_t cnt = node_ref_cnt[bn];
+#ifdef DW1_SHARED_ROWS_K32
+            // Bag is row-sorted and the node's selected_examples is sorted
+            // ascending, so its rows are visited in slab order: the running
+            // counter IS the row's local slot. Advances once per node row
+            // (every entry that reaches here), so it stays in lockstep.
+            const int32_t local = node_local[bn]++;
+#else
             const int32_t local = BagRowLocal(be);
+#endif
             float* slab = out_projected[node].data();
             const size_t rows_n = selected_examples_per_node[node].size();
             for (int32_t t = 0; t < cnt; ++t) {

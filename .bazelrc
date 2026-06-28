@@ -18,6 +18,19 @@ build:depthwise_1_pass --cxxopt="-DDEPTHWISE_1_PASS=1"
 build:dw1_shared_rows --config=depthwise_1_pass
 build:dw1_shared_rows --cxxopt="-DDW1_SHARED_ROWS=1"
 
+# DW1 shared-rows, 32-bit bag entry: a variant of --config=dw1_shared_rows that
+# packs the merged bag as hwy::K32V32 (8 B) instead of K64V64 (16 B). VQSort
+# orders by the 32-bit example id (key); the 32-bit value carries only the
+# owning node. The row's local slab slot is NOT stored -- selected_examples are
+# sorted ascending, so the row-sorted bag visits each node's rows in slab order
+# and `local` is recovered as a per-node counter during the colwalk. Halves the
+# bytes streamed by Dw1SweepColWalk (and shrinks the VQSort element vs K64V64);
+# A/B the Dw1SweepColWalk and Dw1SharedBag chrono lines against
+# --config=dw1_shared_rows. Requires the default 32-bit example index (NOT
+# compatible with --define=ydf_example_idx_num_bits=64; static_assert enforces).
+build:dw1_shared_rows_k32 --config=dw1_shared_rows
+build:dw1_shared_rows_k32 --cxxopt="-DDW1_SHARED_ROWS_K32=1"
+
 # Hidden synthetic-layout experiments for ProjectionEvaluator. These change
 # numerical-feature storage for trunk synthetic datasets only; they are
 # scheduler-independent and can be combined with default Nodewise or Depthwise.
