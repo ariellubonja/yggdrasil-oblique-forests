@@ -2,77 +2,67 @@ build --disk_cache=~/.cache/bazel-disk
 
 # APPLYPROJECTION EXPERIMENTS
 
-# Depthwise fused ApplyProjection: one depth-batch scheduler over all node/projection
-# tasks, preserving ordinary per-node Sparse Oblique RF projection sampling.
+# Depthwise fused ApplyProjection: one depth-batch scheduler over all
+# node/projection tasks, keeping per-node Sparse Oblique RF projection sampling.
 build:depthwise_1_pass --cxxopt="-DDEPTHWISE_1_PASS=1"
 
-# DW1 shared-rows colwalk: a variant of --config=depthwise_1_pass. In the
-# column-centric block, read each touched column ONCE over the block's merged
-# bag (union of its nodes' selected_examples, sorted by row id) and scatter each
-# value to its owning node's projections, instead of re-gathering the column per
-# (node, projection). Trades the per-node sparse gather for a stride-1 read plus
-# sparse writes into the output slabs. A/B against plain --config=depthwise_1_pass:
-# compare the Dw1SweepColWalk chrono line (the new merged-bag prep shows up as
-# Dw1SharedBag). YDF_DW1_BLOCK_FLOATS now bounds the scatter-write working set,
-# so tune it down if the block's output slabs spill LLC.
+# DW1 shared-rows colwalk: variant of depthwise_1_pass. In the column-centric
+# block, read each touched column ONCE over the block's merged bag (union of its
+# nodes' selected_examples, sorted by row id) and scatter values to each owning
+# node's projections, instead of re-gathering the column per (node, projection).
+# Trades the per-node sparse gather for a stride-1 read plus sparse slab writes.
+# A/B vs plain depthwise_1_pass: compare the Dw1SweepColWalk chrono line (merged-
+# bag prep shows as Dw1SharedBag). YDF_DW1_BLOCK_FLOATS bounds the scatter-write
+# working set; tune down if output slabs spill LLC.
 #
-# The merged bag is packed as hwy::K32V32 (8 B/row): VQSort orders by the 32-bit
-# example id (key); the 32-bit value carries only the owning node. The row's
-# local slab slot is NOT stored -- selected_examples are sorted ascending, so the
-# row-sorted bag visits each node's rows in slab order and `local` is recovered
-# as a per-node counter during the colwalk. Requires the default 32-bit example
-# index (NOT compatible with --define=ydf_example_idx_num_bits=64; a static_assert
-# enforces this).
+# Merged bag is packed as hwy::K32V32 (8 B/row): VQSort orders by the 32-bit
+# example id (key); the 32-bit value carries only the owning node. The local slab
+# slot is NOT stored -- selected_examples are sorted ascending, so the row-sorted
+# bag visits each node's rows in slab order and `local` is recovered as a per-node
+# counter during the colwalk. Requires the default 32-bit example index (NOT
+# compatible with --define=ydf_example_idx_num_bits=64; static_assert enforces it).
 build:dw1_shared_rows --config=depthwise_1_pass
 build:dw1_shared_rows --cxxopt="-DDW1_SHARED_ROWS=1"
 
-# Hidden synthetic-layout experiments for ProjectionEvaluator. These change
-# numerical-feature storage for trunk synthetic datasets only; they are
-# scheduler-independent and can be combined with default Nodewise or Depthwise.
+# Synthetic-layout experiments for ProjectionEvaluator: change numerical-feature
+# storage for trunk synthetic datasets only. Scheduler-independent; combinable
+# with default Nodewise or Depthwise.
 build:row_major_dataset_layout --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 build:flat_col_dataset_layout --cxxopt="-DFLAT_COL_DATASET_LAYOUT=1"
 
 
 ## SYMMETRIC TREES
-# CatBoost-style symmetric/oblivious trees for Sparse Oblique RF: K candidate projections
-# shared across all nodes at depth d, one bag-wide sweep per candidate. Hooks
-# into GrowTreeLocalBFS's depth-batch loop. Implies BFS scheduling.
-
-# NOTE this does not include the shared Entropy logic of CatBoost, where only 1 entropy
-#  calculation per depth is done
+# CatBoost-style symmetric/oblivious trees for Sparse Oblique RF: K candidate
+# projections shared across all nodes at depth d, one bag-wide sweep per
+# candidate. Hooks into GrowTreeLocalBFS's depth-batch loop. Implies BFS.
+# NOTE: does not include CatBoost's shared-entropy logic (1 entropy calc/depth).
 build:symmetric_depthwise_ap --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
-# Symmetric_Nodewise_Control: control experiment that isolates the
-# shared-projection-sampling effect from the bagwide column-read effect.
-# K projections are sampled once per depth and reused by every node at that
-# depth, but each node still runs the normal node-local
-# ProjectionEvaluator::Evaluate path. Do not combine with
-# --config=symmetric_depthwise_ap (the AP path would shadow the control).
+# Symmetric_Nodewise_Control: isolates shared-projection-sampling from the
+# bagwide column-read effect. K projections sampled once per depth and reused by
+# every node, but each node still runs the normal node-local Evaluate path. Do
+# not combine with --config=symmetric_depthwise_ap (AP path would shadow it).
 build:symmetric_nodewise_control --cxxopt="-DSYMMETRIC_NODEWISE_CONTROL=1"
-# BFS_Only: deeper control that isolates the cost/benefit of just the BFS
-# (level-order) scheduler vs. DFS. Triggers GrowTreeLocalBFS, but does NOT
-# sample shared projections and does NOT call any fused bag-wide Apply. Each
-# node at a depth runs the normal per-node projection sampling and the
-# standard per-node ProjectionEvaluator::Evaluate path — identical to the
-# Nodewise baseline algorithmically, only the tree-traversal order differs.
-# Despite living next to the symmetric_* configs in this file (because it is
-# the BFS-only control for the symmetric-trees ablation series), no symmetric
-# behavior is involved. Mutually exclusive with symmetric_depthwise_ap and
-# symmetric_nodewise_control.
+# BFS_Only: isolates the cost/benefit of the BFS (level-order) scheduler vs DFS.
+# Triggers GrowTreeLocalBFS but does NOT sample shared projections or call any
+# fused bag-wide Apply -- each node runs the normal per-node sampling + Evaluate,
+# algorithmically identical to the Nodewise baseline, only traversal order
+# differs. Lives by the symmetric_* configs as their BFS-only control but
+# involves no symmetric behavior. Mutually exclusive with symmetric_depthwise_ap
+# and symmetric_nodewise_control.
 build:bfs_only --cxxopt="-DBFS_ONLY=1"
 
 # Subtree gather cache: memory-safe replacement for the Dynamic_Row_Col_Major
 # dual store. Keeps the single column-major dataset; nodes with <=
-# YDF_RM_MAX_ROWS (default 5000) rows gather the feature columns their
-# projections touch into compact per-subtree buffers (lazily, reused by all
-# descendant nodes under DFS). Extra memory is capped at YDF_SG_BUDGET_MB
-# (default 1024) per training thread instead of a second full dataset copy.
-# Run with the plain --dataset_layout=column; do not combine with the
-# *_dataset_layout configs.
+# YDF_RM_MAX_ROWS (default 5000) rows gather their projections' feature columns
+# into compact per-subtree buffers (lazily, reused by descendants under DFS).
+# Extra memory capped at YDF_SG_BUDGET_MB (default 1024) per training thread
+# instead of a second full dataset copy. Run with plain --dataset_layout=column;
+# do not combine with the *_dataset_layout configs.
 build:subtree_gather --cxxopt="-DSUBTREE_GATHER_CACHE=1"
 
-# Reuse one ProjectionEvaluator per thread instead of rebuilding its
-# per-attribute pointer tables on every node (kFindObliqueSetup waste).
-# Bit-identical; disabled automatically under RANDOM_LOCAL_IMPUTATION.
+# Reuse one ProjectionEvaluator per thread instead of rebuilding its per-attribute
+# pointer tables on every node (kFindObliqueSetup waste). Bit-identical; disabled
+# automatically under RANDOM_LOCAL_IMPUTATION.
 build:cache_projection_evaluator --cxxopt="-DCACHE_PROJECTION_EVALUATOR=1"
 
 
@@ -82,30 +72,29 @@ build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 # INSTRUMENTATION & DEFAULTS
 
 
-# Two-tier chrono profiling. CHRONO_PROFILE=2 is the fine tier (every scope);
-# CHRONO_PROFILE=1 is the coarse tier (only the top-level scopes — TreeTrain,
-# NodeTrain, SampleProjection, EvaluateProj, ProjectionEvaluate, BfsNodeLoop)
-# for lower measurement overhead.
+# Two-tier chrono profiling. =2 is fine (every scope); =1 is coarse (only the
+# top-level scopes: TreeTrain, NodeTrain, SampleProjection, EvaluateProj,
+# ProjectionEvaluate, BfsNodeLoop) for lower measurement overhead.
 build:chrono_profile --cxxopt="-DCHRONO_PROFILE=2"
 build:chrono_profile_coarse --cxxopt="-DCHRONO_PROFILE=1"
-# Don't Inlining ApplyProjection for more accurate profiling by Default. Very small cost: <2% e2e
+# Don't inline ApplyProjection, for more accurate profiling. Very small cost: <2% e2e.
 build:inline_projection_evaluate --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
-# Skip the std::isnan branch in ProjectionEvaluator::Evaluate. by default. again small cost but possible cache misbehavior
+# Skip the std::isnan branch in Evaluate. Small cost but possible cache misbehavior.
 build:enable_applyprojection_isnan --cxxopt="-DENABLE_APPLYPROJECTION_ISNAN=1"
 
-# Precomputed count*log(count) lookup table ON by default for unweighted binary entropy in RF/SPORF Exact 
-#   ~9% e2e runtime win, ~39% local on SortScanSplits)
+# Precomputed count*log(count) lookup table, ON by default for unweighted binary
+# entropy in RF/SPORF Exact (~9% e2e win, ~39% local on SortScanSplits).
 build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
 
 # STD::UPPER_BOUND VECTORIZATION
 build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
 build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
 
-# Default ON: tune for the host CPU and enable std::upper_bound AVX2 vectorization
+# Default ON: tune for the host CPU + enable std::upper_bound AVX2 vectorization
 # for every build (no --config needed). -march=native already implies -mavx2/-mfma
-# on AVX2-capable hosts, so only the vectorization define is added here.
-# NOTE: -march=native is host-specific and will break cross-compiles (e.g. wasm);
-# scope these under build:linux/build:macos if you ever cross-compile.
+# on AVX2 hosts, so only the vectorization define is added here.
+# NOTE: -march=native is host-specific and breaks cross-compiles (e.g. wasm);
+# scope under build:linux/build:macos if you ever cross-compile.
 build --copt=-march=native --cxxopt="-O3"
 build --cxxopt=-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1
 
@@ -113,21 +102,18 @@ build --cxxopt=-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1
 # DEFAULTS
 
 
-# Auto-apply the build:linux / build:macos / build:windows configs based on
-# the host OS, so the compiler pins below take effect without needing an
-# explicit --config on the command line.
+# Auto-apply build:linux / build:macos / build:windows by host OS, so the
+# compiler pins below take effect without an explicit --config.
 build --enable_platform_specific_config
 
-# pin Intel oneAPI ICX (clang-based) on Linux. Without this, Bazel's
-# auto-detection silently falls back to /usr/bin/gcc, which compiles the
-# Oblique Exact hot path ~30-40% slower than ICX. Requires oneAPI to be
-# sourced in the shell (`source /opt/intel/oneapi/setvars.sh`) so that
-# `icx` / `icpx` are on PATH for Bazel's cc_configure rule. This is pinned
-# under build:linux (not global) so that on Linux a missing icx is a hard
-# error -- it must not silently fall back to gcc, which would invalidate
-# performance numbers. macOS cannot use icx (Intel never shipped icx/icpx
-# for macOS, and not at all for Apple Silicon), so it intentionally has no
-# pin and uses the native Apple clang toolchain instead.
+# Pin Intel oneAPI ICX (clang-based) on Linux. Without this, Bazel auto-detection
+# silently falls back to /usr/bin/gcc, which compiles the Oblique Exact hot path
+# ~30-40% slower than ICX. Requires oneAPI sourced in the shell
+# (`source /opt/intel/oneapi/setvars.sh`) so icx/icpx are on PATH for Bazel's
+# cc_configure. Pinned under build:linux (not global) so a missing icx is a hard
+# error rather than a silent gcc fallback that invalidates perf numbers. macOS
+# has no pin (Intel never shipped icx/icpx for macOS/Apple Silicon) and uses the
+# native Apple clang toolchain.
 build:linux --repo_env=CC=icx
 build:linux --repo_env=CXX=icpx
 
