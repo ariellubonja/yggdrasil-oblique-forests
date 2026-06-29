@@ -70,12 +70,6 @@ build:bfs_only --cxxopt="-DBFS_ONLY=1"
 # *_dataset_layout configs.
 build:subtree_gather --cxxopt="-DSUBTREE_GATHER_CACHE=1"
 
-# 4-row-block ApplyProjection kernel (V2-rev3's inner loop) applied
-# per-(node, projection) inside the stock DFS ProjectionEvaluator::Evaluate:
-# 4 independent accumulators expose 4 concurrent DRAM gathers per projection
-# item. No extra memory, no driver/sampling change, bit-identical results.
-build:evaluate_4row --cxxopt="-DEVALUATE_4ROW_KERNEL=1"
-
 # Reuse one ProjectionEvaluator per thread instead of rebuilding its
 # per-attribute pointer tables on every node (kFindObliqueSetup waste).
 # Bit-identical; disabled automatically under RANDOM_LOCAL_IMPUTATION.

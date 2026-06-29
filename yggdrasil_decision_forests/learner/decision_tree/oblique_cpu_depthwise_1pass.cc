@@ -377,6 +377,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         auto& col_touched = scratch.col_touched;
         auto& node_local = scratch.node_local;
         size_t pos = 0;
+        
         for (const int32_t c : touched) {
           const float* col = evaluator.AttributeData(c);
           const size_t slice_begin = pos;
@@ -390,7 +391,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           ref_w.resize(slice_end - slice_begin);
           col_touched.clear();
           int32_t prev_node = -1;
-          CHRONO_BEGIN(dw1_colwalk_group_by_node);
+          CHRONO_BEGIN(dw1_colwalk_group_by_node); // This operation is free - ~0% cost
           for (size_t k = slice_begin; k < slice_end; ++k) {
             const ColEntry& e = sorted[k];
             const size_t kk = k - slice_begin;
@@ -426,6 +427,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             const int32_t local = node_local[bn]++;
             float* slab = out_projected[node].data();
             const size_t rows_n = selected_examples_per_node[node].size();
+            
             for (int32_t t = 0; t < cnt; ++t) {
               slab[static_cast<size_t>(ref_proj[off + t]) * rows_n + local] +=
                   ref_w[off + t] * v;
