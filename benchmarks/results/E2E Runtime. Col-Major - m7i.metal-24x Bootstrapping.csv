@@ -1,12 +1,11 @@
-,"DFS, col-major
-YDF Stock",BFS col-major,Depthwise 1-pass BFS Col-Major,DW1 Shared Rows,,,,,,,,,,date_utc: 2026-06-18T14:51:14Z
-HIGGS 11m x 29,313,387,453,841,,,,,,,,,,git_sha: 6bcab758
-Trunk 1.5m x 4096,323,331,334,1530,,,,,,,,,,git_branch: rebased-main
-Trunk 150k x 40k,150,151,147,525,,,,,,,,,,machine: Intel(R) Xeon(R) Platinum 8488C (nproc=48)
-Trunk 15k x 400k,156,156,177,236,,,,,,,,,,machine_serial: ec228a4c-d7ff-8a09-43f4-a31487292e54
+,YDF,BFS,DW1 Col-Sharing,DW1 Shared Rows,,,,,,,,,,date_utc: 2026-06-18T14:51:14Z
+HIGGS 11m x 29,313,387,453,749.123,,,,,,,,,,git_sha: 6bcab758
+Trunk 1.5m x 4096,323,331,334,1215.24,,,,,,,,,,git_branch: rebased-main
+Trunk 150k x 40k,150,151,147,514.459,,,,,,,,,,machine: Intel(R) Xeon(R) Platinum 8488C (nproc=48)
+Trunk 15k x 400k,156,156,177,231.256,,,,,,,,,,machine_serial: ec228a4c-d7ff-8a09-43f4-a31487292e54
 ,,,,,,,,,,,,,,
 ,"DFS, col-major
-YDF Stock",BFS col-major,Depthwise 1-pass BFS Col-Major,,,,,,,,,,,"# aws
+YDF Stock",BFS col-major,Depthwise 1-pass BFS Col-Major,DW1 Shared Rows,,,,,,,,,,"# aws
 EXTRA_TRAIN_ARGS=""--tree_depth=2"" bash benchmarks/evaluation/runtime.sh dfs_colmajor_baseline_no_bootstrap_depth1  ; EXTRA_BAZEL_CONFIGS=""--config=row_major_dataset_layout"" EXTRA_TRAIN_ARGS=""--dataset_layout=row --tree_depth=2"" benchmarks/evaluation/runtime.sh DFS_row_major_no_bootstrap_depth1 ; EXTRA_BAZEL_CONFIGS=""--config=row_major_dataset_layout --config=bfs_only"" EXTRA_TRAIN_ARGS=""--dataset_layout=row --tree_depth=2"" benchmarks/evaluation/runtime.sh BFS_row_major_no_bootstrap_depth1 ; EXTRA_BAZEL_CONFIGS=""--config=bfs_only"" EXTRA_TRAIN_ARGS=""--tree_depth=2"" benchmarks/evaluation/runtime.sh BFS_col_major_no_bootstrap_depth1 ; EXTRA_BAZEL_CONFIGS=""--config=depthwise_1_pass"" EXTRA_TRAIN_ARGS=""--tree_depth=2"" benchmarks/evaluation/runtime.sh dw1_no_bootstrap_depth1 ; EXTRA_BAZEL_CONFIGS=""--config=depthwise_1_pass --config=row_major_dataset_layout"" EXTRA_TRAIN_ARGS=""--tree_depth=2 --dataset_layout=row"" benchmarks/evaluation/runtime.sh dw1_rowMajor
 ;
 EXTRA_TRAIN_ARGS=""--tree_depth=3"" bash benchmarks/evaluation/runtime.sh dfs_colmajor_baseline_no_bootstrap_depth2 ; EXTRA_BAZEL_CONFIGS=""--config=row_major_dataset_layout"" EXTRA_TRAIN_ARGS=""--dataset_layout=row --tree_depth=3"" benchmarks/evaluation/runtime.sh DFS_row_major_no_bootstrap_depth2 ; EXTRA_BAZEL_CONFIGS=""--config=row_major_dataset_layout --config=bfs_only"" EXTRA_TRAIN_ARGS=""--dataset_layout=row --tree_depth=3"" benchmarks/evaluation/runtime.sh BFS_row_major_no_bootstrap_depth2 ; EXTRA_BAZEL_CONFIGS=""--config=bfs_only"" EXTRA_TRAIN_ARGS=""--tree_depth=3"" benchmarks/evaluation/runtime.sh BFS_col_major_no_bootstrap_depth2 ; EXTRA_BAZEL_CONFIGS=""--config=depthwise_1_pass"" EXTRA_TRAIN_ARGS=""--tree_depth=3"" benchmarks/evaluation/runtime.sh dw1_depth2 ; EXTRA_BAZEL_CONFIGS=""--config=depthwise_1_pass --config=row_major_dataset_layout"" EXTRA_TRAIN_ARGS=""--tree_depth=3 --dataset_layout=row"" benchmarks/evaluation/runtime.sh dw1_rowMajor
@@ -14,19 +13,10 @@ EXTRA_TRAIN_ARGS=""--tree_depth=3"" bash benchmarks/evaluation/runtime.sh dfs_co
 EXTRA_TRAIN_ARGS=""--tree_depth=5"" bash benchmarks/evaluation/runtime.sh dfs_colmajor_baseline_no_bootstrap_depth4 ; EXTRA_BAZEL_CONFIGS=""--config=row_major_dataset_layout"" EXTRA_TRAIN_ARGS=""--dataset_layout=row --tree_depth=5"" benchmarks/evaluation/runtime.sh DFS_row_major_no_bootstrap_depth4 ; EXTRA_BAZEL_CONFIGS=""--config=row_major_dataset_layout --config=bfs_only"" EXTRA_TRAIN_ARGS=""--dataset_layout=row --tree_depth=5"" benchmarks/evaluation/runtime.sh BFS_row_major_no_bootstrap_depth4 ; EXTRA_BAZEL_CONFIGS=""--config=bfs_only"" EXTRA_TRAIN_ARGS=""--tree_depth=5"" benchmarks/evaluation/runtime.sh BFS_col_major_no_bootstrap_depth4 ; EXTRA_BAZEL_CONFIGS=""--config=depthwise_1_pass"" EXTRA_TRAIN_ARGS=""--tree_depth=5"" benchmarks/evaluation/runtime.sh dw1_no_bootstrap_depth4 ; EXTRA_BAZEL_CONFIGS=""--config=depthwise_1_pass --config=row_major_dataset_layout"" EXTRA_TRAIN_ARGS=""--tree_depth=5 --dataset_layout=row"" benchmarks/evaluation/runtime.sh dw1_rowMajor
 ;
 bash benchmarks/evaluation/runtime.sh --runs=3 dfs_colmajor_baseline_no_bootstrap ; EXTRA_BAZEL_CONFIGS=""--config=row_major_dataset_layout"" EXTRA_TRAIN_ARGS=""--dataset_layout=row"" benchmarks/evaluation/runtime.sh --runs=3 DFS_row_major_no_bootstrap ; EXTRA_BAZEL_CONFIGS=""--config=row_major_dataset_layout --config=bfs_only"" EXTRA_TRAIN_ARGS=""--dataset_layout=row"" benchmarks/evaluation/runtime.sh --runs=3 BFS_row_major_no_bootstrap ; EXTRA_BAZEL_CONFIGS=""--config=bfs_only"" benchmarks/evaluation/runtime.sh --runs=3 BFS_col_major_no_bootstrap ; EXTRA_BAZEL_CONFIGS=""--config=depthwise_1_pass"" benchmarks/evaluation/runtime.sh --runs=3 dw1_no_bootstrap ; EXTRA_BAZEL_CONFIGS=""--config=depthwise_1_pass --config=row_major_dataset_layout"" EXTRA_TRAIN_ARGS=""--dataset_layout=row"" benchmarks/evaluation/runtime.sh --runs=3 dw1_rowMajor"
-HIGGS 11m x 29,1,1.2,1.4,2.7,,,,,,,,,,
-Trunk 1.5m x 4096,1,1.0,1.0,4.7,,,,,,,,,,
-Trunk 150k x 40k,1,1.0,1.0,3.5,,,,,,,,,,
-Trunk 15k x 400k,1,1.0,1.1,1.5,,,,,,,,,,
-,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,
-Depth 1,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,
-Depth 2,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,
-Depth 4,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,
-Depth 8,,,,,,,,,,,,,,
+HIGGS 11m x 29,1,1.2,1.4,3.1,,,,,,,,,,
+Trunk 1.5m x 4096,1,1.0,1.0,12.0,,,,,,,,,,
+Trunk 150k x 40k,1,1.0,1.0,3.0,,,,,,,,,,
+Trunk 15k x 400k,1,1.0,1.1,0.2,,,,,,,,,,
 ,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,
 st dev - -1 depth,"DFS, col-major
@@ -34,4 +24,4 @@ YDF Stock",BFS col-major,Depthwise 1-pass BFS Col-Major,DW1 Shared Rows,,,,,,,,,
 HIGGS 11m x 29,.6,1.1,1.1,8.3,,,,,,,,,,
 Trunk 1.5m x 4096,.3,.9,.9,1.6,,,,,,,,,,
 Trunk 150k x 40k,.2,.6,.6,2.2,,,,,,,,,,
-Trunk 15k x 400k,.9,.5,.5,.3,,,,,,,,,,
+Trunk 15k x 400k,.9,.5,.5,0.3,,,,,,,,,,
