@@ -1489,8 +1489,7 @@ absl::Status ProjectionEvaluator::Evaluate(
   // stay comparable with the single-layout 'row' / 'flat_column' runs.
   if (row_major_matrix_ != nullptr && flat_col_matrix_ != nullptr) {
     const bool use_row_major = selected_examples.size() <= RowMajorMaxRows();
-    for (size_t selected_idx = 0; selected_idx < selected_examples.size();
-         selected_idx++) {
+    for (size_t selected_idx = 0; selected_idx < selected_examples.size(); selected_idx++) {
       float value = 0;
       const auto example_idx = selected_examples[selected_idx];
       for (const auto& item : projection) {
@@ -1498,11 +1497,7 @@ absl::Status ProjectionEvaluator::Evaluate(
             use_row_major
                 ? row_major_matrix_->Get(example_idx, item.attribute_idx)
                 : flat_col_matrix_->Get(example_idx, item.attribute_idx);
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
-        if (std::isnan(attribute_value)) {
-          attribute_value = na_replacement_value_[item.attribute_idx];
-        }
-#endif
+
         value += attribute_value * item.weight;
       }
       (*values)[selected_idx] = value;
@@ -1511,10 +1506,11 @@ absl::Status ProjectionEvaluator::Evaluate(
   }
 #endif
 
-  for (size_t selected_idx = 0; selected_idx < selected_examples.size();
-       selected_idx++) {
+  for (size_t selected_idx = 0; selected_idx < selected_examples.size(); selected_idx++) {
     float value = 0;
     const auto example_idx = selected_examples[selected_idx];
+
+    // This is iterating over columns : would benefit from Row-major
     for (const auto& item : projection) {
       DCHECK_LT(item.attribute_idx, numerical_attributes_.size());
       DCHECK_GE(item.attribute_idx, 0);

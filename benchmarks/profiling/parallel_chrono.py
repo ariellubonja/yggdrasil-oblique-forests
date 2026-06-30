@@ -176,7 +176,16 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         # Friendlier column names + dashes to show scope nesting. GPU
         # columns are flat (one column per helper stage) — no dashes. CPU
         # split-finder columns retain their nested dashes.
-        # The dash prefix on each renamed column equals the scope's absolute
+        #
+        # Symmetric depthwise AP is special: shared SampleProjection and
+        # bag-wide ApplyProjection run in GrowTreeLocalBFS before NodeTrain,
+        # not inside FindBestConditionSparseObliqueTemplate. Detect it from
+        # its Sym* sub-scopes and render those scopes as TreeTrain children.
+        symmetric_depthwise = any(
+            c in g.columns and (g[c] != 0.0).any()
+            for c in ("SymBuildBag", "SymSortBag", "SymSweep"))
+
+        # The dash prefix on each renamed column equals the scope's displayed
         # depth in the CHRONO hierarchy, with TreeTrain at depth 0:
         #   0  TreeTrain
         #   1  ├─ NodeTrain (and the BFS-only BfsNodeLoop scheduler scope)
@@ -187,6 +196,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         #   5  │  │  │  │  ├─ (ApplyProjection) Sym*/Dw1* ; (EvaluateProj) Cart/Histo
         #   6  │  │  │  │  │  └─ Dw1Sweep* ; Cart/Histo split-finder leaves
         #   7  │  │  │  │  │     └─ MinMaxNumerical (under HistogramSetup)
+        # In symmetric_depthwise, SampleProjection / ApplyProjection move to
+        # depth 1 and Sym* moves to depth 2 because they run before NodeTrain.
         # GPU helper-stage columns stay flat (no dashes): they are alternative
         # implementations of ApplyProjection, not nested scopes.
         g = g.rename(columns={
@@ -206,18 +217,27 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "AxisAlignedSplitSearch":       "---AxisAlignedSplitSearch",
             # depth 4 — under ObliqueSplitSearch (per-node setup + per-K loop).
             "FindObliqueSetup":             "----FindObliqueSetup",
-            "SampleProjection":             "----SampleProjection",
-            "ProjectionEvaluate":           "----ApplyProjection",
+            "SampleProjection": (
+                "-SampleProjection" if symmetric_depthwise
+                else "----SampleProjection"),
+            "ProjectionEvaluate": (
+                "-ApplyProjection" if symmetric_depthwise
+                else "----ApplyProjection"),
             "EvaluateProj":                 "----EvaluateProj",
-            # depth 4 — under AxisAlignedSplitSearch (noise on oblique runs).
-            "GetCandidateAttributes":       "----GetCandidateAttributes",
+            # Axis-aligned candidate-selection/search tail under FindBestCondition.
+            "GetCandidateAttributes": (
+                "---GetCandidateAttributes" if symmetric_depthwise
+                else "----GetCandidateAttributes"),
             "ColumnWithCast":               "----ColumnWithCast",
-            # depth 5 — ApplyProjection sub-phases. SymmetricDepthwiseAP and
-            # Depthwise1Pass are mutually exclusive by build mode; each sums
-            # back to ApplyProjection.
-            "SymBuildBag":                  "-----SymBuildBag",
-            "SymSortBag":                   "-----SymSortBag",
-            "SymSweep":                     "-----SymSweep",
+            # ApplyProjection sub-phases. In symmetric depthwise AP they are
+            # under the TreeTrain-level ApplyProjection; otherwise they are
+            # displayed under the node-local ApplyProjection scope.
+            "SymBuildBag": (
+                "--SymBuildBag" if symmetric_depthwise else "-----SymBuildBag"),
+            "SymSortBag": (
+                "--SymSortBag" if symmetric_depthwise else "-----SymSortBag"),
+            "SymSweep": (
+                "--SymSweep" if symmetric_depthwise else "-----SymSweep"),
             "Dw1PreSize":                   "-----Dw1PreSize",
             "Dw1Sweep":                     "-----Dw1Sweep",
             # depth 5 — EvaluateProj's two split-finder paths.
@@ -268,6 +288,13 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
 
             # depth 0 — top-level per-tree scope.
             "TreeTrain",
+            # Symmetric depthwise AP: these run once per depth cohort before
+            # per-node NodeTrain, so they are TreeTrain children.
+            "-SampleProjection",
+            "-ApplyProjection",
+            "--SymBuildBag",
+            "--SymSortBag",
+            "--SymSweep",
             # depth 1 — under TreeTrain.
             "-BfsNodeLoop",          # BFS-only scheduler scope
             "-NodeTrain",
@@ -327,6 +354,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "------SelectBestThresholdHistogram",
             # depth 3 — axis-aligned splitter tail (timing noise under oblique).
             "---AxisAlignedSplitSearch",
+            "---GetCandidateAttributes",
             "----GetCandidateAttributes",
             "----ColumnWithCast",
             # depth 2 — per-node finish.
