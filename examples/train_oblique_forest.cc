@@ -101,13 +101,12 @@ ABSL_FLAG(int, label_mod, 2,
 ABSL_FLAG(uint32_t, seed, 1234,
           "PRNG seed (for deterministic synthetic mode and model training).");
 ABSL_FLAG(std::string, dataset_layout, "column",
-          "Hidden dataset-layout experiment: 'column', 'row', 'flat_column', "
-          "or 'dynamic_row_col_major' (fp32). Dynamic_Row_Col_Major keeps "
+          "Hidden dataset-layout experiment: 'column', 'row', or "
+          "'dynamic_row_col_major' (fp32). Dynamic_Row_Col_Major keeps "
           "both a row-major and a column-major store and dispatches per node "
           "on YDF_RM_MAX_ROWS. CSV mode supports 'column', 'row', and "
-          "'dynamic_row_col_major'; 'flat_column' is trunk-synthetic only. "
-          "Non-column layouts require the matching Bazel config. 'dual_fp32' "
-          "is a deprecated alias.");
+          "'dynamic_row_col_major'. Non-column layouts require the matching "
+          "Bazel config. 'dual_fp32' is a deprecated alias.");
 
 // Histogram-based splits - Updated to match Yggdrasil implementation
 ABSL_FLAG(std::string, numerical_split_type, "Dynamic Random Histogram",
@@ -518,29 +517,6 @@ int main(int argc, char** argv) {
                    "--config=row_major_dataset_layout.\n";
       return 1;
 #endif
-    } else if (layout == "flat_column") {
-#if defined(FLAT_COL_DATASET_LAYOUT)
-      if (mode != "trunk") {
-        std::cerr
-            << "--dataset_layout=flat_column only supports trunk synthetic.\n";
-        return 1;
-      }
-      auto fc = MakeTrunkDatasetFlatColMajor(data_spec,
-                                             absl::GetFlag(FLAGS_rows),
-                                             absl::GetFlag(FLAGS_cols),
-                                             absl::GetFlag(FLAGS_seed));
-      tf_ds = std::move(fc.vd);
-      flat_col_matrix = std::move(fc.matrix);
-      dataset::FlatColMajorFeatureMatrix::SetActive(flat_col_matrix.get());
-      LOG(INFO) << "Flat-column-major matrix allocated: "
-                << (flat_col_matrix->bytes() / (1024.0 * 1024.0 * 1024.0))
-                << " GiB";
-      ds_ptr = tf_ds.get();
-#else
-      std::cerr << "--dataset_layout=flat_column requires "
-                   "--config=flat_col_dataset_layout.\n";
-      return 1;
-#endif
     }
 #if 0  // bf16 disabled for now.
     else if (layout == "dynamic_row_col_major_bf16") {
@@ -599,8 +575,7 @@ int main(int argc, char** argv) {
 #endif
     } else {
       std::cerr << "Unknown --dataset_layout: " << layout
-                << ". Use 'column', 'row', 'flat_column', or "
-                   "'dynamic_row_col_major'.\n";
+                << ". Use 'column', 'row', or 'dynamic_row_col_major'.\n";
       return 1;
     }
   }

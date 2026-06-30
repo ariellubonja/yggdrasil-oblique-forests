@@ -28,7 +28,6 @@ build:dw1_shared_rows --cxxopt="-DDW1_SHARED_ROWS=1"
 # storage for trunk synthetic datasets only. Scheduler-independent; combinable
 # with default Nodewise or Depthwise.
 build:row_major_dataset_layout --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
-build:flat_col_dataset_layout --cxxopt="-DFLAT_COL_DATASET_LAYOUT=1"
 
 
 ## SYMMETRIC TREES
@@ -64,11 +63,6 @@ build:bfs_only --cxxopt="-DBFS_ONLY=1"
 # instead of a second full dataset copy. Run with plain --dataset_layout=column;
 # do not combine with the *_dataset_layout configs.
 build:subtree_gather --cxxopt="-DSUBTREE_GATHER_CACHE=1"
-
-# Reuse one ProjectionEvaluator per thread instead of rebuilding its per-attribute
-# pointer tables on every node (kFindObliqueSetup waste). Bit-identical; disabled
-# automatically under RANDOM_LOCAL_IMPUTATION.
-build:cache_projection_evaluator --cxxopt="-DCACHE_PROJECTION_EVALUATOR=1"
 
 
 ##### GPU Support

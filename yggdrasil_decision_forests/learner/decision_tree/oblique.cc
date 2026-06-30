@@ -168,36 +168,8 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   auto& projection_values = cache->projection_values;
 
   CHRONO_BEGIN_COARSE(find_oblique_setup);
-#ifdef CACHE_PROJECTION_EVALUATOR
-  // ProjectionEvaluator only depends on (dataset, numerical_features), both
-  // constant across every node of every tree under GLOBAL_IMPUTATION, so
-  // rebuilding its per-attribute pointer tables per node is pure
-  // kFindObliqueSetup waste. RANDOM_LOCAL_IMPUTATION trains each node on a
-  // fresh per-node dataset whose address could alias a freed one — never
-  // cache there.
-  static thread_local std::optional<ProjectionEvaluator> tl_evaluator;
-  static thread_local const dataset::VerticalDataset* tl_evaluator_ds =
-      nullptr;
-  static thread_local int64_t tl_evaluator_nrow = -1;
-  static thread_local int tl_evaluator_num_features = -1;
-  const bool can_cache_evaluator =
-      dt_config.missing_value_policy() ==
-      proto::DecisionTreeTrainingConfig::GLOBAL_IMPUTATION;
-  if (!can_cache_evaluator || tl_evaluator_ds != &train_dataset ||
-      tl_evaluator_nrow != static_cast<int64_t>(train_dataset.nrow()) ||
-      tl_evaluator_num_features != config_link.numerical_features_size()) {
-    tl_evaluator.emplace(train_dataset, config_link.numerical_features());
-    tl_evaluator_ds = can_cache_evaluator ? &train_dataset : nullptr;
-    tl_evaluator_nrow =
-        can_cache_evaluator ? static_cast<int64_t>(train_dataset.nrow()) : -1;
-    tl_evaluator_num_features =
-        can_cache_evaluator ? config_link.numerical_features_size() : -1;
-  }
-  ProjectionEvaluator& projection_evaluator = *tl_evaluator;
-#else
   ProjectionEvaluator projection_evaluator(train_dataset,
                                            config_link.numerical_features());
-#endif
 
   // TODO: Cache.
   const auto selected_labels = ExtractLabels(label_stats, selected_examples);
@@ -1409,49 +1381,13 @@ ProjectionEvaluator::ProjectionEvaluator(
   }
 
 #if defined(ROW_MAJOR_DATASET_LAYOUT)
-  // Dual bf16 layout: both half-width stores live; per-node kernels pick the
-  // order, AttributeValue defaults to the column store.
-  const auto* bf16_rows = dataset::Bf16RowMajorFeatureMatrix::Active();
-  const auto* bf16_cols = dataset::Bf16FlatColMajorFeatureMatrix::Active();
-  if (bf16_rows != nullptr || bf16_cols != nullptr) {
-    if (bf16_rows != nullptr) {
-      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
-                bf16_rows->num_rows());
-      bf16_row_major_matrix_ = bf16_rows;
-    }
-    if (bf16_cols != nullptr) {
-      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
-                bf16_cols->num_rows());
-      bf16_flat_col_matrix_ = bf16_cols;
-    }
-    return;
-  }
-
-  // Dual fp32 layout: same dispatch idea as dual bf16, full precision. Either
-  // store alone also lands here (single-layout experiments).
+  // Optional row-major fp32 store; when active it feeds AttributeValue (and
+  // thus the single Evaluate loop) in place of the per-column vertical store.
   const auto* row_active = dataset::RowMajorFeatureMatrix::Active();
-  const auto* flat_active_rm = dataset::FlatColMajorFeatureMatrix::Active();
-  if (row_active != nullptr || flat_active_rm != nullptr) {
-    if (row_active != nullptr) {
-      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
-                row_active->num_rows());
-      row_major_matrix_ = row_active;
-    }
-    if (flat_active_rm != nullptr) {
-      DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
-                flat_active_rm->num_rows());
-      flat_col_matrix_ = flat_active_rm;
-    }
-    return;
-  }
-#endif
-
-#if defined(FLAT_COL_DATASET_LAYOUT)
-  const auto* flat_active = dataset::FlatColMajorFeatureMatrix::Active();
-  if (flat_active != nullptr) {
+  if (row_active != nullptr) {
     DCHECK_EQ(static_cast<int64_t>(train_dataset.nrow()),
-              flat_active->num_rows());
-    flat_col_matrix_ = flat_active;
+              row_active->num_rows());
+    row_major_matrix_ = row_active;
     return;
   }
 #endif
@@ -1480,47 +1416,26 @@ absl::Status ProjectionEvaluator::Evaluate(
   CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
   values->resize(selected_examples.size());
 
-#if defined(ROW_MAJOR_DATASET_LAYOUT)
-  // Dynamic_Row_Col_Major on the DFS/nodewise path: when both fp32 stores are
-  // live, pick per node with the same YDF_RM_MAX_ROWS threshold as the BFS
-  // (DEPTHWISE_1_PASS) kernel. Without this, AttributeValue's static
-  // store priority would read the column store for every node. Both branches
-  // keep the generic loop shape below (only the store is fixed), so timings
-  // stay comparable with the single-layout 'row' / 'flat_column' runs.
-  if (row_major_matrix_ != nullptr && flat_col_matrix_ != nullptr) {
-    const bool use_row_major = selected_examples.size() <= RowMajorMaxRows();
-    for (size_t selected_idx = 0; selected_idx < selected_examples.size(); selected_idx++) {
-      float value = 0;
-      const auto example_idx = selected_examples[selected_idx];
-      for (const auto& item : projection) {
-        float attribute_value =
-            use_row_major
-                ? row_major_matrix_->Get(example_idx, item.attribute_idx)
-                : flat_col_matrix_->Get(example_idx, item.attribute_idx);
-
-        value += attribute_value * item.weight;
-      }
-      (*values)[selected_idx] = value;
-    }
-    return absl::OkStatus();
-  }
-#endif
-
   for (size_t selected_idx = 0; selected_idx < selected_examples.size(); selected_idx++) {
     float value = 0;
     const auto example_idx = selected_examples[selected_idx];
 
     // This is iterating over columns : would benefit from Row-major
     for (const auto& item : projection) {
+      float attribute_value = AttributeValue(item.attribute_idx, example_idx);
+
+/* #region debug checks */
       DCHECK_LT(item.attribute_idx, numerical_attributes_.size());
       DCHECK_GE(item.attribute_idx, 0);
 
-      float attribute_value = AttributeValue(item.attribute_idx, example_idx);
+      
 #ifdef ENABLE_APPLYPROJECTION_ISNAN
       if (std::isnan(attribute_value)) {
         attribute_value = na_replacement_value_[item.attribute_idx];
       }
 #endif
+/* #endregion */
+      
       value += attribute_value * item.weight;
     }
     (*values)[selected_idx] = value;

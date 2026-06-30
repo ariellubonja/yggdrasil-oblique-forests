@@ -178,12 +178,10 @@ namespace internal {
 // translation units in oblique_gpu_kernels.cu.cc / randomprojection.cu without
 // pulling in the absl/protobuf-heavy transitive includes of this header.
 
-// Dynamic_Row_Col_Major dispatch threshold (YDF_RM_MAX_ROWS env var): nodes
-// with at most this many selected rows take the row-major path; larger nodes
-// take the column-major path. Experiment knob, read once. Unset => row-major
-// for every node. Shared by the BFS (DEPTHWISE_1_PASS) kernel and
-// the DFS/nodewise dispatch in ProjectionEvaluator::Evaluate so both
-// schedulers split row-vs-col identically.
+// Node-size threshold (YDF_RM_MAX_ROWS env var): nodes with at most this many
+// selected rows are eligible for the subtree gather cache; larger nodes
+// evaluate on the raw column store. Experiment knob, read once. Unset => every
+// node is eligible. Consumed by PrepareSubtreeGatherNode.
 size_t RowMajorMaxRows();
 
 #ifdef SUBTREE_GATHER_CACHE
@@ -253,35 +251,12 @@ class ProjectionEvaluator {
   }
 
   float AttributeValue(int attribute_idx, UnsignedExampleIdx example_idx) const {
-    // Generic consumers (axis-aligned search, ExtractAttribute) walk one
-    // column over many rows, so prefer the column-major bf16 store when the
-    // dual layout is active.
-    if (bf16_flat_col_matrix_ != nullptr) {
-      return bf16_flat_col_matrix_->Get(example_idx, attribute_idx);
-    }
-    if (bf16_row_major_matrix_ != nullptr) {
-      return bf16_row_major_matrix_->Get(example_idx, attribute_idx);
-    }
-    if (flat_col_matrix_ != nullptr) {
-      return flat_col_matrix_->Get(example_idx, attribute_idx);
-    }
+    // The optional row-major store (ROW_MAJOR_DATASET_LAYOUT) shadows the
+    // default per-column vertical store; both feed the same projection loop.
     if (row_major_matrix_ != nullptr) {
       return row_major_matrix_->Get(example_idx, attribute_idx);
     }
     return numerical_attribute_data_[attribute_idx][example_idx];
-  }
-
-  const dataset::Bf16RowMajorFeatureMatrix* Bf16Rows() const {
-    return bf16_row_major_matrix_;
-  }
-  const dataset::Bf16FlatColMajorFeatureMatrix* Bf16Cols() const {
-    return bf16_flat_col_matrix_;
-  }
-  const dataset::RowMajorFeatureMatrix* Fp32Rows() const {
-    return row_major_matrix_;
-  }
-  const dataset::FlatColMajorFeatureMatrix* Fp32Cols() const {
-    return flat_col_matrix_;
   }
 
   float NaReplacementValue(int attribute_idx) const {
@@ -295,10 +270,6 @@ class ProjectionEvaluator {
   std::vector<const float*> numerical_attribute_data_;
 
   const dataset::RowMajorFeatureMatrix* row_major_matrix_ = nullptr;
-  const dataset::FlatColMajorFeatureMatrix* flat_col_matrix_ = nullptr;
-  const dataset::Bf16RowMajorFeatureMatrix* bf16_row_major_matrix_ = nullptr;
-  const dataset::Bf16FlatColMajorFeatureMatrix* bf16_flat_col_matrix_ =
-      nullptr;
 
   // Replacement for missing values.
   // Indexed by attribute idx.

@@ -31,9 +31,6 @@
      defined(BFS_ONLY)) > 1
 #error "SYMMETRIC_DEPTHWISE_AP, SYMMETRIC_NODEWISE_CONTROL, and BFS_ONLY are mutually exclusive"
 #endif
-#if defined(ROW_MAJOR_DATASET_LAYOUT) && defined(FLAT_COL_DATASET_LAYOUT)
-#error "ROW_MAJOR_DATASET_LAYOUT and FLAT_COL_DATASET_LAYOUT are mutually exclusive"
-#endif
 #if defined(DEPTHWISE_1_PASS)
 #define OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS 1
 #endif

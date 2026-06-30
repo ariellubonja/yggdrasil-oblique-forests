@@ -29,9 +29,7 @@ set -euo pipefail
 #                     depth sweep: each layout is one point. Non-column layouts
 #                     need a matching Bazel config, so the binary is rebuilt per
 #                     config group (column=plain, row/dynamic_row_col_major=
-#                     row_major_dataset_layout, flat_column=flat_col_dataset_
-#                     layout). flat_column is trunk-synthetic only; CSV datasets
-#                     are skipped for it and recorded as N/A.
+#                     row_major_dataset_layout).
 #
 # Each sweep point is a fresh binary launch: the *_MIN/MAX_DEPTH knobs are read
 # once per process, and --dataset_layout is a per-launch flag.
@@ -123,8 +121,6 @@ case "$MODE" in
     SWEEP_ENV=""            # layout is a train flag, not an env knob
     SWEEP_COL="dataset_layout"
     OUT_PREFIX="layout_linesearch"
-    # Layouts to sweep. Default is the row-vs-column-major comparison the user
-    # asked for; add flat_column / dynamic_row_col_major to taste.
     LAYOUTS=(column row)
     if [[ -n "$LAYOUTS_OVERRIDE" ]]; then
       # shellcheck disable=SC2206
@@ -396,17 +392,9 @@ layout_build_spec() {
     column)                 build_key="col_base";  layout_cfg="" ;;
     row|dynamic_row_col_major)
                             build_key="rowmajor";  layout_cfg="--config=row_major_dataset_layout" ;;
-    flat_column)            build_key="flatcol";   layout_cfg="--config=flat_col_dataset_layout" ;;
-    *) echo "ERROR: unknown layout '$1' (use column, row, flat_column, dynamic_row_col_major)" >&2
+    *) echo "ERROR: unknown layout '$1' (use column, row, dynamic_row_col_major)" >&2
        exit 2 ;;
   esac
-}
-
-# flat_column is trunk-synthetic only; all others run on CSV and trunk.
-layout_supports_kind() {
-  local layout="$1" kind="$2"
-  [[ "$layout" == "flat_column" && "$kind" == "csv" ]] && return 1
-  return 0
 }
 
 # Group layouts by build key (preserving first-seen order) so we rebuild minimally.
@@ -444,11 +432,6 @@ for key in "${ORDERED_KEYS[@]}"; do
     for entry in "${DATASETS[@]}"; do
       IFS='|' read -r kind a b maxdepth <<<"$entry"
       build_cmd_base "$kind" "$a" "$b"
-      if ! layout_supports_kind "$layout" "$kind"; then
-        echo "SKIP: $dataset_label incompatible with layout=$layout (trunk-only)" | tee -a "$logfile"
-        echo "${dataset_label},${layout},N/A,N/A,0,\"\"" >> "$csvfile"
-        continue
-      fi
       run_point "$dataset_label" "$layout" "" "$cmd_base --dataset_layout=$layout"
     done
   done
