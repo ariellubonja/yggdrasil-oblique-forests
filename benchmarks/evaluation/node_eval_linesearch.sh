@@ -140,10 +140,10 @@ NUM_THREADS=-1                     # train_oblique_forest.cc default is 1, so pa
 # trunk datasets are GUESSES (fewer rows -> shallower trees) -- adjust once you
 # have real numbers.
 DATASETS=(
-  "csv|benchmarks/data/HIGGS_with_header.csv|class|60"
-  "trunk|1500000|4096|25"
-  "trunk|150000|40000|20"   # GUESSed depth
-  "trunk|15000|400000|15"   # GUESSed depth
+  "csv|benchmarks/data/HIGGS_with_header.csv|class|60" # Necessary, though timing-expensive. Trunk 11m x 28 is only depth 38
+  "trunk|1500000|4096|40"
+  "trunk|150000|40000|40"
+  "trunk|15000|400000|40"
 )
 # Optional override (QoL from runtime.sh): isolate ONE dataset per run so an OOM
 # costs only that dataset. Same 'kind|a|b|maxdepth' format, ';'-separated.
