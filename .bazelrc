@@ -36,6 +36,11 @@ build:flat_col_dataset_layout --cxxopt="-DFLAT_COL_DATASET_LAYOUT=1"
 # projections shared across all nodes at depth d, one bag-wide sweep per
 # candidate. Hooks into GrowTreeLocalBFS's depth-batch loop. Implies BFS.
 # NOTE: does not include CatBoost's shared-entropy logic (1 entropy calc/depth).
+# Runtime knob YDF_SYMMETRIC_MAX_DEPTH (default INT32_MAX = symmetric everywhere)
+# caps the symmetric depth: levels deeper than it hand each frontier node off to
+# the DFS grower (GrowTreeLocal). =0 is all-DFS. See SymmetricMaxDepth() in
+# learner/decision_tree/training.cc; swept by benchmarks' dw1_depth_linesearch.sh
+# --mode=symmetric.
 build:symmetric_depthwise_ap --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
 # Symmetric_Nodewise_Control: isolates shared-projection-sampling from the
 # bagwide column-read effect. K projections sampled once per depth and reused by

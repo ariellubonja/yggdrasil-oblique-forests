@@ -5426,6 +5426,25 @@ int32_t Depthwise1PassMinDepth() {
 }
 #endif
 
+#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
+// Deepest level (inclusive) that runs the symmetric bagwide path; levels deeper
+// than this hand each frontier node off to the stack-based DFS grower
+// (GrowTreeLocal) to finish its subtree. Read once from YDF_SYMMETRIC_MAX_DEPTH
+// (default INT32_MAX = symmetric everywhere, the pre-existing behavior). The
+// tree root is depth 1, so YDF_SYMMETRIC_MAX_DEPTH=5 keeps depths 1..5 symmetric
+// and switches to DFS from depth 6. Intended for a symmetric<->DFS depth
+// line-search: large frontiers up top stay symmetric (dense bag, stride-1 column
+// reads) while small scattered deep nodes get DFS subtree cache locality.
+int32_t SymmetricMaxDepth() {
+  static const int32_t value = [] {
+    const char* e = std::getenv("YDF_SYMMETRIC_MAX_DEPTH");
+    return e != nullptr ? static_cast<int32_t>(std::strtol(e, nullptr, 10))
+                        : INT32_MAX;
+  }();
+  return value;
+}
+#endif
+
 // BFS (level-order) variant of GrowTreeLocal. Uses a FIFO deque, collects all
 // nodes at the current depth into a `depth_batch`, then dispatches each node
 // through NodeTrain. The depth-batch collection is the seam where the
@@ -5573,7 +5592,8 @@ absl::Status GrowTreeLocalBFS(
       }
     } else
 #elif defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
-    if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1) {
+    if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1 &&
+        current_depth <= SymmetricMaxDepth()) {
       // CatBoost-style symmetric trees: sample K projections ONCE for this
       // depth, shared across all nodes. The aggregate of nodes' selected
       // examples at depth d == the bag, so the projection sweep becomes
@@ -5661,6 +5681,21 @@ absl::Status GrowTreeLocalBFS(
                                   cache, std::move(nae), node_queue));
       }
 #endif
+    } else if (dt_config.has_sparse_oblique_split()) {
+      // Symmetric -> DFS handoff. Reached only when current_depth >
+      // SymmetricMaxDepth(): finish each frontier node's subtree with the
+      // stack-based DFS grower (GrowTreeLocal) instead of continuing the bagwide
+      // symmetric sweep. The handed-off subtree pushes nothing back onto
+      // node_queue, so once every frontier node is forwarded the BFS loop drains
+      // and the tree is complete. Shallow levels (at/above the cut) stay
+      // symmetric; deep levels get DFS subtree cache locality.
+      for (auto& nae : depth_batch) {
+        RETURN_IF_ERROR(GrowTreeLocal(
+            train_dataset, config, config_link, dt_config, deployment, weights,
+            nae.depth, internal_config, nae.constraints,
+            nae.set_leaf_already_set, nae.node, random, cache,
+            std::move(nae.selected_examples), std::move(nae.leaf_examples)));
+      }
     } else
 #endif
     {
