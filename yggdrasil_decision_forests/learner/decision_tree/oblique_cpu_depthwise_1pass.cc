@@ -447,6 +447,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 /* #endregion */
 
 /* #region Col sharing only */
+// Slower than BFS by <= 15%
+// Takeaway: column sharing via cache residency doesn't work at scale.
       CHRONO_BEGIN(dw1_sweep_colwalk); // ~93% of the ApplyProjection time in non-Shared-Rows. In Shared-rows, ~66%
       size_t pos = 0;
       for (const int32_t c : touched) {
