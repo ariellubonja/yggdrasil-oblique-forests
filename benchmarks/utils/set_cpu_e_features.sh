@@ -30,6 +30,11 @@ check_root() {
 # Verify CPU model (non-185H: warn and skip without error)
 verify_cpu() {
     local cpu_model
+    if [[ ! -r /proc/cpuinfo ]]; then
+        SUPPORTED_CPU=0
+        print_warn "No /proc/cpuinfo (not Linux). Skipping; no changes will be made."
+        return
+    fi
     cpu_model=$(grep -m1 "model name" /proc/cpuinfo | cut -d: -f2 | xargs)
     if [[ "$cpu_model" == "Intel(R) Core(TM) Ultra 9 185H" ]]; then
         SUPPORTED_CPU=1
