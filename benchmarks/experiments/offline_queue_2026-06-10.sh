@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Offline experiment queue 2026-06-10. Fully local: trunk synthetic data,
 # warm bazel cache, NOPASSWD CPU staging via parallel_chrono.py. Safe to run
 # with no internet. Each step is independent; failures don't stop the queue.

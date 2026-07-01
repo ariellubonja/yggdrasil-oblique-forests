@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # dw1 column-centric follow-ups: block-size ablation + shape generalization.
 # Fully local; safe offline. Sequential; failures don't stop the queue.
 cd /home/ariel/prog/ydf/yggdrasil-oblique-forests

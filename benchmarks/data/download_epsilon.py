@@ -2,9 +2,13 @@
 """Download and merge epsilon-normalized dataset parquet files into a single CSV."""
 
 import os
+import ssl
 import urllib.request
+import certifi
 import numpy as np
 import pandas as pd
+
+SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 BASE_URL = "https://huggingface.co/datasets/jxie/epsilon-normalized/resolve/refs%2Fconvert%2Fparquet/default/train"
 NUM_FILES = 20
@@ -15,6 +19,10 @@ TEMP_DIR = os.path.join(SCRIPT_DIR, "epsilon_parquet_temp")
 def download_parquet_files():
     """Download all parquet files."""
     os.makedirs(TEMP_DIR, exist_ok=True)
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=SSL_CONTEXT)
+    )
+    urllib.request.install_opener(opener)
 
     for i in range(NUM_FILES):
         filename = f"{i:04d}.parquet"

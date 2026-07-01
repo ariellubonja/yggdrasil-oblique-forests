@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Script to manage P-cores only configuration on Intel Core Ultra 9 185H
 # Toggles hyperthreading, E-cores, and turbo boost together
