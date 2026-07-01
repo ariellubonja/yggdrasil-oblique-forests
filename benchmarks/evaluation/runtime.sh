@@ -166,6 +166,12 @@ trap 'sudo "$SET_CPU_E_FEATURES" --enable' EXIT
 # falls back to gcc -- a gcc-built binary quietly corrupts every timing
 # number. Source oneAPI here and abort loudly if icx still can't be found.
 ensure_icx() {
+  # .bazelrc only pins CC=icx under build:linux; macOS has no such pin
+  # (Intel never shipped icx/icpx for macOS/Apple Silicon) and just uses
+  # the default toolchain, so there's nothing to ensure there.
+  if [[ "$(uname -s)" != "Linux" ]]; then
+    return 0
+  fi
   if ! command -v icx >/dev/null 2>&1; then
     local setvars="${ONEAPI_SETVARS:-/opt/intel/oneapi/setvars.sh}"
     if [[ -r "$setvars" ]]; then

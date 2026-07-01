@@ -149,12 +149,18 @@ VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
 # enable/disable dance like runtime.sh.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
-sudo "$SET_CPU_E_FEATURES" --enable
+"$SET_CPU_E_FEATURES" --enable
 
 # .bazelrc pins --repo_env=CC=icx. If icx is not on PATH the build either
 # hard-fails or (worse, across bazel/cc_configure cache states) silently
 # falls back to gcc. Source oneAPI here and abort loudly if icx is missing.
 ensure_icx() {
+  # .bazelrc only pins CC=icx under build:linux; macOS has no such pin
+  # (Intel never shipped icx/icpx for macOS/Apple Silicon) and just uses
+  # the default toolchain, so there's nothing to ensure there.
+  if [[ "$(uname -s)" != "Linux" ]]; then
+    return 0
+  fi
   if ! command -v icx >/dev/null 2>&1; then
     local setvars="${ONEAPI_SETVARS:-/opt/intel/oneapi/setvars.sh}"
     if [[ -r "$setvars" ]]; then
