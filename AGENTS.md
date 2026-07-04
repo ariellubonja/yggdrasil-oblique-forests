@@ -17,10 +17,12 @@ known. Before forming any hypothesis:
    the bar your change must beat and the baselines you may reuse.
 3. The per-topic deep-dive .md linked from the relevant LEDGER row — only
    for the area you're working on.
-4. **`OBLIQUE_CONTEXT.md`** (repo root) — the code map: full call stack,
-   raw source of every function on the oblique hot path (ApplyProjection,
-   SampleProjection, split finders, tree growers), kernel variants, build
-   configs, and the invariants a new kernel must respect. Read it instead
+4. **`oblique_context/OBLIQUE_CONTEXT.md`** — the lean code-map core (scope,
+   call stack, the hot function, driver skeleton, invariants, measured
+   facts); auto-loaded via CLAUDE.md. Deeper detail (full split finders,
+   tree growers, kernel variants, dataset/sampling source, build/measure)
+   is sharded into sibling files under `oblique_context/` and read on
+   demand via the router table at the top of the core. Read these instead
    of re-deriving code context from the sources listed below.
 
 ### Maintenance contract (non-negotiable, same standing as the workflow below)
