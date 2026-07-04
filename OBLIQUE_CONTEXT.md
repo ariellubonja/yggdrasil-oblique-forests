@@ -9,9 +9,10 @@
 > **Division of labor between the standing docs:**
 > - `AGENTS.md` — the *workflow* (experiment loop, measurement rules, logging contract).
 > - **This file** — the *code*: call stack, raw functions, variants, configs, invariants.
+> - `E2E + Chrono coarse. Col-major - m7i.metal-24x Bootstrapping.csv` — the end-to-end timing results
 >
-> Code snapshots and `file:line` refs are as of **2026-07-04, branch `rebased-main`,
-> commit `c80ffbf7` (+ staged comment-only edits to `oblique_cpu_depthwise_1pass.cc`)**.
+> Code snapshots and `file:line` refs are as of 2026-07-04, branch `rebased-main`,
+> commit `c80ffbf7`.
 > Line numbers drift; grep for the symbol if a ref misses.
 
 ---
@@ -1604,14 +1605,3 @@ Standard dataset shapes: HIGGS 11M×29 (tall-narrow), trunk 3M×4096 (~49 GB), 1
   prepaid in RAM, not traffic) but takes 2× dataset memory ⇒ OOM on 3M×4096 at 61 GiB.
   The memory-safe leader is `evaluate_4row + cache_projection_evaluator`.
 
-## 14. Current state (2026-07-04)
-
-- Branch `rebased-main`; staged: comment-only chrono-percentage updates in
-  `oblique_cpu_depthwise_1pass.cc` (shared-rows: bag ≈10 %, colwalk ≈86 % of AP).
-- Untracked: coarse chrono CSV `benchmarks/results/per_function_timing/COARSE/Intel(R)
-  Xeon(R) Platinum 8488C/Oblique | Dynamic Random Histogram/HIGGS_with_header/loop_reorder_dfs.csv`
-  — an in-flight "loop_reorder_dfs" measurement on the m7i box;
-- Open TODOs in code: dw1 shared-rows FM2 fix (per-column dispatch in GroupByNode, ~30–50
-  lines, would revert wide-trunk regressions to ≈control); replace per-depth VQSort of the
-  bag with a merge of already-sorted per-node runs; hoist per-(row×col) metadata loads
-  into GroupByNode; no symmetric per-depth chrono CSV exists yet.
