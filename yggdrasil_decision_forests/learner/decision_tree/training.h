@@ -52,6 +52,8 @@
 namespace yggdrasil_decision_forests::model::decision_tree {
 
 namespace internal {
+class ProjectionEvaluatorCache;
+
 struct NodeAndExamples {
   // The current node
   NodeWithChildren* node;
@@ -140,6 +142,8 @@ struct SplitterPerThreadCache {
 
   std::vector<int> numerical_features;
   std::vector<float> projection_values;
+  std::shared_ptr<internal::ProjectionEvaluatorCache>
+      projection_evaluator_cache;
 
 #ifdef SUBTREE_GATHER_CACHE
   // Subtree-scoped gathered feature columns for sparse-oblique splits. See
