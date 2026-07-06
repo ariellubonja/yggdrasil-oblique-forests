@@ -10,9 +10,8 @@ the column layout is read from the header instead of being hardcoded.
 
 For every depth this script pools all (thread, tree) rows with that depth --
 i.e. it averages across threads and across the multiple trees per thread at
-once -- and writes one row per depth with the number of pooled samples in a
-"count" column. Note: a depth is only averaged over the trees that actually
-reached it, so counts shrink at large depths.
+once -- and writes one row per depth. Note: a depth is only averaged over the
+trees that actually reached it, so the pool size shrinks at large depths.
 
 Depth-0 rows carry only the total TreeTrain time; they are kept in the
 output, and each file also gets a sanity check printed: mean TreeTrain per
@@ -107,9 +106,9 @@ def write_avg(path):
     out_path = os.path.join(os.path.dirname(path), stem(path) + "_avg_per_depth.csv")
     with open(out_path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["depth", "count"] + metrics)
+        w.writerow(["depth"] + metrics)
         for depth, (n, means) in avg.items():
-            w.writerow([depth, n] + means)
+            w.writerow([depth] + means)
     print(f"Wrote {out_path}")
     sanity_check(path, metrics, samples)
     return metrics, avg
