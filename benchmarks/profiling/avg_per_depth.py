@@ -18,20 +18,62 @@ output, and each file also gets a sanity check printed: mean TreeTrain per
 tree vs. the mean of the per-depth NodeTrain sums (these should roughly
 agree if the averaging is sound).
 
-Usage:
-  avg_per_depth.py <csv> [<csv> ...]
-      Writes <name>_avg_per_depth.csv next to each input.
+Provenance / freshness
+----------------------
+Each <name>_avg_per_depth.csv starts with a single "#"-comment metadata line
+that fingerprints the raw source CSV it was derived from, e.g.
+
+  #avg_per_depth_meta format=1 source=dfs_colmajor_multicore.csv sha256=<hex> \
+      src_size=1481554 src_mtime=2026-07-07T13:38:00Z generated=2026-07-07T14:40:00Z
+
+The authoritative change signal is the sha256 of the source's *bytes*; format
+is bumped when this script's output schema changes. Because the first line is
+a comment, read these with e.g. pandas' ``read_csv(path, comment="#")``.
+
+Layout
+------
+parallel_chrono.py writes raw timing CSVs into a ``raw/`` subfolder of the
+``<dataset_name>`` dir, e.g. ``.../<dataset_name>/raw/dfs_colmajor_multicore.csv``.
+This script writes the per-depth average one level up, in ``<dataset_name>``
+itself, reusing the source's name (``.../<dataset_name>/dfs_colmajor_multicore.csv``)
+-- the raw/ vs. parent split is what distinguishes raw from average, so the
+average no longer needs a suffix. A raw CSV that is *not* under a ``raw/`` dir
+falls back to the legacy ``<name>_avg_per_depth.csv`` name in its own dir, so
+the average can never overwrite the raw source.
+
+Usage
+-----
+  avg_per_depth.py <csv|dir> [<csv|dir> ...]
+      For each file argument: (re)writes the per-depth average for it
+      (unconditionally, as before). For each directory argument: recursively
+      scans it and (re)generates only the per-depth CSVs that are missing or
+      whose source CSV has changed (see the fingerprint above).
 
   avg_per_depth.py --compare <csvA> <csvB> [-o out.csv]
       Also writes a long-format comparison of the metric columns the two
       files share: depth, metric, <A>, <B>, ratio B/A. Default output is
       compare_<stemA>_vs_<stemB>.csv next to <csvA>.
+
+Scan-only flags: --force (regenerate every chrono CSV regardless of the
+fingerprint), --dry-run (report what would be regenerated, write nothing),
+-v/--verbose (also list CSVs skipped for not looking like chrono output).
 """
 import argparse
 import csv
+import hashlib
 import os
 import sys
+import time
 from collections import defaultdict
+from datetime import datetime, timezone
+
+# Bump when the per-depth output schema changes so existing files whose source
+# is unchanged still get regenerated on the next scan.
+FORMAT_VERSION = 1
+AVG_SUFFIX = "_avg_per_depth.csv"
+META_PREFIX = "#avg_per_depth_meta "
+# csv.writer under open(newline="") emits CRLF; match it for the meta line.
+LINE_TERM = "\r\n"
 
 
 def norm(name):
@@ -42,11 +84,16 @@ def norm(name):
 
 
 def read_blocks(path):
-    """Return (metric_names, samples) where samples is {depth: [row_dict, ...]}."""
+    """Return (metric_names, samples) where samples is {depth: [row_dict, ...]}.
+
+    Raises ValueError if the file has no per-thread "tree" header, i.e. it does
+    not look like a parallel_chrono per-function-timing CSV."""
     with open(path, newline="") as f:
         rows = list(csv.reader(f))
 
-    header_idx = next(i for i, r in enumerate(rows) if "tree" in r)
+    header_idx = next((i for i, r in enumerate(rows) if "tree" in r), None)
+    if header_idx is None:
+        raise ValueError("no 'tree' header row -- not a chrono timing CSV")
     header = rows[header_idx]
     block_starts = [i for i, v in enumerate(header) if v == "tree"]
 
@@ -100,11 +147,106 @@ def stem(path):
     return base
 
 
-def write_avg(path):
+def avg_path_for(raw_path):
+    """Path of the per-depth CSV that write_avg() produces for raw_path.
+
+    New layout: raw at ``<ds>/raw/<name>.csv`` -> average at ``<ds>/<name>.csv``
+    (the raw/ vs. parent split is what distinguishes them, so the average keeps
+    the source's name -- no suffix). Legacy layout (a raw *not* inside a ``raw/``
+    dir) falls back to the ``<name>_avg_per_depth.csv`` suffix in the same dir,
+    so the average can never overwrite the raw source."""
+    d = os.path.dirname(raw_path)
+    if os.path.basename(d) == "raw":
+        return os.path.join(os.path.dirname(d), os.path.basename(raw_path))
+    return os.path.join(d, stem(raw_path) + AVG_SUFFIX)
+
+
+# --- source fingerprint / provenance ---------------------------------------
+
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _iso(ts):
+    return (datetime.fromtimestamp(ts, timezone.utc)
+            .replace(microsecond=0).isoformat().replace("+00:00", "Z"))
+
+
+def source_meta(path, sha=None, source_name=None):
+    """Fingerprint dict for the raw source CSV at `path`. `source_name` is what
+    to record as the source (e.g. 'raw/foo.csv' relative to the average's dir);
+    defaults to the bare basename."""
+    st = os.stat(path)
+    return {
+        "format": FORMAT_VERSION,
+        "source": source_name or os.path.basename(path),
+        "sha256": sha or file_sha256(path),
+        "src_size": st.st_size,
+        "src_mtime": _iso(st.st_mtime),
+        "generated": _iso(time.time()),
+    }
+
+
+def format_meta_line(meta):
+    keys = ("format", "source", "sha256", "src_size", "src_mtime", "generated")
+    return META_PREFIX + " ".join(f"{k}={meta[k]}" for k in keys)
+
+
+def parse_meta_line(line):
+    """Inverse of format_meta_line; None if `line` is not a metadata line.
+
+    Only sha256/format drive freshness, and those tokens are comma/space-free,
+    so a source basename containing spaces (which these files never have) would
+    at worst garble the informational `source` field -- never sha256/format."""
+    if not line.startswith(META_PREFIX):
+        return None
+    out = {}
+    for tok in line[len(META_PREFIX):].split():
+        k, _, v = tok.partition("=")
+        out[k] = v
+    return out
+
+
+def read_meta(avg_path):
+    """Metadata dict recorded in an existing per-depth CSV, or None."""
+    try:
+        with open(avg_path, newline="") as f:
+            first = f.readline()
+    except OSError:
+        return None
+    return parse_meta_line(first.rstrip("\r\n"))
+
+
+def staleness_reason(raw_path, avg_path, sha):
+    """Why avg_path must be regenerated from raw_path, or None if up to date.
+    `sha` is the current sha256 of raw_path (passed in to avoid re-hashing)."""
+    if not os.path.exists(avg_path):
+        return "missing"
+    meta = read_meta(avg_path)
+    if meta is None:
+        return "no-meta"
+    if meta.get("format") != str(FORMAT_VERSION):
+        return "format-change"
+    if meta.get("sha256") != sha:
+        return "source-changed"
+    return None
+
+
+# --- conversion -------------------------------------------------------------
+
+def write_avg(path, sha=None):
     metrics, samples = read_blocks(path)
     avg = averages(metrics, samples)
-    out_path = os.path.join(os.path.dirname(path), stem(path) + "_avg_per_depth.csv")
+    out_path = avg_path_for(path)
+    out_dir = os.path.dirname(out_path) or "."
+    os.makedirs(out_dir, exist_ok=True)
+    source_rel = os.path.relpath(path, out_dir)
     with open(out_path, "w", newline="") as f:
+        f.write(format_meta_line(source_meta(path, sha, source_rel)) + LINE_TERM)
         w = csv.writer(f)
         w.writerow(["depth"] + metrics)
         for depth, (n, means) in avg.items():
@@ -152,23 +294,101 @@ def write_compare(path_a, path_b, out_path):
         print(f"    {m:<20} {ta:12.4f} {tb:12.4f}  {ratio}")
 
 
+# --- recursive scan ---------------------------------------------------------
+
+def iter_raw_csvs(root):
+    """Candidate raw chrono CSVs under root: *.csv that are neither our own
+    per-depth outputs nor compare outputs. (Chrono-ness is confirmed later.)"""
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for name in sorted(filenames):
+            if not name.endswith(".csv"):
+                continue
+            if name.endswith(AVG_SUFFIX) or name.startswith("compare_"):
+                continue
+            yield os.path.join(dirpath, name)
+
+
+def looks_like_chrono(path, max_rows=25):
+    """Cheap check (reads only the first rows) that `path` is a parallel_chrono
+    timing CSV -- so the scan can skip datasets/other CSVs without loading them."""
+    try:
+        with open(path, newline="") as f:
+            for i, row in enumerate(csv.reader(f)):
+                if i >= max_rows:
+                    break
+                if "tree" in row:
+                    return True
+    except (OSError, csv.Error, UnicodeDecodeError):
+        return False
+    return False
+
+
+def scan_dir(root, force=False, dry_run=False, verbose=False):
+    converted = up_to_date = skipped = errors = 0
+    for raw in iter_raw_csvs(root):
+        # A per-depth average (which now carries no distinguishing suffix) is
+        # recognised by its metadata line and is never itself a source.
+        if read_meta(raw) is not None:
+            continue
+        if not looks_like_chrono(raw):
+            skipped += 1
+            if verbose:
+                print(f"[skip non-chrono] {raw}")
+            continue
+        avg = avg_path_for(raw)
+        try:
+            sha = file_sha256(raw)
+            reason = "forced" if force else staleness_reason(raw, avg, sha)
+            if reason is None:
+                up_to_date += 1
+                continue
+            if dry_run:
+                print(f"[regenerate: {reason}] {raw}")
+            else:
+                print(f"[{reason}] {raw}")
+                write_avg(raw, sha=sha)
+            converted += 1
+        except Exception as e:  # keep scanning past one bad file
+            errors += 1
+            print(f"[error] {raw}: {e}", file=sys.stderr)
+
+    verb = "to regenerate" if dry_run else "regenerated"
+    print(f"\nscan {root}: {converted} {verb}, {up_to_date} up-to-date, "
+          f"{skipped} non-chrono skipped, {errors} errors")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("csvs", nargs="+")
+    p.add_argument("paths", nargs="+",
+                   help="raw chrono CSV files and/or directories to scan recursively")
     p.add_argument("--compare", action="store_true",
                    help="compare exactly two files on their common columns")
     p.add_argument("-o", "--output", default=None,
                    help="output path for the comparison CSV")
+    p.add_argument("--force", action="store_true",
+                   help="scan: regenerate every chrono CSV, ignoring the fingerprint")
+    p.add_argument("--dry-run", action="store_true",
+                   help="scan: only report what would be regenerated; write nothing")
+    p.add_argument("-v", "--verbose", action="store_true",
+                   help="scan: also list CSVs skipped for not looking like chrono output")
     args = p.parse_args()
 
     if args.compare:
-        if len(args.csvs) != 2:
-            sys.exit("--compare needs exactly two CSVs")
-        write_compare(args.csvs[0], args.csvs[1], args.output)
-    else:
-        for path in args.csvs:
-            write_avg(path)
+        files = [x for x in args.paths if os.path.isfile(x)]
+        if len(args.paths) != 2 or len(files) != 2:
+            sys.exit("--compare needs exactly two CSV files")
+        write_compare(args.paths[0], args.paths[1], args.output)
+        return
+
+    for path in args.paths:
+        if os.path.isdir(path):
+            scan_dir(path, force=args.force, dry_run=args.dry_run,
+                     verbose=args.verbose)
+        elif os.path.isfile(path):
+            write_avg(path)  # explicit file: always (re)convert, as before
+        else:
+            print(f"[error] not found: {path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

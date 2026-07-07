@@ -492,14 +492,19 @@ if __name__ == "__main__":
         device_name = utils.get_gpu_name() or "Unknown_GPU"
     else:
         device_name = utils.get_cpu_model_proc()
+    # Raw timing CSVs (and their sibling .log) go under a `raw/` subfolder of
+    # the <dataset_name> dir; avg_per_depth.py writes the per-depth averages up
+    # in the <dataset_name> dir itself (the raw/ vs. parent split is what now
+    # distinguishes the two — the averages no longer carry a suffix).
     out_dir = (
         Path("benchmarks/results/per_function_timing")
         / chrono_level_name(a.chrono_level)
         / device_name
         / exp
         / dataset_name
+        / "raw"
     )
-    out_dir.mkdir(parents=True, exist_ok=True)   
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     binary_cmd_str = " ".join(cmd)
     print("\nRunning binary with command:\n", binary_cmd_str, "\n\n")
