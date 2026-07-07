@@ -531,6 +531,13 @@ int main(int argc, char** argv) {
         model::gradient_boosted_trees::proto::gradient_boosted_trees_config);
     gbt.set_num_trees(absl::GetFlag(FLAGS_num_trees));
     gbt.set_shrinkage(absl::GetFlag(FLAGS_shrinkage));
+    // Disable the validation split + early stopping so a clean AP A/B isn't
+    // diluted by a withheld 10% of training data and per-tree validation
+    // inference (num_trees becomes the actual tree count, not a ceiling).
+    gbt.set_validation_set_ratio(0);
+    gbt.set_early_stopping(
+        model::gradient_boosted_trees::proto::
+            GradientBoostedTreesTrainingConfig::NONE);
     dt_config = gbt.mutable_decision_tree();
   } else {
     std::cerr << "Unknown ensemble_method: " << ensemble_method
@@ -561,10 +568,6 @@ int main(int argc, char** argv) {
   const std::string feature_split_type = absl::GetFlag(FLAGS_feature_split_type);
 
   if (feature_split_type == "Oblique") {
-    if (ensemble_method == "Boosting") {
-      std::cerr << "Oblique splits are not supported with Boosting.\n";
-      return 1;
-    }
     LOG(INFO) << "Configuring oblique splits";
     auto* sos = dt_config->mutable_sparse_oblique_split();
     sos->set_max_num_projections(
