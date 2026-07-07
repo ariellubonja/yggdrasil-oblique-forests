@@ -64,13 +64,6 @@ build:bfs_only --cxxopt="-DBFS_ONLY=1"
 # do not combine with the *_dataset_layout configs.
 build:subtree_gather --cxxopt="-DSUBTREE_GATHER_CACHE=1"
 
-# Cache the per-node ProjectionEvaluator across nodes/trees on a thread.
-# The evaluator only depends on (dataset, numerical_features); rebuilding its
-# O(num_features) per-attribute tables per node is pure kFindObliqueSetup
-# waste. Bit-identical; safe only under GLOBAL_IMPUTATION (guarded in code).
-build:cache_projection_evaluator --cxxopt="-DCACHE_PROJECTION_EVALUATOR=1"
-
-
 ##### GPU Support
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 

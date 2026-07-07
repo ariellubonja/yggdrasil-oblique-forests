@@ -237,13 +237,8 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   auto& projection_values = cache->projection_values;
 
   CHRONO_BEGIN_COARSE(find_oblique_setup);
-#ifdef CACHE_PROJECTION_EVALUATOR
   ProjectionEvaluator& projection_evaluator =
       GetProjectionEvaluator(train_dataset, config_link, dt_config, cache);
-#else
-  ProjectionEvaluator projection_evaluator(train_dataset,
-                                           config_link.numerical_features());
-#endif
 
   // TODO: Cache.
   const auto selected_labels = ExtractLabels(label_stats, selected_examples);
@@ -765,13 +760,8 @@ absl::StatusOr<bool> FindBestConditionMHLDObliqueTemplate(
     return false;
   }
 
-#ifdef CACHE_PROJECTION_EVALUATOR
   ProjectionEvaluator& projection_evaluator =
       GetProjectionEvaluator(train_dataset, config_link, dt_config, cache);
-#else
-  ProjectionEvaluator projection_evaluator(train_dataset,
-                                           config_link.numerical_features());
-#endif
 
   // TODO: Cache.
   const auto selected_labels = ExtractLabels(label_stats, selected_examples);
