@@ -1,0 +1,869 @@
+==== PROVENANCE ====
+date_utc: 2026-07-07T01:53:03Z
+git_sha: 9197f38f
+git_branch: cache-projection-evaluator
+machine: Intel(R) Xeon(R) Platinum 8488C (nproc=48)
+machine_serial: ec2d65b4-2555-44a5-d802-ecaea08b3ad7
+EXTRA_BAZEL_CONFIGS: <none>
+EXTRA_TRAIN_ARGS: --ensemble_method=Boosting
+NUM_TREES: 240  NUM_RUNS: 2  NUM_THREADS: -1  bins: 64
+====================
+
+
+======== Skipping CPU experiments (RUN_CPU=false) ========
+
+
+
+======== VECTORIZED EXPERIMENTS [AVX2] histogram_num_bins=64 ========
+
+USING INSTRUCTION SET: AVX2
+
+
+======== Running Dynamic Random Histogram [Oblique] [VECTORIZE: AVX2] with 64 bins threshold=250 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --feature_split_type "Oblique" --numerical_split_type "Dynamic Random Histogram" --num_trees=240 --num_threads=-1 --histogram_num_bins=64 --dynamic_split_threshold=250 --ensemble_method=Boosting
+----- Run 1/2 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783389183.194995   21090 train_oblique_forest.cc:395] Inferring DataSpec from CSV: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1783389183.198809   21090 csv_example_reader.cc:216] 0 row(s) processed
+I0000 00:00:1783389183.209281   21090 csv_example_reader.cc:225] Stop scanning the csv file to infer the type. Some records were not considered.
+I0000 00:00:1783389183.209299   21090 data_spec_inference.cc:518] 29 column(s) found
+I0000 00:00:1783389183.209315   21090 csv_example_reader.cc:320] 0 row(s) processed
+I0000 00:00:1783389213.209286   21090 csv_example_reader.cc:320] 7835982 row(s) processed
+I0000 00:00:1783389225.423006   21090 data_spec_inference.cc:557] Finalizing [11000000 row(s) found]
+I0000 00:00:1783389225.423045   21090 train_oblique_forest.cc:501] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1783389225.423055   21090 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783389225.423057   21090 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783389225.423095   21090 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783389225.423097   21090 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783389225.423648   21090 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1783389255.423724   21090 vertical_dataset_io.cc:82] 7274900 examples scanned.
+I0000 00:00:1783389271.460309   21090 vertical_dataset_io.cc:91] 11000000 examples read. Memory: usage:1276MB allocated:1276MB. 0 (0%) examples have been skipped.
+I0000 00:00:1783389271.460380   21090 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783389271.460384   21090 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783389271.460394   21090 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783389271.460581   21090 gradient_boosted_trees.cc:1189] Training gradient boosted tree on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1783389271.460599   21090 gradient_boosted_trees.cc:1229] 11000000 examples used for training and 0 examples used for validation
+I0000 00:00:1783389271.517140   21090 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783389271.517153   21090 training.cc:5098] Create processor with 48 threads for split computation
+I0000 00:00:1783389271.518086   21090 gradient_boosted_trees.cc:1410] Create thread pool with 48 threads for loss computation
+I0000 00:00:1783389277.445761   21090 gradient_boosted_trees.cc:1718] Train tree 1/240 train-loss:1.362923 train-accuracy:0.539775 [total:5.93s iter:5.93s]
+I0000 00:00:1783389283.677223   21090 gradient_boosted_trees.cc:1718] Train tree 2/240 train-loss:1.351699 train-accuracy:0.587261 [total:12.16s iter:6.23s]
+I0000 00:00:1783389289.507801   21090 gradient_boosted_trees.cc:1720] Train tree 3/240 train-loss:1.337515 train-accuracy:0.616289 [total:17.99s iter:5.83s]
+I0000 00:00:1783389313.646926   21090 gradient_boosted_trees.cc:1720] Train tree 7/240 train-loss:1.298939 train-accuracy:0.659542 [total:42.13s iter:5.60s]
+I0000 00:00:1783389337.495053   21090 gradient_boosted_trees.cc:1720] Train tree 11/240 train-loss:1.276005 train-accuracy:0.671840 [total:1m5.98s iter:5.63s]
+I0000 00:00:1783389362.246286   21090 gradient_boosted_trees.cc:1720] Train tree 15/240 train-loss:1.245822 train-accuracy:0.682177 [total:1m30.73s iter:6.27s]
+I0000 00:00:1783389386.821912   21090 gradient_boosted_trees.cc:1720] Train tree 19/240 train-loss:1.225425 train-accuracy:0.686132 [total:1m55.30s iter:5.99s]
+I0000 00:00:1783389410.541248   21090 gradient_boosted_trees.cc:1720] Train tree 23/240 train-loss:1.209558 train-accuracy:0.691207 [total:2m19.02s iter:6.07s]
+I0000 00:00:1783389434.746927   21090 gradient_boosted_trees.cc:1720] Train tree 27/240 train-loss:1.194491 train-accuracy:0.695145 [total:2m43.23s iter:6.26s]
+I0000 00:00:1783389458.668114   21090 gradient_boosted_trees.cc:1720] Train tree 31/240 train-loss:1.183492 train-accuracy:0.697518 [total:3m7.15s iter:5.94s]
+I0000 00:00:1783389482.757889   21090 gradient_boosted_trees.cc:1720] Train tree 35/240 train-loss:1.172539 train-accuracy:0.700649 [total:3m31.24s iter:5.83s]
+I0000 00:00:1783389506.648666   21090 gradient_boosted_trees.cc:1720] Train tree 39/240 train-loss:1.161760 train-accuracy:0.703880 [total:3m55.13s iter:6.12s]
+I0000 00:00:1783389530.242733   21090 gradient_boosted_trees.cc:1720] Train tree 43/240 train-loss:1.152817 train-accuracy:0.706092 [total:4m18.72s iter:5.68s]
+I0000 00:00:1783389553.215436   21090 gradient_boosted_trees.cc:1720] Train tree 47/240 train-loss:1.145357 train-accuracy:0.707386 [total:4m41.70s iter:5.88s]
+I0000 00:00:1783389577.712912   21090 gradient_boosted_trees.cc:1720] Train tree 51/240 train-loss:1.138758 train-accuracy:0.709077 [total:5m6.19s iter:5.95s]
+I0000 00:00:1783389600.602879   21090 gradient_boosted_trees.cc:1720] Train tree 55/240 train-loss:1.134490 train-accuracy:0.709958 [total:5m29.08s iter:5.98s]
+I0000 00:00:1783389623.916534   21090 gradient_boosted_trees.cc:1720] Train tree 59/240 train-loss:1.129021 train-accuracy:0.710994 [total:5m52.40s iter:5.93s]
+I0000 00:00:1783389647.288752   21090 gradient_boosted_trees.cc:1720] Train tree 63/240 train-loss:1.124315 train-accuracy:0.711986 [total:6m15.77s iter:5.54s]
+I0000 00:00:1783389670.949107   21090 gradient_boosted_trees.cc:1720] Train tree 67/240 train-loss:1.119969 train-accuracy:0.712911 [total:6m39.43s iter:5.86s]
+I0000 00:00:1783389693.940526   21090 gradient_boosted_trees.cc:1720] Train tree 71/240 train-loss:1.115934 train-accuracy:0.713966 [total:7m2.42s iter:5.47s]
+I0000 00:00:1783389716.434570   21090 gradient_boosted_trees.cc:1720] Train tree 75/240 train-loss:1.113164 train-accuracy:0.714687 [total:7m24.92s iter:5.67s]
+I0000 00:00:1783389739.150057   21090 gradient_boosted_trees.cc:1720] Train tree 79/240 train-loss:1.109122 train-accuracy:0.715721 [total:7m47.63s iter:5.25s]
+I0000 00:00:1783389762.319252   21090 gradient_boosted_trees.cc:1720] Train tree 83/240 train-loss:1.106313 train-accuracy:0.716640 [total:8m10.80s iter:6.02s]
+I0000 00:00:1783389785.799590   21090 gradient_boosted_trees.cc:1720] Train tree 87/240 train-loss:1.103554 train-accuracy:0.717292 [total:8m34.28s iter:6.02s]
+I0000 00:00:1783389808.805204   21090 gradient_boosted_trees.cc:1720] Train tree 91/240 train-loss:1.101283 train-accuracy:0.717956 [total:8m57.29s iter:5.79s]
+I0000 00:00:1783389831.969046   21090 gradient_boosted_trees.cc:1720] Train tree 95/240 train-loss:1.098303 train-accuracy:0.718674 [total:9m20.45s iter:5.96s]
+I0000 00:00:1783389855.636779   21090 gradient_boosted_trees.cc:1720] Train tree 99/240 train-loss:1.095904 train-accuracy:0.719314 [total:9m44.12s iter:5.84s]
+I0000 00:00:1783389879.020921   21090 gradient_boosted_trees.cc:1720] Train tree 103/240 train-loss:1.093781 train-accuracy:0.719919 [total:10m7.50s iter:5.97s]
+I0000 00:00:1783389902.229985   21090 gradient_boosted_trees.cc:1720] Train tree 107/240 train-loss:1.092026 train-accuracy:0.720427 [total:10m30.71s iter:5.83s]
+I0000 00:00:1783389925.033376   21090 gradient_boosted_trees.cc:1720] Train tree 111/240 train-loss:1.089851 train-accuracy:0.720918 [total:10m53.51s iter:5.82s]
+I0000 00:00:1783389947.357275   21090 gradient_boosted_trees.cc:1720] Train tree 115/240 train-loss:1.088478 train-accuracy:0.721197 [total:11m15.84s iter:5.58s]
+I0000 00:00:1783389970.007898   21090 gradient_boosted_trees.cc:1720] Train tree 119/240 train-loss:1.086837 train-accuracy:0.721655 [total:11m38.49s iter:5.71s]
+I0000 00:00:1783389993.845440   21090 gradient_boosted_trees.cc:1720] Train tree 123/240 train-loss:1.085002 train-accuracy:0.722195 [total:12m2.33s iter:6.57s]
+I0000 00:00:1783390016.022076   21090 gradient_boosted_trees.cc:1720] Train tree 127/240 train-loss:1.083955 train-accuracy:0.722599 [total:12m24.50s iter:5.67s]
+I0000 00:00:1783390039.948480   21090 gradient_boosted_trees.cc:1720] Train tree 131/240 train-loss:1.082650 train-accuracy:0.722937 [total:12m48.43s iter:6.13s]
+I0000 00:00:1783390062.998538   21090 gradient_boosted_trees.cc:1720] Train tree 135/240 train-loss:1.081355 train-accuracy:0.723331 [total:13m11.48s iter:5.90s]
+I0000 00:00:1783390086.789550   21090 gradient_boosted_trees.cc:1720] Train tree 139/240 train-loss:1.079936 train-accuracy:0.723754 [total:13m35.27s iter:5.85s]
+I0000 00:00:1783390108.544638   21090 gradient_boosted_trees.cc:1720] Train tree 143/240 train-loss:1.078598 train-accuracy:0.724138 [total:13m57.03s iter:5.54s]
+I0000 00:00:1783390131.672396   21090 gradient_boosted_trees.cc:1720] Train tree 147/240 train-loss:1.077061 train-accuracy:0.724525 [total:14m20.15s iter:5.65s]
+I0000 00:00:1783390154.474879   21090 gradient_boosted_trees.cc:1720] Train tree 151/240 train-loss:1.075876 train-accuracy:0.724863 [total:14m42.96s iter:5.41s]
+I0000 00:00:1783390178.085642   21090 gradient_boosted_trees.cc:1720] Train tree 155/240 train-loss:1.075048 train-accuracy:0.725151 [total:15m6.57s iter:5.83s]
+I0000 00:00:1783390200.775762   21090 gradient_boosted_trees.cc:1720] Train tree 159/240 train-loss:1.074038 train-accuracy:0.725479 [total:15m29.26s iter:5.45s]
+I0000 00:00:1783390224.014552   21090 gradient_boosted_trees.cc:1720] Train tree 163/240 train-loss:1.072829 train-accuracy:0.725847 [total:15m52.50s iter:5.95s]
+I0000 00:00:1783390245.459874   21090 gradient_boosted_trees.cc:1720] Train tree 167/240 train-loss:1.072198 train-accuracy:0.726091 [total:16m13.94s iter:5.55s]
+I0000 00:00:1783390269.067801   21090 gradient_boosted_trees.cc:1720] Train tree 171/240 train-loss:1.070655 train-accuracy:0.726504 [total:16m37.55s iter:5.55s]
+I0000 00:00:1783390292.183711   21090 gradient_boosted_trees.cc:1720] Train tree 175/240 train-loss:1.069646 train-accuracy:0.726847 [total:17m0.66s iter:6.03s]
+I0000 00:00:1783390313.856316   21090 gradient_boosted_trees.cc:1720] Train tree 179/240 train-loss:1.069115 train-accuracy:0.727004 [total:17m22.34s iter:5.26s]
+I0000 00:00:1783390336.638919   21090 gradient_boosted_trees.cc:1720] Train tree 183/240 train-loss:1.068418 train-accuracy:0.727261 [total:17m45.12s iter:5.39s]
+I0000 00:00:1783390358.580691   21090 gradient_boosted_trees.cc:1720] Train tree 187/240 train-loss:1.067813 train-accuracy:0.727455 [total:18m7.06s iter:5.01s]
+I0000 00:00:1783390381.539475   21090 gradient_boosted_trees.cc:1720] Train tree 191/240 train-loss:1.066992 train-accuracy:0.727695 [total:18m30.02s iter:5.88s]
+I0000 00:00:1783390404.278084   21090 gradient_boosted_trees.cc:1720] Train tree 195/240 train-loss:1.066118 train-accuracy:0.728006 [total:18m52.76s iter:5.84s]
+I0000 00:00:1783390425.813088   21090 gradient_boosted_trees.cc:1720] Train tree 199/240 train-loss:1.065459 train-accuracy:0.728276 [total:19m14.29s iter:5.35s]
+I0000 00:00:1783390448.787328   21090 gradient_boosted_trees.cc:1720] Train tree 203/240 train-loss:1.064697 train-accuracy:0.728563 [total:19m37.27s iter:5.52s]
+I0000 00:00:1783390471.394914   21090 gradient_boosted_trees.cc:1720] Train tree 207/240 train-loss:1.064149 train-accuracy:0.728751 [total:19m59.88s iter:5.76s]
+I0000 00:00:1783390494.715364   21090 gradient_boosted_trees.cc:1720] Train tree 211/240 train-loss:1.063399 train-accuracy:0.728968 [total:20m23.20s iter:5.86s]
+I0000 00:00:1783390518.048716   21090 gradient_boosted_trees.cc:1720] Train tree 215/240 train-loss:1.062612 train-accuracy:0.729212 [total:20m46.53s iter:5.61s]
+I0000 00:00:1783390540.789411   21090 gradient_boosted_trees.cc:1720] Train tree 219/240 train-loss:1.062009 train-accuracy:0.729400 [total:21m9.27s iter:5.56s]
+I0000 00:00:1783390563.487961   21090 gradient_boosted_trees.cc:1720] Train tree 223/240 train-loss:1.061315 train-accuracy:0.729587 [total:21m31.97s iter:5.97s]
+I0000 00:00:1783390585.286456   21090 gradient_boosted_trees.cc:1720] Train tree 227/240 train-loss:1.060812 train-accuracy:0.729772 [total:21m53.77s iter:5.19s]
+I0000 00:00:1783390608.536680   21090 gradient_boosted_trees.cc:1720] Train tree 231/240 train-loss:1.060201 train-accuracy:0.729996 [total:22m17.02s iter:5.57s]
+I0000 00:00:1783390631.636174   21090 gradient_boosted_trees.cc:1720] Train tree 235/240 train-loss:1.059751 train-accuracy:0.730136 [total:22m40.12s iter:5.91s]
+I0000 00:00:1783390654.634977   21090 gradient_boosted_trees.cc:1720] Train tree 239/240 train-loss:1.059254 train-accuracy:0.730311 [total:23m3.12s iter:5.76s]
+I0000 00:00:1783390659.661531   21090 gradient_boosted_trees.cc:1718] Train tree 240/240 train-loss:1.059178 train-accuracy:0.730338 [total:23m8.14s iter:5.03s]
+I0000 00:00:1783390659.741318   21090 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 1434.32s
+WARNING: Could not parse 'Training block took' from run 1
+----- Run 2/2 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783390659.851056   26995 train_oblique_forest.cc:395] Inferring DataSpec from CSV: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1783390659.854878   26995 csv_example_reader.cc:216] 0 row(s) processed
+I0000 00:00:1783390659.863853   26995 csv_example_reader.cc:225] Stop scanning the csv file to infer the type. Some records were not considered.
+I0000 00:00:1783390659.863869   26995 data_spec_inference.cc:518] 29 column(s) found
+I0000 00:00:1783390659.863882   26995 csv_example_reader.cc:320] 0 row(s) processed
+I0000 00:00:1783390689.863856   26995 csv_example_reader.cc:320] 7821652 row(s) processed
+I0000 00:00:1783390702.232158   26995 data_spec_inference.cc:557] Finalizing [11000000 row(s) found]
+I0000 00:00:1783390702.232196   26995 train_oblique_forest.cc:501] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1783390702.232205   26995 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783390702.232207   26995 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783390702.232245   26995 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783390702.232247   26995 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783390702.232804   26995 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1783390732.232890   26995 vertical_dataset_io.cc:82] 7236100 examples scanned.
+I0000 00:00:1783390748.563710   26995 vertical_dataset_io.cc:91] 11000000 examples read. Memory: usage:1276MB allocated:1276MB. 0 (0%) examples have been skipped.
+I0000 00:00:1783390748.563787   26995 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783390748.563791   26995 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783390748.563801   26995 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783390748.563983   26995 gradient_boosted_trees.cc:1189] Training gradient boosted tree on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1783390748.564001   26995 gradient_boosted_trees.cc:1229] 11000000 examples used for training and 0 examples used for validation
+I0000 00:00:1783390748.621352   26995 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783390748.621364   26995 training.cc:5098] Create processor with 48 threads for split computation
+I0000 00:00:1783390748.622297   26995 gradient_boosted_trees.cc:1410] Create thread pool with 48 threads for loss computation
+I0000 00:00:1783390754.569651   26995 gradient_boosted_trees.cc:1718] Train tree 1/240 train-loss:1.362923 train-accuracy:0.539775 [total:5.95s iter:5.95s]
+I0000 00:00:1783390760.744798   26995 gradient_boosted_trees.cc:1718] Train tree 2/240 train-loss:1.351699 train-accuracy:0.587261 [total:12.12s iter:6.18s]
+I0000 00:00:1783390766.715422   26995 gradient_boosted_trees.cc:1720] Train tree 3/240 train-loss:1.337515 train-accuracy:0.616289 [total:18.09s iter:5.97s]
+I0000 00:00:1783390791.075461   26995 gradient_boosted_trees.cc:1720] Train tree 7/240 train-loss:1.298939 train-accuracy:0.659542 [total:42.45s iter:5.70s]
+I0000 00:00:1783390815.171328   26995 gradient_boosted_trees.cc:1720] Train tree 11/240 train-loss:1.276005 train-accuracy:0.671840 [total:1m6.55s iter:5.72s]
+I0000 00:00:1783390840.386459   26995 gradient_boosted_trees.cc:1720] Train tree 15/240 train-loss:1.245822 train-accuracy:0.682177 [total:1m31.76s iter:6.37s]
+I0000 00:00:1783390865.190245   26995 gradient_boosted_trees.cc:1720] Train tree 19/240 train-loss:1.225425 train-accuracy:0.686132 [total:1m56.57s iter:6.09s]
+I0000 00:00:1783390889.275344   26995 gradient_boosted_trees.cc:1720] Train tree 23/240 train-loss:1.209558 train-accuracy:0.691207 [total:2m20.65s iter:6.14s]
+I0000 00:00:1783390913.832789   26995 gradient_boosted_trees.cc:1720] Train tree 27/240 train-loss:1.194491 train-accuracy:0.695145 [total:2m45.21s iter:6.28s]
+I0000 00:00:1783390937.751846   26995 gradient_boosted_trees.cc:1720] Train tree 31/240 train-loss:1.183492 train-accuracy:0.697518 [total:3m9.13s iter:5.85s]
+I0000 00:00:1783390962.163466   26995 gradient_boosted_trees.cc:1720] Train tree 35/240 train-loss:1.172539 train-accuracy:0.700649 [total:3m33.54s iter:5.82s]
+I0000 00:00:1783390986.114585   26995 gradient_boosted_trees.cc:1720] Train tree 39/240 train-loss:1.161760 train-accuracy:0.703880 [total:3m57.49s iter:6.20s]
+I0000 00:00:1783391009.880411   26995 gradient_boosted_trees.cc:1720] Train tree 43/240 train-loss:1.152817 train-accuracy:0.706092 [total:4m21.26s iter:5.71s]
+I0000 00:00:1783391032.940119   26995 gradient_boosted_trees.cc:1720] Train tree 47/240 train-loss:1.145357 train-accuracy:0.707386 [total:4m44.32s iter:5.93s]
+I0000 00:00:1783391057.598883   26995 gradient_boosted_trees.cc:1720] Train tree 51/240 train-loss:1.138758 train-accuracy:0.709077 [total:5m8.98s iter:5.99s]
+I0000 00:00:1783391080.445359   26995 gradient_boosted_trees.cc:1720] Train tree 55/240 train-loss:1.134490 train-accuracy:0.709958 [total:5m31.82s iter:5.96s]
+I0000 00:00:1783391103.938645   26995 gradient_boosted_trees.cc:1720] Train tree 59/240 train-loss:1.129021 train-accuracy:0.710994 [total:5m55.32s iter:5.98s]
+I0000 00:00:1783391127.352278   26995 gradient_boosted_trees.cc:1720] Train tree 63/240 train-loss:1.124315 train-accuracy:0.711986 [total:6m18.73s iter:5.57s]
+I0000 00:00:1783391150.903169   26995 gradient_boosted_trees.cc:1720] Train tree 67/240 train-loss:1.119969 train-accuracy:0.712911 [total:6m42.28s iter:5.87s]
+I0000 00:00:1783391174.113383   26995 gradient_boosted_trees.cc:1720] Train tree 71/240 train-loss:1.115934 train-accuracy:0.713966 [total:7m5.49s iter:5.52s]
+I0000 00:00:1783391196.898526   26995 gradient_boosted_trees.cc:1720] Train tree 75/240 train-loss:1.113164 train-accuracy:0.714687 [total:7m28.28s iter:5.69s]
+I0000 00:00:1783391219.853046   26995 gradient_boosted_trees.cc:1720] Train tree 79/240 train-loss:1.109122 train-accuracy:0.715721 [total:7m51.23s iter:5.33s]
+I0000 00:00:1783391243.360116   26995 gradient_boosted_trees.cc:1720] Train tree 83/240 train-loss:1.106313 train-accuracy:0.716640 [total:8m14.74s iter:6.07s]
+I0000 00:00:1783391267.142648   26995 gradient_boosted_trees.cc:1720] Train tree 87/240 train-loss:1.103554 train-accuracy:0.717292 [total:8m38.52s iter:6.05s]
+I0000 00:00:1783391290.379552   26995 gradient_boosted_trees.cc:1720] Train tree 91/240 train-loss:1.101283 train-accuracy:0.717956 [total:9m1.76s iter:5.87s]
+I0000 00:00:1783391313.839936   26995 gradient_boosted_trees.cc:1720] Train tree 95/240 train-loss:1.098303 train-accuracy:0.718674 [total:9m25.22s iter:5.93s]
+I0000 00:00:1783391338.075985   26995 gradient_boosted_trees.cc:1720] Train tree 99/240 train-loss:1.095904 train-accuracy:0.719314 [total:9m49.45s iter:5.83s]
+I0000 00:00:1783391361.711768   26995 gradient_boosted_trees.cc:1720] Train tree 103/240 train-loss:1.093781 train-accuracy:0.719919 [total:10m13.09s iter:6.05s]
+I0000 00:00:1783391384.965290   26995 gradient_boosted_trees.cc:1720] Train tree 107/240 train-loss:1.092026 train-accuracy:0.720427 [total:10m36.34s iter:5.85s]
+I0000 00:00:1783391407.790411   26995 gradient_boosted_trees.cc:1720] Train tree 111/240 train-loss:1.089851 train-accuracy:0.720918 [total:10m59.17s iter:5.88s]
+I0000 00:00:1783391430.020603   26995 gradient_boosted_trees.cc:1720] Train tree 115/240 train-loss:1.088478 train-accuracy:0.721197 [total:11m21.40s iter:5.61s]
+I0000 00:00:1783391452.771238   26995 gradient_boosted_trees.cc:1720] Train tree 119/240 train-loss:1.086837 train-accuracy:0.721655 [total:11m44.15s iter:5.75s]
+I0000 00:00:1783391476.805008   26995 gradient_boosted_trees.cc:1720] Train tree 123/240 train-loss:1.085002 train-accuracy:0.722195 [total:12m8.18s iter:6.62s]
+I0000 00:00:1783391499.250322   26995 gradient_boosted_trees.cc:1720] Train tree 127/240 train-loss:1.083955 train-accuracy:0.722599 [total:12m30.63s iter:5.67s]
+I0000 00:00:1783391523.146902   26995 gradient_boosted_trees.cc:1720] Train tree 131/240 train-loss:1.082650 train-accuracy:0.722937 [total:12m54.52s iter:6.11s]
+I0000 00:00:1783391546.326169   26995 gradient_boosted_trees.cc:1720] Train tree 135/240 train-loss:1.081355 train-accuracy:0.723331 [total:13m17.70s iter:5.87s]
+I0000 00:00:1783391570.291777   26995 gradient_boosted_trees.cc:1720] Train tree 139/240 train-loss:1.079936 train-accuracy:0.723754 [total:13m41.67s iter:5.90s]
+I0000 00:00:1783391591.888581   26995 gradient_boosted_trees.cc:1720] Train tree 143/240 train-loss:1.078598 train-accuracy:0.724138 [total:14m3.27s iter:5.54s]
+I0000 00:00:1783391615.117983   26995 gradient_boosted_trees.cc:1720] Train tree 147/240 train-loss:1.077061 train-accuracy:0.724525 [total:14m26.49s iter:5.59s]
+I0000 00:00:1783391638.130678   26995 gradient_boosted_trees.cc:1720] Train tree 151/240 train-loss:1.075876 train-accuracy:0.724863 [total:14m49.51s iter:5.52s]
+I0000 00:00:1783391661.978296   26995 gradient_boosted_trees.cc:1720] Train tree 155/240 train-loss:1.075048 train-accuracy:0.725151 [total:15m13.36s iter:5.91s]
+I0000 00:00:1783391684.880229   26995 gradient_boosted_trees.cc:1720] Train tree 159/240 train-loss:1.074038 train-accuracy:0.725479 [total:15m36.26s iter:5.47s]
+I0000 00:00:1783391708.325652   26995 gradient_boosted_trees.cc:1720] Train tree 163/240 train-loss:1.072829 train-accuracy:0.725847 [total:15m59.70s iter:5.97s]
+I0000 00:00:1783391729.908914   26995 gradient_boosted_trees.cc:1720] Train tree 167/240 train-loss:1.072198 train-accuracy:0.726091 [total:16m21.29s iter:5.62s]
+I0000 00:00:1783391753.847559   26995 gradient_boosted_trees.cc:1720] Train tree 171/240 train-loss:1.070655 train-accuracy:0.726504 [total:16m45.22s iter:5.69s]
+I0000 00:00:1783391777.149073   26995 gradient_boosted_trees.cc:1720] Train tree 175/240 train-loss:1.069646 train-accuracy:0.726847 [total:17m8.53s iter:6.03s]
+I0000 00:00:1783391799.063142   26995 gradient_boosted_trees.cc:1720] Train tree 179/240 train-loss:1.069115 train-accuracy:0.727004 [total:17m30.44s iter:5.24s]
+I0000 00:00:1783391822.126846   26995 gradient_boosted_trees.cc:1720] Train tree 183/240 train-loss:1.068418 train-accuracy:0.727261 [total:17m53.50s iter:5.48s]
+I0000 00:00:1783391844.390598   26995 gradient_boosted_trees.cc:1720] Train tree 187/240 train-loss:1.067813 train-accuracy:0.727455 [total:18m15.77s iter:5.03s]
+I0000 00:00:1783391867.548221   26995 gradient_boosted_trees.cc:1720] Train tree 191/240 train-loss:1.066992 train-accuracy:0.727695 [total:18m38.93s iter:5.92s]
+I0000 00:00:1783391890.406990   26995 gradient_boosted_trees.cc:1720] Train tree 195/240 train-loss:1.066118 train-accuracy:0.728006 [total:19m1.78s iter:5.84s]
+I0000 00:00:1783391912.220597   26995 gradient_boosted_trees.cc:1720] Train tree 199/240 train-loss:1.065459 train-accuracy:0.728276 [total:19m23.60s iter:5.49s]
+I0000 00:00:1783391935.636870   26995 gradient_boosted_trees.cc:1720] Train tree 203/240 train-loss:1.064697 train-accuracy:0.728563 [total:19m47.01s iter:5.68s]
+I0000 00:00:1783391958.488168   26995 gradient_boosted_trees.cc:1720] Train tree 207/240 train-loss:1.064149 train-accuracy:0.728751 [total:20m9.87s iter:5.79s]
+I0000 00:00:1783391982.095992   26995 gradient_boosted_trees.cc:1720] Train tree 211/240 train-loss:1.063399 train-accuracy:0.728968 [total:20m33.47s iter:5.86s]
+I0000 00:00:1783392005.500182   26995 gradient_boosted_trees.cc:1720] Train tree 215/240 train-loss:1.062612 train-accuracy:0.729212 [total:20m56.88s iter:5.61s]
+I0000 00:00:1783392028.392684   26995 gradient_boosted_trees.cc:1720] Train tree 219/240 train-loss:1.062009 train-accuracy:0.729400 [total:21m19.77s iter:5.54s]
+I0000 00:00:1783392051.217222   26995 gradient_boosted_trees.cc:1720] Train tree 223/240 train-loss:1.061315 train-accuracy:0.729587 [total:21m42.59s iter:5.93s]
+I0000 00:00:1783392073.108110   26995 gradient_boosted_trees.cc:1720] Train tree 227/240 train-loss:1.060812 train-accuracy:0.729772 [total:22m4.48s iter:5.23s]
+I0000 00:00:1783392096.371222   26995 gradient_boosted_trees.cc:1720] Train tree 231/240 train-loss:1.060201 train-accuracy:0.729996 [total:22m27.75s iter:5.55s]
+I0000 00:00:1783392119.528635   26995 gradient_boosted_trees.cc:1720] Train tree 235/240 train-loss:1.059751 train-accuracy:0.730136 [total:22m50.91s iter:5.97s]
+I0000 00:00:1783392142.549664   26995 gradient_boosted_trees.cc:1720] Train tree 239/240 train-loss:1.059254 train-accuracy:0.730311 [total:23m13.93s iter:5.79s]
+I0000 00:00:1783392147.598345   26995 gradient_boosted_trees.cc:1718] Train tree 240/240 train-loss:1.059178 train-accuracy:0.730338 [total:23m18.98s iter:5.05s]
+I0000 00:00:1783392147.676203   26995 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 1445.44s
+WARNING: Could not parse 'Training block took' from run 2
+MEDIAN of 0/2 runs: ERROR
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --feature_split_type "Oblique" --numerical_split_type "Dynamic Random Histogram" --num_trees=240 --num_threads=-1 --histogram_num_bins=64 --dynamic_split_threshold=250 --ensemble_method=Boosting
+----- Run 1/2 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783392147.788330   32814 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1783392199.127533   32814 train_oblique_forest.cc:501] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1783392199.127557   32814 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783392199.127559   32814 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783392199.127844   32814 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783392199.127850   32814 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783392199.128089   32814 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783392199.128750   32814 gradient_boosted_trees.cc:1189] Training gradient boosted tree on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1783392199.129478   32814 gradient_boosted_trees.cc:1229] 1500000 examples used for training and 0 examples used for validation
+I0000 00:00:1783392199.137529   32814 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783392199.137585   32814 training.cc:5098] Create processor with 48 threads for split computation
+I0000 00:00:1783392199.138438   32814 gradient_boosted_trees.cc:1410] Create thread pool with 48 threads for loss computation
+I0000 00:00:1783392200.648994   32814 gradient_boosted_trees.cc:1718] Train tree 1/240 train-loss:1.372408 train-accuracy:0.612733 [total:1.51s iter:1.51s]
+I0000 00:00:1783392202.109700   32814 gradient_boosted_trees.cc:1718] Train tree 2/240 train-loss:1.309091 train-accuracy:0.779239 [total:2.97s iter:1.46s]
+I0000 00:00:1783392203.613541   32814 gradient_boosted_trees.cc:1720] Train tree 3/240 train-loss:1.288537 train-accuracy:0.793999 [total:4.47s iter:1.50s]
+I0000 00:00:1783392224.535207   32814 gradient_boosted_trees.cc:1720] Train tree 17/240 train-loss:0.997698 train-accuracy:0.900929 [total:25.40s iter:1.50s]
+I0000 00:00:1783392245.334910   32814 gradient_boosted_trees.cc:1720] Train tree 31/240 train-loss:0.803983 train-accuracy:0.935676 [total:46.20s iter:1.45s]
+I0000 00:00:1783392265.957956   32814 gradient_boosted_trees.cc:1720] Train tree 45/240 train-loss:0.665978 train-accuracy:0.949781 [total:1m6.82s iter:1.47s]
+I0000 00:00:1783392286.335595   32814 gradient_boosted_trees.cc:1720] Train tree 59/240 train-loss:0.546252 train-accuracy:0.959495 [total:1m27.20s iter:1.45s]
+I0000 00:00:1783392306.650995   32814 gradient_boosted_trees.cc:1720] Train tree 73/240 train-loss:0.472022 train-accuracy:0.965323 [total:1m47.51s iter:1.44s]
+I0000 00:00:1783392326.813161   32814 gradient_boosted_trees.cc:1720] Train tree 87/240 train-loss:0.417993 train-accuracy:0.968580 [total:2m7.67s iter:1.44s]
+I0000 00:00:1783392347.142011   32814 gradient_boosted_trees.cc:1720] Train tree 101/240 train-loss:0.365749 train-accuracy:0.972251 [total:2m28.00s iter:1.46s]
+I0000 00:00:1783392367.365009   32814 gradient_boosted_trees.cc:1720] Train tree 115/240 train-loss:0.327185 train-accuracy:0.974542 [total:2m48.23s iter:1.46s]
+I0000 00:00:1783392387.454861   32814 gradient_boosted_trees.cc:1720] Train tree 129/240 train-loss:0.298237 train-accuracy:0.976065 [total:3m8.32s iter:1.42s]
+I0000 00:00:1783392407.455998   32814 gradient_boosted_trees.cc:1720] Train tree 143/240 train-loss:0.269731 train-accuracy:0.977419 [total:3m28.32s iter:1.42s]
+I0000 00:00:1783392428.807821   32814 gradient_boosted_trees.cc:1720] Train tree 158/240 train-loss:0.249359 train-accuracy:0.978784 [total:3m49.67s iter:1.45s]
+I0000 00:00:1783392450.114962   32814 gradient_boosted_trees.cc:1720] Train tree 173/240 train-loss:0.227735 train-accuracy:0.980051 [total:4m10.98s iter:1.39s]
+I0000 00:00:1783392471.301572   32814 gradient_boosted_trees.cc:1720] Train tree 188/240 train-loss:0.208818 train-accuracy:0.981049 [total:4m32.16s iter:1.42s]
+I0000 00:00:1783392492.684952   32814 gradient_boosted_trees.cc:1720] Train tree 203/240 train-loss:0.190138 train-accuracy:0.981754 [total:4m53.55s iter:1.45s]
+I0000 00:00:1783392513.864471   32814 gradient_boosted_trees.cc:1720] Train tree 218/240 train-loss:0.178391 train-accuracy:0.982558 [total:5m14.73s iter:1.40s]
+I0000 00:00:1783392534.888006   32814 gradient_boosted_trees.cc:1720] Train tree 233/240 train-loss:0.166987 train-accuracy:0.983211 [total:5m35.75s iter:1.40s]
+I0000 00:00:1783392544.691727   32814 gradient_boosted_trees.cc:1718] Train tree 240/240 train-loss:0.161464 train-accuracy:0.983459 [total:5m45.55s iter:1.35s]
+I0000 00:00:1783392544.905965   32814 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 345.778s
+WARNING: Could not parse 'Training block took' from run 1
+----- Run 2/2 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783392545.584259   34492 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1783392596.911208   34492 train_oblique_forest.cc:501] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1783392596.911232   34492 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783392596.911235   34492 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783392596.911522   34492 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783392596.911527   34492 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783392596.911760   34492 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783392596.912414   34492 gradient_boosted_trees.cc:1189] Training gradient boosted tree on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1783392596.913147   34492 gradient_boosted_trees.cc:1229] 1500000 examples used for training and 0 examples used for validation
+I0000 00:00:1783392596.920923   34492 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783392596.920982   34492 training.cc:5098] Create processor with 48 threads for split computation
+I0000 00:00:1783392596.921830   34492 gradient_boosted_trees.cc:1410] Create thread pool with 48 threads for loss computation
+I0000 00:00:1783392598.441661   34492 gradient_boosted_trees.cc:1718] Train tree 1/240 train-loss:1.372408 train-accuracy:0.612733 [total:1.52s iter:1.52s]
+I0000 00:00:1783392599.921033   34492 gradient_boosted_trees.cc:1718] Train tree 2/240 train-loss:1.309091 train-accuracy:0.779239 [total:3.00s iter:1.48s]
+I0000 00:00:1783392601.432815   34492 gradient_boosted_trees.cc:1720] Train tree 3/240 train-loss:1.288537 train-accuracy:0.793999 [total:4.51s iter:1.51s]
+I0000 00:00:1783392622.341249   34492 gradient_boosted_trees.cc:1720] Train tree 17/240 train-loss:0.997698 train-accuracy:0.900929 [total:25.42s iter:1.50s]
+I0000 00:00:1783392643.000638   34492 gradient_boosted_trees.cc:1720] Train tree 31/240 train-loss:0.803983 train-accuracy:0.935676 [total:46.08s iter:1.44s]
+I0000 00:00:1783392663.561868   34492 gradient_boosted_trees.cc:1720] Train tree 45/240 train-loss:0.665978 train-accuracy:0.949781 [total:1m6.64s iter:1.47s]
+I0000 00:00:1783392683.878589   34492 gradient_boosted_trees.cc:1720] Train tree 59/240 train-loss:0.546252 train-accuracy:0.959495 [total:1m26.96s iter:1.45s]
+I0000 00:00:1783392704.157111   34492 gradient_boosted_trees.cc:1720] Train tree 73/240 train-loss:0.472022 train-accuracy:0.965323 [total:1m47.23s iter:1.45s]
+I0000 00:00:1783392724.331633   34492 gradient_boosted_trees.cc:1720] Train tree 87/240 train-loss:0.417993 train-accuracy:0.968580 [total:2m7.41s iter:1.43s]
+I0000 00:00:1783392744.704550   34492 gradient_boosted_trees.cc:1720] Train tree 101/240 train-loss:0.365749 train-accuracy:0.972251 [total:2m27.78s iter:1.45s]
+I0000 00:00:1783392764.859453   34492 gradient_boosted_trees.cc:1720] Train tree 115/240 train-loss:0.327185 train-accuracy:0.974542 [total:2m47.94s iter:1.46s]
+I0000 00:00:1783392784.860298   34492 gradient_boosted_trees.cc:1720] Train tree 129/240 train-loss:0.298237 train-accuracy:0.976065 [total:3m7.94s iter:1.42s]
+I0000 00:00:1783392806.289947   34492 gradient_boosted_trees.cc:1720] Train tree 144/240 train-loss:0.268464 train-accuracy:0.977456 [total:3m29.37s iter:1.43s]
+I0000 00:00:1783392827.660383   34492 gradient_boosted_trees.cc:1720] Train tree 159/240 train-loss:0.248300 train-accuracy:0.978888 [total:3m50.74s iter:1.42s]
+I0000 00:00:1783392848.964833   34492 gradient_boosted_trees.cc:1720] Train tree 174/240 train-loss:0.224793 train-accuracy:0.980165 [total:4m12.04s iter:1.38s]
+I0000 00:00:1783392870.301896   34492 gradient_boosted_trees.cc:1720] Train tree 189/240 train-loss:0.208115 train-accuracy:0.981096 [total:4m33.38s iter:1.45s]
+I0000 00:00:1783392891.621513   34492 gradient_boosted_trees.cc:1720] Train tree 204/240 train-loss:0.189442 train-accuracy:0.981823 [total:4m54.70s iter:1.42s]
+I0000 00:00:1783392912.765465   34492 gradient_boosted_trees.cc:1720] Train tree 219/240 train-loss:0.177758 train-accuracy:0.982600 [total:5m15.84s iter:1.42s]
+I0000 00:00:1783392933.735847   34492 gradient_boosted_trees.cc:1720] Train tree 234/240 train-loss:0.166453 train-accuracy:0.983263 [total:5m36.81s iter:1.43s]
+I0000 00:00:1783392942.112203   34492 gradient_boosted_trees.cc:1718] Train tree 240/240 train-loss:0.161464 train-accuracy:0.983459 [total:5m45.19s iter:1.36s]
+I0000 00:00:1783392942.329462   34492 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 345.418s
+WARNING: Could not parse 'Training block took' from run 2
+MEDIAN of 0/2 runs: ERROR
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --feature_split_type "Oblique" --numerical_split_type "Dynamic Random Histogram" --num_trees=240 --num_threads=-1 --histogram_num_bins=64 --dynamic_split_threshold=250 --ensemble_method=Boosting
+----- Run 1/2 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783392942.998325   36127 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1783392993.212391   36127 train_oblique_forest.cc:501] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1783392993.212416   36127 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783392993.212419   36127 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783392993.214719   36127 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783392993.214750   36127 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783392993.217156   36127 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783392993.218883   36127 gradient_boosted_trees.cc:1189] Training gradient boosted tree on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1783392993.225819   36127 gradient_boosted_trees.cc:1229] 150000 examples used for training and 0 examples used for validation
+I0000 00:00:1783392993.233099   36127 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783392993.233543   36127 training.cc:5098] Create processor with 48 threads for split computation
+I0000 00:00:1783392993.234389   36127 gradient_boosted_trees.cc:1410] Create thread pool with 48 threads for loss computation
+I0000 00:00:1783392995.949681   36127 gradient_boosted_trees.cc:1718] Train tree 1/240 train-loss:1.362506 train-accuracy:0.654293 [total:2.71s iter:2.71s]
+I0000 00:00:1783392998.733199   36127 gradient_boosted_trees.cc:1718] Train tree 2/240 train-loss:1.348245 train-accuracy:0.684027 [total:5.50s iter:2.78s]
+I0000 00:00:1783393001.540998   36127 gradient_boosted_trees.cc:1720] Train tree 3/240 train-loss:1.325464 train-accuracy:0.727193 [total:8.31s iter:2.81s]
+I0000 00:00:1783393022.626589   36127 gradient_boosted_trees.cc:1720] Train tree 11/240 train-loss:1.187783 train-accuracy:0.850373 [total:29.39s iter:2.56s]
+I0000 00:00:1783393043.774274   36127 gradient_boosted_trees.cc:1720] Train tree 19/240 train-loss:1.130156 train-accuracy:0.881380 [total:50.54s iter:2.56s]
+I0000 00:00:1783393064.640553   36127 gradient_boosted_trees.cc:1720] Train tree 27/240 train-loss:1.056545 train-accuracy:0.905940 [total:1m11.41s iter:2.71s]
+I0000 00:00:1783393086.212000   36127 gradient_boosted_trees.cc:1720] Train tree 35/240 train-loss:0.982364 train-accuracy:0.922727 [total:1m32.98s iter:2.67s]
+I0000 00:00:1783393107.912544   36127 gradient_boosted_trees.cc:1720] Train tree 43/240 train-loss:0.937570 train-accuracy:0.931267 [total:1m54.68s iter:2.72s]
+I0000 00:00:1783393129.840451   36127 gradient_boosted_trees.cc:1720] Train tree 51/240 train-loss:0.888670 train-accuracy:0.941533 [total:2m16.61s iter:2.75s]
+I0000 00:00:1783393150.329369   36127 gradient_boosted_trees.cc:1720] Train tree 59/240 train-loss:0.850957 train-accuracy:0.946727 [total:2m37.09s iter:2.65s]
+I0000 00:00:1783393172.450253   36127 gradient_boosted_trees.cc:1720] Train tree 67/240 train-loss:0.807036 train-accuracy:0.953200 [total:2m59.22s iter:2.86s]
+I0000 00:00:1783393194.102738   36127 gradient_boosted_trees.cc:1720] Train tree 75/240 train-loss:0.759052 train-accuracy:0.958460 [total:3m20.87s iter:2.68s]
+I0000 00:00:1783393216.058286   36127 gradient_boosted_trees.cc:1720] Train tree 83/240 train-loss:0.722160 train-accuracy:0.961913 [total:3m42.82s iter:2.61s]
+I0000 00:00:1783393237.087974   36127 gradient_boosted_trees.cc:1720] Train tree 91/240 train-loss:0.693261 train-accuracy:0.964380 [total:4m3.85s iter:2.69s]
+I0000 00:00:1783393259.358950   36127 gradient_boosted_trees.cc:1720] Train tree 99/240 train-loss:0.658859 train-accuracy:0.967580 [total:4m26.12s iter:2.55s]
+I0000 00:00:1783393281.146539   36127 gradient_boosted_trees.cc:1720] Train tree 107/240 train-loss:0.631226 train-accuracy:0.969927 [total:4m47.91s iter:2.79s]
+I0000 00:00:1783393301.650003   36127 gradient_boosted_trees.cc:1720] Train tree 115/240 train-loss:0.593401 train-accuracy:0.972653 [total:5m8.41s iter:2.61s]
+I0000 00:00:1783393323.267011   36127 gradient_boosted_trees.cc:1720] Train tree 123/240 train-loss:0.565058 train-accuracy:0.974100 [total:5m30.03s iter:2.82s]
+I0000 00:00:1783393343.738416   36127 gradient_boosted_trees.cc:1720] Train tree 131/240 train-loss:0.525740 train-accuracy:0.976333 [total:5m50.50s iter:2.59s]
+I0000 00:00:1783393365.324147   36127 gradient_boosted_trees.cc:1720] Train tree 139/240 train-loss:0.497979 train-accuracy:0.977873 [total:6m12.09s iter:2.61s]
+I0000 00:00:1783393387.077154   36127 gradient_boosted_trees.cc:1720] Train tree 147/240 train-loss:0.476901 train-accuracy:0.979313 [total:6m33.84s iter:2.64s]
+I0000 00:00:1783393408.076198   36127 gradient_boosted_trees.cc:1720] Train tree 155/240 train-loss:0.459204 train-accuracy:0.980460 [total:6m54.84s iter:2.24s]
+I0000 00:00:1783393430.212642   36127 gradient_boosted_trees.cc:1720] Train tree 164/240 train-loss:0.436661 train-accuracy:0.981273 [total:7m16.98s iter:2.54s]
+I0000 00:00:1783393451.462539   36127 gradient_boosted_trees.cc:1720] Train tree 172/240 train-loss:0.416274 train-accuracy:0.982307 [total:7m38.23s iter:2.68s]
+I0000 00:00:1783393472.670289   36127 gradient_boosted_trees.cc:1720] Train tree 180/240 train-loss:0.402455 train-accuracy:0.983247 [total:7m59.44s iter:2.69s]
+I0000 00:00:1783393494.362783   36127 gradient_boosted_trees.cc:1720] Train tree 188/240 train-loss:0.389462 train-accuracy:0.984007 [total:8m21.13s iter:2.73s]
+I0000 00:00:1783393515.545548   36127 gradient_boosted_trees.cc:1720] Train tree 196/240 train-loss:0.377407 train-accuracy:0.984653 [total:8m42.31s iter:2.68s]
+I0000 00:00:1783393536.750065   36127 gradient_boosted_trees.cc:1720] Train tree 204/240 train-loss:0.360370 train-accuracy:0.985280 [total:9m3.51s iter:2.82s]
+I0000 00:00:1783393557.442432   36127 gradient_boosted_trees.cc:1720] Train tree 212/240 train-loss:0.348764 train-accuracy:0.985773 [total:9m24.21s iter:2.55s]
+I0000 00:00:1783393579.152300   36127 gradient_boosted_trees.cc:1720] Train tree 220/240 train-loss:0.338308 train-accuracy:0.986453 [total:9m45.92s iter:2.81s]
+I0000 00:00:1783393600.437113   36127 gradient_boosted_trees.cc:1720] Train tree 228/240 train-loss:0.323040 train-accuracy:0.987193 [total:10m7.20s iter:2.56s]
+I0000 00:00:1783393620.969397   36127 gradient_boosted_trees.cc:1720] Train tree 236/240 train-loss:0.312122 train-accuracy:0.987680 [total:10m27.73s iter:2.72s]
+I0000 00:00:1783393631.118848   36127 gradient_boosted_trees.cc:1718] Train tree 240/240 train-loss:0.299827 train-accuracy:0.987693 [total:10m37.88s iter:2.39s]
+I0000 00:00:1783393633.195766   36127 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 639.983s
+WARNING: Could not parse 'Training block took' from run 1
+----- Run 2/2 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783393633.930620   38862 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1783393684.169942   38862 train_oblique_forest.cc:501] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1783393684.169967   38862 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783393684.169970   38862 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783393684.172369   38862 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783393684.172401   38862 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783393684.174941   38862 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783393684.176724   38862 gradient_boosted_trees.cc:1189] Training gradient boosted tree on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1783393684.183819   38862 gradient_boosted_trees.cc:1229] 150000 examples used for training and 0 examples used for validation
+I0000 00:00:1783393684.191232   38862 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783393684.191691   38862 training.cc:5098] Create processor with 48 threads for split computation
+I0000 00:00:1783393684.192551   38862 gradient_boosted_trees.cc:1410] Create thread pool with 48 threads for loss computation
+I0000 00:00:1783393686.806503   38862 gradient_boosted_trees.cc:1718] Train tree 1/240 train-loss:1.362506 train-accuracy:0.654293 [total:2.61s iter:2.61s]
+I0000 00:00:1783393689.455860   38862 gradient_boosted_trees.cc:1718] Train tree 2/240 train-loss:1.348245 train-accuracy:0.684027 [total:5.26s iter:2.65s]
+I0000 00:00:1783393692.087197   38862 gradient_boosted_trees.cc:1720] Train tree 3/240 train-loss:1.325464 train-accuracy:0.727193 [total:7.89s iter:2.63s]
+I0000 00:00:1783393712.555373   38862 gradient_boosted_trees.cc:1720] Train tree 11/240 train-loss:1.187783 train-accuracy:0.850373 [total:28.36s iter:2.71s]
+I0000 00:00:1783393733.273920   38862 gradient_boosted_trees.cc:1720] Train tree 19/240 train-loss:1.130156 train-accuracy:0.881380 [total:49.08s iter:2.59s]
+I0000 00:00:1783393753.875044   38862 gradient_boosted_trees.cc:1720] Train tree 27/240 train-loss:1.056545 train-accuracy:0.905940 [total:1m9.68s iter:2.46s]
+I0000 00:00:1783393774.073703   38862 gradient_boosted_trees.cc:1720] Train tree 35/240 train-loss:0.982364 train-accuracy:0.922727 [total:1m29.88s iter:2.70s]
+I0000 00:00:1783393795.298411   38862 gradient_boosted_trees.cc:1720] Train tree 43/240 train-loss:0.937570 train-accuracy:0.931267 [total:1m51.11s iter:2.55s]
+I0000 00:00:1783393816.027709   38862 gradient_boosted_trees.cc:1720] Train tree 51/240 train-loss:0.888670 train-accuracy:0.941533 [total:2m11.83s iter:2.64s]
+I0000 00:00:1783393836.611654   38862 gradient_boosted_trees.cc:1720] Train tree 59/240 train-loss:0.850957 train-accuracy:0.946727 [total:2m32.42s iter:2.62s]
+I0000 00:00:1783393857.454074   38862 gradient_boosted_trees.cc:1720] Train tree 67/240 train-loss:0.807036 train-accuracy:0.953200 [total:2m53.26s iter:2.50s]
+I0000 00:00:1783393878.774154   38862 gradient_boosted_trees.cc:1720] Train tree 75/240 train-loss:0.759052 train-accuracy:0.958460 [total:3m14.58s iter:2.70s]
+I0000 00:00:1783393899.681702   38862 gradient_boosted_trees.cc:1720] Train tree 83/240 train-loss:0.722160 train-accuracy:0.961913 [total:3m35.49s iter:2.56s]
+I0000 00:00:1783393919.967485   38862 gradient_boosted_trees.cc:1720] Train tree 91/240 train-loss:0.693261 train-accuracy:0.964380 [total:3m55.77s iter:2.47s]
+I0000 00:00:1783393940.356955   38862 gradient_boosted_trees.cc:1720] Train tree 99/240 train-loss:0.658859 train-accuracy:0.967580 [total:4m16.16s iter:2.75s]
+I0000 00:00:1783393961.127293   38862 gradient_boosted_trees.cc:1720] Train tree 107/240 train-loss:0.631226 train-accuracy:0.969927 [total:4m36.93s iter:2.54s]
+I0000 00:00:1783393981.431379   38862 gradient_boosted_trees.cc:1720] Train tree 115/240 train-loss:0.593401 train-accuracy:0.972653 [total:4m57.24s iter:2.60s]
+I0000 00:00:1783394002.452843   38862 gradient_boosted_trees.cc:1720] Train tree 123/240 train-loss:0.565058 train-accuracy:0.974100 [total:5m18.26s iter:2.59s]
+I0000 00:00:1783394022.787278   38862 gradient_boosted_trees.cc:1720] Train tree 131/240 train-loss:0.525740 train-accuracy:0.976333 [total:5m38.59s iter:2.56s]
+I0000 00:00:1783394043.263716   38862 gradient_boosted_trees.cc:1720] Train tree 139/240 train-loss:0.497979 train-accuracy:0.977873 [total:5m59.07s iter:2.54s]
+I0000 00:00:1783394064.073972   38862 gradient_boosted_trees.cc:1720] Train tree 147/240 train-loss:0.476901 train-accuracy:0.979313 [total:6m19.88s iter:2.44s]
+I0000 00:00:1783394086.716324   38862 gradient_boosted_trees.cc:1720] Train tree 156/240 train-loss:0.457308 train-accuracy:0.980540 [total:6m42.52s iter:2.67s]
+I0000 00:00:1783394108.974130   38862 gradient_boosted_trees.cc:1720] Train tree 165/240 train-loss:0.435247 train-accuracy:0.981407 [total:7m4.78s iter:2.62s]
+I0000 00:00:1783394129.929788   38862 gradient_boosted_trees.cc:1720] Train tree 173/240 train-loss:0.413644 train-accuracy:0.982407 [total:7m25.74s iter:2.58s]
+I0000 00:00:1783394150.225250   38862 gradient_boosted_trees.cc:1720] Train tree 181/240 train-loss:0.401439 train-accuracy:0.983267 [total:7m46.03s iter:2.68s]
+I0000 00:00:1783394170.903314   38862 gradient_boosted_trees.cc:1720] Train tree 189/240 train-loss:0.387389 train-accuracy:0.984113 [total:8m6.71s iter:2.58s]
+I0000 00:00:1783394192.864088   38862 gradient_boosted_trees.cc:1720] Train tree 198/240 train-loss:0.374486 train-accuracy:0.984780 [total:8m28.67s iter:2.63s]
+I0000 00:00:1783394213.850748   38862 gradient_boosted_trees.cc:1720] Train tree 206/240 train-loss:0.358376 train-accuracy:0.985500 [total:8m49.66s iter:2.57s]
+I0000 00:00:1783394233.996959   38862 gradient_boosted_trees.cc:1720] Train tree 214/240 train-loss:0.347053 train-accuracy:0.985907 [total:9m9.80s iter:2.48s]
+I0000 00:00:1783394254.498642   38862 gradient_boosted_trees.cc:1720] Train tree 222/240 train-loss:0.333431 train-accuracy:0.986647 [total:9m30.31s iter:2.16s]
+I0000 00:00:1783394274.867313   38862 gradient_boosted_trees.cc:1720] Train tree 230/240 train-loss:0.321222 train-accuracy:0.987233 [total:9m50.67s iter:2.28s]
+I0000 00:00:1783394297.266562   38862 gradient_boosted_trees.cc:1720] Train tree 239/240 train-loss:0.304115 train-accuracy:0.987813 [total:10m13.07s iter:2.41s]
+I0000 00:00:1783394299.374443   38862 gradient_boosted_trees.cc:1718] Train tree 240/240 train-loss:0.299827 train-accuracy:0.987693 [total:10m15.18s iter:2.11s]
+I0000 00:00:1783394301.376596   38862 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 617.207s
+WARNING: Could not parse 'Training block took' from run 2
+MEDIAN of 0/2 runs: ERROR
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --feature_split_type "Oblique" --numerical_split_type "Dynamic Random Histogram" --num_trees=240 --num_threads=-1 --histogram_num_bins=64 --dynamic_split_threshold=250 --ensemble_method=Boosting
+----- Run 1/2 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783394302.115593   41524 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1783394352.386499   41524 train_oblique_forest.cc:501] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1783394352.386525   41524 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783394352.386528   41524 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783394352.408697   41524 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783394352.408945   41524 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783394352.436724   41524 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783394352.449191   41524 gradient_boosted_trees.cc:1189] Training gradient boosted tree on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1783394352.519059   41524 gradient_boosted_trees.cc:1229] 15000 examples used for training and 0 examples used for validation
+I0000 00:00:1783394352.585400   41524 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783394352.589652   41524 training.cc:5098] Create processor with 48 threads for split computation
+I0000 00:00:1783394352.590564   41524 gradient_boosted_trees.cc:1410] Create thread pool with 48 threads for loss computation
+I0000 00:00:1783394378.044906   41524 gradient_boosted_trees.cc:1718] Train tree 1/240 train-loss:1.367731 train-accuracy:0.641067 [total:25.45s iter:25.45s]
+I0000 00:00:1783394402.392123   41524 gradient_boosted_trees.cc:1718] Train tree 2/240 train-loss:1.345497 train-accuracy:0.687667 [total:49.80s iter:24.35s]
+I0000 00:00:1783394426.197175   41524 gradient_boosted_trees.cc:1720] Train tree 3/240 train-loss:1.329867 train-accuracy:0.708600 [total:1m13.61s iter:23.81s]
+I0000 00:00:1783394449.926186   41524 gradient_boosted_trees.cc:1720] Train tree 4/240 train-loss:1.321790 train-accuracy:0.720267 [total:1m37.33s iter:23.73s]
+I0000 00:00:1783394494.704313   41524 gradient_boosted_trees.cc:1720] Train tree 6/240 train-loss:1.228156 train-accuracy:0.858600 [total:2m22.11s iter:25.53s]
+I0000 00:00:1783394519.998752   41524 gradient_boosted_trees.cc:1720] Train tree 7/240 train-loss:1.222948 train-accuracy:0.860933 [total:2m47.41s iter:25.29s]
+I0000 00:00:1783394544.301103   41524 gradient_boosted_trees.cc:1720] Train tree 8/240 train-loss:1.210755 train-accuracy:0.869333 [total:3m11.71s iter:24.30s]
+I0000 00:00:1783394568.108238   41524 gradient_boosted_trees.cc:1720] Train tree 9/240 train-loss:1.205055 train-accuracy:0.875867 [total:3m35.52s iter:23.81s]
+I0000 00:00:1783394612.663167   41524 gradient_boosted_trees.cc:1720] Train tree 11/240 train-loss:1.195327 train-accuracy:0.879933 [total:4m20.07s iter:26.20s]
+I0000 00:00:1783394637.635109   41524 gradient_boosted_trees.cc:1720] Train tree 12/240 train-loss:1.186892 train-accuracy:0.884533 [total:4m45.04s iter:24.97s]
+I0000 00:00:1783394659.336935   41524 gradient_boosted_trees.cc:1720] Train tree 13/240 train-loss:1.181744 train-accuracy:0.887533 [total:5m6.75s iter:21.70s]
+I0000 00:00:1783394685.013660   41524 gradient_boosted_trees.cc:1720] Train tree 14/240 train-loss:1.175755 train-accuracy:0.891800 [total:5m32.42s iter:25.68s]
+I0000 00:00:1783394710.023934   41524 gradient_boosted_trees.cc:1720] Train tree 15/240 train-loss:1.169177 train-accuracy:0.895733 [total:5m57.43s iter:25.01s]
+I0000 00:00:1783394734.502713   41524 gradient_boosted_trees.cc:1720] Train tree 16/240 train-loss:1.160044 train-accuracy:0.899200 [total:6m21.91s iter:24.48s]
+I0000 00:00:1783394759.344871   41524 gradient_boosted_trees.cc:1720] Train tree 17/240 train-loss:1.148377 train-accuracy:0.902400 [total:6m46.75s iter:24.84s]
+I0000 00:00:1783394782.462124   41524 gradient_boosted_trees.cc:1720] Train tree 18/240 train-loss:1.141401 train-accuracy:0.904600 [total:7m9.87s iter:23.12s]
+I0000 00:00:1783394807.468692   41524 gradient_boosted_trees.cc:1720] Train tree 19/240 train-loss:1.134592 train-accuracy:0.909067 [total:7m34.88s iter:25.01s]
+I0000 00:00:1783394831.711318   41524 gradient_boosted_trees.cc:1720] Train tree 20/240 train-loss:1.127062 train-accuracy:0.913067 [total:7m59.12s iter:24.24s]
+I0000 00:00:1783394852.956487   41524 gradient_boosted_trees.cc:1720] Train tree 21/240 train-loss:1.123648 train-accuracy:0.912400 [total:8m20.37s iter:21.25s]
+I0000 00:00:1783394878.897732   41524 gradient_boosted_trees.cc:1720] Train tree 22/240 train-loss:1.114261 train-accuracy:0.918800 [total:8m46.31s iter:25.94s]
+I0000 00:00:1783394905.149183   41524 gradient_boosted_trees.cc:1720] Train tree 23/240 train-loss:1.097293 train-accuracy:0.923467 [total:9m12.56s iter:26.25s]
+I0000 00:00:1783394930.261786   41524 gradient_boosted_trees.cc:1720] Train tree 24/240 train-loss:1.088553 train-accuracy:0.926800 [total:9m37.67s iter:25.11s]
+I0000 00:00:1783394953.655261   41524 gradient_boosted_trees.cc:1720] Train tree 25/240 train-loss:1.082486 train-accuracy:0.929000 [total:10m1.06s iter:23.39s]
+I0000 00:00:1783394976.622372   41524 gradient_boosted_trees.cc:1720] Train tree 26/240 train-loss:1.076825 train-accuracy:0.932800 [total:10m24.03s iter:22.97s]
+I0000 00:00:1783395000.835900   41524 gradient_boosted_trees.cc:1720] Train tree 27/240 train-loss:1.069216 train-accuracy:0.934600 [total:10m48.24s iter:24.21s]
+I0000 00:00:1783395025.546893   41524 gradient_boosted_trees.cc:1720] Train tree 28/240 train-loss:1.063743 train-accuracy:0.936133 [total:11m12.96s iter:24.71s]
+I0000 00:00:1783395051.741042   41524 gradient_boosted_trees.cc:1720] Train tree 29/240 train-loss:1.059010 train-accuracy:0.937800 [total:11m39.15s iter:26.19s]
+I0000 00:00:1783395077.749895   41524 gradient_boosted_trees.cc:1720] Train tree 30/240 train-loss:1.046046 train-accuracy:0.939133 [total:12m5.16s iter:26.01s]
+I0000 00:00:1783395102.858662   41524 gradient_boosted_trees.cc:1720] Train tree 31/240 train-loss:1.041256 train-accuracy:0.939933 [total:12m30.27s iter:25.11s]
+I0000 00:00:1783395128.781106   41524 gradient_boosted_trees.cc:1720] Train tree 32/240 train-loss:1.035713 train-accuracy:0.943733 [total:12m56.19s iter:25.92s]
+I0000 00:00:1783395152.728914   41524 gradient_boosted_trees.cc:1720] Train tree 33/240 train-loss:1.029386 train-accuracy:0.946400 [total:13m20.14s iter:23.95s]
+I0000 00:00:1783395197.214302   41524 gradient_boosted_trees.cc:1720] Train tree 35/240 train-loss:1.018881 train-accuracy:0.949067 [total:14m4.62s iter:25.48s]
+I0000 00:00:1783395219.675119   41524 gradient_boosted_trees.cc:1720] Train tree 36/240 train-loss:1.012907 train-accuracy:0.950533 [total:14m27.08s iter:22.46s]
+I0000 00:00:1783395244.645706   41524 gradient_boosted_trees.cc:1720] Train tree 37/240 train-loss:1.008083 train-accuracy:0.951667 [total:14m52.05s iter:24.97s]
+I0000 00:00:1783395269.405529   41524 gradient_boosted_trees.cc:1720] Train tree 38/240 train-loss:0.998929 train-accuracy:0.953600 [total:15m16.81s iter:24.76s]
+I0000 00:00:1783395295.344326   41524 gradient_boosted_trees.cc:1720] Train tree 39/240 train-loss:0.992958 train-accuracy:0.956400 [total:15m42.75s iter:25.94s]
+I0000 00:00:1783395321.238212   41524 gradient_boosted_trees.cc:1720] Train tree 40/240 train-loss:0.988203 train-accuracy:0.958267 [total:16m8.65s iter:25.89s]
+I0000 00:00:1783395344.569988   41524 gradient_boosted_trees.cc:1720] Train tree 41/240 train-loss:0.976850 train-accuracy:0.959400 [total:16m31.98s iter:23.33s]
+I0000 00:00:1783395367.738594   41524 gradient_boosted_trees.cc:1720] Train tree 42/240 train-loss:0.968013 train-accuracy:0.961000 [total:16m55.15s iter:23.17s]
+I0000 00:00:1783395391.446314   41524 gradient_boosted_trees.cc:1720] Train tree 43/240 train-loss:0.963932 train-accuracy:0.962267 [total:17m18.85s iter:23.71s]
+I0000 00:00:1783395416.790713   41524 gradient_boosted_trees.cc:1720] Train tree 44/240 train-loss:0.955532 train-accuracy:0.964267 [total:17m44.20s iter:25.34s]
+I0000 00:00:1783395442.603773   41524 gradient_boosted_trees.cc:1720] Train tree 45/240 train-loss:0.952051 train-accuracy:0.965400 [total:18m10.01s iter:25.81s]
+I0000 00:00:1783395466.999827   41524 gradient_boosted_trees.cc:1720] Train tree 46/240 train-loss:0.948432 train-accuracy:0.966733 [total:18m34.41s iter:24.40s]
+I0000 00:00:1783395490.310343   41524 gradient_boosted_trees.cc:1720] Train tree 47/240 train-loss:0.942915 train-accuracy:0.968200 [total:18m57.72s iter:23.31s]
+I0000 00:00:1783395515.700240   41524 gradient_boosted_trees.cc:1720] Train tree 48/240 train-loss:0.937624 train-accuracy:0.968133 [total:19m23.11s iter:25.39s]
+I0000 00:00:1783395541.597942   41524 gradient_boosted_trees.cc:1720] Train tree 49/240 train-loss:0.928822 train-accuracy:0.969267 [total:19m49.01s iter:25.90s]
+I0000 00:00:1783395566.363334   41524 gradient_boosted_trees.cc:1720] Train tree 50/240 train-loss:0.924602 train-accuracy:0.970400 [total:20m13.77s iter:24.77s]
+I0000 00:00:1783395590.396628   41524 gradient_boosted_trees.cc:1720] Train tree 51/240 train-loss:0.921574 train-accuracy:0.970200 [total:20m37.81s iter:24.03s]
+I0000 00:00:1783395615.229135   41524 gradient_boosted_trees.cc:1720] Train tree 52/240 train-loss:0.917276 train-accuracy:0.971733 [total:21m2.64s iter:24.83s]
+I0000 00:00:1783395639.634748   41524 gradient_boosted_trees.cc:1720] Train tree 53/240 train-loss:0.912180 train-accuracy:0.973933 [total:21m27.04s iter:24.41s]
+I0000 00:00:1783395663.120705   41524 gradient_boosted_trees.cc:1720] Train tree 54/240 train-loss:0.906509 train-accuracy:0.974733 [total:21m50.53s iter:23.49s]
+I0000 00:00:1783395688.428890   41524 gradient_boosted_trees.cc:1720] Train tree 55/240 train-loss:0.898822 train-accuracy:0.974800 [total:22m15.84s iter:25.31s]
+I0000 00:00:1783395713.933769   41524 gradient_boosted_trees.cc:1720] Train tree 56/240 train-loss:0.893692 train-accuracy:0.975533 [total:22m41.34s iter:25.50s]
+I0000 00:00:1783395738.335296   41524 gradient_boosted_trees.cc:1720] Train tree 57/240 train-loss:0.887635 train-accuracy:0.976000 [total:23m5.74s iter:24.40s]
+I0000 00:00:1783395764.444443   41524 gradient_boosted_trees.cc:1720] Train tree 58/240 train-loss:0.880393 train-accuracy:0.977533 [total:23m31.85s iter:26.11s]
+I0000 00:00:1783395787.637454   41524 gradient_boosted_trees.cc:1720] Train tree 59/240 train-loss:0.876646 train-accuracy:0.977800 [total:23m55.05s iter:23.19s]
+I0000 00:00:1783395812.944319   41524 gradient_boosted_trees.cc:1720] Train tree 60/240 train-loss:0.870428 train-accuracy:0.979067 [total:24m20.35s iter:25.31s]
+I0000 00:00:1783395836.312040   41524 gradient_boosted_trees.cc:1720] Train tree 61/240 train-loss:0.866025 train-accuracy:0.978533 [total:24m43.72s iter:23.37s]
+I0000 00:00:1783395862.101890   41524 gradient_boosted_trees.cc:1720] Train tree 62/240 train-loss:0.863055 train-accuracy:0.978867 [total:25m9.51s iter:25.79s]
+I0000 00:00:1783395885.727296   41524 gradient_boosted_trees.cc:1720] Train tree 63/240 train-loss:0.857927 train-accuracy:0.980333 [total:25m33.14s iter:23.63s]
+I0000 00:00:1783395910.459456   41524 gradient_boosted_trees.cc:1720] Train tree 64/240 train-loss:0.848172 train-accuracy:0.980867 [total:25m57.87s iter:24.73s]
+I0000 00:00:1783395935.578046   41524 gradient_boosted_trees.cc:1720] Train tree 65/240 train-loss:0.840802 train-accuracy:0.981667 [total:26m22.99s iter:25.12s]
+I0000 00:00:1783395961.339643   41524 gradient_boosted_trees.cc:1720] Train tree 66/240 train-loss:0.836705 train-accuracy:0.983000 [total:26m48.75s iter:25.76s]
+I0000 00:00:1783395987.067037   41524 gradient_boosted_trees.cc:1720] Train tree 67/240 train-loss:0.833372 train-accuracy:0.982867 [total:27m14.48s iter:25.73s]
+I0000 00:00:1783396009.570863   41524 gradient_boosted_trees.cc:1720] Train tree 68/240 train-loss:0.831057 train-accuracy:0.983667 [total:27m36.98s iter:22.50s]
+I0000 00:00:1783396034.726535   41524 gradient_boosted_trees.cc:1720] Train tree 69/240 train-loss:0.823745 train-accuracy:0.984667 [total:28m2.14s iter:25.16s]
+I0000 00:00:1783396060.417959   41524 gradient_boosted_trees.cc:1720] Train tree 70/240 train-loss:0.819803 train-accuracy:0.984667 [total:28m27.83s iter:25.69s]
+I0000 00:00:1783396086.018542   41524 gradient_boosted_trees.cc:1720] Train tree 71/240 train-loss:0.815091 train-accuracy:0.986067 [total:28m53.43s iter:25.60s]
+I0000 00:00:1783396110.967455   41524 gradient_boosted_trees.cc:1720] Train tree 72/240 train-loss:0.811169 train-accuracy:0.986467 [total:29m18.38s iter:24.95s]
+I0000 00:00:1783396135.627386   41524 gradient_boosted_trees.cc:1720] Train tree 73/240 train-loss:0.806722 train-accuracy:0.986733 [total:29m43.04s iter:24.66s]
+I0000 00:00:1783396160.681928   41524 gradient_boosted_trees.cc:1720] Train tree 74/240 train-loss:0.802155 train-accuracy:0.987733 [total:30m8.09s iter:25.05s]
+I0000 00:00:1783396183.587429   41524 gradient_boosted_trees.cc:1720] Train tree 75/240 train-loss:0.798452 train-accuracy:0.987600 [total:30m31.00s iter:22.91s]
+I0000 00:00:1783396204.127323   41524 gradient_boosted_trees.cc:1720] Train tree 76/240 train-loss:0.796638 train-accuracy:0.988133 [total:30m51.54s iter:20.54s]
+I0000 00:00:1783396227.993882   41524 gradient_boosted_trees.cc:1720] Train tree 77/240 train-loss:0.793195 train-accuracy:0.988600 [total:31m15.40s iter:23.87s]
+I0000 00:00:1783396252.751687   41524 gradient_boosted_trees.cc:1720] Train tree 78/240 train-loss:0.785810 train-accuracy:0.988800 [total:31m40.16s iter:24.76s]
+I0000 00:00:1783396293.587060   41524 gradient_boosted_trees.cc:1720] Train tree 80/240 train-loss:0.776164 train-accuracy:0.989400 [total:32m21.00s iter:23.69s]
+I0000 00:00:1783396317.132767   41524 gradient_boosted_trees.cc:1720] Train tree 81/240 train-loss:0.772647 train-accuracy:0.989867 [total:32m44.54s iter:23.55s]
+I0000 00:00:1783396361.170185   41524 gradient_boosted_trees.cc:1720] Train tree 83/240 train-loss:0.766941 train-accuracy:0.990200 [total:33m28.58s iter:24.97s]
+I0000 00:00:1783396386.038192   41524 gradient_boosted_trees.cc:1720] Train tree 84/240 train-loss:0.762728 train-accuracy:0.990267 [total:33m53.45s iter:24.87s]
+I0000 00:00:1783396411.033090   41524 gradient_boosted_trees.cc:1720] Train tree 85/240 train-loss:0.758153 train-accuracy:0.990800 [total:34m18.44s iter:24.99s]
+I0000 00:00:1783396431.223583   41524 gradient_boosted_trees.cc:1720] Train tree 86/240 train-loss:0.755088 train-accuracy:0.990933 [total:34m38.63s iter:20.19s]
+I0000 00:00:1783396456.222252   41524 gradient_boosted_trees.cc:1720] Train tree 87/240 train-loss:0.751291 train-accuracy:0.991733 [total:35m3.63s iter:25.00s]
+I0000 00:00:1783396480.420604   41524 gradient_boosted_trees.cc:1720] Train tree 88/240 train-loss:0.746247 train-accuracy:0.992133 [total:35m27.83s iter:24.20s]
+I0000 00:00:1783396505.408775   41524 gradient_boosted_trees.cc:1720] Train tree 89/240 train-loss:0.742511 train-accuracy:0.992467 [total:35m52.82s iter:24.99s]
+I0000 00:00:1783396530.148407   41524 gradient_boosted_trees.cc:1720] Train tree 90/240 train-loss:0.735886 train-accuracy:0.992267 [total:36m17.56s iter:24.74s]
+I0000 00:00:1783396555.683309   41524 gradient_boosted_trees.cc:1720] Train tree 91/240 train-loss:0.731403 train-accuracy:0.992800 [total:36m43.09s iter:25.53s]
+I0000 00:00:1783396580.203414   41524 gradient_boosted_trees.cc:1720] Train tree 92/240 train-loss:0.727784 train-accuracy:0.993000 [total:37m7.61s iter:24.52s]
+I0000 00:00:1783396606.143687   41524 gradient_boosted_trees.cc:1720] Train tree 93/240 train-loss:0.717308 train-accuracy:0.994000 [total:37m33.55s iter:25.94s]
+I0000 00:00:1783396631.443654   41524 gradient_boosted_trees.cc:1720] Train tree 94/240 train-loss:0.713716 train-accuracy:0.994067 [total:37m58.85s iter:25.30s]
+I0000 00:00:1783396655.066283   41524 gradient_boosted_trees.cc:1720] Train tree 95/240 train-loss:0.710455 train-accuracy:0.994267 [total:38m22.47s iter:23.62s]
+I0000 00:00:1783396680.487641   41524 gradient_boosted_trees.cc:1720] Train tree 96/240 train-loss:0.705555 train-accuracy:0.994533 [total:38m47.90s iter:25.42s]
+I0000 00:00:1783396704.013136   41524 gradient_boosted_trees.cc:1720] Train tree 97/240 train-loss:0.702965 train-accuracy:0.994533 [total:39m11.42s iter:23.53s]
+I0000 00:00:1783396728.715830   41524 gradient_boosted_trees.cc:1720] Train tree 98/240 train-loss:0.699293 train-accuracy:0.995133 [total:39m36.12s iter:24.70s]
+I0000 00:00:1783396754.093864   41524 gradient_boosted_trees.cc:1720] Train tree 99/240 train-loss:0.696364 train-accuracy:0.995067 [total:40m1.50s iter:25.38s]
+I0000 00:00:1783396779.222825   41524 gradient_boosted_trees.cc:1720] Train tree 100/240 train-loss:0.690992 train-accuracy:0.995667 [total:40m26.63s iter:25.13s]
+I0000 00:00:1783396803.905734   41524 gradient_boosted_trees.cc:1720] Train tree 101/240 train-loss:0.687237 train-accuracy:0.995667 [total:40m51.31s iter:24.68s]
+I0000 00:00:1783396827.771226   41524 gradient_boosted_trees.cc:1720] Train tree 102/240 train-loss:0.682787 train-accuracy:0.995733 [total:41m15.18s iter:23.87s]
+I0000 00:00:1783396851.143486   41524 gradient_boosted_trees.cc:1720] Train tree 103/240 train-loss:0.680238 train-accuracy:0.995667 [total:41m38.55s iter:23.37s]
+I0000 00:00:1783396874.735182   41524 gradient_boosted_trees.cc:1720] Train tree 104/240 train-loss:0.678335 train-accuracy:0.995667 [total:42m2.14s iter:23.59s]
+I0000 00:00:1783396898.818768   41524 gradient_boosted_trees.cc:1720] Train tree 105/240 train-loss:0.675615 train-accuracy:0.995867 [total:42m26.23s iter:24.08s]
+I0000 00:00:1783396923.684584   41524 gradient_boosted_trees.cc:1720] Train tree 106/240 train-loss:0.672725 train-accuracy:0.996067 [total:42m51.09s iter:24.87s]
+I0000 00:00:1783396945.662339   41524 gradient_boosted_trees.cc:1720] Train tree 107/240 train-loss:0.670352 train-accuracy:0.996267 [total:43m13.07s iter:21.98s]
+I0000 00:00:1783396990.112234   41524 gradient_boosted_trees.cc:1720] Train tree 109/240 train-loss:0.664759 train-accuracy:0.996533 [total:43m57.52s iter:24.66s]
+I0000 00:00:1783397014.202230   41524 gradient_boosted_trees.cc:1720] Train tree 110/240 train-loss:0.662339 train-accuracy:0.996600 [total:44m21.61s iter:24.09s]
+I0000 00:00:1783397039.473508   41524 gradient_boosted_trees.cc:1720] Train tree 111/240 train-loss:0.658440 train-accuracy:0.996733 [total:44m46.88s iter:25.27s]
+I0000 00:00:1783397065.204575   41524 gradient_boosted_trees.cc:1720] Train tree 112/240 train-loss:0.655018 train-accuracy:0.996867 [total:45m12.61s iter:25.73s]
+I0000 00:00:1783397109.002676   41524 gradient_boosted_trees.cc:1720] Train tree 114/240 train-loss:0.651002 train-accuracy:0.997067 [total:45m56.41s iter:24.60s]
+I0000 00:00:1783397129.019793   41524 gradient_boosted_trees.cc:1720] Train tree 115/240 train-loss:0.642611 train-accuracy:0.997267 [total:46m16.43s iter:20.02s]
+I0000 00:00:1783397152.836701   41524 gradient_boosted_trees.cc:1720] Train tree 116/240 train-loss:0.639468 train-accuracy:0.997533 [total:46m40.25s iter:23.82s]
+I0000 00:00:1783397178.862186   41524 gradient_boosted_trees.cc:1720] Train tree 117/240 train-loss:0.636175 train-accuracy:0.997667 [total:47m6.27s iter:26.03s]
+I0000 00:00:1783397203.013864   41524 gradient_boosted_trees.cc:1720] Train tree 118/240 train-loss:0.631366 train-accuracy:0.997600 [total:47m30.42s iter:24.15s]
+I0000 00:00:1783397229.011991   41524 gradient_boosted_trees.cc:1720] Train tree 119/240 train-loss:0.628976 train-accuracy:0.997667 [total:47m56.42s iter:26.00s]
+I0000 00:00:1783397254.897959   41524 gradient_boosted_trees.cc:1720] Train tree 120/240 train-loss:0.623935 train-accuracy:0.997800 [total:48m22.31s iter:25.89s]
+I0000 00:00:1783397279.732945   41524 gradient_boosted_trees.cc:1720] Train tree 121/240 train-loss:0.620982 train-accuracy:0.997867 [total:48m47.14s iter:24.83s]
+I0000 00:00:1783397305.314689   41524 gradient_boosted_trees.cc:1720] Train tree 122/240 train-loss:0.617189 train-accuracy:0.997867 [total:49m12.72s iter:25.58s]
+I0000 00:00:1783397331.077213   41524 gradient_boosted_trees.cc:1720] Train tree 123/240 train-loss:0.612966 train-accuracy:0.997933 [total:49m38.49s iter:25.76s]
+I0000 00:00:1783397356.293237   41524 gradient_boosted_trees.cc:1720] Train tree 124/240 train-loss:0.609690 train-accuracy:0.998067 [total:50m3.70s iter:25.22s]
+I0000 00:00:1783397381.682383   41524 gradient_boosted_trees.cc:1720] Train tree 125/240 train-loss:0.605906 train-accuracy:0.998200 [total:50m29.09s iter:25.39s]
+I0000 00:00:1783397405.149847   41524 gradient_boosted_trees.cc:1720] Train tree 126/240 train-loss:0.603699 train-accuracy:0.998267 [total:50m52.56s iter:23.47s]
+I0000 00:00:1783397430.172885   41524 gradient_boosted_trees.cc:1720] Train tree 127/240 train-loss:0.601219 train-accuracy:0.998467 [total:51m17.58s iter:25.02s]
+I0000 00:00:1783397454.076800   41524 gradient_boosted_trees.cc:1720] Train tree 128/240 train-loss:0.596895 train-accuracy:0.998667 [total:51m41.49s iter:23.90s]
+I0000 00:00:1783397479.024853   41524 gradient_boosted_trees.cc:1720] Train tree 129/240 train-loss:0.594957 train-accuracy:0.998600 [total:52m6.43s iter:24.95s]
+I0000 00:00:1783397502.073015   41524 gradient_boosted_trees.cc:1720] Train tree 130/240 train-loss:0.590810 train-accuracy:0.998600 [total:52m29.48s iter:23.05s]
+I0000 00:00:1783397527.358473   41524 gradient_boosted_trees.cc:1720] Train tree 131/240 train-loss:0.587891 train-accuracy:0.998667 [total:52m54.77s iter:25.29s]
+I0000 00:00:1783397552.403502   41524 gradient_boosted_trees.cc:1720] Train tree 132/240 train-loss:0.584847 train-accuracy:0.998533 [total:53m19.81s iter:25.05s]
+I0000 00:00:1783397578.129638   41524 gradient_boosted_trees.cc:1720] Train tree 133/240 train-loss:0.582257 train-accuracy:0.998467 [total:53m45.54s iter:25.73s]
+I0000 00:00:1783397603.441710   41524 gradient_boosted_trees.cc:1720] Train tree 134/240 train-loss:0.579134 train-accuracy:0.998600 [total:54m10.85s iter:25.31s]
+I0000 00:00:1783397628.400712   41524 gradient_boosted_trees.cc:1720] Train tree 135/240 train-loss:0.576517 train-accuracy:0.998867 [total:54m35.81s iter:24.96s]
+I0000 00:00:1783397654.202888   41524 gradient_boosted_trees.cc:1720] Train tree 136/240 train-loss:0.574217 train-accuracy:0.998800 [total:55m1.61s iter:25.80s]
+I0000 00:00:1783397680.104183   41524 gradient_boosted_trees.cc:1720] Train tree 137/240 train-loss:0.570303 train-accuracy:0.998800 [total:55m27.51s iter:25.90s]
+I0000 00:00:1783397705.417158   41524 gradient_boosted_trees.cc:1720] Train tree 138/240 train-loss:0.566763 train-accuracy:0.999067 [total:55m52.83s iter:25.31s]
+I0000 00:00:1783397729.308508   41524 gradient_boosted_trees.cc:1720] Train tree 139/240 train-loss:0.563834 train-accuracy:0.999133 [total:56m16.72s iter:23.89s]
+I0000 00:00:1783397752.702366   41524 gradient_boosted_trees.cc:1720] Train tree 140/240 train-loss:0.560230 train-accuracy:0.999200 [total:56m40.11s iter:23.39s]
+I0000 00:00:1783397777.517919   41524 gradient_boosted_trees.cc:1720] Train tree 141/240 train-loss:0.557882 train-accuracy:0.999133 [total:57m4.93s iter:24.82s]
+I0000 00:00:1783397802.976807   41524 gradient_boosted_trees.cc:1720] Train tree 142/240 train-loss:0.555303 train-accuracy:0.999200 [total:57m30.39s iter:25.46s]
+I0000 00:00:1783397828.016206   41524 gradient_boosted_trees.cc:1720] Train tree 143/240 train-loss:0.552614 train-accuracy:0.999133 [total:57m55.42s iter:25.04s]
+I0000 00:00:1783397853.979462   41524 gradient_boosted_trees.cc:1720] Train tree 144/240 train-loss:0.549400 train-accuracy:0.999267 [total:58m21.39s iter:25.96s]
+I0000 00:00:1783397878.614786   41524 gradient_boosted_trees.cc:1720] Train tree 145/240 train-loss:0.545627 train-accuracy:0.999333 [total:58m46.02s iter:24.64s]
+I0000 00:00:1783397903.955752   41524 gradient_boosted_trees.cc:1720] Train tree 146/240 train-loss:0.542795 train-accuracy:0.999400 [total:59m11.36s iter:25.34s]
+I0000 00:00:1783397929.035313   41524 gradient_boosted_trees.cc:1720] Train tree 147/240 train-loss:0.537591 train-accuracy:0.999267 [total:59m36.44s iter:25.08s]
+I0000 00:00:1783397953.821427   41524 gradient_boosted_trees.cc:1720] Train tree 148/240 train-loss:0.535507 train-accuracy:0.999400 [total:1h0m1.23s iter:24.79s]
+I0000 00:00:1783397978.241602   41524 gradient_boosted_trees.cc:1720] Train tree 149/240 train-loss:0.532396 train-accuracy:0.999467 [total:1h0m25.65s iter:24.42s]
+I0000 00:00:1783398000.842800   41524 gradient_boosted_trees.cc:1720] Train tree 150/240 train-loss:0.530097 train-accuracy:0.999400 [total:1h0m48.25s iter:22.60s]
+I0000 00:00:1783398025.743172   41524 gradient_boosted_trees.cc:1720] Train tree 151/240 train-loss:0.527735 train-accuracy:0.999467 [total:1h1m13.15s iter:24.90s]
+I0000 00:00:1783398050.340455   41524 gradient_boosted_trees.cc:1720] Train tree 152/240 train-loss:0.524669 train-accuracy:0.999467 [total:1h1m37.75s iter:24.60s]
+I0000 00:00:1783398074.918276   41524 gradient_boosted_trees.cc:1720] Train tree 153/240 train-loss:0.522004 train-accuracy:0.999533 [total:1h2m2.33s iter:24.58s]
+I0000 00:00:1783398100.237494   41524 gradient_boosted_trees.cc:1720] Train tree 154/240 train-loss:0.518690 train-accuracy:0.999533 [total:1h2m27.65s iter:25.32s]
+I0000 00:00:1783398122.690213   41524 gradient_boosted_trees.cc:1720] Train tree 155/240 train-loss:0.516225 train-accuracy:0.999533 [total:1h2m50.10s iter:22.45s]
+I0000 00:00:1783398148.365636   41524 gradient_boosted_trees.cc:1720] Train tree 156/240 train-loss:0.514004 train-accuracy:0.999533 [total:1h3m15.77s iter:25.68s]
+I0000 00:00:1783398190.211319   41524 gradient_boosted_trees.cc:1720] Train tree 158/240 train-loss:0.509752 train-accuracy:0.999467 [total:1h3m57.62s iter:24.51s]
+I0000 00:00:1783398213.033745   41524 gradient_boosted_trees.cc:1720] Train tree 159/240 train-loss:0.508056 train-accuracy:0.999467 [total:1h4m20.44s iter:22.82s]
+I0000 00:00:1783398237.713402   41524 gradient_boosted_trees.cc:1720] Train tree 160/240 train-loss:0.505420 train-accuracy:0.999533 [total:1h4m45.12s iter:24.68s]
+I0000 00:00:1783398263.133288   41524 gradient_boosted_trees.cc:1720] Train tree 161/240 train-loss:0.503129 train-accuracy:0.999533 [total:1h5m10.54s iter:25.42s]
+I0000 00:00:1783398288.441327   41524 gradient_boosted_trees.cc:1720] Train tree 162/240 train-loss:0.498511 train-accuracy:0.999600 [total:1h5m35.85s iter:25.31s]
+I0000 00:00:1783398313.610376   41524 gradient_boosted_trees.cc:1720] Train tree 163/240 train-loss:0.495808 train-accuracy:0.999600 [total:1h6m1.02s iter:25.17s]
+I0000 00:00:1783398339.020302   41524 gradient_boosted_trees.cc:1720] Train tree 164/240 train-loss:0.493343 train-accuracy:0.999600 [total:1h6m26.43s iter:25.41s]
+I0000 00:00:1783398364.117109   41524 gradient_boosted_trees.cc:1720] Train tree 165/240 train-loss:0.490409 train-accuracy:0.999733 [total:1h6m51.53s iter:25.10s]
+I0000 00:00:1783398389.690728   41524 gradient_boosted_trees.cc:1720] Train tree 166/240 train-loss:0.487430 train-accuracy:0.999733 [total:1h7m17.10s iter:25.57s]
+I0000 00:00:1783398412.291344   41524 gradient_boosted_trees.cc:1720] Train tree 167/240 train-loss:0.485072 train-accuracy:0.999733 [total:1h7m39.70s iter:22.60s]
+I0000 00:00:1783398433.090689   41524 gradient_boosted_trees.cc:1720] Train tree 168/240 train-loss:0.482810 train-accuracy:0.999733 [total:1h8m0.50s iter:20.80s]
+I0000 00:00:1783398457.911094   41524 gradient_boosted_trees.cc:1720] Train tree 169/240 train-loss:0.479840 train-accuracy:0.999733 [total:1h8m25.32s iter:24.82s]
+I0000 00:00:1783398481.635585   41524 gradient_boosted_trees.cc:1720] Train tree 170/240 train-loss:0.477240 train-accuracy:0.999800 [total:1h8m49.04s iter:23.72s]
+I0000 00:00:1783398506.620233   41524 gradient_boosted_trees.cc:1720] Train tree 171/240 train-loss:0.475272 train-accuracy:0.999800 [total:1h9m14.03s iter:24.98s]
+I0000 00:00:1783398527.144953   41524 gradient_boosted_trees.cc:1720] Train tree 172/240 train-loss:0.474119 train-accuracy:0.999867 [total:1h9m34.55s iter:20.52s]
+I0000 00:00:1783398552.449087   41524 gradient_boosted_trees.cc:1720] Train tree 173/240 train-loss:0.471927 train-accuracy:0.999867 [total:1h9m59.86s iter:25.30s]
+I0000 00:00:1783398577.112789   41524 gradient_boosted_trees.cc:1720] Train tree 174/240 train-loss:0.468946 train-accuracy:0.999867 [total:1h10m24.52s iter:24.66s]
+I0000 00:00:1783398600.027351   41524 gradient_boosted_trees.cc:1720] Train tree 175/240 train-loss:0.467133 train-accuracy:0.999867 [total:1h10m47.44s iter:22.91s]
+I0000 00:00:1783398620.657783   41524 gradient_boosted_trees.cc:1720] Train tree 176/240 train-loss:0.464646 train-accuracy:0.999867 [total:1h11m8.07s iter:20.63s]
+I0000 00:00:1783398642.906470   41524 gradient_boosted_trees.cc:1720] Train tree 177/240 train-loss:0.463428 train-accuracy:0.999867 [total:1h11m30.32s iter:22.25s]
+I0000 00:00:1783398667.221953   41524 gradient_boosted_trees.cc:1720] Train tree 178/240 train-loss:0.459430 train-accuracy:0.999867 [total:1h11m54.63s iter:24.32s]
+I0000 00:00:1783398689.500041   41524 gradient_boosted_trees.cc:1720] Train tree 179/240 train-loss:0.457637 train-accuracy:0.999867 [total:1h12m16.91s iter:22.28s]
+I0000 00:00:1783398712.130086   41524 gradient_boosted_trees.cc:1720] Train tree 180/240 train-loss:0.456006 train-accuracy:0.999867 [total:1h12m39.54s iter:22.63s]
+I0000 00:00:1783398736.279581   41524 gradient_boosted_trees.cc:1720] Train tree 181/240 train-loss:0.452987 train-accuracy:0.999867 [total:1h13m3.69s iter:24.15s]
+I0000 00:00:1783398771.699190   41524 gradient_boosted_trees.cc:1720] Train tree 183/240 train-loss:0.450860 train-accuracy:0.999867 [total:1h13m39.11s iter:20.43s]
+I0000 00:00:1783398793.566111   41524 gradient_boosted_trees.cc:1720] Train tree 184/240 train-loss:0.449595 train-accuracy:0.999867 [total:1h14m0.97s iter:21.87s]
+I0000 00:00:1783398819.494756   41524 gradient_boosted_trees.cc:1720] Train tree 185/240 train-loss:0.447260 train-accuracy:0.999867 [total:1h14m26.90s iter:25.93s]
+I0000 00:00:1783398843.320893   41524 gradient_boosted_trees.cc:1720] Train tree 186/240 train-loss:0.444559 train-accuracy:0.999867 [total:1h14m50.73s iter:23.83s]
+I0000 00:00:1783398866.911072   41524 gradient_boosted_trees.cc:1720] Train tree 187/240 train-loss:0.441814 train-accuracy:0.999867 [total:1h15m14.32s iter:23.59s]
+I0000 00:00:1783398892.989438   41524 gradient_boosted_trees.cc:1720] Train tree 188/240 train-loss:0.439319 train-accuracy:0.999867 [total:1h15m40.40s iter:26.08s]
+I0000 00:00:1783398916.529476   41524 gradient_boosted_trees.cc:1720] Train tree 189/240 train-loss:0.437288 train-accuracy:0.999867 [total:1h16m3.94s iter:23.54s]
+I0000 00:00:1783398941.560111   41524 gradient_boosted_trees.cc:1720] Train tree 190/240 train-loss:0.434674 train-accuracy:0.999867 [total:1h16m28.97s iter:25.03s]
+I0000 00:00:1783398966.989871   41524 gradient_boosted_trees.cc:1720] Train tree 191/240 train-loss:0.432978 train-accuracy:0.999867 [total:1h16m54.40s iter:25.43s]
+I0000 00:00:1783398990.556555   41524 gradient_boosted_trees.cc:1720] Train tree 192/240 train-loss:0.430753 train-accuracy:0.999867 [total:1h17m17.97s iter:23.57s]
+I0000 00:00:1783399014.558400   41524 gradient_boosted_trees.cc:1720] Train tree 193/240 train-loss:0.428750 train-accuracy:0.999867 [total:1h17m41.97s iter:24.00s]
+I0000 00:00:1783399039.515961   41524 gradient_boosted_trees.cc:1720] Train tree 194/240 train-loss:0.426356 train-accuracy:0.999867 [total:1h18m6.92s iter:24.96s]
+I0000 00:00:1783399065.593977   41524 gradient_boosted_trees.cc:1720] Train tree 195/240 train-loss:0.422150 train-accuracy:0.999867 [total:1h18m33.00s iter:26.08s]
+I0000 00:00:1783399091.732823   41524 gradient_boosted_trees.cc:1720] Train tree 196/240 train-loss:0.419086 train-accuracy:0.999867 [total:1h18m59.14s iter:26.14s]
+I0000 00:00:1783399115.757345   41524 gradient_boosted_trees.cc:1720] Train tree 197/240 train-loss:0.416925 train-accuracy:0.999867 [total:1h19m23.17s iter:24.02s]
+I0000 00:00:1783399140.674369   41524 gradient_boosted_trees.cc:1720] Train tree 198/240 train-loss:0.415412 train-accuracy:0.999867 [total:1h19m48.08s iter:24.92s]
+I0000 00:00:1783399165.682987   41524 gradient_boosted_trees.cc:1720] Train tree 199/240 train-loss:0.412345 train-accuracy:0.999867 [total:1h20m13.09s iter:25.01s]
+I0000 00:00:1783399189.515117   41524 gradient_boosted_trees.cc:1720] Train tree 200/240 train-loss:0.410907 train-accuracy:0.999867 [total:1h20m36.92s iter:23.83s]
+I0000 00:00:1783399214.602565   41524 gradient_boosted_trees.cc:1720] Train tree 201/240 train-loss:0.409169 train-accuracy:0.999867 [total:1h21m2.01s iter:25.09s]
+I0000 00:00:1783399237.126119   41524 gradient_boosted_trees.cc:1720] Train tree 202/240 train-loss:0.406679 train-accuracy:0.999867 [total:1h21m24.53s iter:22.52s]
+I0000 00:00:1783399263.182710   41524 gradient_boosted_trees.cc:1720] Train tree 203/240 train-loss:0.404648 train-accuracy:0.999933 [total:1h21m50.59s iter:26.06s]
+I0000 00:00:1783399287.387925   41524 gradient_boosted_trees.cc:1720] Train tree 204/240 train-loss:0.402046 train-accuracy:0.999933 [total:1h22m14.80s iter:24.21s]
+I0000 00:00:1783399313.053133   41524 gradient_boosted_trees.cc:1720] Train tree 205/240 train-loss:0.400295 train-accuracy:0.999933 [total:1h22m40.46s iter:25.67s]
+I0000 00:00:1783399338.533338   41524 gradient_boosted_trees.cc:1720] Train tree 206/240 train-loss:0.398749 train-accuracy:1.000000 [total:1h23m5.94s iter:25.48s]
+I0000 00:00:1783399363.743706   41524 gradient_boosted_trees.cc:1720] Train tree 207/240 train-loss:0.397444 train-accuracy:0.999933 [total:1h23m31.15s iter:25.21s]
+I0000 00:00:1783399389.701603   41524 gradient_boosted_trees.cc:1720] Train tree 208/240 train-loss:0.395617 train-accuracy:0.999933 [total:1h23m57.11s iter:25.96s]
+I0000 00:00:1783399415.393377   41524 gradient_boosted_trees.cc:1720] Train tree 209/240 train-loss:0.393701 train-accuracy:0.999933 [total:1h24m22.80s iter:25.69s]
+I0000 00:00:1783399441.549740   41524 gradient_boosted_trees.cc:1720] Train tree 210/240 train-loss:0.384123 train-accuracy:0.999933 [total:1h24m48.96s iter:26.16s]
+I0000 00:00:1783399484.288803   41524 gradient_boosted_trees.cc:1720] Train tree 212/240 train-loss:0.381833 train-accuracy:0.999933 [total:1h25m31.70s iter:25.27s]
+I0000 00:00:1783399509.388028   41524 gradient_boosted_trees.cc:1720] Train tree 213/240 train-loss:0.379731 train-accuracy:0.999933 [total:1h25m56.80s iter:25.10s]
+I0000 00:00:1783399535.087001   41524 gradient_boosted_trees.cc:1720] Train tree 214/240 train-loss:0.377970 train-accuracy:0.999933 [total:1h26m22.50s iter:25.70s]
+I0000 00:00:1783399559.601397   41524 gradient_boosted_trees.cc:1720] Train tree 215/240 train-loss:0.376711 train-accuracy:0.999933 [total:1h26m47.01s iter:24.51s]
+I0000 00:00:1783399583.298317   41524 gradient_boosted_trees.cc:1720] Train tree 216/240 train-loss:0.375089 train-accuracy:0.999933 [total:1h27m10.71s iter:23.70s]
+I0000 00:00:1783399604.308312   41524 gradient_boosted_trees.cc:1720] Train tree 217/240 train-loss:0.373988 train-accuracy:0.999933 [total:1h27m31.72s iter:21.01s]
+I0000 00:00:1783399629.088732   41524 gradient_boosted_trees.cc:1720] Train tree 218/240 train-loss:0.372833 train-accuracy:0.999933 [total:1h27m56.50s iter:24.78s]
+I0000 00:00:1783399653.128459   41524 gradient_boosted_trees.cc:1720] Train tree 219/240 train-loss:0.371343 train-accuracy:0.999933 [total:1h28m20.54s iter:24.04s]
+I0000 00:00:1783399678.662566   41524 gradient_boosted_trees.cc:1720] Train tree 220/240 train-loss:0.369817 train-accuracy:1.000000 [total:1h28m46.07s iter:25.53s]
+I0000 00:00:1783399704.826836   41524 gradient_boosted_trees.cc:1720] Train tree 221/240 train-loss:0.368119 train-accuracy:1.000000 [total:1h29m12.24s iter:26.16s]
+I0000 00:00:1783399727.671568   41524 gradient_boosted_trees.cc:1720] Train tree 222/240 train-loss:0.366026 train-accuracy:1.000000 [total:1h29m35.08s iter:22.84s]
+I0000 00:00:1783399752.760444   41524 gradient_boosted_trees.cc:1720] Train tree 223/240 train-loss:0.363976 train-accuracy:1.000000 [total:1h30m0.17s iter:25.09s]
+I0000 00:00:1783399776.570368   41524 gradient_boosted_trees.cc:1720] Train tree 224/240 train-loss:0.362940 train-accuracy:1.000000 [total:1h30m23.98s iter:23.81s]
+I0000 00:00:1783399802.056709   41524 gradient_boosted_trees.cc:1720] Train tree 225/240 train-loss:0.360121 train-accuracy:1.000000 [total:1h30m49.47s iter:25.49s]
+I0000 00:00:1783399846.982419   41524 gradient_boosted_trees.cc:1720] Train tree 227/240 train-loss:0.357643 train-accuracy:1.000000 [total:1h31m34.39s iter:25.80s]
+I0000 00:00:1783399869.611146   41524 gradient_boosted_trees.cc:1720] Train tree 228/240 train-loss:0.356731 train-accuracy:1.000000 [total:1h31m57.02s iter:22.63s]
+I0000 00:00:1783399895.063070   41524 gradient_boosted_trees.cc:1720] Train tree 229/240 train-loss:0.355311 train-accuracy:1.000000 [total:1h32m22.47s iter:25.45s]
+I0000 00:00:1783399920.326359   41524 gradient_boosted_trees.cc:1720] Train tree 230/240 train-loss:0.353958 train-accuracy:1.000000 [total:1h32m47.73s iter:25.26s]
+I0000 00:00:1783399946.032818   41524 gradient_boosted_trees.cc:1720] Train tree 231/240 train-loss:0.352258 train-accuracy:1.000000 [total:1h33m13.44s iter:25.71s]
+I0000 00:00:1783399971.665253   41524 gradient_boosted_trees.cc:1720] Train tree 232/240 train-loss:0.350692 train-accuracy:1.000000 [total:1h33m39.07s iter:25.63s]
+I0000 00:00:1783399996.710186   41524 gradient_boosted_trees.cc:1720] Train tree 233/240 train-loss:0.349321 train-accuracy:1.000000 [total:1h34m4.12s iter:25.04s]
+I0000 00:00:1783400022.118398   41524 gradient_boosted_trees.cc:1720] Train tree 234/240 train-loss:0.347361 train-accuracy:1.000000 [total:1h34m29.53s iter:25.41s]
+I0000 00:00:1783400047.243616   41524 gradient_boosted_trees.cc:1720] Train tree 235/240 train-loss:0.345493 train-accuracy:1.000000 [total:1h34m54.65s iter:25.13s]
+I0000 00:00:1783400072.556331   41524 gradient_boosted_trees.cc:1720] Train tree 236/240 train-loss:0.344175 train-accuracy:1.000000 [total:1h35m19.96s iter:25.31s]
+I0000 00:00:1783400097.943927   41524 gradient_boosted_trees.cc:1720] Train tree 237/240 train-loss:0.342820 train-accuracy:1.000000 [total:1h35m45.35s iter:25.39s]
+I0000 00:00:1783400121.932999   41524 gradient_boosted_trees.cc:1720] Train tree 238/240 train-loss:0.341445 train-accuracy:1.000000 [total:1h36m9.34s iter:23.99s]
+I0000 00:00:1783400147.336940   41524 gradient_boosted_trees.cc:1720] Train tree 239/240 train-loss:0.339538 train-accuracy:1.000000 [total:1h36m34.75s iter:25.40s]
+I0000 00:00:1783400166.224355   41524 gradient_boosted_trees.cc:1718] Train tree 240/240 train-loss:0.338571 train-accuracy:1.000000 [total:1h36m53.63s iter:18.89s]
+I0000 00:00:1783400184.440635   41524 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 5832.05s
+WARNING: Could not parse 'Training block took' from run 1
+----- Run 2/2 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783400185.205949   64043 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1783400235.481673   64043 train_oblique_forest.cc:501] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1783400235.481699   64043 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783400235.481702   64043 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783400235.504159   64043 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783400235.504407   64043 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783400235.531616   64043 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783400235.544086   64043 gradient_boosted_trees.cc:1189] Training gradient boosted tree on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1783400235.614423   64043 gradient_boosted_trees.cc:1229] 15000 examples used for training and 0 examples used for validation
+I0000 00:00:1783400235.681081   64043 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783400235.685415   64043 training.cc:5098] Create processor with 48 threads for split computation
+I0000 00:00:1783400235.686325   64043 gradient_boosted_trees.cc:1410] Create thread pool with 48 threads for loss computation
+I0000 00:00:1783400260.240632   64043 gradient_boosted_trees.cc:1718] Train tree 1/240 train-loss:1.367731 train-accuracy:0.641067 [total:24.55s iter:24.55s]
+I0000 00:00:1783400284.937723   64043 gradient_boosted_trees.cc:1718] Train tree 2/240 train-loss:1.345497 train-accuracy:0.687667 [total:49.25s iter:24.70s]
+I0000 00:00:1783400307.909685   64043 gradient_boosted_trees.cc:1720] Train tree 3/240 train-loss:1.329867 train-accuracy:0.708600 [total:1m12.22s iter:22.97s]
+I0000 00:00:1783400331.475550   64043 gradient_boosted_trees.cc:1720] Train tree 4/240 train-loss:1.321790 train-accuracy:0.720267 [total:1m35.79s iter:23.57s]
+I0000 00:00:1783400351.959277   64043 gradient_boosted_trees.cc:1720] Train tree 5/240 train-loss:1.236208 train-accuracy:0.853867 [total:1m56.27s iter:20.48s]
+I0000 00:00:1783400377.096390   64043 gradient_boosted_trees.cc:1720] Train tree 6/240 train-loss:1.228156 train-accuracy:0.858600 [total:2m21.41s iter:25.14s]
+I0000 00:00:1783400402.233075   64043 gradient_boosted_trees.cc:1720] Train tree 7/240 train-loss:1.222948 train-accuracy:0.860933 [total:2m46.55s iter:25.14s]
+I0000 00:00:1783400427.432880   64043 gradient_boosted_trees.cc:1720] Train tree 8/240 train-loss:1.210755 train-accuracy:0.869333 [total:3m11.75s iter:25.20s]
+I0000 00:00:1783400450.757101   64043 gradient_boosted_trees.cc:1720] Train tree 9/240 train-loss:1.205055 train-accuracy:0.875867 [total:3m35.07s iter:23.32s]
+I0000 00:00:1783400494.875387   64043 gradient_boosted_trees.cc:1720] Train tree 11/240 train-loss:1.195327 train-accuracy:0.879933 [total:4m19.19s iter:25.60s]
+I0000 00:00:1783400520.268652   64043 gradient_boosted_trees.cc:1720] Train tree 12/240 train-loss:1.186892 train-accuracy:0.884533 [total:4m44.58s iter:25.39s]
+I0000 00:00:1783400542.411069   64043 gradient_boosted_trees.cc:1720] Train tree 13/240 train-loss:1.181744 train-accuracy:0.887533 [total:5m6.72s iter:22.14s]
+I0000 00:00:1783400566.313840   64043 gradient_boosted_trees.cc:1720] Train tree 14/240 train-loss:1.175755 train-accuracy:0.891800 [total:5m30.63s iter:23.90s]
+I0000 00:00:1783400591.835742   64043 gradient_boosted_trees.cc:1720] Train tree 15/240 train-loss:1.169177 train-accuracy:0.895733 [total:5m56.15s iter:25.52s]
+I0000 00:00:1783400617.236605   64043 gradient_boosted_trees.cc:1720] Train tree 16/240 train-loss:1.160044 train-accuracy:0.899200 [total:6m21.55s iter:25.40s]
+I0000 00:00:1783400641.242880   64043 gradient_boosted_trees.cc:1720] Train tree 17/240 train-loss:1.148377 train-accuracy:0.902400 [total:6m45.56s iter:24.01s]
+I0000 00:00:1783400664.373398   64043 gradient_boosted_trees.cc:1720] Train tree 18/240 train-loss:1.141401 train-accuracy:0.904600 [total:7m8.69s iter:23.13s]
+I0000 00:00:1783400689.166097   64043 gradient_boosted_trees.cc:1720] Train tree 19/240 train-loss:1.134592 train-accuracy:0.909067 [total:7m33.48s iter:24.79s]
+I0000 00:00:1783400713.423437   64043 gradient_boosted_trees.cc:1720] Train tree 20/240 train-loss:1.127062 train-accuracy:0.913067 [total:7m57.74s iter:24.26s]
+I0000 00:00:1783400733.972695   64043 gradient_boosted_trees.cc:1720] Train tree 21/240 train-loss:1.123648 train-accuracy:0.912400 [total:8m18.29s iter:20.55s]
+I0000 00:00:1783400759.406088   64043 gradient_boosted_trees.cc:1720] Train tree 22/240 train-loss:1.114261 train-accuracy:0.918800 [total:8m43.72s iter:25.43s]
+I0000 00:00:1783400784.680924   64043 gradient_boosted_trees.cc:1720] Train tree 23/240 train-loss:1.097293 train-accuracy:0.923467 [total:9m8.99s iter:25.27s]
+I0000 00:00:1783400809.450927   64043 gradient_boosted_trees.cc:1720] Train tree 24/240 train-loss:1.088553 train-accuracy:0.926800 [total:9m33.76s iter:24.77s]
+I0000 00:00:1783400832.285569   64043 gradient_boosted_trees.cc:1720] Train tree 25/240 train-loss:1.082486 train-accuracy:0.929000 [total:9m56.60s iter:22.83s]
+I0000 00:00:1783400854.927438   64043 gradient_boosted_trees.cc:1720] Train tree 26/240 train-loss:1.076825 train-accuracy:0.932800 [total:10m19.24s iter:22.64s]
+I0000 00:00:1783400880.124660   64043 gradient_boosted_trees.cc:1720] Train tree 27/240 train-loss:1.069216 train-accuracy:0.934600 [total:10m44.44s iter:25.20s]
+I0000 00:00:1783400904.830834   64043 gradient_boosted_trees.cc:1720] Train tree 28/240 train-loss:1.063743 train-accuracy:0.936133 [total:11m9.14s iter:24.71s]
+I0000 00:00:1783400929.351879   64043 gradient_boosted_trees.cc:1720] Train tree 29/240 train-loss:1.059010 train-accuracy:0.937800 [total:11m33.66s iter:24.52s]
+I0000 00:00:1783400954.174998   64043 gradient_boosted_trees.cc:1720] Train tree 30/240 train-loss:1.046046 train-accuracy:0.939133 [total:11m58.49s iter:24.82s]
+I0000 00:00:1783400978.161144   64043 gradient_boosted_trees.cc:1720] Train tree 31/240 train-loss:1.041256 train-accuracy:0.939933 [total:12m22.47s iter:23.99s]
+I0000 00:00:1783401002.937267   64043 gradient_boosted_trees.cc:1720] Train tree 32/240 train-loss:1.035713 train-accuracy:0.943733 [total:12m47.25s iter:24.78s]
+I0000 00:00:1783401025.875436   64043 gradient_boosted_trees.cc:1720] Train tree 33/240 train-loss:1.029386 train-accuracy:0.946400 [total:13m10.19s iter:22.94s]
+I0000 00:00:1783401069.746231   64043 gradient_boosted_trees.cc:1720] Train tree 35/240 train-loss:1.018881 train-accuracy:0.949067 [total:13m54.06s iter:25.25s]
+I0000 00:00:1783401092.991506   64043 gradient_boosted_trees.cc:1720] Train tree 36/240 train-loss:1.012907 train-accuracy:0.950533 [total:14m17.30s iter:23.25s]
+I0000 00:00:1783401117.540824   64043 gradient_boosted_trees.cc:1720] Train tree 37/240 train-loss:1.008083 train-accuracy:0.951667 [total:14m41.85s iter:24.55s]
+I0000 00:00:1783401142.207179   64043 gradient_boosted_trees.cc:1720] Train tree 38/240 train-loss:0.998929 train-accuracy:0.953600 [total:15m6.52s iter:24.67s]
+I0000 00:00:1783401166.828087   64043 gradient_boosted_trees.cc:1720] Train tree 39/240 train-loss:0.992958 train-accuracy:0.956400 [total:15m31.14s iter:24.62s]
+I0000 00:00:1783401191.363068   64043 gradient_boosted_trees.cc:1720] Train tree 40/240 train-loss:0.988203 train-accuracy:0.958267 [total:15m55.68s iter:24.53s]
+I0000 00:00:1783401214.268386   64043 gradient_boosted_trees.cc:1720] Train tree 41/240 train-loss:0.976850 train-accuracy:0.959400 [total:16m18.58s iter:22.91s]
+I0000 00:00:1783401236.347745   64043 gradient_boosted_trees.cc:1720] Train tree 42/240 train-loss:0.968013 train-accuracy:0.961000 [total:16m40.66s iter:22.08s]
+I0000 00:00:1783401259.454235   64043 gradient_boosted_trees.cc:1720] Train tree 43/240 train-loss:0.963932 train-accuracy:0.962267 [total:17m3.77s iter:23.11s]
+I0000 00:00:1783401283.743136   64043 gradient_boosted_trees.cc:1720] Train tree 44/240 train-loss:0.955532 train-accuracy:0.964267 [total:17m28.06s iter:24.29s]
+I0000 00:00:1783401307.544995   64043 gradient_boosted_trees.cc:1720] Train tree 45/240 train-loss:0.952051 train-accuracy:0.965400 [total:17m51.86s iter:23.80s]
+I0000 00:00:1783401331.280595   64043 gradient_boosted_trees.cc:1720] Train tree 46/240 train-loss:0.948432 train-accuracy:0.966733 [total:18m15.59s iter:23.74s]
+I0000 00:00:1783401354.814097   64043 gradient_boosted_trees.cc:1720] Train tree 47/240 train-loss:0.942915 train-accuracy:0.968200 [total:18m39.13s iter:23.53s]
+I0000 00:00:1783401380.118044   64043 gradient_boosted_trees.cc:1720] Train tree 48/240 train-loss:0.937624 train-accuracy:0.968133 [total:19m4.43s iter:25.30s]
+I0000 00:00:1783401404.262341   64043 gradient_boosted_trees.cc:1720] Train tree 49/240 train-loss:0.928822 train-accuracy:0.969267 [total:19m28.58s iter:24.14s]
+I0000 00:00:1783401429.180675   64043 gradient_boosted_trees.cc:1720] Train tree 50/240 train-loss:0.924602 train-accuracy:0.970400 [total:19m53.49s iter:24.92s]
+I0000 00:00:1783401451.839540   64043 gradient_boosted_trees.cc:1720] Train tree 51/240 train-loss:0.921574 train-accuracy:0.970200 [total:20m16.15s iter:22.66s]
+I0000 00:00:1783401476.735419   64043 gradient_boosted_trees.cc:1720] Train tree 52/240 train-loss:0.917276 train-accuracy:0.971733 [total:20m41.05s iter:24.90s]
+I0000 00:00:1783401502.208754   64043 gradient_boosted_trees.cc:1720] Train tree 53/240 train-loss:0.912180 train-accuracy:0.973933 [total:21m6.52s iter:25.47s]
+I0000 00:00:1783401527.428381   64043 gradient_boosted_trees.cc:1720] Train tree 54/240 train-loss:0.906509 train-accuracy:0.974733 [total:21m31.74s iter:25.22s]
+I0000 00:00:1783401552.411685   64043 gradient_boosted_trees.cc:1720] Train tree 55/240 train-loss:0.898822 train-accuracy:0.974800 [total:21m56.72s iter:24.98s]
+I0000 00:00:1783401577.047560   64043 gradient_boosted_trees.cc:1720] Train tree 56/240 train-loss:0.893692 train-accuracy:0.975533 [total:22m21.36s iter:24.64s]
+I0000 00:00:1783401599.510352   64043 gradient_boosted_trees.cc:1720] Train tree 57/240 train-loss:0.887635 train-accuracy:0.976000 [total:22m43.82s iter:22.46s]
+I0000 00:00:1783401623.965919   64043 gradient_boosted_trees.cc:1720] Train tree 58/240 train-loss:0.880393 train-accuracy:0.977533 [total:23m8.28s iter:24.46s]
+I0000 00:00:1783401647.159688   64043 gradient_boosted_trees.cc:1720] Train tree 59/240 train-loss:0.876646 train-accuracy:0.977800 [total:23m31.47s iter:23.19s]
+I0000 00:00:1783401671.610914   64043 gradient_boosted_trees.cc:1720] Train tree 60/240 train-loss:0.870428 train-accuracy:0.979067 [total:23m55.92s iter:24.45s]
+I0000 00:00:1783401694.560334   64043 gradient_boosted_trees.cc:1720] Train tree 61/240 train-loss:0.866025 train-accuracy:0.978533 [total:24m18.87s iter:22.95s]
+I0000 00:00:1783401719.808007   64043 gradient_boosted_trees.cc:1720] Train tree 62/240 train-loss:0.863055 train-accuracy:0.978867 [total:24m44.12s iter:25.25s]
+I0000 00:00:1783401742.787441   64043 gradient_boosted_trees.cc:1720] Train tree 63/240 train-loss:0.857927 train-accuracy:0.980333 [total:25m7.10s iter:22.98s]
+I0000 00:00:1783401767.708985   64043 gradient_boosted_trees.cc:1720] Train tree 64/240 train-loss:0.848172 train-accuracy:0.980867 [total:25m32.02s iter:24.92s]
+I0000 00:00:1783401792.742951   64043 gradient_boosted_trees.cc:1720] Train tree 65/240 train-loss:0.840802 train-accuracy:0.981667 [total:25m57.06s iter:25.03s]
+I0000 00:00:1783401816.982039   64043 gradient_boosted_trees.cc:1720] Train tree 66/240 train-loss:0.836705 train-accuracy:0.983000 [total:26m21.29s iter:24.24s]
+I0000 00:00:1783401842.447106   64043 gradient_boosted_trees.cc:1720] Train tree 67/240 train-loss:0.833372 train-accuracy:0.982867 [total:26m46.76s iter:25.47s]
+I0000 00:00:1783401865.882164   64043 gradient_boosted_trees.cc:1720] Train tree 68/240 train-loss:0.831057 train-accuracy:0.983667 [total:27m10.20s iter:23.44s]
+I0000 00:00:1783401890.800489   64043 gradient_boosted_trees.cc:1720] Train tree 69/240 train-loss:0.823745 train-accuracy:0.984667 [total:27m35.11s iter:24.92s]
+I0000 00:00:1783401916.149082   64043 gradient_boosted_trees.cc:1720] Train tree 70/240 train-loss:0.819803 train-accuracy:0.984667 [total:28m0.46s iter:25.35s]
+I0000 00:00:1783401940.706252   64043 gradient_boosted_trees.cc:1720] Train tree 71/240 train-loss:0.815091 train-accuracy:0.986067 [total:28m25.02s iter:24.56s]
+I0000 00:00:1783401966.353541   64043 gradient_boosted_trees.cc:1720] Train tree 72/240 train-loss:0.811169 train-accuracy:0.986467 [total:28m50.67s iter:25.65s]
+I0000 00:00:1783401991.555876   64043 gradient_boosted_trees.cc:1720] Train tree 73/240 train-loss:0.806722 train-accuracy:0.986733 [total:29m15.87s iter:25.20s]
+I0000 00:00:1783402016.455267   64043 gradient_boosted_trees.cc:1720] Train tree 74/240 train-loss:0.802155 train-accuracy:0.987733 [total:29m40.77s iter:24.90s]
+I0000 00:00:1783402040.099388   64043 gradient_boosted_trees.cc:1720] Train tree 75/240 train-loss:0.798452 train-accuracy:0.987600 [total:30m4.41s iter:23.64s]
+I0000 00:00:1783402084.975760   64043 gradient_boosted_trees.cc:1720] Train tree 77/240 train-loss:0.793195 train-accuracy:0.988600 [total:30m49.29s iter:25.55s]
+I0000 00:00:1783402110.140340   64043 gradient_boosted_trees.cc:1720] Train tree 78/240 train-loss:0.785810 train-accuracy:0.988800 [total:31m14.45s iter:25.16s]
+I0000 00:00:1783402150.507491   64043 gradient_boosted_trees.cc:1720] Train tree 80/240 train-loss:0.776164 train-accuracy:0.989400 [total:31m54.82s iter:23.26s]
+I0000 00:00:1783402173.509102   64043 gradient_boosted_trees.cc:1720] Train tree 81/240 train-loss:0.772647 train-accuracy:0.989867 [total:32m17.82s iter:23.00s]
+I0000 00:00:1783402217.301145   64043 gradient_boosted_trees.cc:1720] Train tree 83/240 train-loss:0.766941 train-accuracy:0.990200 [total:33m1.61s iter:25.33s]
+I0000 00:00:1783402242.636376   64043 gradient_boosted_trees.cc:1720] Train tree 84/240 train-loss:0.762728 train-accuracy:0.990267 [total:33m26.95s iter:25.34s]
+I0000 00:00:1783402267.626601   64043 gradient_boosted_trees.cc:1720] Train tree 85/240 train-loss:0.758153 train-accuracy:0.990800 [total:33m51.94s iter:24.99s]
+I0000 00:00:1783402313.074508   64043 gradient_boosted_trees.cc:1720] Train tree 87/240 train-loss:0.751291 train-accuracy:0.991733 [total:34m37.39s iter:25.54s]
+I0000 00:00:1783402337.567624   64043 gradient_boosted_trees.cc:1720] Train tree 88/240 train-loss:0.746247 train-accuracy:0.992133 [total:35m1.88s iter:24.49s]
+I0000 00:00:1783402362.957425   64043 gradient_boosted_trees.cc:1720] Train tree 89/240 train-loss:0.742511 train-accuracy:0.992467 [total:35m27.27s iter:25.39s]
+I0000 00:00:1783402387.639767   64043 gradient_boosted_trees.cc:1720] Train tree 90/240 train-loss:0.735886 train-accuracy:0.992267 [total:35m51.95s iter:24.68s]
+I0000 00:00:1783402413.012213   64043 gradient_boosted_trees.cc:1720] Train tree 91/240 train-loss:0.731403 train-accuracy:0.992800 [total:36m17.33s iter:25.37s]
+I0000 00:00:1783402438.152342   64043 gradient_boosted_trees.cc:1720] Train tree 92/240 train-loss:0.727784 train-accuracy:0.993000 [total:36m42.47s iter:25.14s]
+I0000 00:00:1783402462.939199   64043 gradient_boosted_trees.cc:1720] Train tree 93/240 train-loss:0.717308 train-accuracy:0.994000 [total:37m7.25s iter:24.79s]
+I0000 00:00:1783402488.426930   64043 gradient_boosted_trees.cc:1720] Train tree 94/240 train-loss:0.713716 train-accuracy:0.994067 [total:37m32.74s iter:25.49s]
+I0000 00:00:1783402511.736308   64043 gradient_boosted_trees.cc:1720] Train tree 95/240 train-loss:0.710455 train-accuracy:0.994267 [total:37m56.05s iter:23.31s]
+I0000 00:00:1783402536.332400   64043 gradient_boosted_trees.cc:1720] Train tree 96/240 train-loss:0.705555 train-accuracy:0.994533 [total:38m20.65s iter:24.60s]
+I0000 00:00:1783402558.330953   64043 gradient_boosted_trees.cc:1720] Train tree 97/240 train-loss:0.702965 train-accuracy:0.994533 [total:38m42.64s iter:22.00s]
+I0000 00:00:1783402583.105571   64043 gradient_boosted_trees.cc:1720] Train tree 98/240 train-loss:0.699293 train-accuracy:0.995133 [total:39m7.42s iter:24.77s]
+I0000 00:00:1783402608.276934   64043 gradient_boosted_trees.cc:1720] Train tree 99/240 train-loss:0.696364 train-accuracy:0.995067 [total:39m32.59s iter:25.17s]
+I0000 00:00:1783402633.241931   64043 gradient_boosted_trees.cc:1720] Train tree 100/240 train-loss:0.690992 train-accuracy:0.995667 [total:39m57.55s iter:24.96s]
+I0000 00:00:1783402657.457020   64043 gradient_boosted_trees.cc:1720] Train tree 101/240 train-loss:0.687237 train-accuracy:0.995667 [total:40m21.77s iter:24.22s]
+I0000 00:00:1783402681.109181   64043 gradient_boosted_trees.cc:1720] Train tree 102/240 train-loss:0.682787 train-accuracy:0.995733 [total:40m45.42s iter:23.65s]
+I0000 00:00:1783402705.187537   64043 gradient_boosted_trees.cc:1720] Train tree 103/240 train-loss:0.680238 train-accuracy:0.995667 [total:41m9.50s iter:24.08s]
+I0000 00:00:1783402728.460018   64043 gradient_boosted_trees.cc:1720] Train tree 104/240 train-loss:0.678335 train-accuracy:0.995667 [total:41m32.77s iter:23.27s]
+I0000 00:00:1783402752.101055   64043 gradient_boosted_trees.cc:1720] Train tree 105/240 train-loss:0.675615 train-accuracy:0.995867 [total:41m56.41s iter:23.64s]
+I0000 00:00:1783402777.403220   64043 gradient_boosted_trees.cc:1720] Train tree 106/240 train-loss:0.672725 train-accuracy:0.996067 [total:42m21.72s iter:25.30s]
+I0000 00:00:1783402799.252039   64043 gradient_boosted_trees.cc:1720] Train tree 107/240 train-loss:0.670352 train-accuracy:0.996267 [total:42m43.56s iter:21.85s]
+I0000 00:00:1783402819.280258   64043 gradient_boosted_trees.cc:1720] Train tree 108/240 train-loss:0.667757 train-accuracy:0.996600 [total:43m3.59s iter:20.03s]
+I0000 00:00:1783402844.812385   64043 gradient_boosted_trees.cc:1720] Train tree 109/240 train-loss:0.664759 train-accuracy:0.996533 [total:43m29.13s iter:25.53s]
+I0000 00:00:1783402868.197919   64043 gradient_boosted_trees.cc:1720] Train tree 110/240 train-loss:0.662339 train-accuracy:0.996600 [total:43m52.51s iter:23.39s]
+I0000 00:00:1783402892.931701   64043 gradient_boosted_trees.cc:1720] Train tree 111/240 train-loss:0.658440 train-accuracy:0.996733 [total:44m17.24s iter:24.73s]
+I0000 00:00:1783402917.020095   64043 gradient_boosted_trees.cc:1720] Train tree 112/240 train-loss:0.655018 train-accuracy:0.996867 [total:44m41.33s iter:24.09s]
+I0000 00:00:1783402961.872070   64043 gradient_boosted_trees.cc:1720] Train tree 114/240 train-loss:0.651002 train-accuracy:0.997067 [total:45m26.18s iter:25.09s]
+I0000 00:00:1783402981.955283   64043 gradient_boosted_trees.cc:1720] Train tree 115/240 train-loss:0.642611 train-accuracy:0.997267 [total:45m46.27s iter:20.08s]
+I0000 00:00:1783403005.281680   64043 gradient_boosted_trees.cc:1720] Train tree 116/240 train-loss:0.639468 train-accuracy:0.997533 [total:46m9.59s iter:23.33s]
+I0000 00:00:1783403029.580586   64043 gradient_boosted_trees.cc:1720] Train tree 117/240 train-loss:0.636175 train-accuracy:0.997667 [total:46m33.89s iter:24.30s]
+I0000 00:00:1783403053.186537   64043 gradient_boosted_trees.cc:1720] Train tree 118/240 train-loss:0.631366 train-accuracy:0.997600 [total:46m57.50s iter:23.61s]
+I0000 00:00:1783403077.795541   64043 gradient_boosted_trees.cc:1720] Train tree 119/240 train-loss:0.628976 train-accuracy:0.997667 [total:47m22.11s iter:24.61s]
+I0000 00:00:1783403102.568318   64043 gradient_boosted_trees.cc:1720] Train tree 120/240 train-loss:0.623935 train-accuracy:0.997800 [total:47m46.88s iter:24.77s]
+I0000 00:00:1783403127.372228   64043 gradient_boosted_trees.cc:1720] Train tree 121/240 train-loss:0.620982 train-accuracy:0.997867 [total:48m11.69s iter:24.80s]
+I0000 00:00:1783403152.679245   64043 gradient_boosted_trees.cc:1720] Train tree 122/240 train-loss:0.617189 train-accuracy:0.997867 [total:48m36.99s iter:25.31s]
+I0000 00:00:1783403177.588113   64043 gradient_boosted_trees.cc:1720] Train tree 123/240 train-loss:0.612966 train-accuracy:0.997933 [total:49m1.90s iter:24.91s]
+I0000 00:00:1783403202.405130   64043 gradient_boosted_trees.cc:1720] Train tree 124/240 train-loss:0.609690 train-accuracy:0.998067 [total:49m26.72s iter:24.82s]
+I0000 00:00:1783403227.181027   64043 gradient_boosted_trees.cc:1720] Train tree 125/240 train-loss:0.605906 train-accuracy:0.998200 [total:49m51.49s iter:24.78s]
+I0000 00:00:1783403250.527092   64043 gradient_boosted_trees.cc:1720] Train tree 126/240 train-loss:0.603699 train-accuracy:0.998267 [total:50m14.84s iter:23.35s]
+I0000 00:00:1783403275.202094   64043 gradient_boosted_trees.cc:1720] Train tree 127/240 train-loss:0.601219 train-accuracy:0.998467 [total:50m39.51s iter:24.67s]
+I0000 00:00:1783403298.965598   64043 gradient_boosted_trees.cc:1720] Train tree 128/240 train-loss:0.596895 train-accuracy:0.998667 [total:51m3.28s iter:23.76s]
+I0000 00:00:1783403324.017453   64043 gradient_boosted_trees.cc:1720] Train tree 129/240 train-loss:0.594957 train-accuracy:0.998600 [total:51m28.33s iter:25.05s]
+I0000 00:00:1783403346.982987   64043 gradient_boosted_trees.cc:1720] Train tree 130/240 train-loss:0.590810 train-accuracy:0.998600 [total:51m51.30s iter:22.97s]
+I0000 00:00:1783403371.783647   64043 gradient_boosted_trees.cc:1720] Train tree 131/240 train-loss:0.587891 train-accuracy:0.998667 [total:52m16.10s iter:24.80s]
+I0000 00:00:1783403396.520430   64043 gradient_boosted_trees.cc:1720] Train tree 132/240 train-loss:0.584847 train-accuracy:0.998533 [total:52m40.83s iter:24.74s]
+I0000 00:00:1783403420.603729   64043 gradient_boosted_trees.cc:1720] Train tree 133/240 train-loss:0.582257 train-accuracy:0.998467 [total:53m4.92s iter:24.08s]
+I0000 00:00:1783403445.458167   64043 gradient_boosted_trees.cc:1720] Train tree 134/240 train-loss:0.579134 train-accuracy:0.998600 [total:53m29.77s iter:24.85s]
+I0000 00:00:1783403469.568322   64043 gradient_boosted_trees.cc:1720] Train tree 135/240 train-loss:0.576517 train-accuracy:0.998867 [total:53m53.88s iter:24.11s]
+I0000 00:00:1783403494.185883   64043 gradient_boosted_trees.cc:1720] Train tree 136/240 train-loss:0.574217 train-accuracy:0.998800 [total:54m18.50s iter:24.62s]
+I0000 00:00:1783403518.657948   64043 gradient_boosted_trees.cc:1720] Train tree 137/240 train-loss:0.570303 train-accuracy:0.998800 [total:54m42.97s iter:24.47s]
+I0000 00:00:1783403543.337650   64043 gradient_boosted_trees.cc:1720] Train tree 138/240 train-loss:0.566763 train-accuracy:0.999067 [total:55m7.65s iter:24.68s]
+I0000 00:00:1783403566.173459   64043 gradient_boosted_trees.cc:1720] Train tree 139/240 train-loss:0.563834 train-accuracy:0.999133 [total:55m30.49s iter:22.84s]
+I0000 00:00:1783403590.176150   64043 gradient_boosted_trees.cc:1720] Train tree 140/240 train-loss:0.560230 train-accuracy:0.999200 [total:55m54.49s iter:24.00s]
+I0000 00:00:1783403615.645061   64043 gradient_boosted_trees.cc:1720] Train tree 141/240 train-loss:0.557882 train-accuracy:0.999133 [total:56m19.96s iter:25.47s]
+I0000 00:00:1783403640.554402   64043 gradient_boosted_trees.cc:1720] Train tree 142/240 train-loss:0.555303 train-accuracy:0.999200 [total:56m44.87s iter:24.91s]
+I0000 00:00:1783403666.392968   64043 gradient_boosted_trees.cc:1720] Train tree 143/240 train-loss:0.552614 train-accuracy:0.999133 [total:57m10.71s iter:25.84s]
+I0000 00:00:1783403691.491124   64043 gradient_boosted_trees.cc:1720] Train tree 144/240 train-loss:0.549400 train-accuracy:0.999267 [total:57m35.80s iter:25.10s]
+I0000 00:00:1783403716.074537   64043 gradient_boosted_trees.cc:1720] Train tree 145/240 train-loss:0.545627 train-accuracy:0.999333 [total:58m0.39s iter:24.58s]
+I0000 00:00:1783403740.947733   64043 gradient_boosted_trees.cc:1720] Train tree 146/240 train-loss:0.542795 train-accuracy:0.999400 [total:58m25.26s iter:24.87s]
+I0000 00:00:1783403765.096814   64043 gradient_boosted_trees.cc:1720] Train tree 147/240 train-loss:0.537591 train-accuracy:0.999267 [total:58m49.41s iter:24.15s]
+I0000 00:00:1783403789.356908   64043 gradient_boosted_trees.cc:1720] Train tree 148/240 train-loss:0.535507 train-accuracy:0.999400 [total:59m13.67s iter:24.26s]
+I0000 00:00:1783403812.491630   64043 gradient_boosted_trees.cc:1720] Train tree 149/240 train-loss:0.532396 train-accuracy:0.999467 [total:59m36.80s iter:23.13s]
+I0000 00:00:1783403835.699061   64043 gradient_boosted_trees.cc:1720] Train tree 150/240 train-loss:0.530097 train-accuracy:0.999400 [total:1h0m0.01s iter:23.21s]
+I0000 00:00:1783403859.978824   64043 gradient_boosted_trees.cc:1720] Train tree 151/240 train-loss:0.527735 train-accuracy:0.999467 [total:1h0m24.29s iter:24.28s]
+I0000 00:00:1783403885.764391   64043 gradient_boosted_trees.cc:1720] Train tree 152/240 train-loss:0.524669 train-accuracy:0.999467 [total:1h0m50.08s iter:25.79s]
+I0000 00:00:1783403910.637657   64043 gradient_boosted_trees.cc:1720] Train tree 153/240 train-loss:0.522004 train-accuracy:0.999533 [total:1h1m14.95s iter:24.87s]
+I0000 00:00:1783403934.882049   64043 gradient_boosted_trees.cc:1720] Train tree 154/240 train-loss:0.518690 train-accuracy:0.999533 [total:1h1m39.19s iter:24.24s]
+I0000 00:00:1783403956.421392   64043 gradient_boosted_trees.cc:1720] Train tree 155/240 train-loss:0.516225 train-accuracy:0.999533 [total:1h2m0.73s iter:21.54s]
+I0000 00:00:1783403981.025339   64043 gradient_boosted_trees.cc:1720] Train tree 156/240 train-loss:0.514004 train-accuracy:0.999533 [total:1h2m25.34s iter:24.60s]
+I0000 00:00:1783404022.231150   64043 gradient_boosted_trees.cc:1720] Train tree 158/240 train-loss:0.509752 train-accuracy:0.999467 [total:1h3m6.54s iter:24.59s]
+I0000 00:00:1783404044.621989   64043 gradient_boosted_trees.cc:1720] Train tree 159/240 train-loss:0.508056 train-accuracy:0.999467 [total:1h3m28.93s iter:22.39s]
+I0000 00:00:1783404070.071328   64043 gradient_boosted_trees.cc:1720] Train tree 160/240 train-loss:0.505420 train-accuracy:0.999533 [total:1h3m54.38s iter:25.45s]
+I0000 00:00:1783404094.172371   64043 gradient_boosted_trees.cc:1720] Train tree 161/240 train-loss:0.503129 train-accuracy:0.999533 [total:1h4m18.49s iter:24.10s]
+I0000 00:00:1783404119.028912   64043 gradient_boosted_trees.cc:1720] Train tree 162/240 train-loss:0.498511 train-accuracy:0.999600 [total:1h4m43.34s iter:24.86s]
+I0000 00:00:1783404143.715180   64043 gradient_boosted_trees.cc:1720] Train tree 163/240 train-loss:0.495808 train-accuracy:0.999600 [total:1h5m8.03s iter:24.69s]
+I0000 00:00:1783404168.058623   64043 gradient_boosted_trees.cc:1720] Train tree 164/240 train-loss:0.493343 train-accuracy:0.999600 [total:1h5m32.37s iter:24.34s]
+I0000 00:00:1783404192.969057   64043 gradient_boosted_trees.cc:1720] Train tree 165/240 train-loss:0.490409 train-accuracy:0.999733 [total:1h5m57.28s iter:24.91s]
+I0000 00:00:1783404217.318739   64043 gradient_boosted_trees.cc:1720] Train tree 166/240 train-loss:0.487430 train-accuracy:0.999733 [total:1h6m21.63s iter:24.35s]
+I0000 00:00:1783404240.974610   64043 gradient_boosted_trees.cc:1720] Train tree 167/240 train-loss:0.485072 train-accuracy:0.999733 [total:1h6m45.29s iter:23.66s]
+I0000 00:00:1783404285.444698   64043 gradient_boosted_trees.cc:1720] Train tree 169/240 train-loss:0.479840 train-accuracy:0.999733 [total:1h7m29.76s iter:24.77s]
+I0000 00:00:1783404308.641407   64043 gradient_boosted_trees.cc:1720] Train tree 170/240 train-loss:0.477240 train-accuracy:0.999800 [total:1h7m52.95s iter:23.20s]
+I0000 00:00:1783404333.572121   64043 gradient_boosted_trees.cc:1720] Train tree 171/240 train-loss:0.475272 train-accuracy:0.999800 [total:1h8m17.88s iter:24.93s]
+I0000 00:00:1783404353.691537   64043 gradient_boosted_trees.cc:1720] Train tree 172/240 train-loss:0.474119 train-accuracy:0.999867 [total:1h8m38.00s iter:20.12s]
+I0000 00:00:1783404378.869028   64043 gradient_boosted_trees.cc:1720] Train tree 173/240 train-loss:0.471927 train-accuracy:0.999867 [total:1h9m3.18s iter:25.18s]
+I0000 00:00:1783404403.713044   64043 gradient_boosted_trees.cc:1720] Train tree 174/240 train-loss:0.468946 train-accuracy:0.999867 [total:1h9m28.03s iter:24.84s]
+I0000 00:00:1783404427.044488   64043 gradient_boosted_trees.cc:1720] Train tree 175/240 train-loss:0.467133 train-accuracy:0.999867 [total:1h9m51.36s iter:23.33s]
+I0000 00:00:1783404447.166136   64043 gradient_boosted_trees.cc:1720] Train tree 176/240 train-loss:0.464646 train-accuracy:0.999867 [total:1h10m11.48s iter:20.12s]
+I0000 00:00:1783404468.453690   64043 gradient_boosted_trees.cc:1720] Train tree 177/240 train-loss:0.463428 train-accuracy:0.999867 [total:1h10m32.77s iter:21.29s]
+I0000 00:00:1783404493.935531   64043 gradient_boosted_trees.cc:1720] Train tree 178/240 train-loss:0.459430 train-accuracy:0.999867 [total:1h10m58.25s iter:25.48s]
+I0000 00:00:1783404517.394508   64043 gradient_boosted_trees.cc:1720] Train tree 179/240 train-loss:0.457637 train-accuracy:0.999867 [total:1h11m21.71s iter:23.46s]
+I0000 00:00:1783404538.589457   64043 gradient_boosted_trees.cc:1720] Train tree 180/240 train-loss:0.456006 train-accuracy:0.999867 [total:1h11m42.90s iter:21.19s]
+I0000 00:00:1783404562.324523   64043 gradient_boosted_trees.cc:1720] Train tree 181/240 train-loss:0.452987 train-accuracy:0.999867 [total:1h12m6.64s iter:23.74s]
+I0000 00:00:1783404597.668516   64043 gradient_boosted_trees.cc:1720] Train tree 183/240 train-loss:0.450860 train-accuracy:0.999867 [total:1h12m41.98s iter:20.33s]
+I0000 00:00:1783404618.601663   64043 gradient_boosted_trees.cc:1720] Train tree 184/240 train-loss:0.449595 train-accuracy:0.999867 [total:1h13m2.91s iter:20.93s]
+I0000 00:00:1783404643.637045   64043 gradient_boosted_trees.cc:1720] Train tree 185/240 train-loss:0.447260 train-accuracy:0.999867 [total:1h13m27.95s iter:25.04s]
+I0000 00:00:1783404666.952317   64043 gradient_boosted_trees.cc:1720] Train tree 186/240 train-loss:0.444559 train-accuracy:0.999867 [total:1h13m51.27s iter:23.32s]
+I0000 00:00:1783404690.184084   64043 gradient_boosted_trees.cc:1720] Train tree 187/240 train-loss:0.441814 train-accuracy:0.999867 [total:1h14m14.50s iter:23.23s]
+I0000 00:00:1783404714.666315   64043 gradient_boosted_trees.cc:1720] Train tree 188/240 train-loss:0.439319 train-accuracy:0.999867 [total:1h14m38.98s iter:24.48s]
+I0000 00:00:1783404738.677036   64043 gradient_boosted_trees.cc:1720] Train tree 189/240 train-loss:0.437288 train-accuracy:0.999867 [total:1h15m2.99s iter:24.01s]
+I0000 00:00:1783404763.841354   64043 gradient_boosted_trees.cc:1720] Train tree 190/240 train-loss:0.434674 train-accuracy:0.999867 [total:1h15m28.15s iter:25.16s]
+I0000 00:00:1783404789.316798   64043 gradient_boosted_trees.cc:1720] Train tree 191/240 train-loss:0.432978 train-accuracy:0.999867 [total:1h15m53.63s iter:25.48s]
+I0000 00:00:1783404811.878893   64043 gradient_boosted_trees.cc:1720] Train tree 192/240 train-loss:0.430753 train-accuracy:0.999867 [total:1h16m16.19s iter:22.56s]
+I0000 00:00:1783404835.177643   64043 gradient_boosted_trees.cc:1720] Train tree 193/240 train-loss:0.428750 train-accuracy:0.999867 [total:1h16m39.49s iter:23.30s]
+I0000 00:00:1783404859.338421   64043 gradient_boosted_trees.cc:1720] Train tree 194/240 train-loss:0.426356 train-accuracy:0.999867 [total:1h17m3.65s iter:24.16s]
+I0000 00:00:1783404884.559679   64043 gradient_boosted_trees.cc:1720] Train tree 195/240 train-loss:0.422150 train-accuracy:0.999867 [total:1h17m28.87s iter:25.22s]
+I0000 00:00:1783404909.878990   64043 gradient_boosted_trees.cc:1720] Train tree 196/240 train-loss:0.419086 train-accuracy:0.999867 [total:1h17m54.19s iter:25.32s]
+I0000 00:00:1783404932.602661   64043 gradient_boosted_trees.cc:1720] Train tree 197/240 train-loss:0.416925 train-accuracy:0.999867 [total:1h18m16.92s iter:22.72s]
+I0000 00:00:1783404956.898042   64043 gradient_boosted_trees.cc:1720] Train tree 198/240 train-loss:0.415412 train-accuracy:0.999867 [total:1h18m41.21s iter:24.30s]
+I0000 00:00:1783404981.174984   64043 gradient_boosted_trees.cc:1720] Train tree 199/240 train-loss:0.412345 train-accuracy:0.999867 [total:1h19m5.49s iter:24.28s]
+I0000 00:00:1783405005.000336   64043 gradient_boosted_trees.cc:1720] Train tree 200/240 train-loss:0.410907 train-accuracy:0.999867 [total:1h19m29.31s iter:23.83s]
+I0000 00:00:1783405029.566820   64043 gradient_boosted_trees.cc:1720] Train tree 201/240 train-loss:0.409169 train-accuracy:0.999867 [total:1h19m53.88s iter:24.57s]
+I0000 00:00:1783405052.747869   64043 gradient_boosted_trees.cc:1720] Train tree 202/240 train-loss:0.406679 train-accuracy:0.999867 [total:1h20m17.06s iter:23.18s]
+I0000 00:00:1783405077.606819   64043 gradient_boosted_trees.cc:1720] Train tree 203/240 train-loss:0.404648 train-accuracy:0.999933 [total:1h20m41.92s iter:24.86s]
+I0000 00:00:1783405103.325845   64043 gradient_boosted_trees.cc:1720] Train tree 204/240 train-loss:0.402046 train-accuracy:0.999933 [total:1h21m7.64s iter:25.72s]
+I0000 00:00:1783405127.233794   64043 gradient_boosted_trees.cc:1720] Train tree 205/240 train-loss:0.400295 train-accuracy:0.999933 [total:1h21m31.55s iter:23.91s]
+I0000 00:00:1783405152.500666   64043 gradient_boosted_trees.cc:1720] Train tree 206/240 train-loss:0.398749 train-accuracy:1.000000 [total:1h21m56.81s iter:25.27s]
+I0000 00:00:1783405177.323099   64043 gradient_boosted_trees.cc:1720] Train tree 207/240 train-loss:0.397444 train-accuracy:0.999933 [total:1h22m21.64s iter:24.82s]
+I0000 00:00:1783405201.272224   64043 gradient_boosted_trees.cc:1720] Train tree 208/240 train-loss:0.395617 train-accuracy:0.999933 [total:1h22m45.59s iter:23.95s]
+I0000 00:00:1783405226.103572   64043 gradient_boosted_trees.cc:1720] Train tree 209/240 train-loss:0.393701 train-accuracy:0.999933 [total:1h23m10.42s iter:24.83s]
+I0000 00:00:1783405250.487591   64043 gradient_boosted_trees.cc:1720] Train tree 210/240 train-loss:0.384123 train-accuracy:0.999933 [total:1h23m34.80s iter:24.38s]
+I0000 00:00:1783405292.377903   64043 gradient_boosted_trees.cc:1720] Train tree 212/240 train-loss:0.381833 train-accuracy:0.999933 [total:1h24m16.69s iter:24.97s]
+I0000 00:00:1783405316.650094   64043 gradient_boosted_trees.cc:1720] Train tree 213/240 train-loss:0.379731 train-accuracy:0.999933 [total:1h24m40.96s iter:24.27s]
+I0000 00:00:1783405342.366193   64043 gradient_boosted_trees.cc:1720] Train tree 214/240 train-loss:0.377970 train-accuracy:0.999933 [total:1h25m6.68s iter:25.72s]
+I0000 00:00:1783405367.273381   64043 gradient_boosted_trees.cc:1720] Train tree 215/240 train-loss:0.376711 train-accuracy:0.999933 [total:1h25m31.59s iter:24.91s]
+I0000 00:00:1783405390.387706   64043 gradient_boosted_trees.cc:1720] Train tree 216/240 train-loss:0.375089 train-accuracy:0.999933 [total:1h25m54.70s iter:23.11s]
+I0000 00:00:1783405434.400585   64043 gradient_boosted_trees.cc:1720] Train tree 218/240 train-loss:0.372833 train-accuracy:0.999933 [total:1h26m38.71s iter:24.56s]
+I0000 00:00:1783405456.881914   64043 gradient_boosted_trees.cc:1720] Train tree 219/240 train-loss:0.371343 train-accuracy:0.999933 [total:1h27m1.19s iter:22.48s]
+I0000 00:00:1783405481.602172   64043 gradient_boosted_trees.cc:1720] Train tree 220/240 train-loss:0.369817 train-accuracy:1.000000 [total:1h27m25.92s iter:24.72s]
+I0000 00:00:1783405506.583330   64043 gradient_boosted_trees.cc:1720] Train tree 221/240 train-loss:0.368119 train-accuracy:1.000000 [total:1h27m50.90s iter:24.98s]
+I0000 00:00:1783405530.542048   64043 gradient_boosted_trees.cc:1720] Train tree 222/240 train-loss:0.366026 train-accuracy:1.000000 [total:1h28m14.85s iter:23.96s]
+I0000 00:00:1783405555.193583   64043 gradient_boosted_trees.cc:1720] Train tree 223/240 train-loss:0.363976 train-accuracy:1.000000 [total:1h28m39.51s iter:24.65s]
+I0000 00:00:1783405577.248277   64043 gradient_boosted_trees.cc:1720] Train tree 224/240 train-loss:0.362940 train-accuracy:1.000000 [total:1h29m1.56s iter:22.05s]
+I0000 00:00:1783405601.788682   64043 gradient_boosted_trees.cc:1720] Train tree 225/240 train-loss:0.360121 train-accuracy:1.000000 [total:1h29m26.10s iter:24.54s]
+I0000 00:00:1783405645.591199   64043 gradient_boosted_trees.cc:1720] Train tree 227/240 train-loss:0.357643 train-accuracy:1.000000 [total:1h30m9.90s iter:25.59s]
+I0000 00:00:1783405668.893165   64043 gradient_boosted_trees.cc:1720] Train tree 228/240 train-loss:0.356731 train-accuracy:1.000000 [total:1h30m33.21s iter:23.30s]
+I0000 00:00:1783405693.515329   64043 gradient_boosted_trees.cc:1720] Train tree 229/240 train-loss:0.355311 train-accuracy:1.000000 [total:1h30m57.83s iter:24.62s]
+I0000 00:00:1783405718.453769   64043 gradient_boosted_trees.cc:1720] Train tree 230/240 train-loss:0.353958 train-accuracy:1.000000 [total:1h31m22.77s iter:24.94s]
+I0000 00:00:1783405744.198543   64043 gradient_boosted_trees.cc:1720] Train tree 231/240 train-loss:0.352258 train-accuracy:1.000000 [total:1h31m48.51s iter:25.74s]
+I0000 00:00:1783405768.594943   64043 gradient_boosted_trees.cc:1720] Train tree 232/240 train-loss:0.350692 train-accuracy:1.000000 [total:1h32m12.91s iter:24.40s]
+I0000 00:00:1783405794.025438   64043 gradient_boosted_trees.cc:1720] Train tree 233/240 train-loss:0.349321 train-accuracy:1.000000 [total:1h32m38.34s iter:25.43s]
+I0000 00:00:1783405818.578147   64043 gradient_boosted_trees.cc:1720] Train tree 234/240 train-loss:0.347361 train-accuracy:1.000000 [total:1h33m2.89s iter:24.55s]
+I0000 00:00:1783405843.361044   64043 gradient_boosted_trees.cc:1720] Train tree 235/240 train-loss:0.345493 train-accuracy:1.000000 [total:1h33m27.67s iter:24.78s]
+I0000 00:00:1783405868.258644   64043 gradient_boosted_trees.cc:1720] Train tree 236/240 train-loss:0.344175 train-accuracy:1.000000 [total:1h33m52.57s iter:24.90s]
+I0000 00:00:1783405893.071807   64043 gradient_boosted_trees.cc:1720] Train tree 237/240 train-loss:0.342820 train-accuracy:1.000000 [total:1h34m17.38s iter:24.81s]
+I0000 00:00:1783405916.219300   64043 gradient_boosted_trees.cc:1720] Train tree 238/240 train-loss:0.341445 train-accuracy:1.000000 [total:1h34m40.53s iter:23.15s]
+I0000 00:00:1783405941.112109   64043 gradient_boosted_trees.cc:1720] Train tree 239/240 train-loss:0.339538 train-accuracy:1.000000 [total:1h35m5.42s iter:24.89s]
+I0000 00:00:1783405959.624640   64043 gradient_boosted_trees.cc:1718] Train tree 240/240 train-loss:0.338571 train-accuracy:1.000000 [total:1h35m23.94s iter:18.51s]
+I0000 00:00:1783405977.770291   64043 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 5742.29s
+WARNING: Could not parse 'Training block took' from run 2
+MEDIAN of 0/2 runs: ERROR
