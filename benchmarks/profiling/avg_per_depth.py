@@ -250,7 +250,7 @@ def write_avg(path, sha=None):
         w = csv.writer(f)
         w.writerow(["depth"] + metrics)
         for depth, (n, means) in avg.items():
-            w.writerow([depth] + means)
+            w.writerow([depth] + [f"{m:.2f}" for m in means])
     print(f"Wrote {out_path}")
     sanity_check(path, metrics, samples)
     return metrics, avg
