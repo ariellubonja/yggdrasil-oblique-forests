@@ -1492,10 +1492,28 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
 
   {
     CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
-    
+
+#ifdef LAZY_CANDIDATE_SHUFFLE
+    // "candidate_attributes" persists across nodes (PerThreadCache, one per
+    // tree) as a permutation of the feature list; only rebuild it when the
+    // cache is fresh. The random ordering comes from a prefix Fisher-Yates
+    // step applied lazily as each position is read in the loop below, so a
+    // node consumes O(attributes actually tested) RNG draws instead of the
+    // O(F) assign + std::shuffle of GetCandidateAttributes. The tested prefix
+    // is distributed identically to the head of a full shuffle, but the RNG
+    // stream differs from stock => accuracy-equivalent, not bit-identical.
+    if (candidate_attributes.size() !=
+        static_cast<size_t>(config_link.features_size())) {
+      candidate_attributes.assign(config_link.features().begin(),
+                                  config_link.features().end());
+    }
+    remaining_attributes_to_test = NumAttributesToTest(
+        dt_config, candidate_attributes.size(), config.task());
+#else
     GetCandidateAttributes(config, config_link, dt_config,
                            &remaining_attributes_to_test, &candidate_attributes,
                            random);
+#endif
 
     // Index of the next attribute to be tested in "candidate_attributes".
     int candidate_attribute_idx_in_candidate_list = 0;
@@ -1503,6 +1521,17 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
     while (remaining_attributes_to_test >= 0 &&
              candidate_attribute_idx_in_candidate_list <
                  candidate_attributes.size()) {
+#ifdef LAZY_CANDIDATE_SHUFFLE
+      {
+        // Fisher-Yates step for the position about to be read (each position
+        // is read at most once per node, so this yields a uniform prefix).
+        const size_t pos = candidate_attribute_idx_in_candidate_list;
+        std::uniform_int_distribution<size_t> swap_with(
+            pos, candidate_attributes.size() - 1);
+        std::swap(candidate_attributes[pos],
+                  candidate_attributes[swap_with(*random)]);
+      }
+#endif
       // Get the attribute data.
       const int32_t attribute_idx =
           candidate_attributes[candidate_attribute_idx_in_candidate_list++];
