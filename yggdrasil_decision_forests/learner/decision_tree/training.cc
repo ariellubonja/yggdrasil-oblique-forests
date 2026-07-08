@@ -4615,13 +4615,21 @@ void GetCandidateAttributes(
     const proto::DecisionTreeTrainingConfig& dt_config,
     int* num_attributes_to_test, std::vector<int32_t>* candidate_attributes,
     utils::RandomEngine* random) {
-  candidate_attributes->assign(config_link.features().begin(),
-                               config_link.features().end());
-  std::shuffle(candidate_attributes->begin(), candidate_attributes->end(),
-               *random);
-
-  *num_attributes_to_test = NumAttributesToTest(
-      dt_config, candidate_attributes->size(), config.task());
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributesAssign);
+    candidate_attributes->assign(config_link.features().begin(),
+                                 config_link.features().end());
+  }
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributesShuffle);
+    std::shuffle(candidate_attributes->begin(), candidate_attributes->end(),
+                 *random);
+  }
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributesNumToTest);
+    *num_attributes_to_test = NumAttributesToTest(
+        dt_config, candidate_attributes->size(), config.task());
+  }
 }
 
 absl::Status GenerateRandomImputation(
