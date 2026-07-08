@@ -39,6 +39,10 @@ def get_args():
     p.add_argument("--gpu_mode", choices=["per_depth", "per_node"], default="per_depth",
                    help="GPU batching mode: per_depth (BFS, one kernel per depth level) "
                         "or per_node (DFS, one kernel per node). Only relevant when --use_gpu=true")
+    p.add_argument("--ensemble_method", choices=["Bagging", "Boosting"], default="Bagging",
+                   help="Ensemble method: 'Bagging' (Random Forest) or 'Boosting' (Gradient Boosted Trees/MART).")
+    p.add_argument("--shrinkage", type=float, default=0.1,
+                   help="Learning rate for boosting (only used when --ensemble_method=Boosting).")
 
     # Bazel config passthrough: any unknown bare `--<name>` flag (no `=value`)
     # is forwarded as `--config=<name>` to the bazel build. Lets new .bazelrc
@@ -442,7 +446,10 @@ if __name__ == "__main__":
     if a.use_gpu:
         gpu_mode_label = f"GPU {a.gpu_mode} | "
         print(f"GPU mode: {a.gpu_mode}")
-    exp = f"{gpu_mode_label}{a.feature_split_type} | {a.numerical_split_type}"
+    ensemble_label = ""
+    if a.ensemble_method == "Boosting":
+        ensemble_label = "Boosting | "
+    exp = f"{gpu_mode_label}{ensemble_label}{a.feature_split_type} | {a.numerical_split_type}"
     
     cmd = ["./bazel-bin/examples/train_oblique_forest",
            f"--num_trees={a.num_trees}",
@@ -458,6 +465,10 @@ if __name__ == "__main__":
         cmd.append(f"--num_threads={a.num_threads}")
     if a.tree_depth is not None:
         cmd.append(f"--tree_depth={a.tree_depth}")
+    if a.ensemble_method is not None:
+        cmd.append(f"--ensemble_method={a.ensemble_method}")
+    if a.shrinkage is not None:
+        cmd.append(f"--shrinkage={a.shrinkage}")
 
     # C++ --use_gpu flag is commented out until hybrid CPU-GPU offloading is
     # added; GPU vs CPU is chosen at compile time via --config=oblique_gpu.
@@ -533,7 +544,8 @@ if __name__ == "__main__":
 
             # Timestamped file name to avoid accidental overwrites
             ts = time.strftime("%Y%m%d-%H%M%S")
-            log_fp = out_dir / f"{a.feature_split_type}-{a.numerical_split_type}-{a.num_threads}t-{ts}.log"
+            ensemble_suffix = f"-{a.ensemble_method}" if a.ensemble_method == "Boosting" else ""
+            log_fp = out_dir / f"{a.feature_split_type}-{a.numerical_split_type}{ensemble_suffix}-{a.num_threads}t-{ts}.log"
 
             try:
                 log_fp.write_text(log_plain, encoding="utf-8")
@@ -556,6 +568,10 @@ if __name__ == "__main__":
         m_train = re.search(
             r"random_forest\.cc Training block took:\s*([0-9.eE+-]+)\s*s",
             log_plain)
+        if not m_train:
+            m_train = re.search(
+                r"train_oblique_forest wall-time - Training \+ Post-Processing:\s*([0-9.eE+-]+)s",
+                log_plain)
         if m_train:
             train_block = float(m_train.group(1))
             print(f"\n⏱  Training block took {train_block:.4f} s"

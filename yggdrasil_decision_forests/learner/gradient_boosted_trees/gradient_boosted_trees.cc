@@ -1186,6 +1186,19 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   RETURN_IF_ERROR(
       BuildAllTrainingConfiguration(train_dataset.data_spec(), &config));
 
+#ifdef CHRONO_PROFILE
+  {
+    using namespace yggdrasil_decision_forests::chrono_prof;
+    const int num_trees_per_iter = config.loss->Shape().gradient_dim;
+    const int total_trees = config.gbt_config->num_trees() * num_trees_per_iter;
+    time_ns().resize(total_trees);
+    call_cnt().resize(total_trees);
+    node_cnt().assign(total_trees, std::vector<uint64_t>(100, 0));
+    sample_cnt().assign(total_trees, std::vector<uint64_t>(100, 0));
+    tree_thread_id().resize(total_trees);
+  }
+#endif
+
   LOG(INFO) << "Training gradient boosted tree on " << train_dataset.nrow()
             << " example(s) and " << config.train_config_link.features().size()
             << " feature(s).";
@@ -1536,6 +1549,12 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
       // Train a tree on the gradient.
       new_trees.reserve(gradients.size());
       for (int grad_idx = 0; grad_idx < gradients.size(); grad_idx++) {
+#ifdef CHRONO_PROFILE
+        const int tree_idx = iter_idx * gradients.size() + grad_idx;
+        ::yggdrasil_decision_forests::chrono_prof::TreeScope tree_guard(tree_idx);
+        CHRONO_SCOPE_COARSE_TOP(
+            ::yggdrasil_decision_forests::chrono_prof::kTreeTrain);
+#endif
         auto tree = std::make_unique<decision_tree::DecisionTree>();
 
         auto internal_config = internal::BuildWeakLearnerInternalConfig(
@@ -1795,6 +1814,242 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   decision_tree::SetLeafIndices(mdl->mutable_decision_trees());
   CHRONO_END(gbt_finalize,
              ::yggdrasil_decision_forests::chrono_prof::kGbtFinalize);
+
+#ifdef CHRONO_PROFILE
+  {
+    using namespace yggdrasil_decision_forests::chrono_prof;
+
+    // One-shot call-count totals (call_cnt() is filled by add_time but never
+    // emitted in the per-depth lines). Used to express unnamed residuals as
+    // ns/call — e.g. CartPath − CartSetup − Σ(sort leaves) over CartPath calls.
+    {
+      FuncArray total_calls{};
+      for (const auto& by_depth : call_cnt()) {
+        for (const auto& cnt : by_depth) {
+          for (int f = 0; f < kNumFuncs; ++f) total_calls[f] += cnt[f];
+        }
+      }
+      LOG(INFO) << "CHRONO_CALLS"
+                << " EvaluateProj " << total_calls[kEvaluateProj]
+                << " CartPath " << total_calls[kCartPath]
+                << " CartSetup " << total_calls[kCartSetup]
+                << " SortInitBuckets " << total_calls[kSortInitBuckets]
+                << " SortFillBuckets " << total_calls[kSortFillBuckets]
+                << " SortFeatures " << total_calls[kSortFeatures]
+                << " SortScanSplits " << total_calls[kSortScanSplits]
+                << " HistoPath " << total_calls[kHistoPath]
+                << " EntropyTableSetup " << total_calls[kEntropyTableSetup]
+                << " HistogramSetup " << total_calls[kHistogramSetup]
+                << " AssignSamplesToHist "
+                << total_calls[kAssignSamplesToHistogram]
+                << " SelectBestThresholdHistogram "
+                << total_calls[kSelectBestThresholdHistogram];
+    }
+
+    for (int t = 0; t < static_cast<int>(time_ns().size()); ++t) {
+      for (int d = 0; d < static_cast<int>(time_ns()[t].size()); ++d) {
+        auto& arr = time_ns()[t][d];
+
+        // Non-Histogram
+        if (config.gbt_config->decision_tree().numerical_split().type() ==
+            yggdrasil_decision_forests::model::decision_tree::proto::
+                NumericalSplit_Type_EXACT) {
+          LOG(INFO) << "thread " << tree_thread_id()[t] << " tree " << t
+                    << " depth " << d << " nodes " << node_cnt()[t][d]
+                    << " samples " << sample_cnt()[t][d] << " ProjEval "
+                    << arr[kProjectionEvaluate] * 1e-9 << "s"
+                    << " kGetCandidateAttributes "
+                    << arr[kGetCandidateAttributes] * 1e-9 << "s"
+                    << " kColumnWithCast "
+                    << arr[kColumnWithCast] * 1e-9 << "s"
+                    << " kSortFillExampleBucketSet "
+                    << arr[kSortFillExampleBucketSet] * 1e-9 << "s"
+                    << " kSortScanSplits " << arr[kSortScanSplits] * 1e-9 << "s"
+                    << " kSortInitBuckets " << arr[kSortInitBuckets] * 1e-9 << "s"
+                    << " kSortFillBuckets " << arr[kSortFillBuckets] * 1e-9 << "s"
+                    << " kSortFinalizeBuckets "
+                    << arr[kSortFinalizeBuckets] * 1e-9 << "s"
+                    << " kSortFeatures " << arr[kSortFeatures] * 1e-9 << "s"
+                    << " kSortLabels " << arr[kSortLabels] * 1e-9 << "s"
+                    << " kScanPresorted " << arr[kScanPresorted] * 1e-9 << "s"
+                    << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
+                    << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
+                    << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
+                    << " GpuSampleBatch "
+                    << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
+                    << " ApplyColumnADD " << arr[kGpuApplyColumnADD] * 1e-9 << "s"
+                    << " ApplyColumnADDMultiNode "
+                    << arr[kGpuApplyColumnADDMultiNode] * 1e-9 << "s"
+                    << " RandomHistogram " << arr[kGpuRandomHistogram] * 1e-9
+                    << "s"
+                    << " SplitHistogram " << arr[kGpuSplitHistogram] * 1e-9 << "s"
+                    << " SortIndices " << arr[kGpuSortIndices] * 1e-9 << "s"
+                    << " ExactSplit " << arr[kGpuExactSplit] * 1e-9 << "s"
+                    << " GpuOther " << arr[kGpuOther] * 1e-9 << "s"
+#ifdef SYMMETRIC_DEPTHWISE_AP
+                    // Sub-phases of ApplyProjectionsSymmetricDepthwiseAP. Sum
+                    // to ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
+                    << " SymBuildBag " << arr[kSymBuildBag] * 1e-9 << "s"
+                    << " SymSortBag " << arr[kSymSortBag] * 1e-9 << "s"
+                    << " SymSweep " << arr[kSymSweep] * 1e-9 << "s"
+#endif
+#ifdef DEPTHWISE_1_PASS
+                    // Sub-phases of ApplyProjectionsDepthwise1Pass. Sum to
+                    // ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
+                    << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
+                    << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
+                    // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
+                    // per-task loop glue.
+                    << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
+                    << " Dw1ColWalkGroupByNode " << arr[kDw1ColWalkGroupByNode] * 1e-9 << "s"
+                    << " Dw1ColWalkBagScatter " << arr[kDw1ColWalkBagScatter] * 1e-9 << "s"
+                    << " Dw1SweepBig " << arr[kDw1SweepBig] * 1e-9 << "s"
+                    << " Dw1SweepGeneric " << arr[kDw1SweepGeneric] * 1e-9 << "s"
+                    << " Dw1SharedBag " << arr[kDw1SharedBag] * 1e-9 << "s"
+#endif
+                    // Per-node bookkeeping scopes inside NodeTrain /
+                    // FindBestConditionSparseObliqueTemplate. Always emitted;
+                    // these close the BfsNodeLoop − Σ(splitter scopes) gap.
+                    << " NodeTrain " << arr[kNodeTrain] * 1e-9 << "s"
+                    << " FindBestCondition "
+                    << arr[kFindBestCondition] * 1e-9 << "s"
+                    << " ObliqueSplitSearch "
+                    << arr[kObliqueSplitSearch] * 1e-9 << "s"
+                    << " FindObliqueSetup "
+                    << arr[kFindObliqueSetup] * 1e-9 << "s"
+                    << " EvaluateProj "
+                    << arr[kEvaluateProj] * 1e-9 << "s"
+                    << " EntropyTableSetup "
+                    << arr[kEntropyTableSetup] * 1e-9 << "s"
+                    << " CartPath "
+                    << arr[kCartPath] * 1e-9 << "s"
+                    << " CartSetup "
+                    << arr[kCartSetup] * 1e-9 << "s"
+                    << " HistoPath "
+                    << arr[kHistoPath] * 1e-9 << "s"
+                    << " AxisAlignedSplitSearch "
+                    << arr[kAxisAlignedSplitSearch] * 1e-9 << "s"
+                    << " SampleProjection "
+                    << arr[kSampleProjection] * 1e-9 << "s"
+                    << " SplitExamplesInPlace "
+                    << arr[kSplitExamplesInPlace] * 1e-9 << "s"
+                    << " SetLeafValue " << arr[kSetLeafValue] * 1e-9 << "s"
+                    // BFS-only scheduler scope. BfsNodeLoop only fires under
+                    // -DBFS_ONLY; zero for DFS builds.
+                    << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
+                    // Top-level per-tree scope (kTreeTrain) wraps the entire
+                    // tree training. Non-zero only at depth=0 of each tree;
+                    // works as the DFS-build analogue of BfsNodeLoop
+                    // when it is zero. Sum across trees ≈ training_block ×
+                    // min(N_trees, N_threads) under good load balance.
+                    << " TreeTrain " << arr[kTreeTrain] * 1e-9 << "s";
+        } else {
+          LOG(INFO) << "thread " << tree_thread_id()[t] << " tree " << t
+                    << " depth " << d << " nodes " << node_cnt()[t][d]
+                    << " samples " << sample_cnt()[t][d] << " ProjEval "
+                    << arr[kProjectionEvaluate] * 1e-9 << "s"
+                    << " kGetCandidateAttributes "
+                    << arr[kGetCandidateAttributes] * 1e-9 << "s"
+                    << " kColumnWithCast "
+                    << arr[kColumnWithCast] * 1e-9 << "s"
+                    << " kHistogramSetup " << arr[kHistogramSetup] * 1e-9 << "s"
+                    << " kMinMaxNumerical " << arr[kMinMaxNumerical] * 1e-9 << "s"
+                    << " kAssignSamplesToHistogram "
+                    << arr[kAssignSamplesToHistogram] * 1e-9 << "s"
+                    << " kSelectBestThresholdHistogram "
+                    << arr[kSelectBestThresholdHistogram] * 1e-9 << "s"
+                    // Exact / sort-based splitter scopes. Normally zero on a
+                    // histogram-mode build, but DYNAMIC_RANDOM_HISTOGRAM /
+                    // DYNAMIC_EQUAL_WIDTH_HISTOGRAM fall back to EXACT per-node
+                    // when the node has fewer than dynamic_split_threshold
+                    // examples (see oblique.cc:194-203), so this branch still
+                    // accumulates non-zero Sort-path time on Dynamic runs.
+                    << " kSortFillExampleBucketSet "
+                    << arr[kSortFillExampleBucketSet] * 1e-9 << "s"
+                    << " kSortScanSplits " << arr[kSortScanSplits] * 1e-9 << "s"
+                    << " kSortInitBuckets " << arr[kSortInitBuckets] * 1e-9 << "s"
+                    << " kSortFillBuckets " << arr[kSortFillBuckets] * 1e-9 << "s"
+                    << " kSortFinalizeBuckets "
+                    << arr[kSortFinalizeBuckets] * 1e-9 << "s"
+                    << " kSortFeatures " << arr[kSortFeatures] * 1e-9 << "s"
+                    << " kSortLabels " << arr[kSortLabels] * 1e-9 << "s"
+                    << " kScanPresorted " << arr[kScanPresorted] * 1e-9 << "s"
+                    << " GpuInit " << arr[kGpuInit] * 1e-9 << "s"
+                    << " GpuCsrFlatten " << arr[kGpuCsrFlatten] * 1e-9 << "s"
+                    << " GpuMutex " << arr[kGpuMutexWait] * 1e-9 << "s"
+                    << " GpuSampleBatch "
+                    << arr[kGpuSampleProjectionsBatch] * 1e-9 << "s"
+                    << " ApplyColumnADD " << arr[kGpuApplyColumnADD] * 1e-9 << "s"
+                    << " ApplyColumnADDMultiNode "
+                    << arr[kGpuApplyColumnADDMultiNode] * 1e-9 << "s"
+                    << " RandomHistogram " << arr[kGpuRandomHistogram] * 1e-9
+                    << "s"
+                    << " SplitHistogram " << arr[kGpuSplitHistogram] * 1e-9 << "s"
+                    << " SortIndices " << arr[kGpuSortIndices] * 1e-9 << "s"
+                    << " ExactSplit " << arr[kGpuExactSplit] * 1e-9 << "s"
+                    << " GpuOther " << arr[kGpuOther] * 1e-9 << "s"
+#ifdef SYMMETRIC_DEPTHWISE_AP
+                    // Sub-phases of ApplyProjectionsSymmetricDepthwiseAP. Sum
+                    // to ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
+                    << " SymBuildBag " << arr[kSymBuildBag] * 1e-9 << "s"
+                    << " SymSortBag " << arr[kSymSortBag] * 1e-9 << "s"
+                    << " SymSweep " << arr[kSymSweep] * 1e-9 << "s"
+#endif
+#ifdef DEPTHWISE_1_PASS
+                    // Sub-phases of ApplyProjectionsDepthwise1Pass. Sum to
+                    // ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
+                    << " Dw1PreSize " << arr[kDw1PreSize] * 1e-9 << "s"
+                    << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
+                    // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
+                    // per-task loop glue.
+                    << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
+                    << " Dw1ColWalkGroupByNode " << arr[kDw1ColWalkGroupByNode] * 1e-9 << "s"
+                    << " Dw1ColWalkBagScatter " << arr[kDw1ColWalkBagScatter] * 1e-9 << "s"
+                    << " Dw1SweepBig " << arr[kDw1SweepBig] * 1e-9 << "s"
+                    << " Dw1SweepGeneric " << arr[kDw1SweepGeneric] * 1e-9 << "s"
+                    << " Dw1SharedBag " << arr[kDw1SharedBag] * 1e-9 << "s"
+#endif
+                    // Per-node bookkeeping scopes inside NodeTrain /
+                    // FindBestConditionSparseObliqueTemplate. Always emitted;
+                    // these close the BfsNodeLoop − Σ(splitter scopes) gap.
+                    << " NodeTrain " << arr[kNodeTrain] * 1e-9 << "s"
+                    << " FindBestCondition "
+                    << arr[kFindBestCondition] * 1e-9 << "s"
+                    << " ObliqueSplitSearch "
+                    << arr[kObliqueSplitSearch] * 1e-9 << "s"
+                    << " FindObliqueSetup "
+                    << arr[kFindObliqueSetup] * 1e-9 << "s"
+                    << " EvaluateProj "
+                    << arr[kEvaluateProj] * 1e-9 << "s"
+                    << " EntropyTableSetup "
+                    << arr[kEntropyTableSetup] * 1e-9 << "s"
+                    << " CartPath "
+                    << arr[kCartPath] * 1e-9 << "s"
+                    << " CartSetup "
+                    << arr[kCartSetup] * 1e-9 << "s"
+                    << " HistoPath "
+                    << arr[kHistoPath] * 1e-9 << "s"
+                    << " AxisAlignedSplitSearch "
+                    << arr[kAxisAlignedSplitSearch] * 1e-9 << "s"
+                    << " SampleProjection "
+                    << arr[kSampleProjection] * 1e-9 << "s"
+                    << " SplitExamplesInPlace "
+                    << arr[kSplitExamplesInPlace] * 1e-9 << "s"
+                    << " SetLeafValue " << arr[kSetLeafValue] * 1e-9 << "s"
+                    // BFS-only scheduler scope. BfsNodeLoop only fires under
+                    // -DBFS_ONLY; zero for DFS builds.
+                    << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
+                    // Top-level per-tree scope (kTreeTrain) wraps the entire
+                    // tree training. Non-zero only at depth=0 of each tree;
+                    // works as the DFS-build analogue of BfsNodeLoop
+                    // when it is zero. Sum across trees ≈ training_block ×
+                    // min(N_trees, N_threads) under good load balance.
+                    << " TreeTrain " << arr[kTreeTrain] * 1e-9 << "s";
+        }
+      }
+    }
+  }
+#endif
 
 #if CHRONO_PROFILE >= 2
   // Dump GBT-level chrono accumulators (in global_stats because no
