@@ -40,6 +40,9 @@ enum FuncId {
   kAssignSamplesToHistogram,
   kSelectBestThresholdHistogram,
   kGetCandidateAttributes,
+  kGetCandidateAttributesAssign,
+  kGetCandidateAttributesShuffle,
+  kGetCandidateAttributesNumToTest,
   kColumnWithCast,
 
   // GBT-level scopes (set in gradient_boosted_trees.cc). These accumulate
