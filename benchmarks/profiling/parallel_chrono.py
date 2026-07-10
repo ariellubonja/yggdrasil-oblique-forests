@@ -672,6 +672,7 @@ if __name__ == "__main__":
         out_fp = out_dir / fname
 
         cmd_lines = [
+            ("Machine", f"{utils.get_cpu_model_proc()} (nproc={os.cpu_count()})"),
             ("Helper invocation", helper_invocation),
             ("Bazel build", utils.last_build_cmd if utils.last_build_cmd else "(build skipped)"),
             ("Binary command", binary_cmd_str),

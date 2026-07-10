@@ -118,6 +118,23 @@ def read_blocks(path):
     return metrics, samples
 
 
+def read_machine(path):
+    """Machine id recorded by parallel_chrono.py in the raw CSV's cmds section
+    (the ("Machine", ...) row), or "unknown" if absent. Kept in the meta line so
+    the per-depth average stays traceable to the host that produced the timing."""
+    try:
+        with open(path, newline="") as f:
+            for row in csv.reader(f):
+                for i, cell in enumerate(row):
+                    if cell == "Machine" and i + 1 < len(row) and row[i + 1]:
+                        # Meta line is space-tokenized key=value; collapse the
+                        # spaces in the CPU brand so it stays a single token.
+                        return "_".join(row[i + 1].split())
+    except OSError:
+        pass
+    return "unknown"
+
+
 def averages(metrics, samples):
     """Return {depth: (count, [mean per metric])}."""
     out = {}
@@ -184,6 +201,7 @@ def source_meta(path, sha=None, source_name=None):
     return {
         "format": FORMAT_VERSION,
         "source": source_name or os.path.basename(path),
+        "machine": read_machine(path),
         "sha256": sha or file_sha256(path),
         "src_size": st.st_size,
         "src_mtime": _iso(st.st_mtime),
@@ -192,7 +210,7 @@ def source_meta(path, sha=None, source_name=None):
 
 
 def format_meta_line(meta):
-    keys = ("format", "source", "sha256", "src_size", "src_mtime", "generated")
+    keys = ("format", "source", "machine", "sha256", "src_size", "src_mtime", "generated")
     return META_PREFIX + " ".join(f"{k}={meta[k]}" for k in keys)
 
 
