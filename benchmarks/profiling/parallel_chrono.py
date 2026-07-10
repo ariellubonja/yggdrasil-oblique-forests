@@ -673,6 +673,7 @@ if __name__ == "__main__":
 
         cmd_lines = [
             ("Machine", f"{utils.get_cpu_model_proc()} (nproc={os.cpu_count()})"),
+            ("Machine serial", utils.get_machine_serial()),
             ("Helper invocation", helper_invocation),
             ("Bazel build", utils.last_build_cmd if utils.last_build_cmd else "(build skipped)"),
             ("Binary command", binary_cmd_str),
