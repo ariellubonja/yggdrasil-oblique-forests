@@ -118,17 +118,16 @@ def read_blocks(path):
     return metrics, samples
 
 
-def read_machine(path):
-    """Machine id recorded by parallel_chrono.py in the raw CSV's cmds section
-    (the ("Machine", ...) row), or "unknown" if absent. Kept in the meta line so
-    the per-depth average stays traceable to the host that produced the timing."""
+def read_labeled_cell(path, label):
+    """Value of the cell immediately following the first `label` cell in the raw
+    CSV's cmds section (e.g. label="Machine serial" -> the dmidecode serial), or
+    "unknown" if absent. Spaces are collapsed to "_" because the meta line is a
+    space-tokenized key=value string and the value must stay a single token."""
     try:
         with open(path, newline="") as f:
             for row in csv.reader(f):
                 for i, cell in enumerate(row):
-                    if cell == "Machine" and i + 1 < len(row) and row[i + 1]:
-                        # Meta line is space-tokenized key=value; collapse the
-                        # spaces in the CPU brand so it stays a single token.
+                    if cell == label and i + 1 < len(row) and row[i + 1]:
                         return "_".join(row[i + 1].split())
     except OSError:
         pass
@@ -201,7 +200,8 @@ def source_meta(path, sha=None, source_name=None):
     return {
         "format": FORMAT_VERSION,
         "source": source_name or os.path.basename(path),
-        "machine": read_machine(path),
+        "machine": read_labeled_cell(path, "Machine"),
+        "machine_serial": read_labeled_cell(path, "Machine serial"),
         "sha256": sha or file_sha256(path),
         "src_size": st.st_size,
         "src_mtime": _iso(st.st_mtime),
@@ -210,7 +210,7 @@ def source_meta(path, sha=None, source_name=None):
 
 
 def format_meta_line(meta):
-    keys = ("format", "source", "machine", "sha256", "src_size", "src_mtime", "generated")
+    keys = ("format", "source", "machine", "machine_serial", "sha256", "src_size", "src_mtime", "generated")
     return META_PREFIX + " ".join(f"{k}={meta[k]}" for k in keys)
 
 

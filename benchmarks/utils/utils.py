@@ -302,6 +302,22 @@ def get_cpu_model_proc():
     return "Unknown_CPU"
 
 
+def get_machine_serial():
+    """Hardware serial for traceability -- the same value runtime.sh records as
+    `machine_serial`. dmidecode needs root and is Linux-only; if it fails (no
+    sudo, not installed, non-Linux) keep the error text in the field rather than
+    aborting, since provenance is best-effort."""
+    try:
+        out = subprocess.run(
+            ["sudo", "dmidecode", "-s", "system-serial-number"],
+            text=True, capture_output=True, check=True, timeout=10).stdout.strip()
+        if out:
+            return out
+        return "dmidecode: empty output"
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        return f"dmidecode failed: {e}"
+
+
 def get_gpu_name():
     """
     Returns the GPU name via nvidia-smi, or None if unavailable.
