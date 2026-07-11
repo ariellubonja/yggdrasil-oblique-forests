@@ -12,10 +12,15 @@
 // projection k once per example, and route each result to the owning node's
 // per-node slab via a write cursor.
 //
-// Output contract (matches V1/V2/V3): out_projected[n] is a (K * rows_n)-
+// Output contract: for each node n, out_projected[n] holds a (K * rows_n)-
 // float slab where slab[k * rows_n + i] = projection k applied to node n's
-// i-th selected example. The consumer is FindBestConditionSparseObliqueTemplate
-// in oblique.cc (gated by SYMMETRIC_DEPTHWISE_AP).
+// i-th selected example. IMPORTANT: the slab lives in *reserved capacity*
+// only — the kernel writes it through raw pointers and skips the (fully
+// overwritten) zero-fill, so out_projected[n].size() stays 0. The caller
+// must therefore build the consuming span from out_projected[n].data() with
+// explicit length K * rows_n, not from the vector's size. The consumer is
+// FindBestConditionSparseObliqueTemplate in oblique.cc (gated by
+// SYMMETRIC_DEPTHWISE_AP).
 
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_DEPTHWISE_AP_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_DEPTHWISE_AP_H_
@@ -34,8 +39,9 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 // Symmetric bag-wide kernel. `selected_examples_per_node` are the per-node
 // example partitions (each individually sorted ascending). `shared_projections`
 // is the K-element vector of projections shared across all nodes at the
-// current depth. `out_projected[n]` is resized to K * rows_n[n] and filled
-// with projection values.
+// current depth. `out_projected[n]` gets K * rows_n[n] floats of *reserved*
+// capacity filled with projection values (its .size() stays 0 — see the
+// output-contract note above).
 absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,

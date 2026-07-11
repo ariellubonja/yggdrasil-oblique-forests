@@ -5659,8 +5659,14 @@ absl::Status GrowTreeLocalBFS(
         auto node_config = internal_config;
         node_config.depthwise_projection_defs = &shared_projections;
         node_config.depthwise_monotonic = &shared_monotonic;
-        node_config.precomputed_projected_values =
-            absl::MakeConstSpan(projected[n]);
+        // The symmetric kernel reserves K*rows_n floats of capacity in
+        // projected[n] and writes them through raw pointers, skipping the
+        // redundant zero-fill; projected[n].size() therefore stays 0. Build
+        // the consuming span from .data() with the explicit slab length
+        // rather than from the (zero) vector size.
+        node_config.precomputed_projected_values = absl::MakeConstSpan(
+            projected[n].data(),
+            shared_projections.size() * sel_spans[n].size());
         RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
                                   deployment, weights, node_config, random,
                                   cache, std::move(depth_batch[n]),
