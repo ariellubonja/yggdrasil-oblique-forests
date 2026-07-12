@@ -64,20 +64,6 @@ build:bfs_only --cxxopt="-DBFS_ONLY=1"
 # do not combine with the *_dataset_layout configs.
 build:subtree_gather --cxxopt="-DSUBTREE_GATHER_CACHE=1"
 
-# Lazy candidate-attribute shuffle: stock GetCandidateAttributes assigns and
-# std::shuffles ALL F feature indices per node, but the axis-aligned pass only
-# reads the first ~sqrt(F)+1 entries -- an O(F)-per-node cost (~1.9 ms/node at
-# F=400k, 44% of e2e on trunk 15k x 400k) of the same species as the cached
-# ProjectionEvaluator ctor. This keeps candidate_attributes as a persistent
-# per-tree permutation and shuffles lazily (prefix Fisher-Yates at read time)
-# in FindBestConditionSingleThreadManager, consuming O(tested) RNG draws.
-# Identically distributed candidate orderings, but a different RNG stream =>
-# trees differ from stock at equal seed (accuracy-equivalent, NOT
-# bit-identical; expect accuracy.sh to match only within noise, like BFS vs
-# DFS). Scheduler-independent; single-thread split manager only (RF path) --
-# the concurrent manager (GBT) stays stock. Combinable with other configs.
-build:lazy_candidate_shuffle --cxxopt="-DLAZY_CANDIDATE_SHUFFLE=1"
-
 ##### GPU Support
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 
