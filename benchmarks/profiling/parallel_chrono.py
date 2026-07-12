@@ -74,6 +74,9 @@ def chrono_level_name(chrono_level: int) -> str:
 _LOG_TOKEN_TO_COL = {
     "ProjEval":                      "ProjectionEvaluate",
     "kGetCandidateAttributes":       "GetCandidateAttributes",
+    "kGetCandidateAttributesAssign": "GetCandidateAttributesAssign",
+    "kGetCandidateAttributesShuffle": "GetCandidateAttributesShuffle",
+    "kGetCandidateAttributesNumToTest": "GetCandidateAttributesNumToTest",
     "kColumnWithCast":               "ColumnWithCast",
     "kHistogramSetup":               "HistogramSetup",
     "kMinMaxNumerical":              "MinMaxNumerical",
@@ -95,7 +98,9 @@ _LOG_TOKEN_TO_COL = {
 # (e.g. a brand-new scope) are still added per row and surface as trailing
 # "unordered" CSV columns -- never dropped.
 _TIMING_COLS = (
-    "ProjectionEvaluate", "GetCandidateAttributes", "ColumnWithCast",
+    "ProjectionEvaluate", "GetCandidateAttributes",
+    "GetCandidateAttributesAssign", "GetCandidateAttributesShuffle", "GetCandidateAttributesNumToTest",
+    "ColumnWithCast",
     "HistogramSetup", "MinMaxNumerical", "AssignSamplesToHist",
     "SelectBestThresholdHistogram",
     "SortFillExampleBucketSet", "SortScanSplits", "SortInitBuckets",
@@ -232,6 +237,15 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "GetCandidateAttributes": (
                 "---GetCandidateAttributes" if symmetric_depthwise
                 else "----GetCandidateAttributes"),
+            "GetCandidateAttributesAssign": (
+                "----GetCandidateAttributesAssign" if symmetric_depthwise
+                else "-----GetCandidateAttributesAssign"),
+            "GetCandidateAttributesShuffle": (
+                "----GetCandidateAttributesShuffle" if symmetric_depthwise
+                else "-----GetCandidateAttributesShuffle"),
+            "GetCandidateAttributesNumToTest": (
+                "----GetCandidateAttributesNumToTest" if symmetric_depthwise
+                else "-----GetCandidateAttributesNumToTest"),
             "ColumnWithCast":               "----ColumnWithCast",
             # ApplyProjection sub-phases. In symmetric depthwise AP they are
             # under the TreeTrain-level ApplyProjection; otherwise they are
@@ -359,7 +373,13 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # depth 3 — axis-aligned splitter tail (timing noise under oblique).
             "---AxisAlignedSplitSearch",
             "---GetCandidateAttributes",
+            "----GetCandidateAttributesAssign",
+            "----GetCandidateAttributesShuffle",
+            "----GetCandidateAttributesNumToTest",
             "----GetCandidateAttributes",
+            "-----GetCandidateAttributesAssign",
+            "-----GetCandidateAttributesShuffle",
+            "-----GetCandidateAttributesNumToTest",
             "----ColumnWithCast",
             # depth 2 — per-node finish.
             "--SplitExamplesInPlace",
