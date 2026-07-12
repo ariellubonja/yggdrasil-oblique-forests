@@ -1815,6 +1815,9 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   CHRONO_END(gbt_finalize,
              ::yggdrasil_decision_forests::chrono_prof::kGbtFinalize);
 
+  LOG(INFO) << "gradient_boosted_trees.cc Training block took: "
+            << absl::ToDoubleSeconds(absl::Now() - begin_training) << " s";
+
 #ifdef CHRONO_PROFILE
   {
     using namespace yggdrasil_decision_forests::chrono_prof;
