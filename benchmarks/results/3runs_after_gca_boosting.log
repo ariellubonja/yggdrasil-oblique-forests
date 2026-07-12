@@ -1,0 +1,286 @@
+==== PROVENANCE ====
+date_utc: 2026-07-12T17:52:39Z
+git_sha: 4d9e686d
+git_branch: speedup-GetCandidateAttributes
+machine: Intel(R) Xeon(R) Platinum 8488C (nproc=48)
+machine_serial: ec228a4c-d7ff-8a09-43f4-a31487292e54
+EXTRA_BAZEL_CONFIGS: --config=lazy_candidate_shuffle
+EXTRA_TRAIN_ARGS: --ensemble_method=Boosting --num_threads=1 --num_trees=10
+NUM_TREES: 240  NUM_RUNS: 3  NUM_THREADS: -1  bins: 64
+====================
+
+
+======== Skipping CPU experiments (RUN_CPU=false) ========
+
+
+
+======== VECTORIZED EXPERIMENTS [AVX2] histogram_num_bins=64 ========
+
+USING INSTRUCTION SET: AVX2
+
+
+======== Running Dynamic Random Histogram [Oblique] [VECTORIZE: AVX2] with 64 bins threshold=250 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --feature_split_type "Oblique" --numerical_split_type "Dynamic Random Histogram" --num_trees=240 --num_threads=-1 --histogram_num_bins=64 --dynamic_split_threshold=250 --ensemble_method=Boosting --num_threads=1 --num_trees=10
+----- Run 1/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783878848.793063    6732 train_oblique_forest.cc:395] Inferring DataSpec from CSV: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1783878848.796800    6732 csv_example_reader.cc:216] 0 row(s) processed
+I0000 00:00:1783878848.805727    6732 csv_example_reader.cc:225] Stop scanning the csv file to infer the type. Some records were not considered.
+I0000 00:00:1783878848.805742    6732 data_spec_inference.cc:518] 29 column(s) found
+I0000 00:00:1783878848.805754    6732 csv_example_reader.cc:320] 0 row(s) processed
+I0000 00:00:1783878878.805946    6732 csv_example_reader.cc:320] 7688159 row(s) processed
+I0000 00:00:1783878891.632278    6732 data_spec_inference.cc:557] Finalizing [11000000 row(s) found]
+I0000 00:00:1783878891.632289    6732 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783878891.632298    6732 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783878891.632299    6732 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783878891.632343    6732 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783878891.632345    6732 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783878891.632907    6732 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1783878921.633195    6732 vertical_dataset_io.cc:82] 7217200 examples scanned.
+I0000 00:00:1783878938.174388    6732 vertical_dataset_io.cc:91] 11000000 examples read. Memory: usage:1276MB allocated:1276MB. 0 (0%) examples have been skipped.
+I0000 00:00:1783878938.174458    6732 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783878938.174463    6732 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783878938.174472    6732 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783878938.174661    6732 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1783878938.174679    6732 gradient_boosted_trees.cc:1242] 11000000 examples used for training and 0 examples used for validation
+I0000 00:00:1783878938.232285    6732 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783878944.145058    6732 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.368329 train-accuracy:0.537637 [total:5.91s iter:5.91s]
+I0000 00:00:1783878950.153964    6732 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.351930 train-accuracy:0.580514 [total:11.92s iter:6.01s]
+I0000 00:00:1783878956.216857    6732 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.341610 train-accuracy:0.607037 [total:17.98s iter:6.06s]
+I0000 00:00:1783878979.746606    6732 gradient_boosted_trees.cc:1739] Train tree 7/10 train-loss:1.299695 train-accuracy:0.651080 [total:41.51s iter:5.97s]
+I0000 00:00:1783878997.209824    6732 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.273997 train-accuracy:0.664749 [total:58.98s iter:5.67s]
+I0000 00:00:1783878997.286909    6732 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 105.655s
+WARNING: Could not parse 'Training block took' from run 1
+----- Run 2/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783878997.297784    6751 train_oblique_forest.cc:395] Inferring DataSpec from CSV: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1783878997.301516    6751 csv_example_reader.cc:216] 0 row(s) processed
+I0000 00:00:1783878997.310199    6751 csv_example_reader.cc:225] Stop scanning the csv file to infer the type. Some records were not considered.
+I0000 00:00:1783878997.310215    6751 data_spec_inference.cc:518] 29 column(s) found
+I0000 00:00:1783878997.310228    6751 csv_example_reader.cc:320] 0 row(s) processed
+I0000 00:00:1783879027.310427    6751 csv_example_reader.cc:320] 7691177 row(s) processed
+I0000 00:00:1783879040.134932    6751 data_spec_inference.cc:557] Finalizing [11000000 row(s) found]
+I0000 00:00:1783879040.134942    6751 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879040.134948    6751 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879040.134950    6751 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879040.134987    6751 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879040.134989    6751 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783879040.135544    6751 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1783879070.135733    6751 vertical_dataset_io.cc:82] 7159600 examples scanned.
+I0000 00:00:1783879087.026536    6751 vertical_dataset_io.cc:91] 11000000 examples read. Memory: usage:1276MB allocated:1276MB. 0 (0%) examples have been skipped.
+I0000 00:00:1783879087.026608    6751 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879087.026612    6751 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783879087.026622    6751 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879087.026813    6751 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1783879087.026831    6751 gradient_boosted_trees.cc:1242] 11000000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879087.084572    6751 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879092.916260    6751 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.368329 train-accuracy:0.537637 [total:5.83s iter:5.83s]
+I0000 00:00:1783879098.837496    6751 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.351930 train-accuracy:0.580514 [total:11.75s iter:5.92s]
+I0000 00:00:1783879104.804516    6751 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.341610 train-accuracy:0.607037 [total:17.72s iter:5.97s]
+I0000 00:00:1783879127.991187    6751 gradient_boosted_trees.cc:1739] Train tree 7/10 train-loss:1.299695 train-accuracy:0.651080 [total:40.91s iter:5.88s]
+I0000 00:00:1783879145.201470    6751 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.273997 train-accuracy:0.664749 [total:58.12s iter:5.60s]
+I0000 00:00:1783879145.276098    6751 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 105.141s
+WARNING: Could not parse 'Training block took' from run 2
+----- Run 3/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879145.287169    6764 train_oblique_forest.cc:395] Inferring DataSpec from CSV: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1783879145.290897    6764 csv_example_reader.cc:216] 0 row(s) processed
+I0000 00:00:1783879145.299607    6764 csv_example_reader.cc:225] Stop scanning the csv file to infer the type. Some records were not considered.
+I0000 00:00:1783879145.299625    6764 data_spec_inference.cc:518] 29 column(s) found
+I0000 00:00:1783879145.299638    6764 csv_example_reader.cc:320] 0 row(s) processed
+I0000 00:00:1783879175.299823    6764 csv_example_reader.cc:320] 7688732 row(s) processed
+I0000 00:00:1783879188.204764    6764 data_spec_inference.cc:557] Finalizing [11000000 row(s) found]
+I0000 00:00:1783879188.204772    6764 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879188.204779    6764 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879188.204781    6764 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879188.204818    6764 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879188.204819    6764 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783879188.205372    6764 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1783879218.205918    6764 vertical_dataset_io.cc:82] 7190700 examples scanned.
+I0000 00:00:1783879234.803984    6764 vertical_dataset_io.cc:91] 11000000 examples read. Memory: usage:1276MB allocated:1276MB. 0 (0%) examples have been skipped.
+I0000 00:00:1783879234.804054    6764 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879234.804058    6764 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1783879234.804068    6764 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879234.804258    6764 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1783879234.804277    6764 gradient_boosted_trees.cc:1242] 11000000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879234.862036    6764 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879240.707436    6764 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.368329 train-accuracy:0.537637 [total:5.85s iter:5.85s]
+I0000 00:00:1783879246.644460    6764 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.351930 train-accuracy:0.580514 [total:11.78s iter:5.94s]
+I0000 00:00:1783879252.625420    6764 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.341610 train-accuracy:0.607037 [total:17.76s iter:5.98s]
+I0000 00:00:1783879275.859861    6764 gradient_boosted_trees.cc:1739] Train tree 7/10 train-loss:1.299695 train-accuracy:0.651080 [total:41.00s iter:5.89s]
+I0000 00:00:1783879293.093455    6764 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.273997 train-accuracy:0.664749 [total:58.23s iter:5.61s]
+I0000 00:00:1783879293.168100    6764 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 104.963s
+WARNING: Could not parse 'Training block took' from run 3
+MEDIAN of 0/3 runs: ERROR
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --feature_split_type "Oblique" --numerical_split_type "Dynamic Random Histogram" --num_trees=240 --num_threads=-1 --histogram_num_bins=64 --dynamic_split_threshold=250 --ensemble_method=Boosting --num_threads=1 --num_trees=10
+----- Run 1/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879293.181073    6784 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1783879344.605821    6784 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879344.605843    6784 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879344.605847    6784 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879344.606135    6784 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879344.606141    6784 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783879344.606389    6784 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879344.607051    6784 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1783879344.607794    6784 gradient_boosted_trees.cc:1242] 1500000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879344.616576    6784 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879351.018608    6784 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.354642 train-accuracy:0.673851 [total:6.40s iter:6.40s]
+I0000 00:00:1783879357.381300    6784 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.313016 train-accuracy:0.754263 [total:12.76s iter:6.36s]
+I0000 00:00:1783879363.696556    6784 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.260414 train-accuracy:0.814803 [total:19.08s iter:6.31s]
+I0000 00:00:1783879389.180975    6784 gradient_boosted_trees.cc:1739] Train tree 7/10 train-loss:1.151487 train-accuracy:0.873699 [total:44.56s iter:6.42s]
+I0000 00:00:1783879408.383183    6784 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.102447 train-accuracy:0.889967 [total:1m3.77s iter:6.41s]
+I0000 00:00:1783879408.394290    6784 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 63.7884s
+WARNING: Could not parse 'Training block took' from run 1
+----- Run 2/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879409.083694    6797 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1783879460.529989    6797 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879460.530012    6797 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879460.530015    6797 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879460.530307    6797 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879460.530312    6797 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783879460.530548    6797 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879460.531207    6797 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1783879460.531969    6797 gradient_boosted_trees.cc:1242] 1500000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879460.540934    6797 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879466.971433    6797 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.354642 train-accuracy:0.673851 [total:6.43s iter:6.43s]
+I0000 00:00:1783879473.345755    6797 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.313016 train-accuracy:0.754263 [total:12.80s iter:6.37s]
+I0000 00:00:1783879479.692156    6797 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.260414 train-accuracy:0.814803 [total:19.15s iter:6.34s]
+I0000 00:00:1783879505.254863    6797 gradient_boosted_trees.cc:1739] Train tree 7/10 train-loss:1.151487 train-accuracy:0.873699 [total:44.71s iter:6.43s]
+I0000 00:00:1783879524.488257    6797 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.102447 train-accuracy:0.889967 [total:1m3.95s iter:6.41s]
+I0000 00:00:1783879524.499385    6797 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 63.9694s
+WARNING: Could not parse 'Training block took' from run 2
+----- Run 3/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879525.191073    6814 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1783879576.621184    6814 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879576.621206    6814 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879576.621209    6814 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879576.621507    6814 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879576.621513    6814 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783879576.621754    6814 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879576.622416    6814 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1783879576.623148    6814 gradient_boosted_trees.cc:1242] 1500000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879576.631980    6814 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879583.050366    6814 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.354642 train-accuracy:0.673851 [total:6.42s iter:6.42s]
+I0000 00:00:1783879589.415150    6814 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.313016 train-accuracy:0.754263 [total:12.78s iter:6.36s]
+I0000 00:00:1783879595.750215    6814 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.260414 train-accuracy:0.814803 [total:19.12s iter:6.33s]
+I0000 00:00:1783879621.290426    6814 gradient_boosted_trees.cc:1739] Train tree 7/10 train-loss:1.151487 train-accuracy:0.873699 [total:44.66s iter:6.43s]
+I0000 00:00:1783879640.520516    6814 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.102447 train-accuracy:0.889967 [total:1m3.89s iter:6.42s]
+I0000 00:00:1783879640.531375    6814 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 63.9102s
+WARNING: Could not parse 'Training block took' from run 3
+MEDIAN of 0/3 runs: ERROR
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --feature_split_type "Oblique" --numerical_split_type "Dynamic Random Histogram" --num_trees=240 --num_threads=-1 --histogram_num_bins=64 --dynamic_split_threshold=250 --ensemble_method=Boosting --num_threads=1 --num_trees=10
+----- Run 1/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879641.225913    6832 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1783879691.577050    6832 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879691.577073    6832 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879691.577076    6832 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879691.579389    6832 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879691.579419    6832 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783879691.581825    6832 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879691.583659    6832 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1783879691.590879    6832 gradient_boosted_trees.cc:1242] 150000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879691.598058    6832 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879693.347431    6832 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.381887 train-accuracy:0.556220 [total:1.75s iter:1.75s]
+I0000 00:00:1783879695.184997    6832 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.368803 train-accuracy:0.624787 [total:3.59s iter:1.84s]
+I0000 00:00:1783879696.998172    6832 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.341912 train-accuracy:0.699307 [total:5.40s iter:1.81s]
+I0000 00:00:1783879709.602527    6832 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.276636 train-accuracy:0.785100 [total:18.00s iter:1.78s]
+I0000 00:00:1783879709.694410    6832 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 18.1173s
+WARNING: Could not parse 'Training block took' from run 1
+----- Run 2/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879710.495541    6845 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1783879760.805628    6845 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879760.805651    6845 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879760.805654    6845 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879760.807994    6845 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879760.808024    6845 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783879760.810442    6845 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879760.812264    6845 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1783879760.819387    6845 gradient_boosted_trees.cc:1242] 150000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879760.826520    6845 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879762.573613    6845 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.381887 train-accuracy:0.556220 [total:1.75s iter:1.75s]
+I0000 00:00:1783879764.406297    6845 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.368803 train-accuracy:0.624787 [total:3.58s iter:1.83s]
+I0000 00:00:1783879766.217118    6845 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.341912 train-accuracy:0.699307 [total:5.39s iter:1.81s]
+I0000 00:00:1783879778.802525    6845 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.276636 train-accuracy:0.785100 [total:17.98s iter:1.78s]
+I0000 00:00:1783879778.896683    6845 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 18.091s
+WARNING: Could not parse 'Training block took' from run 2
+----- Run 3/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879779.658802    6858 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1783879829.966738    6858 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879829.966760    6858 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879829.966763    6858 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879829.969158    6858 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879829.969188    6858 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783879829.971555    6858 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879829.973329    6858 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1783879829.980532    6858 gradient_boosted_trees.cc:1242] 150000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879829.987778    6858 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879831.735256    6858 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.381887 train-accuracy:0.556220 [total:1.75s iter:1.75s]
+I0000 00:00:1783879833.569614    6858 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.368803 train-accuracy:0.624787 [total:3.58s iter:1.83s]
+I0000 00:00:1783879835.380810    6858 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.341912 train-accuracy:0.699307 [total:5.39s iter:1.81s]
+I0000 00:00:1783879847.982904    6858 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.276636 train-accuracy:0.785100 [total:17.99s iter:1.79s]
+I0000 00:00:1783879848.075750    6858 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 18.109s
+WARNING: Could not parse 'Training block took' from run 3
+MEDIAN of 0/3 runs: ERROR
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --feature_split_type "Oblique" --numerical_split_type "Dynamic Random Histogram" --num_trees=240 --num_threads=-1 --histogram_num_bins=64 --dynamic_split_threshold=250 --ensemble_method=Boosting --num_threads=1 --num_trees=10
+----- Run 1/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879848.872865    6879 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1783879899.108395    6879 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879899.108418    6879 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879899.108421    6879 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879899.131614    6879 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879899.131835    6879 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783879899.160167    6879 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879899.172783    6879 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1783879899.243392    6879 gradient_boosted_trees.cc:1242] 15000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879899.310704    6879 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879900.387443    6879 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.380215 train-accuracy:0.558867 [total:1.07s iter:1.07s]
+I0000 00:00:1783879901.512138    6879 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.368858 train-accuracy:0.608933 [total:2.20s iter:1.12s]
+I0000 00:00:1783879902.659744    6879 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.356993 train-accuracy:0.651933 [total:3.34s iter:1.14s]
+I0000 00:00:1783879910.220246    6879 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.219427 train-accuracy:0.865000 [total:10.91s iter:0.85s]
+I0000 00:00:1783879911.028145    6879 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 11.9197s
+WARNING: Could not parse 'Training block took' from run 1
+----- Run 2/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879911.865165    6892 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1783879962.177615    6892 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783879962.177637    6892 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783879962.177640    6892 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783879962.199983    6892 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783879962.200206    6892 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783879962.227068    6892 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783879962.239596    6892 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1783879962.310025    6892 gradient_boosted_trees.cc:1242] 15000 examples used for training and 0 examples used for validation
+I0000 00:00:1783879962.376435    6892 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783879963.423552    6892 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.380215 train-accuracy:0.558867 [total:1.04s iter:1.04s]
+I0000 00:00:1783879964.515032    6892 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.368858 train-accuracy:0.608933 [total:2.13s iter:1.09s]
+I0000 00:00:1783879965.628474    6892 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.356993 train-accuracy:0.651933 [total:3.24s iter:1.11s]
+I0000 00:00:1783879972.967063    6892 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.219427 train-accuracy:0.865000 [total:10.59s iter:0.83s]
+I0000 00:00:1783879973.748276    6892 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 11.5706s
+WARNING: Could not parse 'Training block took' from run 2
+----- Run 3/3 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783879974.560014    6905 train_oblique_forest.cc:409] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1783880024.897912    6905 train_oblique_forest.cc:492] Running with 1 threads, as requested.
+I0000 00:00:1783880024.897935    6905 train_oblique_forest.cc:571] Configuring oblique splits
+I0000 00:00:1783880024.897938    6905 train_oblique_forest.cc:656] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1783880024.920560    6905 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1783880024.920782    6905 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1783880024.947725    6905 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1783880024.960343    6905 gradient_boosted_trees.cc:1202] Training gradient boosted tree on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1783880025.030196    6905 gradient_boosted_trees.cc:1242] 15000 examples used for training and 0 examples used for validation
+I0000 00:00:1783880025.096634    6905 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1783880026.144299    6905 gradient_boosted_trees.cc:1737] Train tree 1/10 train-loss:1.380215 train-accuracy:0.558867 [total:1.04s iter:1.04s]
+I0000 00:00:1783880027.236150    6905 gradient_boosted_trees.cc:1737] Train tree 2/10 train-loss:1.368858 train-accuracy:0.608933 [total:2.14s iter:1.09s]
+I0000 00:00:1783880028.350369    6905 gradient_boosted_trees.cc:1739] Train tree 3/10 train-loss:1.356993 train-accuracy:0.651933 [total:3.25s iter:1.11s]
+I0000 00:00:1783880035.697601    6905 gradient_boosted_trees.cc:1737] Train tree 10/10 train-loss:1.219427 train-accuracy:0.865000 [total:10.60s iter:0.83s]
+I0000 00:00:1783880036.489254    6905 train_oblique_forest.cc:733] train_oblique_forest wall-time - Training + Post-Processing: 11.5913s
+WARNING: Could not parse 'Training block took' from run 3
+MEDIAN of 0/3 runs: ERROR
