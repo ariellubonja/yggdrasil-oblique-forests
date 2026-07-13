@@ -1181,6 +1181,8 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   const auto begin_training = absl::Now();
   RETURN_IF_ERROR(dataset::CheckNumExamples(train_dataset.nrow()));
 
+  /* #region setup */
+
   // Initialize the configuration.
   internal::AllTrainingConfiguration config;
   RETURN_IF_ERROR(
@@ -1541,6 +1543,8 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
       }
     }
 
+    /* #endregion */
+
     {
       // kGbtTrainTree: GBT-side wrapper around decision_tree::Train. The
       // delta (kGbtTrainTree − Σ kTreeTrain) exposes per-call setup
@@ -1552,6 +1556,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
 #ifdef CHRONO_PROFILE
         const int tree_idx = iter_idx * gradients.size() + grad_idx;
         ::yggdrasil_decision_forests::chrono_prof::TreeScope tree_guard(tree_idx);
+
         CHRONO_SCOPE_COARSE_TOP(
             ::yggdrasil_decision_forests::chrono_prof::kTreeTrain);
 #endif
