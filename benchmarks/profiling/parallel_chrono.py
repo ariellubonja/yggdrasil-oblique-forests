@@ -92,6 +92,26 @@ _LOG_TOKEN_TO_COL = {
     "kScanPresorted":                "ScanPresorted",
 }
 
+# GBT session-level scopes. gradient_boosted_trees.cc dumps these once, on a
+# single aggregate line ("GBT chrono (ms): startup=.. train_tree=.. ..") in
+# MILLISECONDS and in `name=value` form -- neither the per-depth line shape nor
+# the "<Token> <seconds>s" pair shape the per-depth parser understands. So they
+# are captured separately (see parse_parallel_chrono) and mapped to these
+# columns; values are converted ms->s to match every other timing column.
+_GBT_TOKEN_TO_COL = {
+    "startup":            "GbtStartup",
+    "preprocess":         "GbtPreprocess",
+    "update_gradients":   "GbtUpdateGradients",
+    "sample_examples":    "GbtSampleExamples",
+    "train_tree":         "GbtTrainTree",
+    "update_predictions": "GbtUpdatePredictions",
+    "validation_eval":    "GbtValidationEval",
+    "finalize":           "GbtFinalize",
+}
+
+# One "<name>=<milliseconds>" pair on the "GBT chrono (ms):" line.
+_GBT_PAIR_RX = re.compile(r"(\w+)=([0-9.eE+-]+)")
+
 # Every timing column the downstream pipeline knows about, seeded to 0.0 on
 # each row so a thread/depth that never emitted a given token still carries the
 # column (the old fixed-schema behaviour). Tokens captured but absent here
@@ -117,6 +137,11 @@ _TIMING_COLS = (
     "FindObliqueSetup", "EvaluateProj", "EntropyTableSetup", "CartPath",
     "CartSetup", "HistoPath", "AxisAlignedSplitSearch", "SampleProjection",
     "SplitExamplesInPlace", "SetLeafValue", "BfsNodeLoop", "TreeTrain",
+    # GBT session-level scopes (overlaid from the "GBT chrono (ms):" line onto
+    # one placeholder row; see parse_parallel_chrono). Absent -> stay 0.0 ->
+    # zero-dropped, so Bagging/RF runs are unaffected.
+    "GbtStartup", "GbtPreprocess", "GbtUpdateGradients", "GbtSampleExamples",
+    "GbtTrainTree", "GbtUpdatePredictions", "GbtValidationEval", "GbtFinalize",
 )
 
 # One "<Token> <seconds>s" timing pair on a per-depth LOG line.
@@ -174,6 +199,24 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
     if m_session:
         placeholder = (df["tree"] == 0) & (df["depth"] == 0)
         df.loc[placeholder, "GpuInit"] = float(m_session.group(1))
+
+    # GBT session-level scopes come on a single "GBT chrono (ms): ..." line
+    # (gradient_boosted_trees.cc, CHRONO_PROFILE>=2). They are global, not
+    # per-thread/depth, so -- like GpuInit -- park them in a single placeholder
+    # row (the first tree=0/depth=0 slot). Only one row gets them so a
+    # cross-thread column sum is not double-counted. ms -> s to match the rest.
+    m_gbt = re.search(r"GBT chrono \(ms\):(.*)", raw_log)
+    if m_gbt:
+        ph_idx = df.index[(df["tree"] == 0) & (df["depth"] == 0)]
+        if len(ph_idx):
+            target = ph_idx[0]
+            for tok, val in _GBT_PAIR_RX.findall(m_gbt.group(1)):
+                col = _GBT_TOKEN_TO_COL.get(tok)
+                if col is None:
+                    continue
+                if col not in df.columns:
+                    df[col] = 0.0
+                df.at[target, col] = float(val) / 1000.0  # ms -> s
 
     # ──────────────────────────────────────────────────────────────────────
     # Build one block per thread (unchanged logic)
@@ -303,6 +346,21 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         # zero-dropped further down.
         desired_order = [
             "tree", "depth", "nodes", "Active Samples",
+
+            # GBT session-level scopes (flat, no dashes — they wrap the whole
+            # boosting run, above any per-tree TreeTrain, and are non-zero only
+            # in the single placeholder row). GbtTrainTree is the GBT-side
+            # wrapper around all decision_tree::Train calls (⊇ Σ TreeTrain);
+            # the rest are the per-iteration / one-shot GBT loop phases. Absent
+            # for Bagging/RF runs, where they zero-drop.
+            "GbtStartup",
+            "GbtPreprocess",
+            "GbtUpdateGradients",
+            "GbtSampleExamples",
+            "GbtTrainTree",
+            "GbtUpdatePredictions",
+            "GbtValidationEval",
+            "GbtFinalize",
 
             # depth 0 — top-level per-tree scope.
             "TreeTrain",
