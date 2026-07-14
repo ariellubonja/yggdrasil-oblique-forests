@@ -1927,6 +1927,23 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
                     << " NodeTrain " << arr[kNodeTrain] * 1e-9 << "s"
                     << " FindBestCondition "
                     << arr[kFindBestCondition] * 1e-9 << "s"
+                    // Partition of FindBestCondition under the concurrent split
+                    // manager (deployment.num_threads > 1, the default GBT
+                    // path): FindBestCondition ≈ SplitManagerSetup + Submit +
+                    // Wait + Process. Wait dominates and is the manager's
+                    // "workers busy" wall-time; the CPU-time that fills it is
+                    // reported as SplitWorkerOblique / SplitWorkerAxisAligned in
+                    // the "GBT chrono" global line. All four are zero when the
+                    // single-thread manager runs (num_threads == 1), where the
+                    // ObliqueSplitSearch/AxisAligned scopes fire instead.
+                    << " SplitManagerSetup "
+                    << arr[kSplitManagerSetup] * 1e-9 << "s"
+                    << " SplitManagerSubmit "
+                    << arr[kSplitManagerSubmit] * 1e-9 << "s"
+                    << " SplitManagerWait "
+                    << arr[kSplitManagerWait] * 1e-9 << "s"
+                    << " SplitManagerProcess "
+                    << arr[kSplitManagerProcess] * 1e-9 << "s"
                     << " ObliqueSplitSearch "
                     << arr[kObliqueSplitSearch] * 1e-9 << "s"
                     << " FindObliqueSetup "
@@ -2035,6 +2052,23 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
                     << " NodeTrain " << arr[kNodeTrain] * 1e-9 << "s"
                     << " FindBestCondition "
                     << arr[kFindBestCondition] * 1e-9 << "s"
+                    // Partition of FindBestCondition under the concurrent split
+                    // manager (deployment.num_threads > 1, the default GBT
+                    // path): FindBestCondition ≈ SplitManagerSetup + Submit +
+                    // Wait + Process. Wait dominates and is the manager's
+                    // "workers busy" wall-time; the CPU-time that fills it is
+                    // reported as SplitWorkerOblique / SplitWorkerAxisAligned in
+                    // the "GBT chrono" global line. All four are zero when the
+                    // single-thread manager runs (num_threads == 1), where the
+                    // ObliqueSplitSearch/AxisAligned scopes fire instead.
+                    << " SplitManagerSetup "
+                    << arr[kSplitManagerSetup] * 1e-9 << "s"
+                    << " SplitManagerSubmit "
+                    << arr[kSplitManagerSubmit] * 1e-9 << "s"
+                    << " SplitManagerWait "
+                    << arr[kSplitManagerWait] * 1e-9 << "s"
+                    << " SplitManagerProcess "
+                    << arr[kSplitManagerProcess] * 1e-9 << "s"
                     << " ObliqueSplitSearch "
                     << arr[kObliqueSplitSearch] * 1e-9 << "s"
                     << " FindObliqueSetup "
@@ -2087,6 +2121,28 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
               << " update_predictions=" << ms(cp::kGbtUpdatePredictions)
               << " validation_eval=" << ms(cp::kGbtValidationEval)
               << " finalize=" << ms(cp::kGbtFinalize);
+
+    // Split-worker CPU time (summed over the split-finder threads, not
+    // wall-time — the workers run outside any TreeScope, so their scopes land
+    // in global_stats). This is what fills the manager's SplitManagerWait:
+    //   SplitManagerWait ≲ (worker_oblique + worker_axis) / effective_parallelism
+    // and, within a job,
+    //   worker_oblique ≈ oblique_setup + sample_projection + projection_evaluate
+    //                    + evaluate_proj (+ dispatch).
+    // Zero when num_threads == 1 (the single-thread manager runs on the tree
+    // thread, and its time shows up in the per-tree tables instead).
+    LOG(INFO) << "GBT split-worker chrono (ms, CPU-time over workers):"
+              << " worker_oblique=" << ms(cp::kSplitWorkerOblique)
+              << " worker_axis_aligned=" << ms(cp::kSplitWorkerAxisAligned)
+              << " | oblique_setup=" << ms(cp::kFindObliqueSetup)
+              << " sample_projection=" << ms(cp::kSampleProjection)
+              << " projection_evaluate=" << ms(cp::kProjectionEvaluate)
+              << " evaluate_proj=" << ms(cp::kEvaluateProj)
+              << " histo_path=" << ms(cp::kHistoPath)
+              << " cart_path=" << ms(cp::kCartPath)
+              << " oblique_split_search=" << ms(cp::kObliqueSplitSearch)
+              << " axis_aligned_split_search="
+              << ms(cp::kAxisAlignedSplitSearch);
   }
 #endif
 

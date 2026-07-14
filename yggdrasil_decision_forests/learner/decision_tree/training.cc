@@ -1311,6 +1311,13 @@ absl::StatusOr<SplitterWorkResponse> FindBestConditionFromSplitterWorkRequest(
   response.condition->set_split_score(request.best_score);
 
   if (request.num_oblique_projections_to_run != -1) {
+    // Worker-side CPU time of an oblique job. Accumulates in global_stats (the
+    // worker threads are outside any TreeScope), so it is CPU-time summed over
+    // workers, not wall-time. Encloses the oblique scopes (FindObliqueSetup,
+    // SampleProjection, ProjectionEvaluate, EvaluateProj) so their coverage
+    // inside a job is checkable.
+    CHRONO_SCOPE(
+        ::yggdrasil_decision_forests::chrono_prof::kSplitWorkerOblique);
     DCHECK_EQ(request.attribute_idx, -1);
     ASSIGN_OR_RETURN(
         const auto found_oblique_condition,
@@ -1337,6 +1344,13 @@ absl::StatusOr<SplitterWorkResponse> FindBestConditionFromSplitterWorkRequest(
         request.attribute_idx, ", columns in the dataset: ",
         request.common->train_dataset.data_spec().columns_size(), "."));
   }
+
+  // Worker-side CPU time of an axis-aligned job. In an oblique GBT run these
+  // jobs are still scheduled (one full numerical splitter per candidate
+  // attribute), so they compete with the oblique jobs for the same workers and
+  // are worth measuring separately. Same global_stats caveat as above.
+  CHRONO_SCOPE(
+      ::yggdrasil_decision_forests::chrono_prof::kSplitWorkerAxisAligned);
 
   switch (config.task()) {
     case model::proto::Task::CLASSIFICATION: {
@@ -1660,6 +1674,12 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
     return false;
   }
 
+  // Manager-side setup: request struct, job accounting, cache resizes and
+  // GetCandidateAttributes. Manual begin/end because the locals declared here
+  // (common, candidate_attributes, ...) must outlive the scope. Ends just
+  // before the first Submit.
+  CHRONO_BEGIN(split_mgr_setup);
+
   // Constant and static part of the requests.
   SplitterWorkRequestCommon common{
       .train_dataset = train_dataset,
@@ -1717,8 +1737,15 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   // Get the ordered indices of the attributes to test.
   int min_num_jobs_to_test;
   std::vector<int32_t>& candidate_attributes = cache->candidate_attributes;
-  GetCandidateAttributes(config, config_link, dt_config, &min_num_jobs_to_test,
-                         &candidate_attributes, random);
+  {
+    // Nested inside kSplitManagerSetup (the single-thread manager has the same
+    // scope at its own GetCandidateAttributes call).
+    CHRONO_SCOPE_COARSE(
+        ::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
+    GetCandidateAttributes(config, config_link, dt_config,
+                           &min_num_jobs_to_test, &candidate_attributes,
+                           random);
+  }
 
   const int num_jobs = candidate_attributes.size() + num_oblique_jobs;
   // All the oblique jobs need to be done.
@@ -1737,6 +1764,9 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   for (auto& s : cache->durable_response_list) {
     s.set = false;
   }
+
+  CHRONO_END(split_mgr_setup,
+             ::yggdrasil_decision_forests::chrono_prof::kSplitManagerSetup);
 
   // Score and value of the best found condition.
   std::atomic<float> best_split_score = best_condition->split_score();
@@ -1777,8 +1807,13 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
         /*num_oblique_projections_to_run=*/num_oblique_projections_to_run);
   };
 
-  // Schedule all the oblique jobs.
   int next_job_to_schedule = 0;
+
+  // Initial scheduling: all the oblique jobs, then axis-aligned jobs while
+  // worker threads remain. Manual begin/end: next_job_to_schedule outlives it.
+  CHRONO_BEGIN(split_mgr_submit);
+
+  // Schedule all the oblique jobs.
   for (int oblique_job_idx = 0; oblique_job_idx < num_oblique_jobs;
        oblique_job_idx++) {
     int num_projections_in_request;
@@ -1809,14 +1844,22 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
     next_job_to_schedule++;
   }
 
+  CHRONO_END(split_mgr_submit,
+             ::yggdrasil_decision_forests::chrono_prof::kSplitManagerSubmit);
+
   int num_valid_job_tested = 0;
   int next_job_to_process = 0;
 
   absl::Status status;
 
   while (true) {
-    // Get a new result from a worker splitter.
-    auto maybe_response = processor.GetResult();
+    // Get a new result from a worker splitter. Blocking: this is the manager's
+    // "workers busy" wall-time.
+    auto maybe_response = [&] {
+      CHRONO_SCOPE(
+          ::yggdrasil_decision_forests::chrono_prof::kSplitManagerWait);
+      return processor.GetResult();
+    }();
     if (!maybe_response.has_value()) {
       break;
     }
@@ -1824,45 +1867,52 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
     num_in_flight--;
     DCHECK_GE(num_in_flight, 0);
 
+    // Recording the response + processing the ones that became processable.
+    // Closes before the scheduling loop below so Submit is not nested in it.
     {
-      // Record, but do not process, the worker response.
-      auto response_or = std::move(maybe_response).value();
-      if (!response_or.ok()) {
-        status.Update(response_or.status());
-        break;
-      }
-      auto response = std::move(response_or).value();
-      // Release the cache immediately to be reused by other workers.
-      cache->available_cache_idxs.push_back(response.manager_data.cache_idx);
+      CHRONO_SCOPE(
+          ::yggdrasil_decision_forests::chrono_prof::kSplitManagerProcess);
 
-      // Record response for further processing.
-      auto& durable_response =
-          cache->durable_response_list[response.manager_data.job_idx];
-      durable_response.status = response.status;
-      durable_response.set = true;
-      if (response.status == SplitSearchResult::kBetterSplitFound) {
-        // The worker found a potentially better solution.
-        durable_response.condition = std::move(response.condition);
-      }
-    }
+      {
+        // Record, but do not process, the worker response.
+        auto response_or = std::move(maybe_response).value();
+        if (!response_or.ok()) {
+          status.Update(response_or.status());
+          break;
+        }
+        auto response = std::move(response_or).value();
+        // Release the cache immediately to be reused by other workers.
+        cache->available_cache_idxs.push_back(response.manager_data.cache_idx);
 
-    // Process new responses that can be processed.
-    while (next_job_to_process < next_job_to_schedule &&
-           num_valid_job_tested < min_num_jobs_to_test &&
-           cache->durable_response_list[next_job_to_process].set) {
-      // Something to process.
-      auto durable_response =
-          &cache->durable_response_list[next_job_to_process];
-      next_job_to_process++;
-
-      if (durable_response->status != SplitSearchResult::kInvalidAttribute) {
-        num_valid_job_tested++;
+        // Record response for further processing.
+        auto& durable_response =
+            cache->durable_response_list[response.manager_data.job_idx];
+        durable_response.status = response.status;
+        durable_response.set = true;
+        if (response.status == SplitSearchResult::kBetterSplitFound) {
+          // The worker found a potentially better solution.
+          durable_response.condition = std::move(response.condition);
+        }
       }
-      if (durable_response->status == SplitSearchResult::kBetterSplitFound) {
-        const float split_score = durable_response->condition->split_score();
-        if (split_score > best_split_score) {
-          best_condition_ptr = std::move(durable_response->condition);
-          best_split_score = split_score;
+
+      // Process new responses that can be processed.
+      while (next_job_to_process < next_job_to_schedule &&
+             num_valid_job_tested < min_num_jobs_to_test &&
+             cache->durable_response_list[next_job_to_process].set) {
+        // Something to process.
+        auto durable_response =
+            &cache->durable_response_list[next_job_to_process];
+        next_job_to_process++;
+
+        if (durable_response->status != SplitSearchResult::kInvalidAttribute) {
+          num_valid_job_tested++;
+        }
+        if (durable_response->status == SplitSearchResult::kBetterSplitFound) {
+          const float split_score = durable_response->condition->split_score();
+          if (split_score > best_split_score) {
+            best_condition_ptr = std::move(durable_response->condition);
+            best_split_score = split_score;
+          }
         }
       }
     }
@@ -1878,20 +1928,29 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
     }
 
     // Schedule the testing of more conditions.
-    while (!cache->available_cache_idxs.empty() &&
-           next_job_to_schedule < num_jobs) {
-      processor.Submit(build_request(
-          next_job_to_schedule,
-          /*attribute_idx=*/
-          candidate_attributes[next_job_to_schedule - num_oblique_jobs],
-          /*num_oblique_projections_to_run=*/-1));
-      next_job_to_schedule++;
+    {
+      CHRONO_SCOPE(
+          ::yggdrasil_decision_forests::chrono_prof::kSplitManagerSubmit);
+      while (!cache->available_cache_idxs.empty() &&
+             next_job_to_schedule < num_jobs) {
+        processor.Submit(build_request(
+            next_job_to_schedule,
+            /*attribute_idx=*/
+            candidate_attributes[next_job_to_schedule - num_oblique_jobs],
+            /*num_oblique_projections_to_run=*/-1));
+        next_job_to_schedule++;
+      }
     }
   }
 
-  // Drain the response channel.
+  // Drain the response channel. The blocking part counts as Wait like the main
+  // loop's GetResult.
   for (int i = 0; i < num_in_flight; i++) {
-    auto maybe_response = processor.GetResult();
+    auto maybe_response = [&] {
+      CHRONO_SCOPE(
+          ::yggdrasil_decision_forests::chrono_prof::kSplitManagerWait);
+      return processor.GetResult();
+    }();
     if (!maybe_response.has_value()) {
       // The channel was closed.
       break;

@@ -112,6 +112,40 @@ enum FuncId {
   kSplitExamplesInPlace,
   kSetLeafValue,
 
+  // Partition of FindBestConditionConcurrentManager (training.cc), the manager
+  // used by GBT whenever deployment.num_threads > 1. These four fire on the
+  // *manager* thread (i.e. inside a TreeScope), so they land in the per-tree /
+  // per-depth tables and satisfy
+  //     kFindBestCondition ≈ Setup + Submit + Wait + Process
+  // up to the manager's own residual (request struct init, RNG discard).
+  //
+  // kSplitManagerSetup   : label-stats casts, SplitterWorkRequestCommon, cache
+  //                        resizes, GetCandidateAttributes (kGetCandidateAttributes
+  //                        nests inside it).
+  // kSplitManagerSubmit  : build_request + processor.Submit for both the
+  //                        oblique and the axis-aligned scheduling loops.
+  // kSplitManagerWait    : processor.GetResult() — the dominant term; it is the
+  //                        wall-time the manager spends blocked on the workers.
+  // kSplitManagerProcess : recording a response + the in-order processing loop.
+  kSplitManagerSetup,
+  kSplitManagerSubmit,
+  kSplitManagerWait,
+  kSplitManagerProcess,
+
+  // Worker-side CPU time, measured inside FindBestConditionFromSplitterWorkRequest
+  // on the split-finder threads. Those threads have tls_ctx.cur_tree == -1, so
+  // add_time routes them to global_stats (atomic) — they are CPU-time summed
+  // over workers, NOT wall-time, and are deliberately kept out of the per-tree /
+  // per-depth tables (multiple workers serve one node concurrently, and the
+  // by_depth writes are non-atomic — see add_time). These two account for what
+  // fills kSplitManagerWait:
+  //     ΣSplitWorkerOblique ≈ FindObliqueSetup + SampleProjection +
+  //                           ProjectionEvaluate + EvaluateProj (+ dispatch)
+  //     kSplitManagerWait   ≲ (SplitWorkerOblique + SplitWorkerAxisAligned)
+  //                           / effective_parallelism
+  kSplitWorkerOblique,
+  kSplitWorkerAxisAligned,
+
   // Sub-scopes of kObliqueSplitSearch, closing the residual gap between
   // kObliqueSplitSearch and Σ(SampleProjection + ProjectionEvaluate +
   // histogram/sort scopes) observed at ~20% on trunk 3M×4096.
