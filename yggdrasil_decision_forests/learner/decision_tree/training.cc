@@ -2788,33 +2788,8 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
     const utils::NormalDistributionDouble& label_distribution,
     const int32_t attribute_idx, utils::RandomEngine* random,
     proto::NodeCondition* condition) {
-  DCHECK(condition != nullptr);
-  if constexpr (weighted) {
-    DCHECK_EQ(weights.size(), labels.size());
-  } else {
-    DCHECK(weights.empty());
-  }
-
-  if (dt_config.missing_value_policy() ==
-      proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION) {
-    LocalImputationForNumericalAttribute(selected_examples, weights, attributes,
-                                         &na_replacement);
-  }
-  // Determine the minimum and maximum values of the attribute.
-  float min_value, max_value;
-  {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
-    if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
-                                  &max_value)) {
-      return SplitSearchResult::kInvalidAttribute;
-    }
-  }
-
-  // There should be at least two different unique values.
-  if (min_value == max_value) {
-    return SplitSearchResult::kInvalidAttribute;
-  }
-  // Randomly select some threshold values.
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistoPath);
+  // Candidate threshold values.
   struct CandidateSplit {
     float threshold;
     utils::NormalDistributionDouble pos_label_dist;
@@ -2823,19 +2798,56 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
       return threshold < other.threshold;
     }
   };
-  ASSIGN_OR_RETURN(
-      const auto bins,
-      internal::GenHistogramBins(dt_config.numerical_split().type(),
-                                 dt_config.numerical_split().num_candidates(),
-                                 attributes, min_value, max_value, random));
 
-  std::vector<CandidateSplit> candidate_splits(bins.size());
-  for (int split_idx = 0; split_idx < candidate_splits.size(); split_idx++) {
-    auto& candidate_split = candidate_splits[split_idx];
-    candidate_split.threshold = bins[split_idx];
+  float min_value, max_value;
+  std::vector<float> bins;
+  std::vector<CandidateSplit> candidate_splits;
+
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistogramSetup);
+    DCHECK(condition != nullptr);
+    if constexpr (weighted) {
+      DCHECK_EQ(weights.size(), labels.size());
+    } else {
+      DCHECK(weights.empty());
+    }
+
+    if (dt_config.missing_value_policy() ==
+        proto::DecisionTreeTrainingConfig::LOCAL_IMPUTATION) {
+      LocalImputationForNumericalAttribute(selected_examples, weights,
+                                           attributes, &na_replacement);
+    }
+    // Determine the minimum and maximum values of the attribute.
+    {
+      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
+      if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
+                                    &max_value)) {
+        return SplitSearchResult::kInvalidAttribute;
+      }
+    }
+
+    // There should be at least two different unique values.
+    if (min_value == max_value) {
+      return SplitSearchResult::kInvalidAttribute;
+    }
+    // Randomly select some threshold values.
+    ASSIGN_OR_RETURN(
+        bins,
+        internal::GenHistogramBins(dt_config.numerical_split().type(),
+                                   dt_config.numerical_split().num_candidates(),
+                                   attributes, min_value, max_value, random));
+
+    candidate_splits.resize(bins.size());
+    for (int split_idx = 0; split_idx < candidate_splits.size(); split_idx++) {
+      auto& candidate_split = candidate_splits[split_idx];
+      candidate_split.threshold = bins[split_idx];
+    }
   }
 
   // Compute the split score of each threshold.
+  {
+    CHRONO_SCOPE(
+        ::yggdrasil_decision_forests::chrono_prof::kAssignSamplesToHistogram);
   for (const auto example_idx : selected_examples) {
     const float label = labels[example_idx];
     float attribute = attributes[example_idx];
@@ -2858,6 +2870,8 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
     }
   }
 
+  // Suffix-sum the per-bin counts into cumulative ">= threshold" counts.
+  // Part of histogram accumulation, hence inside kAssignSamplesToHistogram.
   for (int split_idx = candidate_splits.size() - 2; split_idx >= 0;
        split_idx--) {
     const auto& src = candidate_splits[split_idx + 1];
@@ -2866,8 +2880,11 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
         src.num_positive_examples_without_weights;
     dst.pos_label_dist.Add(src.pos_label_dist);
   }
+  }
 
   // Select the best threshold.
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::
+                   kSelectBestThresholdHistogram);
   const double initial_variance = label_distribution.Var();
   int best_candidate_split_idx = -1;
   double best_variance_reduction = condition->split_score();
@@ -2930,6 +2947,8 @@ FindSplitLabelHessianRegressionFeatureNumericalCart(
     const InternalTrainConfig& internal_config,
     const NodeConstraints& constraints, const int8_t monotonic_direction,
     proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartPath);
+  CHRONO_BEGIN(cart_setup);
   if constexpr (weighted) {
     DCHECK_GE(weights.size(), selected_examples.size());
   } else {
@@ -2962,6 +2981,8 @@ FindSplitLabelHessianRegressionFeatureNumericalCart(
     const auto& sorted_attributes =
         internal_config.preprocessing
             ->presorted_numerical_features()[attribute_idx];
+    CHRONO_END(cart_setup,
+               ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
     return ScanSplitsPresortedSparse<
         FeatureNumericalLabelHessianNumericalOneValue<weighted>,
         LabelHessianNumericalScoreAccumulator>(
@@ -2972,6 +2993,8 @@ FindSplitLabelHessianRegressionFeatureNumericalCart(
         &cache->cache_v2);
   } else if (sorting_strategy ==
              proto::DecisionTreeTrainingConfig::Internal::IN_NODE) {
+    CHRONO_END(cart_setup,
+               ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
     return FindBestSplit_LabelHessianRegressionFeatureNumerical<weighted>(
         selected_examples, feature_filler, label_filler, initializer,
         min_num_obs, attribute_idx, condition, &cache->cache_v2);
@@ -3079,6 +3102,8 @@ absl::StatusOr<SplitSearchResult> FindSplitLabelRegressionFeatureNumericalCart(
     const utils::NormalDistributionDouble& label_distribution,
     const int32_t attribute_idx, const InternalTrainConfig& internal_config,
     proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
+  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartPath);
+  CHRONO_BEGIN(cart_setup);
   if constexpr (weighted) {
     DCHECK_GE(weights.size(), selected_examples.size());
   } else {
@@ -3107,6 +3132,8 @@ absl::StatusOr<SplitSearchResult> FindSplitLabelRegressionFeatureNumericalCart(
     const auto& sorted_attributes =
         internal_config.preprocessing
             ->presorted_numerical_features()[attribute_idx];
+    CHRONO_END(cart_setup,
+               ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
     return ScanSplitsPresortedSparse<
         FeatureNumericalLabelNumericalOneValue<weighted>,
         LabelNumericalScoreAccumulator>(
@@ -3117,6 +3144,8 @@ absl::StatusOr<SplitSearchResult> FindSplitLabelRegressionFeatureNumericalCart(
         &cache->cache_v2);
   } else if (sorting_strategy ==
              proto::DecisionTreeTrainingConfig::Internal::IN_NODE) {
+    CHRONO_END(cart_setup,
+               ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
     return FindBestSplit_LabelRegressionFeatureNumerical<weighted>(
         selected_examples, feature_filler, label_filler, initializer,
         min_num_obs, attribute_idx, condition, &cache->cache_v2);

@@ -521,6 +521,10 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
     }
   } else if constexpr (is_same<LabelStats,
                                RegressionHessianLabelStats>::value) {
+    // No histogram variant exists for hessian splits
+    // (FindSplitLabelHessianRegressionFeatureNumericalHistogram is not
+    // implemented), so hessian gain always uses the sort-based Cart path,
+    // regardless of the numerical split type.
     if (!selected_weights.empty()) {
       ASSIGN_OR_RETURN(
           result,
@@ -546,7 +550,36 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
               monotonic_direction, condition, cache));
     }
   } else if constexpr (is_same<LabelStats, RegressionLabelStats>::value) {
-    if (!selected_weights.empty()) {
+    // Same routing as classification: histogram-based split types go through
+    // the histogram finder, EXACT through the sort-based Cart path. GBT
+    // (Boosting) trains regression trees on gradients, so this is the branch
+    // Boosting takes; before this routing existed, a histogram split type
+    // silently ran EXACT on every node.
+    if (dt_config.numerical_split().type() != proto::NumericalSplit::EXACT) {
+      DCHECK(random != nullptr)
+          << "EvaluateProjection: histogram split type "
+          << dt_config.numerical_split().type()
+          << " requires a non-null RandomEngine.";
+      if (!selected_weights.empty()) {
+        ASSIGN_OR_RETURN(
+            result,
+            FindSplitLabelRegressionFeatureNumericalHistogram<
+                /*weighted=*/true>(
+                dense_example_idxs, selected_weights, projection_values,
+                selected_labels, na_replacement, min_num_obs, dt_config,
+                label_stats.label_distribution, first_attribute_idx, random,
+                condition));
+      } else {
+        ASSIGN_OR_RETURN(
+            result,
+            FindSplitLabelRegressionFeatureNumericalHistogram<
+                /*weighted=*/false>(
+                dense_example_idxs, selected_weights, projection_values,
+                selected_labels, na_replacement, min_num_obs, dt_config,
+                label_stats.label_distribution, first_attribute_idx, random,
+                condition));
+      }
+    } else if (!selected_weights.empty()) {
       ASSIGN_OR_RETURN(
           result,
           FindSplitLabelRegressionFeatureNumericalCart</*weighted=*/true>(
