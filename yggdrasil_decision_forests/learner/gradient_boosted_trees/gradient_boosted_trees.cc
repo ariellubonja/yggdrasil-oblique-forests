@@ -1581,6 +1581,8 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
       }
     }
 
+    /* #region Finalize */
+
     {
       // kGbtUpdatePredictions: adaptive_work report + dart/plain prediction
       // cache update (train + validation) + AddTree.
@@ -2147,6 +2149,8 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
 #endif
 
   return std::move(mdl);
+
+  /* #endregion */
 }
 
 absl::Status GradientBoostedTreesLearner::SetHyperParametersImpl(

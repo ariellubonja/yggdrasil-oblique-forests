@@ -97,12 +97,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   } else
 #endif
   {
-#ifdef SUBTREE_GATHER_CACHE
-    SubtreeGatherCache* const sg = &cache->subtree_gather;
-    const bool sg_active = internal::PrepareSubtreeGatherNode(
-        selected_examples, train_dataset.nrow(), sg);
-#endif
-
 // MAIN LOOP
   for (int projection_idx = 0; projection_idx < num_projections; projection_idx++) {
     int8_t monotonic_direction;
@@ -113,12 +107,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
                        &current_projection, &monotonic_direction, random);
     }
 
-#ifdef SUBTREE_GATHER_CACHE
-    if (sg_active) {
-      RETURN_IF_ERROR(projection_evaluator.EvaluateWithSubtreeCache(
-          current_projection, selected_examples, sg, &projection_values));
-    } else
-#endif
     RETURN_IF_ERROR(projection_evaluator.Evaluate(
         current_projection, selected_examples, &projection_values));       // ★ ApplyProjection
 
@@ -170,7 +158,7 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 | DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem in core §13 |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
 | Symmetric nodewise control | `--config=symmetric_nodewise_control` | shared sampling, node-local Evaluate | control |
-| Subtree gather cache | `--config=subtree_gather` | `oblique.cc` `#ifdef SUBTREE_GATHER_CACHE` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
+| Subtree gather cache | *(code removed 2026-07-16)* | was `oblique.cc` `#ifdef SUBTREE_GATHER_CACHE`; recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
 
 ### DW1: `ApplyProjectionsDepthwise1Pass` (oblique_cpu_depthwise_1pass.cc)
@@ -364,11 +352,13 @@ nodes/depth). Hence: ties BFS on HIGGS (386 vs 387 s; deep 100k+-node depths thr
 slabs) symmetric **upper-bounds** shared-rows: if symmetric can't beat control on a shape,
 no shared-rows fix will.
 
-### Dead end kept for reference: `SubtreeGatherCache` (oblique_types.h:26, oblique.cc `#ifdef SUBTREE_GATHER_CACHE`)
+### Dead end: `SubtreeGatherCache` (code removed 2026-07-16; was oblique_types.h + oblique.cc `#ifdef SUBTREE_GATHER_CACHE`, added in `9f32e817`)
 
-Epoch-tagged per-thread block cache: when a node first drops to ≤`YDF_RM_MAX_ROWS` rows its
-example list becomes the current block; feature columns gather lazily into dense
-block-local arrays reused by descendants (DFS makes it effective), budget
+Epoch-tagged per-thread block cache: when a node first dropped to ≤`YDF_RM_MAX_ROWS` rows its
+example list became the current block; feature columns gathered lazily into dense
+block-local arrays reused by descendants (DFS made it effective), budget
 `YDF_SG_BUDGET_MB`. **⛔ +43 % at 1.5M×4096**: with P=⌈√F⌉ and nnz≈1.5, a node and its
-descendants share only ~2 % of features — gathers never amortize. Kept as the worked
-example of Standing conclusion #2 ("adding memory traffic to fix locality loses").
+descendants share only ~2 % of features — gathers never amortize. The worked example of
+Standing conclusion #2 ("adding memory traffic to fix locality loses"). Code deleted from
+the branch; recover from commit `9f32e817` (measurement log:
+`benchmarks/experiments/memory_safe_dynamic_2026-06-12.md`).

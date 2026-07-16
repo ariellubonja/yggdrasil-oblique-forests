@@ -19,7 +19,6 @@ build:row_major_dataset_layout    --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 build:symmetric_depthwise_ap      --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
 build:symmetric_nodewise_control  --cxxopt="-DSYMMETRIC_NODEWISE_CONTROL=1"   # don't combine with the above
 build:bfs_only                    --cxxopt="-DBFS_ONLY=1"                     # mutually exclusive with symmetric_*
-build:subtree_gather              --cxxopt="-DSUBTREE_GATHER_CACHE=1"
 build:oblique_gpu                 --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 build:chrono_profile              --cxxopt="-DCHRONO_PROFILE=2"   # every scope
 build:chrono_profile_coarse       --cxxopt="-DCHRONO_PROFILE=1"   # top-level scopes only, lower overhead
@@ -36,7 +35,7 @@ build:profiler --cxxopt=-O2 -g, no fission    # for VTune/perf
 Env knobs (read once, cached in a static): `YDF_RM_MAX_ROWS` (node-size threshold, default
 5000 baked by the harness `main()`; ∞ if binary run without harness), `YDF_DW1_BLOCK_FLOATS`
 (default 64 Mi floats), `YDF_DW1_MIN_DEPTH` (default 0), `YDF_SYMMETRIC_MAX_DEPTH` (default
-INT32_MAX; deeper levels hand off to DFS `GrowTreeLocal`), `YDF_SG_BUDGET_MB` (default 1024).
+INT32_MAX; deeper levels hand off to DFS `GrowTreeLocal`).
 
 ## Harness: `examples/train_oblique_forest.cc`
 

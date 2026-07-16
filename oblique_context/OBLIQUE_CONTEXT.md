@@ -342,7 +342,7 @@ Upstream: `FindBestConditionOblique` (oblique.cc:777) → `FindBestConditionSing
 single-thread branch (training.cc:1896).
 
 **The full body — with every variant `#ifdef` branch (SYMMETRIC_DEPTHWISE_AP precomputed-slab
-hook, SYMMETRIC_NODEWISE_CONTROL, SUBTREE_GATHER_CACHE) — is in
+hook, SYMMETRIC_NODEWISE_CONTROL) — is in
 `oblique_context/kernel_variants.md`.** Any kernel that produces the same slab values in slab
 order `slab[p*rows_n + i]` can feed the `precomputed_projected_values` hook without touching
 the finders (§12.4).
@@ -396,7 +396,7 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 | DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem §13 |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
 | Symmetric nodewise control | `--config=symmetric_nodewise_control` | shared sampling, node-local Evaluate | control |
-| Subtree gather cache | `--config=subtree_gather` | `oblique.cc` `#ifdef SUBTREE_GATHER_CACHE` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
+| Subtree gather cache | *(code removed 2026-07-16)* | recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
 
 Kernel internals (DW1 col-sharing + shared-rows, symmetric depthwise AP, the subtree-gather
@@ -407,7 +407,7 @@ dead end) and the full driver hookup are in the shard.
 ## 11. Building, running, measuring → `oblique_context/build_measure.md`
 
 The `.bazelrc` experiment configs, env knobs (`YDF_RM_MAX_ROWS`, `YDF_DW1_BLOCK_FLOATS`,
-`YDF_DW1_MIN_DEPTH`, `YDF_SYMMETRIC_MAX_DEPTH`, `YDF_SG_BUDGET_MB`), harness defaults
+`YDF_DW1_MIN_DEPTH`, `YDF_SYMMETRIC_MAX_DEPTH`), harness defaults
 (`examples/train_oblique_forest.cc`: Oblique + Dynamic Random Histogram, 64 bins, threshold
 250, P exp .5, density 1.5, seed 1234, one tree/thread), input modes, the trunk generator, the
 standard dataset shapes, and the measurement tooling (`runtime.sh`, `accuracy.sh`,

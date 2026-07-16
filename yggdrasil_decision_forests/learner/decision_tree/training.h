@@ -145,12 +145,6 @@ struct SplitterPerThreadCache {
   std::shared_ptr<internal::ProjectionEvaluatorCache>
       projection_evaluator_cache;
 
-#ifdef SUBTREE_GATHER_CACHE
-  // Subtree-scoped gathered feature columns for sparse-oblique splits. See
-  // SubtreeGatherCache in oblique_types.h.
-  SubtreeGatherCache subtree_gather;
-#endif
-
   PerThreadCacheV2 cache_v2;
 
   utils::RandomEngine random;
