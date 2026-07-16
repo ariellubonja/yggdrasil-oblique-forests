@@ -275,7 +275,7 @@ BINARY="./bazel-bin/examples/train_oblique_forest"
 # Boosting (GBT/MART) builds trees sequentially, so the "5x cores to prevent
 # skewness" heuristic doesn't apply; use a fixed 30 trees instead.
 if [[ "$EXTRA_TRAIN_ARGS" == *"ensemble_method=Boosting"* ]]; then
-  NUM_TREES=30
+  NUM_TREES=300
 else
   NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
 fi

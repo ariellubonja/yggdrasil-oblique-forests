@@ -357,6 +357,7 @@ int FillMatrixFromDataset(Matrix* matrix,
 /* #endregion */
 
 int main(int argc, char** argv) {
+  const auto t_main_start = std::chrono::high_resolution_clock::now();
   absl::ParseCommandLine(argc, argv);
   if (std::getenv("YDF_RM_MAX_ROWS") == nullptr) {
     setenv("YDF_RM_MAX_ROWS", "5000", /*overwrite=*/0);
@@ -677,6 +678,15 @@ int main(int argc, char** argv) {
   CHECK_OK(model::GetLearner(train_config, &learner, deploy_config));
 
   // 3) Train with timing
+  // Everything before this point (flag parsing, dataspec inference, synthetic
+  // generation, tfrecord load). The csv/column dataset load happens inside
+  // TrainWithStatus and is logged separately by abstract_learner.cc.
+  {
+    const std::chrono::duration<double> init_dur =
+        std::chrono::high_resolution_clock::now() - t_main_start;
+    LOG(INFO) << "train_oblique_forest wall-time - Loading/Init (pre-train): "
+              << init_dur.count() << "s";
+  }
   auto start = std::chrono::high_resolution_clock::now();
   absl::StatusOr<std::unique_ptr<model::AbstractModel>> model_or;
 
@@ -687,6 +697,7 @@ int main(int argc, char** argv) {
       // Row-major from CSV: same scheme as Dynamic_Row_Col_Major but only
       // the row-major store. The VerticalDataset stays the fp32 source for
       // split application and OOB.
+      const auto t_load_start = std::chrono::high_resolution_clock::now();
       static std::unique_ptr<dataset::VerticalDataset> csv_ds;
       csv_ds = std::make_unique<dataset::VerticalDataset>();
       CHECK_OK(dataset::LoadVerticalDataset("csv:" + csv_path, data_spec,
@@ -698,6 +709,10 @@ int main(int argc, char** argv) {
           std::make_unique<dataset::RowMajorFeatureMatrix>(nrow, total_cols);
       const int mirrored = FillMatrixFromDataset(csv_rows.get(), *csv_ds);
       dataset::RowMajorFeatureMatrix::SetActive(csv_rows.get());
+      const std::chrono::duration<double> load_dur =
+          std::chrono::high_resolution_clock::now() - t_load_start;
+      LOG(INFO) << "train_oblique_forest Dataset load took: "
+                << load_dur.count() << " s";
       LOG(INFO) << "Row-major CSV matrix: " << mirrored
                 << " numerical columns, "
                 << (csv_rows->bytes() / (1024.0 * 1024.0 * 1024.0)) << " GiB";

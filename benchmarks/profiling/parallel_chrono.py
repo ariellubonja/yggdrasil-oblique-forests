@@ -644,12 +644,14 @@ if __name__ == "__main__":
         # time if the marker is missing (e.g. binary crashed before the
         # log line, or chrono build dropped the marker).
         m_train = re.search(
-            r"random_forest\.cc Training block took:\s*([0-9.eE+-]+)\s*s",
+            r"(?:random_forest|gradient_boosted_trees)\.cc Training block took:\s*([0-9.eE+-]+)\s*s",
             log_plain)
+        m_total = re.search(
+            r"train_oblique_forest wall-time - Training \+ Post-Processing:\s*([0-9.eE+-]+)s",
+            log_plain)
+        train_from_learner_marker = m_train is not None
         if not m_train:
-            m_train = re.search(
-                r"train_oblique_forest wall-time - Training \+ Post-Processing:\s*([0-9.eE+-]+)s",
-                log_plain)
+            m_train = m_total
         if m_train:
             train_block = float(m_train.group(1))
             print(f"\n⏱  Training block took {train_block:.4f} s"
@@ -658,6 +660,35 @@ if __name__ == "__main__":
             train_block = None
             print(f"\n⏱  Binary subprocess ran for {dt:.4f} s"
                   f"   (Training-block marker not found in log)\n")
+
+        # ── Phase decomposition: Loading/Init | Training | Post-processing ──
+        # Loading/Init = harness pre-train wall (flag parsing, dataspec
+        # inference, synthetic generation, tfrecord load) + the dataset load
+        # that happens inside TrainWithStatus ("Dataset load took" markers:
+        # abstract_learner.cc for csv/column, the harness for csv/row).
+        # Post-processing = harness Training+Post-Processing wall − dataset
+        # load − learner training block (OOB, validation, model finalize).
+        # A manual exit() after the learner's training-block log (used to
+        # skip RF post-processing) drops the harness end marker → "(skipped)".
+        dataset_load = sum(float(x) for x in re.findall(
+            r"Dataset load took:\s*([0-9.eE+-]+)\s*s", log_plain))
+        m_init = re.search(
+            r"train_oblique_forest wall-time - Loading/Init \(pre-train\):\s*([0-9.eE+-]+)s",
+            log_plain)
+        loading_init = (float(m_init.group(1)) + dataset_load) if m_init else None
+        if m_total and train_from_learner_marker:
+            post_proc = float(m_total.group(1)) - dataset_load - train_block
+        else:
+            post_proc = None
+
+        def _fmt_phase(v, missing):
+            return f"{v:.4f} s" if v is not None else missing
+
+        print("⏱  Phases: "
+              f"Loading/Init {_fmt_phase(loading_init, '(no marker — rebuild binary)')} | "
+              f"Training {_fmt_phase(train_block, '(no marker)')} | "
+              f"Post-processing {_fmt_phase(post_proc, '(skipped)')}"
+              f"   (subprocess wall {dt:.4f} s)\n")
 
         # ── CHRONO coverage vs Training-block wall ────────────────────
         # Sum top-level per-tree-train chrono scopes across all
@@ -735,8 +766,12 @@ if __name__ == "__main__":
             ("Helper invocation", helper_invocation),
             ("Bazel build", utils.last_build_cmd if utils.last_build_cmd else "(build skipped)"),
             ("Binary command", binary_cmd_str),
+            ("Loading/init time (s)",
+             f"{loading_init:.4f}" if loading_init is not None else "(marker not found)"),
             ("Training time (s)",
              f"{train_block:.4f}" if train_block is not None else "(marker not found)"),
+            ("Post-processing time (s)",
+             f"{post_proc:.4f}" if post_proc is not None else "(skipped)"),
         ]
 
         write_csv(table, cmd_lines, out_fp)

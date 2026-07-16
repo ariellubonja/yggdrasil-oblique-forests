@@ -430,10 +430,13 @@ AbstractLearner::TrainWithStatusImpl(
   dataset_loading_config.num_threads = deployment().num_io_threads();
   dataset_loading_config.stop = this->stop_training_trigger_;
 
+  const auto begin_dataset_load = absl::Now();
   dataset::VerticalDataset train_dataset;
   RETURN_IF_ERROR(LoadVerticalDataset(typed_path, data_spec, &train_dataset,
                                       /*required_columns=*/{},
                                       dataset_loading_config));
+  LOG(INFO) << "abstract_learner.cc Dataset load took: "
+            << absl::ToDoubleSeconds(absl::Now() - begin_dataset_load) << " s";
 
   RETURN_IF_ERROR(dataset::CheckNumExamples(train_dataset.nrow()));
 
