@@ -137,6 +137,13 @@ METHOD_EXTRA_ARGS["Dynamic Random Histogram"]="--histogram_num_bins=$histogram_n
 # Build target and base flags
 BUILD_TARGET="//examples:train_oblique_forest"
 BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native")
+# Optional space-separated extra build configs/flags injected into every
+# bazel_build (e.g. EXTRA_BAZEL_CONFIGS="--config=symmetric_nodewise_control").
+# shellcheck disable=SC2206
+EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
+# Optional extra train_oblique_forest flags injected into every binary command
+# (e.g. EXTRA_TRAIN_ARGS="--ensemble_method Boosting --shrinkage=0.1").
+EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
 # Vectorized build configs (adjust if your repo uses different config names)
 VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
 VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
@@ -181,7 +188,7 @@ ensure_icx() {
 
 bazel_build() {
   ensure_icx
-  bazel build "$@"
+  bazel build "$@" "${EXTRA_BAZEL_CONFIGS_ARR[@]}"
 }
 
 logdir="benchmarks/results"
@@ -318,7 +325,7 @@ for split in "${SPLIT_TYPES[@]}"; do
       # CSV datasets
       for entry in "${CSV_DATASETS[@]}"; do
         IFS='|' read -r path label <<<"$entry"
-        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
         run_cmd "$cmd"
       done
     done
@@ -380,7 +387,7 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
         # CSV datasets
         for entry in "${CSV_DATASETS[@]}"; do
           IFS='|' read -r path label <<<"$entry"
-          cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg"
+          cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
           run_cmd "$cmd"
         done
       done
@@ -465,7 +472,7 @@ for method in "${selected_vec_methods[@]}"; do
     # CSV datasets
     for entry in "${CSV_DATASETS[@]}"; do
       IFS='|' read -r path label <<<"$entry"
-      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg"
+      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
       run_cmd "$cmd"
     done
   done

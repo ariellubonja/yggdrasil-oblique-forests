@@ -4,7 +4,8 @@
 Log type is taken from an explicit 3rd argument when given, otherwise it is
 inferred from the filename (substring 'runtime' or 'accuracy'):
   *runtime*.log  -> per-run timing samples (uses MEDIAN samples line)
-  *accuracy*.log -> per-seed final OOB accuracy (last 'Train tree N/N accuracy:' per run)
+  *accuracy*.log -> per-seed final accuracy (last 'Train tree N/N ... accuracy:'
+                    per run; RF OOB accuracy or GBT train-accuracy)
 
 Usage: parse_log_to_csv.py <log_file> <out_csv> [runtime|accuracy]
 
@@ -21,7 +22,17 @@ import sys
 
 CMD_RE = re.compile(r'^\./bazel-bin/examples/train_oblique_forest (.+?)\s*$')
 RUN_RE = re.compile(r'^----- Run (\d+)/(\d+)(?: \(seed=(\d+)\))? -----$')
-ACC_RE = re.compile(r'Train tree \d+/\d+ accuracy:([\d.]+)')
+# Random Forest logs   "Train tree N/N accuracy:0.83 logloss:..."
+# Gradient Boosted Trees log "Train tree N/N train-loss:... train-accuracy:0.73 [total:...]"
+# One regex captures the accuracy value in either format: the `\b` before
+# `accuracy` also matches the GBT `train-accuracy:` variant (since `-` is a
+# non-word char, there is a word boundary between it and `accuracy`). The
+# accuracy parser keeps the LAST match per seed, i.e. the final-model accuracy
+# in both cases.
+# CAVEAT: GBT's number is TRAIN-set accuracy (the harness builds GBT with
+# validation_set_ratio=0), whereas RF's is OOB accuracy. The two are NOT
+# directly comparable -- GBT train-accuracy is optimistic.
+ACC_RE = re.compile(r'Train tree \d+/\d+.*?\baccuracy:([\d.]+)')
 # STDDEV segment is optional so logs predating it still parse.
 MEDIAN_RUN_RE = re.compile(
     r'^MEDIAN of \d+/\d+ runs: ([\d.eE+\-]+) s'
