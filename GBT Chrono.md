@@ -21,6 +21,11 @@ Reported time is wrong by runtime.sh . rerun
 
 chrono
 
+    [ ] Add vectorized in FindSplitRegerssionHistogram
+        [ ] Find a better code way for it to generalize across all methods that use Random Hist
+
+    [X] Remove isnan in FindSplitRegerssionHistogram
+
     [X] Add histogramming cols
 
     [ ] Proportion of AP-EP by dataset
