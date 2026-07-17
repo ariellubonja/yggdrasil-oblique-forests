@@ -4,16 +4,24 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
+#include <limits>
+#include <map>
 #include <memory>
 #include <random>
 #include <thread>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/strings/ascii.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
 
 #include "yggdrasil_decision_forests/dataset/data_spec_inference.h"
+#include "yggdrasil_decision_forests/dataset/data_spec.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
 #include "yggdrasil_decision_forests/dataset/row_major_feature_matrix.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
@@ -104,6 +112,15 @@ ABSL_FLAG(std::string, dataset_layout, "column",
           "Hidden dataset-layout experiment: 'column' (default vertical "
           "store) or 'row' (fp32 row-major store feeding the projection "
           "loop). 'row' requires --config=row_major_dataset_layout.");
+
+// When true (default), CSV mode reads the file ONCE (build the dataspec from
+// the in-memory columns) instead of YDF's default two full reads
+// (CreateDataSpec's statistics pass + LoadVerticalDataset). Automatically falls
+// back to the two-read path when the fast path does not apply (string labels,
+// categorical feature columns, degenerate labels). Set to false to force the
+// original two-read behaviour (useful for A/B correctness checks).
+ABSL_FLAG(bool, csv_single_pass_load, true,
+          "Load CSV in a single file scan instead of YDF's default two reads.");
 
 // Histogram-based splits - Updated to match Yggdrasil implementation
 ABSL_FLAG(std::string, numerical_split_type, "Dynamic Random Histogram",
@@ -356,6 +373,192 @@ int FillMatrixFromDataset(Matrix* matrix,
 
 /* #endregion */
 
+/* #region Single-pass CSV load */
+// Loads a CSV into a VerticalDataset with a SINGLE file scan, avoiding YDF's
+// default two full reads (CreateDataSpec's statistics pass, then
+// LoadVerticalDataset). Strategy:
+//   1. Read only the header line to learn the column names.
+//   2. Load every column as NUMERICAL in one pass. YDF's numerical CSV parser
+//      returns an error on a non-numeric cell, so a string label or categorical
+//      feature safely aborts this fast path (caller falls back to two reads).
+//   3. Recompute exact numerical statistics from the in-RAM columns.
+//   4. Convert the label column NUMERICAL -> binary CATEGORICAL from the *full*
+//      in-memory label values. Doing this after the full load (rather than from
+//      a truncated inference scan) makes it robust to label-sorted files.
+namespace single_pass_csv {
+
+std::string FormatLabelKey(float v) {
+  if (std::isfinite(v) && std::floor(v) == v && std::fabs(v) < 1e15f) {
+    return absl::StrCat(static_cast<int64_t>(v));
+  }
+  return absl::StrCat(v);
+}
+
+absl::StatusOr<std::vector<std::string>> ReadHeader(const std::string& path) {
+  std::ifstream in(path);
+  if (!in.is_open()) {
+    return absl::NotFoundError(absl::StrCat("Cannot open CSV: ", path));
+  }
+  std::string line;
+  if (!std::getline(in, line)) {
+    return absl::InvalidArgumentError(absl::StrCat("Empty CSV: ", path));
+  }
+  if (!line.empty() && line.back() == '\r') line.pop_back();
+  std::vector<std::string> names = absl::StrSplit(line, ',');
+  for (auto& n : names) n = std::string(absl::StripAsciiWhitespace(n));
+  if (names.empty()) {
+    return absl::InvalidArgumentError("CSV header has no columns");
+  }
+  return names;
+}
+
+absl::StatusOr<std::unique_ptr<dataset::VerticalDataset>> Load(
+    const std::string& csv_path, const std::string& label_col) {
+  auto header_or = ReadHeader(csv_path);
+  if (!header_or.ok()) return header_or.status();
+  const std::vector<std::string>& header = header_or.value();
+
+  int label_idx = -1;
+  for (int i = 0; i < static_cast<int>(header.size()); ++i) {
+    if (header[i] == label_col) {
+      label_idx = i;
+      break;
+    }
+  }
+  if (label_idx < 0) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Label column '", label_col, "' not found in CSV header"));
+  }
+
+  // (2) Load every column as NUMERICAL in a single scan.
+  dataset::proto::DataSpecification numeric_spec;
+  for (const auto& name : header) {
+    auto* col = numeric_spec.add_columns();
+    col->set_name(name);
+    col->set_type(dataset::proto::ColumnType::NUMERICAL);
+  }
+  auto ds = std::make_unique<dataset::VerticalDataset>();
+  const absl::Status load_status =
+      dataset::LoadVerticalDataset("csv:" + csv_path, numeric_spec, ds.get());
+  if (!load_status.ok()) return load_status;  // e.g. a non-numeric column.
+
+  const int64_t nrow = ds->nrow();
+  if (nrow <= 0) return absl::InvalidArgumentError("CSV has no data rows");
+
+  // (4) Convert the label column NUMERICAL -> CATEGORICAL from full data.
+  auto label_num_or = ds->numerical_column(label_idx);
+  if (!label_num_or.ok()) return label_num_or.status();
+  // Copy the values: ReplaceColumn destroys the underlying numerical column.
+  const std::vector<float> label_vals = label_num_or.value()->values();
+
+  std::map<float, int64_t> counts;  // value-ordered for determinism.
+  int64_t label_nas = 0;
+  for (float v : label_vals) {
+    if (std::isnan(v)) {
+      ++label_nas;
+      continue;
+    }
+    ++counts[v];
+  }
+  if (counts.size() < 2) {
+    return absl::FailedPreconditionError(
+        "Label has fewer than 2 distinct values; not a classification label");
+  }
+
+  // Vocabulary in frequency-descending order (matches YDF), value-ascending on
+  // ties (stable over the value-ordered map).
+  std::vector<std::pair<float, int64_t>> vocab(counts.begin(), counts.end());
+  std::stable_sort(
+      vocab.begin(), vocab.end(),
+      [](const std::pair<float, int64_t>& a,
+         const std::pair<float, int64_t>& b) { return a.second > b.second; });
+
+  dataset::proto::Column cat_spec;
+  cat_spec.set_name(header[label_idx]);
+  cat_spec.set_type(dataset::proto::ColumnType::CATEGORICAL);
+  auto* cat = cat_spec.mutable_categorical();
+  cat->set_is_already_integerized(false);
+  cat->set_number_of_unique_values(static_cast<int64_t>(vocab.size()) + 1);
+  auto& items = *cat->mutable_items();
+  {
+    auto& ood = items[dataset::kOutOfDictionaryItemKey];
+    ood.set_index(dataset::kOutOfDictionaryItemIndex);
+    ood.set_count(label_nas);
+  }
+  std::map<float, int32_t> value_to_index;
+  int64_t most_freq_idx = dataset::kOutOfDictionaryItemIndex;
+  int64_t most_freq_count = -1;
+  for (size_t i = 0; i < vocab.size(); ++i) {
+    const int32_t idx = static_cast<int32_t>(i) + 1;
+    auto& item = items[FormatLabelKey(vocab[i].first)];
+    item.set_index(idx);
+    item.set_count(vocab[i].second);
+    value_to_index[vocab[i].first] = idx;
+    if (vocab[i].second > most_freq_count) {
+      most_freq_count = vocab[i].second;
+      most_freq_idx = idx;
+    }
+  }
+  cat->set_most_frequent_value(most_freq_idx);
+
+  auto replaced = ds->ReplaceColumn(label_idx, cat_spec);
+  if (!replaced.ok()) return replaced.status();
+  auto cat_col_or = ds->mutable_categorical_column(label_idx);
+  if (!cat_col_or.ok()) return cat_col_or.status();
+  auto* cat_col = cat_col_or.value();
+  for (int64_t r = 0; r < nrow; ++r) {
+    const float v = label_vals[r];
+    if (std::isnan(v)) {
+      cat_col->Set(r, dataset::VerticalDataset::CategoricalColumn::kNaValue);
+    } else {
+      cat_col->Set(r, value_to_index[v]);
+    }
+  }
+
+  // (3) Recompute exact numerical statistics for feature columns from RAM.
+  for (int col_idx = 0; col_idx < ds->data_spec().columns_size(); ++col_idx) {
+    if (col_idx == label_idx) continue;
+    auto* col_spec = ds->mutable_data_spec()->mutable_columns(col_idx);
+    if (col_spec->type() != dataset::proto::ColumnType::NUMERICAL) continue;
+    auto num_or = ds->numerical_column(col_idx);
+    if (!num_or.ok()) continue;
+    const std::vector<float>& vals = num_or.value()->values();
+    double sum = 0.0, sum_sq = 0.0;
+    int64_t count = 0, nas = 0;
+    float min_v = std::numeric_limits<float>::infinity();
+    float max_v = -std::numeric_limits<float>::infinity();
+    for (float v : vals) {
+      if (std::isnan(v)) {
+        ++nas;
+        continue;
+      }
+      sum += v;
+      sum_sq += static_cast<double>(v) * v;
+      ++count;
+      min_v = std::min(min_v, v);
+      max_v = std::max(max_v, v);
+    }
+    auto* num = col_spec->mutable_numerical();
+    if (count > 0) {
+      const double mean = sum / count;
+      double var = sum_sq / count - mean * mean;
+      if (var < 0) var = 0;
+      num->set_mean(mean);
+      num->set_standard_deviation(std::sqrt(var));
+      num->set_min_value(min_v);
+      num->set_max_value(max_v);
+    }
+    col_spec->set_count_nas(nas);
+  }
+
+  ds->mutable_data_spec()->set_created_num_rows(nrow);
+  return ds;
+}
+
+}  // namespace single_pass_csv
+
+/* #endregion */
+
 int main(int argc, char** argv) {
   const auto t_main_start = std::chrono::high_resolution_clock::now();
   absl::ParseCommandLine(argc, argv);
@@ -392,18 +595,37 @@ int main(int argc, char** argv) {
       return 1;
     }
 
-    
-    LOG(INFO) << "Inferring DataSpec from CSV: " << csv_path;
-    dataset::proto::DataSpecificationGuide guide;
-    auto* col_guide = guide.add_column_guides();
-    col_guide->set_column_name_pattern(label_col);
-    col_guide->set_type(dataset::proto::ColumnType::CATEGORICAL);
+    bool single_pass_ok = false;
+    if (absl::GetFlag(FLAGS_csv_single_pass_load)) {
+      LOG(INFO) << "Loading CSV in a single pass: " << csv_path;
+      auto ds_or = single_pass_csv::Load(csv_path, label_col);
+      if (ds_or.ok()) {
+        tf_ds = std::move(ds_or.value());
+        ds_ptr = tf_ds.get();
+        data_spec = tf_ds->data_spec();
+        single_pass_ok = true;
+        LOG(INFO) << "Single-pass CSV load complete: " << tf_ds->nrow()
+                  << " rows, " << data_spec.columns_size() << " columns.";
+      } else {
+        LOG(WARNING) << "Single-pass CSV load not applicable ("
+                     << ds_or.status().message()
+                     << "); falling back to two-pass inference + load.";
+      }
+    }
 
-    dataset::CreateDataSpec(
-        "csv:" + csv_path,
-        /*require_same_dataset_fields=*/false,
-        guide,
-        &data_spec);
+    if (!single_pass_ok) {
+      LOG(INFO) << "Inferring DataSpec from CSV: " << csv_path;
+      dataset::proto::DataSpecificationGuide guide;
+      auto* col_guide = guide.add_column_guides();
+      col_guide->set_column_name_pattern(label_col);
+      col_guide->set_type(dataset::proto::ColumnType::CATEGORICAL);
+
+      dataset::CreateDataSpec(
+          "csv:" + csv_path,
+          /*require_same_dataset_fields=*/false,
+          guide,
+          &data_spec);
+    }
   }
   else if (mode == "uniform" || mode == "trunk") {
     std::string layout = absl::GetFlag(FLAGS_dataset_layout);
@@ -696,18 +918,22 @@ int main(int argc, char** argv) {
     if (csv_layout == "row") {
       // Row-major from CSV: same scheme as Dynamic_Row_Col_Major but only
       // the row-major store. The VerticalDataset stays the fp32 source for
-      // split application and OOB.
+      // split application and OOB. Reuse the single-pass dataset if present.
       const auto t_load_start = std::chrono::high_resolution_clock::now();
       static std::unique_ptr<dataset::VerticalDataset> csv_ds;
-      csv_ds = std::make_unique<dataset::VerticalDataset>();
-      CHECK_OK(dataset::LoadVerticalDataset("csv:" + csv_path, data_spec,
-                                            csv_ds.get()));
-      const int64_t nrow = csv_ds->nrow();
-      const int total_cols = csv_ds->data_spec().columns_size();
+      dataset::VerticalDataset* base_ds = ds_ptr;
+      if (base_ds == nullptr) {
+        csv_ds = std::make_unique<dataset::VerticalDataset>();
+        CHECK_OK(dataset::LoadVerticalDataset("csv:" + csv_path, data_spec,
+                                              csv_ds.get()));
+        base_ds = csv_ds.get();
+      }
+      const int64_t nrow = base_ds->nrow();
+      const int total_cols = base_ds->data_spec().columns_size();
       static std::unique_ptr<dataset::RowMajorFeatureMatrix> csv_rows;
       csv_rows =
           std::make_unique<dataset::RowMajorFeatureMatrix>(nrow, total_cols);
-      const int mirrored = FillMatrixFromDataset(csv_rows.get(), *csv_ds);
+      const int mirrored = FillMatrixFromDataset(csv_rows.get(), *base_ds);
       dataset::RowMajorFeatureMatrix::SetActive(csv_rows.get());
       const std::chrono::duration<double> load_dur =
           std::chrono::high_resolution_clock::now() - t_load_start;
@@ -716,9 +942,13 @@ int main(int argc, char** argv) {
       LOG(INFO) << "Row-major CSV matrix: " << mirrored
                 << " numerical columns, "
                 << (csv_rows->bytes() / (1024.0 * 1024.0 * 1024.0)) << " GiB";
-      model_or = learner->TrainWithStatus(*csv_ds);
+      model_or = learner->TrainWithStatus(*base_ds);
     } else if (csv_layout == "column") {
-      model_or = learner->TrainWithStatus("csv:" + csv_path, data_spec);
+      if (ds_ptr != nullptr) {
+        model_or = learner->TrainWithStatus(*ds_ptr);
+      } else {
+        model_or = learner->TrainWithStatus("csv:" + csv_path, data_spec);
+      }
     } else {
       std::cerr << "Unsupported --dataset_layout for csv mode: " << csv_layout
                 << ". Use 'column' or 'row'.\n";
@@ -731,7 +961,11 @@ int main(int argc, char** argv) {
                    "--config=row_major_dataset_layout.\n";
       return 1;
     }
-    model_or = learner->TrainWithStatus("csv:" + csv_path, data_spec);
+    if (ds_ptr != nullptr) {
+      model_or = learner->TrainWithStatus(*ds_ptr);
+    } else {
+      model_or = learner->TrainWithStatus("csv:" + csv_path, data_spec);
+    }
 #endif
   } else {
     model_or = learner->TrainWithStatus(*ds_ptr);
