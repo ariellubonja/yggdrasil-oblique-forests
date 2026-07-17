@@ -1343,7 +1343,7 @@ absl::Status ProjectionEvaluator::Evaluate(
       DCHECK_GE(item.attribute_idx, 0);
 
       
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
+#ifdef ENABLE_ISNAN
       if (std::isnan(attribute_value)) {
         attribute_value = na_replacement_value_[item.attribute_idx];
       }

@@ -18,7 +18,7 @@
 // out_projected[n] is a (P_n * rows_n)-float slab, row-minor within
 // projection -- slab[p * rows_n + i] = <projections_per_node[n][p],
 // features[selected_examples_per_node[n][i]]>, with NaN inputs replaced
-// by the dataset-level feature mean when ENABLE_APPLYPROJECTION_ISNAN is
+// by the dataset-level feature mean when ENABLE_ISNAN is
 // defined.
 
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_DEPTHWISE_1PASS_H_

@@ -2851,9 +2851,12 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
   for (const auto example_idx : selected_examples) {
     const float label = labels[example_idx];
     float attribute = attributes[example_idx];
+    // TODO gate isnan behind #ifdef. on SPORF this is redundant cuz it's already checked in ApplyProjection
+#ifdef ENABLE_ISNAN
     if (std::isnan(attribute)) {
       attribute = na_replacement;
     }
+#endif
 
     auto it_split = std::upper_bound(
         candidate_splits.begin(), candidate_splits.end(), attribute,

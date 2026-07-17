@@ -23,7 +23,7 @@ build:oblique_gpu                 --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=en
 build:chrono_profile              --cxxopt="-DCHRONO_PROFILE=2"   # every scope
 build:chrono_profile_coarse       --cxxopt="-DCHRONO_PROFILE=1"   # top-level scopes only, lower overhead
 build:inline_projection_evaluate  --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
-build:enable_applyprojection_isnan --cxxopt="-DENABLE_APPLYPROJECTION_ISNAN=1"
+build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
 build:enable_std_upper_bound_avx2 / _avx512   # SIMD upper_bound; define is also default-on globally
 build --copt=-march=native --cxxopt="-O3"     # global

@@ -45,7 +45,7 @@ Everything in this project is specialized to:
   `weights` vector when all weights are 1, so all hot paths take the `weights.empty()` /
   `weighted=false` branches.
 - **No missing values in practice.** The per-lookup `std::isnan` in the projection kernels
-  is **compiled out by default** and only re-enabled by `--config=enable_applyprojection_isnan`.
+  is **compiled out by default** and only re-enabled by `--config=enable_isnan`.
   Synthetic data has no NaN; row-major mirrors replace NaN with the column mean at copy time.
 - **Random Forest (Bagging), `growing_strategy=Local`, sparse-oblique splits.**
   Not GBT, not MHLD-oblique, not best-first-global, no monotonic constraints, no honest
@@ -260,7 +260,7 @@ absl::Status ProjectionEvaluator::Evaluate(
     // This is iterating over columns : would benefit from Row-major
     for (const auto& item : projection) {
       float attribute_value = AttributeValue(item.attribute_idx, example_idx);
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
+#ifdef ENABLE_ISNAN
       if (std::isnan(attribute_value)) {
         attribute_value = na_replacement_value_[item.attribute_idx];
       }

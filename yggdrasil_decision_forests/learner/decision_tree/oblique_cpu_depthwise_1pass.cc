@@ -125,7 +125,7 @@ inline void EvaluateNodeProjMajor(
   struct FeatRef {
     const float* col;
     float weight;
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
+#ifdef ENABLE_ISNAN
     float na;
 #endif
   };
@@ -135,7 +135,7 @@ inline void EvaluateNodeProjMajor(
     for (const auto& feat : projs[p]) {
       feats.push_back({evaluator.AttributeData(feat.attribute_idx),
                        feat.weight
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
+#ifdef ENABLE_ISNAN
                        ,
                        evaluator.NaReplacementValue(feat.attribute_idx)
 #endif
@@ -147,7 +147,7 @@ inline void EvaluateNodeProjMajor(
       float acc = 0.f;
       for (const auto& f : feats) {
         float v = f.col[ex];
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
+#ifdef ENABLE_ISNAN
         if (std::isnan(v)) v = f.na;
 #endif
         acc += f.weight * v;
@@ -168,7 +168,7 @@ inline void EvaluateProjectionRowsGeneric(
     float acc = 0.f;
     for (const auto& feat : proj) {
       float v = evaluator.AttributeValue(feat.attribute_idx, ex);
-#ifdef ENABLE_APPLYPROJECTION_ISNAN
+#ifdef ENABLE_ISNAN
       if (std::isnan(v)) v = evaluator.NaReplacementValue(feat.attribute_idx);
 #endif
       acc += feat.weight * v;
