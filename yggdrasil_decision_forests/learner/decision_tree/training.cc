@@ -2267,6 +2267,17 @@ struct HistogramBinner {
 #endif
   }
 
+  // Reference bin index: index of the last threshold <= x, or -1 if all
+  // thresholds are > x. This is std::upper_bound over the real (unpadded)
+  // thresholds. It serves BOTH as the production scalar fallback and as the
+  // debug cross-check that the equal-width closed form and the SIMD fast paths
+  // agree with it.
+  int ScalarIndex(const float x) const {
+    auto it = std::upper_bound(scalar_thr.begin(), scalar_thr.end(), x);
+    if (it == scalar_thr.begin()) return -1;
+    return static_cast<int>(it - scalar_thr.begin()) - 1;
+  }
+
   // Returns the index of the last threshold <= x; -1 if all thresholds > x.
   // (Equivalent to std::upper_bound(thr, x) - thr.begin() - 1.)
   int Index(const float x) const {
@@ -2275,12 +2286,7 @@ struct HistogramBinner {
 #ifndef NDEBUG
       // The closed-form equal-width index must match std::upper_bound on the
       // real thresholds (same invariant the finders used to DCHECK inline).
-      auto it_ref = std::upper_bound(scalar_thr.begin(), scalar_thr.end(), x);
-      const int idx_ref =
-          (it_ref == scalar_thr.begin())
-              ? -1
-              : static_cast<int>(it_ref - scalar_thr.begin()) - 1;
-      DCHECK_EQ(idx, idx_ref)
+      DCHECK_EQ(idx, ScalarIndex(x))
           << "Fast equal-width binning disagrees with std::upper_bound at "
           << idx;
 #endif
@@ -2291,12 +2297,23 @@ struct HistogramBinner {
       const __m512 vx = _mm512_set1_ps(x);
       const __mmask16 m = _mm512_cmp_ps_mask(vx, coarse16, _CMP_GE_OQ);
       const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(m));
-      if (K >= 16) return 255;
-      const float* base = thr256 + (K << 4);
-      const __m512 vthr = _mm512_load_ps(base);
-      const __mmask16 mf = _mm512_cmp_ps_mask(vx, vthr, _CMP_GE_OQ);
-      const unsigned cnt = static_cast<unsigned>(_mm_popcnt_u32(mf));
-      return static_cast<int>((K << 4) + cnt) - 1;
+      int idx;
+      if (K >= 16) {
+        idx = 255;
+      } else {
+        const float* base = thr256 + (K << 4);
+        const __m512 vthr = _mm512_load_ps(base);
+        const __mmask16 mf = _mm512_cmp_ps_mask(vx, vthr, _CMP_GE_OQ);
+        const unsigned cnt = static_cast<unsigned>(_mm_popcnt_u32(mf));
+        idx = static_cast<int>((K << 4) + cnt) - 1;
+      }
+#ifndef NDEBUG
+      // The SIMD upper_bound (the non-equal-width / "random" path) must match
+      // the scalar std::upper_bound. Debug-only; compiled out in opt.
+      DCHECK_EQ(idx, ScalarIndex(x))
+          << "AVX-512 SIMD binning disagrees with std::upper_bound at " << idx;
+#endif
+      return idx;
     }
 #endif
 #if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
@@ -2305,18 +2322,27 @@ struct HistogramBinner {
       const unsigned mc = static_cast<unsigned>(
           _mm256_movemask_ps(_mm256_cmp_ps(vx, coarse8, _CMP_GE_OQ)));
       const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(mc));
-      if (K >= 8) return 63;
-      const float* base = thr64 + (K << 3);
-      const __m256 vthr = _mm256_load_ps(base);
-      const unsigned mf = static_cast<unsigned>(
-          _mm256_movemask_ps(_mm256_cmp_ps(vx, vthr, _CMP_GE_OQ)));
-      const unsigned cnt = static_cast<unsigned>(_mm_popcnt_u32(mf));
-      return static_cast<int>((K << 3) + cnt) - 1;
+      int idx;
+      if (K >= 8) {
+        idx = 63;
+      } else {
+        const float* base = thr64 + (K << 3);
+        const __m256 vthr = _mm256_load_ps(base);
+        const unsigned mf = static_cast<unsigned>(
+            _mm256_movemask_ps(_mm256_cmp_ps(vx, vthr, _CMP_GE_OQ)));
+        const unsigned cnt = static_cast<unsigned>(_mm_popcnt_u32(mf));
+        idx = static_cast<int>((K << 3) + cnt) - 1;
+      }
+#ifndef NDEBUG
+      // The SIMD upper_bound (the non-equal-width / "random" path) must match
+      // the scalar std::upper_bound. Debug-only; compiled out in opt.
+      DCHECK_EQ(idx, ScalarIndex(x))
+          << "AVX2 SIMD binning disagrees with std::upper_bound at " << idx;
+#endif
+      return idx;
     }
 #endif
-    auto it = std::upper_bound(scalar_thr.begin(), scalar_thr.end(), x);
-    if (it == scalar_thr.begin()) return -1;
-    return static_cast<int>(it - scalar_thr.begin()) - 1;
+    return ScalarIndex(x);
   }
 };
 /* #endregion */

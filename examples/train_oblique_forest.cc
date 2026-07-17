@@ -29,9 +29,13 @@
 #include "yggdrasil_decision_forests/learner/learner_library.h"
 #include "yggdrasil_decision_forests/learner/random_forest/random_forest.pb.h"
 #include "yggdrasil_decision_forests/learner/gradient_boosted_trees/gradient_boosted_trees.pb.h"
+#include "yggdrasil_decision_forests/metric/metric.h"
+#include "yggdrasil_decision_forests/metric/metric.pb.h"
+#include "yggdrasil_decision_forests/metric/report.h"
 #include "yggdrasil_decision_forests/model/model_library.h"
 // #include "yggdrasil_decision_forests/utils/status_macros.h"
 #include "yggdrasil_decision_forests/utils/filesystem.h"
+#include "yggdrasil_decision_forests/utils/random.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
 
 #include <random>
@@ -48,6 +52,11 @@ ABSL_FLAG(std::string, input_mode, "",
 // CSV mode flags
 ABSL_FLAG(std::string, train_csv, "./benchmarks/data/processed_wise1_data.csv",
           "Path to training CSV file (for csv mode). Must include --label_col.");
+ABSL_FLAG(std::string, test_csv, "",
+          "Optional held-out test CSV (csv mode only). If set, the trained model "
+          "is evaluated on it and a parseable 'test-accuracy:' line is logged. "
+          "Loaded with the trained model's dataspec so the label vocabulary and "
+          "feature columns match training.");
 // TFRecord mode flags
 ABSL_FLAG(std::string, ds_path, "",
           "Path (without extension) to TF-Record file (for tfrecord mode).");
@@ -565,6 +574,15 @@ int main(int argc, char** argv) {
   if (std::getenv("YDF_RM_MAX_ROWS") == nullptr) {
     setenv("YDF_RM_MAX_ROWS", "5000", /*overwrite=*/0);
   }
+  // The RF learner has a benchmark shortcut that exit(0)s right after the
+  // training block (skipping model finalization + return) to speed up
+  // pure-runtime experiments. Any post-training use of the returned model needs
+  // it disabled: held-out test evaluation (--test_csv) or model saving
+  // (--model_out_dir). GBT has no such shortcut, so this only affects RF.
+  if (!absl::GetFlag(FLAGS_test_csv).empty() ||
+      !absl::GetFlag(FLAGS_model_out_dir).empty()) {
+    setenv("YDF_NO_EARLY_EXIT", "1", /*overwrite=*/1);
+  }
   dataset::RowMajorFeatureMatrix::SetActive(nullptr);
   const auto mode = absl::GetFlag(FLAGS_input_mode);
 
@@ -990,6 +1008,44 @@ int main(int argc, char** argv) {
       return 1;
     }
     LOG(INFO) << "Model saved to: " << out_dir;
+  }
+
+  // 5) Optional held-out test-set evaluation (csv mode only).
+  // Failure here is non-fatal: training already succeeded, so we log an error
+  // and still exit 0 rather than marking the whole run as failed.
+  const std::string test_csv = absl::GetFlag(FLAGS_test_csv);
+  if (!test_csv.empty()) {
+    if (mode != "csv") {
+      LOG(ERROR) << "--test_csv is only supported in csv mode; skipping.";
+    } else {
+      // The row-major training mirror (if any) must not shadow inference.
+      dataset::RowMajorFeatureMatrix::SetActive(nullptr);
+      dataset::VerticalDataset test_ds;
+      const absl::Status load_status = dataset::LoadVerticalDataset(
+          "csv:" + test_csv, model_ptr->data_spec(), &test_ds);
+      if (!load_status.ok()) {
+        LOG(ERROR) << "Could not load test CSV '" << test_csv
+                   << "': " << load_status.message();
+      } else {
+        metric::proto::EvaluationOptions eval_options;
+        eval_options.set_task(model::proto::Task::CLASSIFICATION);
+        utils::RandomEngine rnd(absl::GetFlag(FLAGS_seed));
+        auto eval_or =
+            model_ptr->EvaluateWithStatus(test_ds, eval_options, &rnd);
+        if (!eval_or.ok()) {
+          LOG(ERROR) << "Test-set evaluation failed: "
+                     << eval_or.status().message();
+        } else {
+          const float test_acc = metric::Accuracy(eval_or.value());
+          LOG(INFO) << "Test-set evaluation on " << test_csv << " ("
+                    << test_ds.nrow() << " rows): test-accuracy:" << test_acc;
+          auto report_or = metric::TextReport(eval_or.value());
+          if (report_or.ok()) {
+            LOG(INFO) << "Test-set report:\n" << report_or.value();
+          }
+        }
+      }
+    }
   }
 
   return 0;
