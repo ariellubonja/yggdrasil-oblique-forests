@@ -40,7 +40,9 @@ if grep -q "Ultra 9 185H" /proc/cpuinfo 2>/dev/null; then
 else
   NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
 fi
-# OOB metrics must be on for accuracy parsing; not exposed as a toggle.
+# Each CC18 fold ships a matching _test.csv, so the binary is given --test_csv
+# and the parser prefers the held-out 'test-accuracy:' line. OOB stays on as a
+# fallback (used only if a test fold is missing / fails to load).
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=-1 --compute_oob_performances=true"
 
 histogram_num_bins=64  # NOTE! AVX512 will be used on Vectorized method
@@ -114,11 +116,15 @@ for d in "$CC18_DIR"/task_*/; do
   [[ -f "$csv" ]] || continue
   # Label is always the last header column; strip BOM/CR/spaces defensively.
   label=$(head -n 1 "$csv" | awk -F',' '{print $NF}' | tr -d '\r\n ' | sed 's/^\xef\xbb\xbf//')
-  CSV_DATASETS+=("$csv|$label")
+  # Sibling held-out test fold (3rd field). Empty if absent; the command
+  # builders only append --test_csv when the file actually exists.
+  test_csv="${d}repeat0_fold0_sample0_test.csv"
+  [[ -f "$test_csv" ]] || test_csv=""
+  CSV_DATASETS+=("$csv|$label|$test_csv")
 done
 if [[ "${#CSV_DATASETS[@]}" -eq 0 ]]; then
   echo "ERROR: found no CC18 datasets under $CC18_DIR" >&2
-  echo "Run: python3 benchmarks/utils/download_cc18_datasets.py" >&2
+  echo "Run: python3 benchmarks/data/download_cc18_datasets.py" >&2
   exit 1
 fi
 
@@ -324,8 +330,10 @@ for split in "${SPLIT_TYPES[@]}"; do
 
       # CSV datasets
       for entry in "${CSV_DATASETS[@]}"; do
-        IFS='|' read -r path label <<<"$entry"
-        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
+        IFS='|' read -r path label test_csv <<<"$entry"
+        test_arg=""
+        [[ -n "$test_csv" && -f "$test_csv" ]] && test_arg="--test_csv \"$test_csv\""
+        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $test_arg $EXTRA_TRAIN_ARGS"
         run_cmd "$cmd"
       done
     done
@@ -386,8 +394,10 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
 
         # CSV datasets
         for entry in "${CSV_DATASETS[@]}"; do
-          IFS='|' read -r path label <<<"$entry"
-          cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
+          IFS='|' read -r path label test_csv <<<"$entry"
+          test_arg=""
+          [[ -n "$test_csv" && -f "$test_csv" ]] && test_arg="--test_csv \"$test_csv\""
+          cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg $test_arg $EXTRA_TRAIN_ARGS"
           run_cmd "$cmd"
         done
       done
@@ -471,8 +481,10 @@ for method in "${selected_vec_methods[@]}"; do
 
     # CSV datasets
     for entry in "${CSV_DATASETS[@]}"; do
-      IFS='|' read -r path label <<<"$entry"
-      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
+      IFS='|' read -r path label test_csv <<<"$entry"
+      test_arg=""
+      [[ -n "$test_csv" && -f "$test_csv" ]] && test_arg="--test_csv \"$test_csv\""
+      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $test_arg $EXTRA_TRAIN_ARGS"
       run_cmd "$cmd"
     done
   done

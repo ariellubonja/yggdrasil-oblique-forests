@@ -33,6 +33,10 @@ RUN_RE = re.compile(r'^----- Run (\d+)/(\d+)(?: \(seed=(\d+)\))? -----$')
 # validation_set_ratio=0), whereas RF's is OOB accuracy. The two are NOT
 # directly comparable -- GBT train-accuracy is optimistic.
 ACC_RE = re.compile(r'Train tree \d+/\d+.*?\baccuracy:([\d.]+)')
+# Held-out test-set accuracy emitted by train_oblique_forest's --test_csv path
+# ("... test-accuracy:0.94"). Disjoint from ACC_RE (no "Train tree N/N" prefix).
+# When present for a seed it is PREFERRED over the OOB/train-accuracy value.
+TEST_ACC_RE = re.compile(r'\btest-accuracy:([\d.]+)')
 # STDDEV segment is optional so logs predating it still parse.
 MEDIAN_RUN_RE = re.compile(
     r'^MEDIAN of \d+/\d+ runs: ([\d.eE+\-]+) s'
@@ -118,22 +122,26 @@ def parse_runtime(log_path):
 
 def parse_accuracy(log_path):
     rows = []
-    state = {'cmd': None, 'seeds': {}, 'cur_seed': None}
+    # 'seeds' holds the OOB/train-accuracy per seed; 'test' holds the held-out
+    # test-set accuracy per seed (preferred when present).
+    state = {'cmd': None, 'seeds': {}, 'test': {}, 'cur_seed': None}
 
     def finish_cmd():
         cmd = state['cmd']
         seeds = state['seeds']
+        test = state['test']
         if cmd is None:
             return
         if seeds:
             dataset, algo = parse_cmd(cmd)
-            samples = [
-                ('' if seeds[s] is None else f"{seeds[s]}")
-                for s in sorted(seeds.keys())
-            ]
+            samples = []
+            for s in sorted(seeds.keys()):
+                val = test[s] if s in test else seeds[s]
+                samples.append('' if val is None else f"{val}")
             rows.append((dataset, algo, samples))
         state['cmd'] = None
         state['seeds'] = {}
+        state['test'] = {}
         state['cur_seed'] = None
 
     with open(log_path) as f:
@@ -152,6 +160,10 @@ def parse_accuracy(log_path):
                 else:
                     state['cur_seed'] = int(m_run.group(1))
                 state['seeds'].setdefault(state['cur_seed'], None)
+                continue
+            m_test = TEST_ACC_RE.search(line)
+            if m_test and state['cur_seed'] is not None:
+                state['test'][state['cur_seed']] = float(m_test.group(1))
                 continue
             m_acc = ACC_RE.search(line)
             if m_acc and state['cur_seed'] is not None:

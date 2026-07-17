@@ -10,19 +10,19 @@ which one did we run?
 
 Reported time is wrong by runtime.sh . rerun
 
-    - [ ] Exact (default)
-    - [ ] Random
-        - [ ] Vectorized Random used?
+    - [X] Dynamic Random
+        
+    - [ ] Vectorized Random used? No. fix 
         n_bins is also ignored. No binning on the fly?
-
-        - [ ] debug to understand: Runtime Histogramming ?
-
     
 
 chrono
 
-    [ ] Add vectorized in FindSplitRegerssionHistogram
-        [ ] Find a better code way for it to generalize across all methods that use Random Hist
+    [ ] Extend vectorized to FindSplitRegerssionHistogram
+        [X] Find a better code way for it to generalize across all methods that use Random Hist
+        ✅ No other methods benefit 
+        [ ] test accuracy
+            [ ] implement test on _test.csv - test set
 
     [X] Remove isnan in FindSplitRegerssionHistogram
 
@@ -31,3 +31,4 @@ chrono
     [ ] Proportion of AP-EP by dataset
 
     [ ] Why is 15k x 400k so slow e2e
+

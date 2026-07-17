@@ -3,12 +3,12 @@
 
 For each task_*/ and issue_task_*/ folder under benchmarks/data/cc18_binary_csv/,
 resolve task_id -> dataset_id via OpenML, count rows in the train CSV, and read
-the label column from the header. Writes benchmarks/utils/cc18_manifest.json.
+the label column from the header. Writes benchmarks/data/cc18_manifest.json.
 
 Run once; the manifest is then committed and consumed by download_cc18_datasets.py.
 
   pip install openml
-  python3 benchmarks/utils/build_cc18_manifest.py
+  python3 benchmarks/data/build_cc18_manifest.py
 """
 import json
 import os
@@ -19,7 +19,7 @@ import openml
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(REPO_ROOT, "benchmarks", "data", "cc18_binary_csv")
-MANIFEST_PATH = os.path.join(REPO_ROOT, "benchmarks", "utils", "cc18_manifest.json")
+MANIFEST_PATH = os.path.join(REPO_ROOT, "benchmarks", "data", "cc18_manifest.json")
 
 ISSUE_REASONS = {
     3021: "TBG column 100% missing values — binary aborts during dataspec creation",

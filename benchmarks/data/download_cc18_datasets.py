@@ -2,12 +2,13 @@
 """Recreate the CC18 binary-classification train CSVs from OpenML, deterministically.
 
 Reads cc18_manifest.json (pinned task_id + dataset_id + expected row count) and
-writes one repeat0_fold0_sample0_train.csv per task into
-benchmarks/data/cc18_binary_csv/. Skips entries marked status="issue" (creates
+writes a train+test CSV for every CV split (repeat{r}_fold{f}_sample{s}_{train,test}.csv)
+per task into benchmarks/data/cc18_binary_csv/. CC18 tasks are 10-fold CV, so each
+dataset yields 10 train/test pairs. Skips entries marked status="issue" (creates
 the issue_<folder>/ marker dir with a README explaining why).
 
   pip install openml pandas tqdm
-  python3 benchmarks/utils/download_cc18_datasets.py
+  python3 benchmarks/data/download_cc18_datasets.py
 """
 import json
 import os
@@ -18,18 +19,41 @@ from tqdm import tqdm
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(REPO_ROOT, "benchmarks", "data", "cc18_binary_csv")
-MANIFEST_PATH = os.path.join(REPO_ROOT, "benchmarks", "utils", "cc18_manifest.json")
+MANIFEST_PATH = os.path.join(REPO_ROOT, "benchmarks", "data", "cc18_manifest.json")
 
 
-def write_train_csv(entry, out_path):
+def write_all_splits(entry, task_dir):
+    """Write train+test CSVs for every (repeat, fold, sample) split of the task.
+
+    CC18 tasks are 10-fold CV (1 repeat x 10 folds x 1 sample), so this yields
+    10 train/test pairs per dataset. Returns the row count of the
+    repeat0_fold0_sample0 train split (the one the manifest validates).
+    """
     task = openml.tasks.get_task(entry["task_id"], download_data=False)
     dset = openml.datasets.get_dataset(entry["dataset_id"])
     target = entry["label_column"]
     X, y, _, _ = dset.get_data(dataset_format="dataframe", target=target)
     df = X.copy()
     df[target] = y
-    train_idx, _ = task.get_train_test_split_indices(repeat=0, fold=0, sample=0)
-    df.iloc[train_idx].to_csv(out_path, index=False)
+
+    n_repeats, n_folds, n_samples = task.get_split_dimensions()
+    fold0_train_rows = None
+    for r in range(n_repeats):
+        for f in range(n_folds):
+            for s in range(n_samples):
+                train_idx, test_idx = task.get_train_test_split_indices(
+                    repeat=r, fold=f, sample=s
+                )
+                stem = f"repeat{r}_fold{f}_sample{s}"
+                df.iloc[train_idx].to_csv(
+                    os.path.join(task_dir, f"{stem}_train.csv"), index=False
+                )
+                df.iloc[test_idx].to_csv(
+                    os.path.join(task_dir, f"{stem}_test.csv"), index=False
+                )
+                if r == 0 and f == 0 and s == 0:
+                    fold0_train_rows = len(train_idx)
+    return fold0_train_rows
 
 
 def main():
@@ -53,17 +77,8 @@ def main():
                 )
             continue
 
-        train_csv = os.path.join(task_dir, "repeat0_fold0_sample0_train.csv")
-        if os.path.isfile(train_csv):
-            with open(train_csv) as f:
-                rows = sum(1 for _ in f) - 1
-            if rows == entry["expected_rows_train"]:
-                continue  # already have correct file
+        rows = write_all_splits(entry, task_dir)
 
-        write_train_csv(entry, train_csv)
-
-        with open(train_csv) as f:
-            rows = sum(1 for _ in f) - 1
         if rows != entry["expected_rows_train"]:
             failures.append(
                 f"task_{entry['task_id']}: expected {entry['expected_rows_train']} "
