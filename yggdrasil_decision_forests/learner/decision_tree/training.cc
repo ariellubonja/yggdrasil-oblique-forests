@@ -2200,25 +2200,31 @@ static inline int EqualWidthThresholdIndex(const float attribute,
   return idx;
 }
 
-/* #region SIMD upper_bound (research-grade microbench surface) */
-// Drop-in replacement for std::upper_bound over the sorted threshold array
-// used by the non-equal-width histogram finder. Specialised for the two
-// common sizes: 64 thresholds (AVX2, 8x8) and 256 thresholds (AVX-512, 16x16).
-// Falls back to std::upper_bound for other sizes or when the corresponding
-// instruction set / ENABLE_STD_UPPER_BOUND_VECTORIZATION is not enabled.
+/* #region Histogram binning: attribute value -> candidate-split bin index */
+// Self-contained "attribute value -> bin index" mapper shared by BOTH numerical
+// *histogram* split finders (classification + regression). It owns the entire
+// binning decision so each finder's per-example loop is just:
+//   const int idx = binner.Index(attribute); if (idx < 0) continue;
+//
+// Three strategies, selected in Init() from the histogram type / bin count:
+//   * equal-width histograms      -> EqualWidthThresholdIndex (closed form)
+//   * non-equal-width, 64 bins    -> AVX2 8x8 SIMD upper_bound
+//   * non-equal-width, 256 bins   -> AVX-512 16x16 SIMD upper_bound
+//   * otherwise                   -> scalar std::upper_bound
+// The SIMD fast paths require ENABLE_STD_UPPER_BOUND_VECTORIZATION and the
+// corresponding ISA; otherwise they compile out and the scalar path is used.
 //
 // Ariel: 256-bin AVX-512 was ~3-4x faster than std::upper_bound on
-// trunk_3000000_x_4096 (i9-185h). TODO Ariel: try 128-bin AVX-512 variant
-// to handle the case where someone sets num_candidates to 128.
-//
-// Usage in the histogram-finder per-example loop:
-//   SIMDUpperBoundBins bins_accel;
-//   bins_accel.Init(thresholds);                    // once, after Gen
-//   const int idx = bins_accel.Index(attribute);    // per example
-//   if (idx < 0) continue;
-//   candidate_splits[idx].pos_label_distribution.Add(...);
-struct SIMDUpperBoundBins {
+// trunk_3000000_x_4096 (i9-185h). TODO Ariel: try 128-bin AVX-512 variant to
+// handle the case where someone sets num_candidates to 128.
+struct HistogramBinner {
+  // Sorted thresholds (== the histogram bins). Always populated; used by the
+  // scalar fallback and by the debug cross-check of the equal-width fast path.
   std::vector<float> scalar_thr;
+  float min_value = 0.f;
+  float max_value = 0.f;
+  int num_bins = 0;
+  bool use_equal_width = false;
 #if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
   alignas(64) float thr256[256];
   __m512 coarse16;
@@ -2230,46 +2236,56 @@ struct SIMDUpperBoundBins {
   bool avx2_64 = false;
 #endif
 
-  void Init(const std::vector<float>& thr) {
+  void Init(const std::vector<float>& thr, const float min_value_in,
+            const float max_value_in, const proto::NumericalSplit::Type type) {
+    min_value = min_value_in;
+    max_value = max_value_in;
+    num_bins = static_cast<int>(thr.size());
+    use_equal_width =
+        (type == proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH ||
+         type == proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
+    scalar_thr = thr;
 #if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+    avx512_256 = false;
     if (thr.size() == 256) {
       for (int i = 0; i < 256; ++i) thr256[i] = thr[i];
       alignas(64) float tmp[16];
       for (int g = 0; g < 16; ++g) tmp[g] = thr256[(g + 1) * 16 - 1];
       coarse16 = _mm512_load_ps(tmp);
       avx512_256 = true;
-#if defined(__AVX2__)
-      avx2_64 = false;
-#endif
-      scalar_thr.clear();
-      return;
     }
 #endif
 #if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+    avx2_64 = false;
     if (thr.size() == 64) {
       for (int i = 0; i < 64; ++i) thr64[i] = thr[i];
       alignas(32) float tmp[8];
       for (int g = 0; g < 8; ++g) tmp[g] = thr64[(g + 1) * 8 - 1];
       coarse8 = _mm256_load_ps(tmp);
       avx2_64 = true;
-#if defined(__AVX512F__)
-      avx512_256 = false;
-#endif
-      scalar_thr.clear();
-      return;
     }
-#endif
-    scalar_thr = thr;
-#if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
-    avx512_256 = false;
-#endif
-#if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
-    avx2_64 = false;
 #endif
   }
 
-  // Returns index of last threshold <= x; -1 if all thresholds > x.
-  int Index(float x) const {
+  // Returns the index of the last threshold <= x; -1 if all thresholds > x.
+  // (Equivalent to std::upper_bound(thr, x) - thr.begin() - 1.)
+  int Index(const float x) const {
+    if (use_equal_width) {
+      const int idx = EqualWidthThresholdIndex(x, min_value, max_value, num_bins);
+#ifndef NDEBUG
+      // The closed-form equal-width index must match std::upper_bound on the
+      // real thresholds (same invariant the finders used to DCHECK inline).
+      auto it_ref = std::upper_bound(scalar_thr.begin(), scalar_thr.end(), x);
+      const int idx_ref =
+          (it_ref == scalar_thr.begin())
+              ? -1
+              : static_cast<int>(it_ref - scalar_thr.begin()) - 1;
+      DCHECK_EQ(idx, idx_ref)
+          << "Fast equal-width binning disagrees with std::upper_bound at "
+          << idx;
+#endif
+      return idx;
+    }
 #if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
     if (avx512_256) {
       const __m512 vx = _mm512_set1_ps(x);
@@ -2329,8 +2345,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
   float min_value, max_value;
   std::vector<float> bins;
   std::vector<CandidateSplit> candidate_splits;
-  SIMDUpperBoundBins bins_accel;
-  bool use_equal_width_fast_path;
+  HistogramBinner binner;
 
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistogramSetup);
@@ -2370,18 +2385,9 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       candidate_split.threshold = bins[split_idx];
     }
 
-    // SIMD-vectorised replacement for the per-example std::upper_bound call on
-    // the non-equal-width path. When the build defines ENABLE_STD_UPPER_BOUND_
-    // VECTORIZATION (see .bazelrc :enable_std_upper_bound_avx2 / _avx512) and
-    // bins.size() matches a fast-path size (64 / 256), this skips the per-call
-    // log(N) binary search.
-    bins_accel.Init(bins);
-
-    use_equal_width_fast_path =
-        (dt_config.numerical_split().type() ==
-             proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH ||
-         dt_config.numerical_split().type() ==
-             proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
+    // Build the shared attribute->bin-index mapper (equal-width closed form,
+    // SIMD upper_bound, or scalar upper_bound; chosen from type + bin count).
+    binner.Init(bins, min_value, max_value, dt_config.numerical_split().type());
   }
 
   // Compute the split score of each threshold.
@@ -2396,44 +2402,13 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       attribute = na_replacement;
     }
 
-    if (use_equal_width_fast_path) {
-      const int idx =
-          EqualWidthThresholdIndex(attribute, min_value, max_value,
-                                   static_cast<int>(candidate_splits.size()));
-
-      // Matches the original behavior when upper_bound(...) == begin()
-      if (idx < 0) {
-        continue;
-      }
-
-      auto& it_split = candidate_splits[idx];
-
-// Check fast binning choice against std::upper_bound()
-#ifndef NDEBUG
-      auto it_ref = std::upper_bound(
-          candidate_splits.begin(), candidate_splits.end(), attribute,
-          [](float a, const CandidateSplit& b) { return a < b.threshold; });
-
-      int idx_ref = (it_ref == candidate_splits.begin())
-                        ? -1
-                        : static_cast<int>(std::distance(
-                              candidate_splits.begin(), --it_ref));
-      DCHECK_EQ(idx, idx_ref)
-          << "Fast equal-width binning disagrees with std::upper_bound at "
-          << idx;
-#endif
-
-      it_split.num_positive_examples_without_weights++;
-      it_split.pos_label_distribution.Add(label, weight);
-    } else {
-      const int idx = bins_accel.Index(attribute);
-      if (idx < 0) {
-        continue;
-      }
-      auto& it_split = candidate_splits[idx];
-      it_split.num_positive_examples_without_weights++;
-      it_split.pos_label_distribution.Add(label, weight);
+    const int idx = binner.Index(attribute);
+    if (idx < 0) {
+      continue;
     }
+    auto& it_split = candidate_splits[idx];
+    it_split.num_positive_examples_without_weights++;
+    it_split.pos_label_distribution.Add(label, weight);
   }
 
   // Suffix-sum the per-bin counts into cumulative ">= threshold" counts.
@@ -2802,6 +2777,7 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
   float min_value, max_value;
   std::vector<float> bins;
   std::vector<CandidateSplit> candidate_splits;
+  HistogramBinner binner;
 
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistogramSetup);
@@ -2842,6 +2818,11 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
       auto& candidate_split = candidate_splits[split_idx];
       candidate_split.threshold = bins[split_idx];
     }
+
+    // Shared attribute->bin-index mapper (see HistogramBinner). Gives the
+    // regression histogram finder the same SIMD / equal-width acceleration as
+    // the classification one, replacing the per-example std::upper_bound below.
+    binner.Init(bins, min_value, max_value, dt_config.numerical_split().type());
   }
 
   // Compute the split score of each threshold.
@@ -2858,18 +2839,16 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
     }
 #endif
 
-    auto it_split = std::upper_bound(
-        candidate_splits.begin(), candidate_splits.end(), attribute,
-        [](const float a, const CandidateSplit& b) { return a < b.threshold; });
-    if (it_split == candidate_splits.begin()) {
+    const int idx = binner.Index(attribute);
+    if (idx < 0) {
       continue;
     }
-    --it_split;
-    it_split->num_positive_examples_without_weights++;
+    auto& it_split = candidate_splits[idx];
+    it_split.num_positive_examples_without_weights++;
     if constexpr (weighted) {
-      it_split->pos_label_dist.Add(label, weights[example_idx]);
+      it_split.pos_label_dist.Add(label, weights[example_idx]);
     } else {
-      it_split->pos_label_dist.Add(label);
+      it_split.pos_label_dist.Add(label);
     }
   }
 
