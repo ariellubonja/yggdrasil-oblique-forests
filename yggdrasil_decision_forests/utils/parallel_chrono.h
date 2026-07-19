@@ -77,8 +77,9 @@ enum FuncId {
   // Sub-phases of ApplyProjectionsSymmetricDepthwiseAP. Only emitted when
   // compiled with -DSYMMETRIC_DEPTHWISE_AP; left at zero otherwise so the
   // enum values stay stable across builds.
-  kSymBuildBag,   // Pre-size slabs + concat per-node selected_examples → bag
-  kSymSortBag,    // stable_sort(perm) + materialize sorted bag/node_of_bag
+  kSymBuildBag,   // Pre-size slabs (+ fallback concat / root-span copy)
+  kSymSortBag,    // O(bag) incremental relabel of the previous depth's sorted
+                  // bag (fallback: K32V32 VQSort rebuild)
   kSymSweep,      // K bag-wide stride-1 projection sweeps (the hot loop)
 
   // Sub-phases of ApplyProjectionsDepthwise1Pass. Only emitted when compiled

@@ -319,14 +319,31 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>> selected_examples_per_node,
     absl::Span<const internal::Projection> shared_projections,
+    absl::Span<const int32_t> prev_first_child,   // prev-batch idx → neg-child idx (pos = +1), -1 = leaf; empty = rebuild
+    SymmetricBagState* bag_state,                 // cross-depth sorted (example,node) bag; thread_local in the driver
     absl::Span<std::vector<float>> out_projected) {
   CHRONO_SCOPE_COARSE(…kProjectionEvaluate);
-  // ── Phase 1: BuildBag (kSymBuildBag) — concat per-node selected_examples
-  //    (+ parallel node-id array) into one flat bag; slab pre-size K*rows_n.
-  // ── Phase 2: SortBag (kSymSortBag) — pack (example_idx, node_id) into
-  //    hwy::K32V32, VQSort by example id. Ties are same-node (BFS depth cohort
-  //    ⇒ every copy of a row lives in one node), so the unstable sort is safe.
-  //    (VQSort beat both stable_sort and a counting sort across all depths.)
+  // ── Phase 1: BuildBag (kSymBuildBag) — slab pre-size K*rows_n (reserve only).
+  // ── Phase 2: obtain the sorted bag. NO per-depth sort in the steady state
+  //    (2026-07-19): a depth's sorted bag = the previous depth's sorted bag
+  //    minus leafed-out rows (stable partition of a sorted span stays sorted,
+  //    so sorted row order telescopes to the pre-sorted bootstrap bag).
+  //    RelabelBagForNewDepth (billed to kSymSortBag) streams the previous
+  //    (example, node) sequence once: drop entries whose parent leafed, else
+  //    advance the node label parent→child, child picked by ONE equality test
+  //    against the neg child's next-unconsumed span element (a row id lives in
+  //    exactly one child span; child spans are consumed strictly in order).
+  //    O(bag), comparison-sort-free, self-validating; the driver
+  //    (GrowTreeLocalBFS) reconstructs prev_first_child from the previous
+  //    batch's node pointers (IsLeaf() after that depth's NodeTrains; children
+  //    are pushed (neg,pos) per split parent in parent order). Root level:
+  //    span copied into the state (the rolling buffer is repartitioned in
+  //    place, so the span won't survive). Fallback on any validation failure:
+  //    concat (kSymBuildBag) + hwy::K32V32 VQSort by example id (kSymSortBag)
+  //    — ties are same-node so the unstable sort is safe.
+  //    Verified bit-identical trees vs the sort path (trunk shapes, incl.
+  //    YDF_SYMMETRIC_MAX_DEPTH handoff); relabel path taken at every non-root
+  //    depth, zero fallbacks.
   // ── Phase 3: Sweep (kSymSweep) — K bag-wide passes:
   std::vector<uint32_t> write_cursor(N);
   for (size_t k = 0; k < K; ++k) {
