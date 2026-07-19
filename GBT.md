@@ -1,19 +1,17 @@
-GBT Chrono
-
 [X] is num_bins ignored? No it's correct
 
-
-e2e
-
-    - [ ] Vectorized Dynamic Random
         [X] Extend vectorized to FindSplitRegerssionHistogram
             ✅ No other methods benefit 
 
-            [ ] test accuracy
+            [X] test accuracy - holds for GBT too.
                 [X] implement proper CV testing in accuracy.sh
-                [ ] Add methods to test: 
+                [X] Add methods to test: 
                         SPO-RF, SPO-GBT x Exact-Random-Vectorized Random
-    
+
+
+
+- [ ] e2e All methods
+        
 
 
 [ ] chrono Vectorized Dynamic
