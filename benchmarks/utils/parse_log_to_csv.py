@@ -55,8 +55,8 @@ MEDIAN_FAIL_RE = re.compile(r'^MEDIAN of \d+/\d+ runs: (OOM|ERROR)$')
 
 
 def sample_stddev(samples):
-    """Sample stddev (Bessel-corrected). Empty string if n<2."""
-    xs = [float(s) for s in samples]
+    """Sample stddev (Bessel-corrected) over non-empty samples. '' if n<2."""
+    xs = [float(s) for s in samples if s != '']
     n = len(xs)
     if n < 2:
         return ''
@@ -65,7 +65,22 @@ def sample_stddev(samples):
     return f"{math.sqrt(var):.6f}"
 
 
-def parse_cmd(args):
+def sample_mean(samples):
+    """Mean over non-empty samples. '' if there are none."""
+    xs = [float(s) for s in samples if s != '']
+    if not xs:
+        return ''
+    return f"{sum(xs) / len(xs):.6f}"
+
+
+# The vectorized experiments rebuild the binary with an AVX --config, which is
+# invisible on the command line. accuracy.sh emits this banner once, right
+# before the vectorized runs, so the parser latches on it and tags every
+# subsequent run's method as "Vectorized_<method>".
+VEC_RE = re.compile(r'USING INSTRUCTION SET:\s*\w+')
+
+
+def parse_cmd(args, vectorized=False):
     m_csv = re.search(r'--train_csv "([^"]+)"', args)
     m_trunk = re.search(r'--input_mode trunk.*?--rows (\d+)(?:.*?--cols (\d+))?', args)
     if m_csv:
@@ -83,15 +98,29 @@ def parse_cmd(args):
     else:
         dataset = "unknown"
 
+    # Binary defaults: feature_split_type=Oblique, ensemble_method=Bagging.
     m_split = re.search(r'--feature_split_type "([^"]+)"', args)
-    split_type = m_split.group(1).replace(' ', '_') if m_split else "Oblique"
+    is_oblique = 'Oblique' in (m_split.group(1) if m_split else "Oblique")
+    m_ens = re.search(r'--ensemble_method\s+(\w+)', args)
+    is_boosting = (m_ens.group(1) if m_ens else "Bagging") == "Boosting"
+
+    # Family label = obliqueness x ensemble:
+    #   Oblique  + Bagging  -> SPORF     Oblique  + Boosting -> SPO-GBT
+    #   non-obl. + Bagging  -> RF        non-obl. + Boosting -> GBT
+    if is_oblique:
+        family = "SPO-GBT" if is_boosting else "SPORF"
+    else:
+        family = "GBT" if is_boosting else "RF"
+
     m_method = re.search(r'--numerical_split_type "([^"]+)"', args)
     method = m_method.group(1).replace(' ', '_') if m_method else "unknown"
+    if vectorized:
+        method = f"Vectorized_{method}"
     m_thresh = re.search(r'--dynamic_split_threshold=(\d+)', args)
     thresh = m_thresh.group(1) if m_thresh else None
     gpu = '--use_gpu=true' in args
 
-    algo = f"{split_type}_{method}"
+    algo = f"{family}_{method}"
     if thresh:
         algo += f"_thresh{thresh}"
     if gpu:
@@ -102,9 +131,13 @@ def parse_cmd(args):
 def parse_runtime(log_path):
     rows = []
     cmd = None
+    vectorized = False
     with open(log_path) as f:
         for line in f:
             line = line.rstrip('\n')
+            if VEC_RE.search(line):
+                vectorized = True
+                continue
             m = CMD_RE.match(line)
             if m:
                 cmd = m.group(1)
@@ -113,14 +146,14 @@ def parse_runtime(log_path):
             if m and cmd is not None:
                 median = m.group(1)
                 samples = m.group(2).split()
-                dataset, algo = parse_cmd(cmd)
+                dataset, algo = parse_cmd(cmd, vectorized)
                 rows.append((dataset, algo, median, samples))
                 cmd = None
                 continue
             m = MEDIAN_FAIL_RE.match(line)
             if m and cmd is not None:
                 # Failure label goes in the median_s cell; no samples => empty stddev.
-                dataset, algo = parse_cmd(cmd)
+                dataset, algo = parse_cmd(cmd, vectorized)
                 rows.append((dataset, algo, m.group(1), []))
                 cmd = None
     return rows
@@ -130,7 +163,8 @@ def parse_accuracy(log_path):
     rows = []
     # 'seeds' holds the OOB/train-accuracy per sample (seed or CV fold); 'test'
     # holds the held-out test-set accuracy per sample (preferred when present).
-    state = {'cmd': None, 'seeds': {}, 'test': {}, 'cur_seed': None}
+    state = {'cmd': None, 'seeds': {}, 'test': {}, 'cur_seed': None,
+             'vectorized': False}
 
     def finish_cmd():
         cmd = state['cmd']
@@ -139,7 +173,7 @@ def parse_accuracy(log_path):
         if cmd is None:
             return
         if seeds:
-            dataset, algo = parse_cmd(cmd)
+            dataset, algo = parse_cmd(cmd, state['vectorized'])
             samples = []
             for s in sorted(seeds.keys()):
                 val = test[s] if s in test else seeds[s]
@@ -153,6 +187,12 @@ def parse_accuracy(log_path):
     with open(log_path) as f:
         for line in f:
             line = line.rstrip('\n')
+            if VEC_RE.search(line):
+                # Finalize the pending (still non-vectorized) command BEFORE
+                # latching, so only the runs that follow this banner are tagged.
+                finish_cmd()
+                state['vectorized'] = True
+                continue
             m_cmd = CMD_RE.match(line)
             if m_cmd:
                 finish_cmd()
@@ -220,7 +260,9 @@ def main():
         header = ['dataset', 'algorithm', 'median_s', 'stddev_s']
     else:
         max_samples = max(len(r[2]) for r in rows)
-        header = ['dataset', 'algorithm'] + [f'{col_prefix}_{i}' for i in range(1, max_samples + 1)]
+        header = (['dataset', 'algorithm']
+                  + [f'{col_prefix}_{i}' for i in range(1, max_samples + 1)]
+                  + ['avg', 'std'])
     with open(out_path, 'w', newline='') as f:
         w = csv.writer(f)
         w.writerow(header)
@@ -229,7 +271,9 @@ def main():
                 w.writerow([dataset, algo, median, sample_stddev(samples)])
         else:
             for dataset, algo, samples in rows:
-                w.writerow([dataset, algo] + samples + [''] * (max_samples - len(samples)))
+                padded = samples + [''] * (max_samples - len(samples))
+                w.writerow([dataset, algo] + padded
+                           + [sample_mean(samples), sample_stddev(samples)])
     print(f"Wrote {len(rows)} rows to {out_path}")
     return 0
 

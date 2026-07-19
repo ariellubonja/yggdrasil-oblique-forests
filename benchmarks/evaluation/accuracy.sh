@@ -43,20 +43,58 @@ fi
 # Number of CV folds per task (repeat0_fold{0..NUM_FOLDS-1}_sample0).
 NUM_FOLDS=10
 
-NUM_TREES=300
-  
 # Every CC18 fold ships a matching _test.csv, so the binary is given --test_csv
 # and the parser prefers the held-out 'test-accuracy:' line -- the only number
 # comparable across RF and GBT. OOB (RF) / train-accuracy (GBT) stays on as a
 # fallback, used only if a test fold is missing / fails to load. The model seed
 # is fixed in the binary (--seed default = 1), so folds -- not seeds -- are the
 # sample axis: exactly one training run per fold, no seed sweep.
-BASE_ARGS="--num_trees=$NUM_TREES --num_threads=-1 --compute_oob_performances=true"
+# NOTE: --num_trees is NOT here; it is set per ensemble (see ensemble_num_trees).
+BASE_ARGS="--num_threads=-1 --compute_oob_performances=true"
+
+# Ensemble methods to run. Each combines with SPLIT_TYPES below to form the
+# 'algorithm' label in the CSV:
+#   Oblique  + Bagging  -> SPORF     Oblique  + Boosting -> SPO-GBT
+#   non-obl. + Bagging  -> RF        non-obl. + Boosting -> GBT
+# Default runs both oblique variants (SPORF and SPO-GBT). Non-oblique RF/GBT are
+# only produced when "Axis Aligned" is uncommented in SPLIT_TYPES.
+ENSEMBLES=(
+  "Bagging"    # Random Forest  (Oblique -> SPORF)
+  "Boosting"   # Gradient Boosted Trees (Oblique -> SPO-GBT)
+)
+
+# num_trees per ensemble: GBT is boosted (sequential, deeper effect per tree) so
+# a smaller fixed count; RF gets 5x cores to keep per-thread tree counts even.
+ensemble_num_trees() {
+  if [[ "$1" == "Boosting" ]]; then
+    echo 300
+  else
+    echo $(( $(nproc) * 5 ))
+  fi
+}
+
+# CSV 'algorithm' family label for banners (must match parse_log_to_csv.py).
+family_label() {  # $1 = ensemble (Bagging|Boosting), $2 = split type
+  local ens="$1" split="$2"
+  if [[ "$split" == "Axis Aligned" ]]; then
+    [[ "$ens" == "Boosting" ]] && echo "GBT" || echo "RF"
+  else
+    [[ "$ens" == "Boosting" ]] && echo "SPO-GBT" || echo "SPORF"
+  fi
+}
 
 histogram_num_bins=64  # NOTE! AVX512 will be used on Vectorized method
 
 RUN_CPU=true          # set false to skip the normal (CPU) experiments section
-RUN_VECTORIZED=false  # set true to run AVX2/AVX512 vectorized experiments
+RUN_VECTORIZED=true   # AVX2/AVX512 vectorized experiments (Vectorized Random)
+
+# AVX2/AVX512 are x86-only instruction sets. On any non-x86 host (e.g. Apple
+# Silicon) the -mavx2/-mfma cxxopts fail to compile, which would abort the whole
+# script before the CSV is written. Force vectorization off there.
+if [[ "$RUN_VECTORIZED" == "true" && "$(uname -m)" != "x86_64" ]]; then
+  echo "CPU ($(uname -m)) does not support AVX instructions; disabling vectorized experiments." >&2
+  RUN_VECTORIZED=false
+fi
 
 # GPU experiments. Only applies to Oblique + HISTOGRAM_RANDOM-style splits.
 # The Oblique path requires --config=oblique_gpu (compiles in the GPU
@@ -155,17 +193,12 @@ BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native")
 # shellcheck disable=SC2206
 EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
 # Optional extra train_oblique_forest flags injected into every binary command
-# (e.g. EXTRA_TRAIN_ARGS="--ensemble_method Boosting --shrinkage=0.1").
+# (e.g. EXTRA_TRAIN_ARGS="--shrinkage=0.05"). Do NOT set --ensemble_method or
+# --num_trees here: the script now owns both (see ENSEMBLES / ensemble_num_trees).
 EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
 # Vectorized build configs (adjust if your repo uses different config names)
 VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
 VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
-
-if [[ "$EXTRA_TRAIN_ARGS" == *"ensemble_method=Boosting"* ]]; then
-  NUM_TREES=300
-else
-  NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
-fi
 
 # Vectorization applies only to these methods (Oblique only)
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
@@ -303,7 +336,12 @@ fi
 if [[ "$RUN_CPU" == "true" ]]; then
 banner "NORMAL EXPERIMENTS (no explicit vector ISA) histogram_num_bins=${histogram_num_bins}"
 
+for ensemble in "${ENSEMBLES[@]}"; do
+  nt="$(ensemble_num_trees "$ensemble")"
+  ensemble_arg="--ensemble_method $ensemble --num_trees=$nt"
+
 for split in "${SPLIT_TYPES[@]}"; do
+  fam="$(family_label "$ensemble" "$split")"
   # Select compatible methods for this split type
   methods_to_run=()
   if [[ "$split" == "Axis Aligned" ]]; then
@@ -317,16 +355,16 @@ for split in "${SPLIT_TYPES[@]}"; do
       done
     done
     if [[ "${#methods_to_run[@]}" -eq 0 ]]; then
-      banner "AXIS ALIGNED: No compatible methods selected (need Exact, Random, or Equal Width). Skipping."
+      banner "$fam: No compatible methods selected (need Exact, Random, or Equal Width). Skipping."
       continue
     fi
-    banner "AXIS ALIGNED EXPERIMENTS feature_split_type=Axis Aligned histogram_num_bins=${histogram_num_bins}"
+    banner "$fam EXPERIMENTS feature_split_type=Axis Aligned histogram_num_bins=${histogram_num_bins}"
     feature_arg='--feature_split_type "Axis Aligned"'
   else
-    # Oblique: use METHODS as-is, no feature_split_type flag
+    # Oblique: use METHODS as-is
     methods_to_run=("${METHODS[@]}")
     oblique_selected=true
-    banner "OBLIQUE EXPERIMENTS histogram_num_bins=${histogram_num_bins}"
+    banner "$fam EXPERIMENTS histogram_num_bins=${histogram_num_bins}"
     feature_arg='--feature_split_type "Oblique"'
   fi
 
@@ -353,20 +391,21 @@ for split in "${SPLIT_TYPES[@]}"; do
       fi
 
       if [[ -n "$extra" ]]; then
-        banner "Running $method [$split] with $histogram_num_bins bins${thresh_label}"
+        banner "Running $fam $method with $histogram_num_bins bins${thresh_label}"
       else
-        banner "Running $method [$split]${thresh_label}"
+        banner "Running $fam $method${thresh_label}"
       fi
 
       # CSV datasets: one run_cv per task, sweeping all NUM_FOLDS folds.
       for entry in "${CSV_DATASETS[@]}"; do
         IFS='|' read -r dir label <<<"$entry"
-        rest="--label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
+        rest="--label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $ensemble_arg $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
         run_cv "$dir" "$rest"
       done
     done
   done
 done
+done  # ENSEMBLES
 fi  # RUN_CPU
 
 # -------------------------
@@ -396,6 +435,11 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
     banner "GPU EXPERIMENTS [$gpu_mode] (Oblique only) histogram_num_bins=${histogram_num_bins}"
     echo "GPU MODE: $gpu_mode" | tee -a "$logfile"
 
+    for ensemble in "${ENSEMBLES[@]}"; do
+      nt="$(ensemble_num_trees "$ensemble")"
+      ensemble_arg="--ensemble_method $ensemble --num_trees=$nt"
+      fam="$(family_label "$ensemble" "Oblique")"
+
     for method in "${METHODS[@]}"; do
       extra="${METHOD_EXTRA_ARGS[$method]:-}"
 
@@ -418,16 +462,17 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
           thresh_label=" threshold=$thresh"
         fi
 
-        banner "Running $method [GPU: $gpu_mode] with $histogram_num_bins bins${thresh_label}"
+        banner "Running $fam $method [GPU: $gpu_mode] with $histogram_num_bins bins${thresh_label}"
 
         # CSV datasets: one run_cv per task, sweeping all NUM_FOLDS folds.
         for entry in "${CSV_DATASETS[@]}"; do
           IFS='|' read -r dir label <<<"$entry"
-          rest="--label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
+          rest="--label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $ensemble_arg $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
           run_cv "$dir" "$rest"
         done
       done
     done
+    done  # ENSEMBLES
   done
 
   # Rebuild the CPU binary so any subsequent non-GPU sections run with the
@@ -481,6 +526,15 @@ bazel_build "${BAZEL_FLAGS[@]}" "$vec_cfg" "$BUILD_TARGET"
 banner "VECTORIZED EXPERIMENTS [${vec_name}] (Oblique only) histogram_num_bins=${histogram_num_bins}"
 echo "USING INSTRUCTION SET: ${vec_name}" | tee -a "$logfile"
 
+# The "USING INSTRUCTION SET" line above latches the parser into naming every
+# subsequent run's method "Vectorized_<method>" (e.g. Vectorized_Random), so no
+# per-command tag is needed here. Vectorized runs are Oblique-only, so ensembles
+# map to SPORF (Bagging) / SPO-GBT (Boosting).
+for ensemble in "${ENSEMBLES[@]}"; do
+  nt="$(ensemble_num_trees "$ensemble")"
+  ensemble_arg="--ensemble_method $ensemble --num_trees=$nt"
+  fam="$(family_label "$ensemble" "Oblique")"
+
 for method in "${selected_vec_methods[@]}"; do
   extra="${METHOD_EXTRA_ARGS[$method]:-}"
 
@@ -503,15 +557,16 @@ for method in "${selected_vec_methods[@]}"; do
       thresh_label=" threshold=$thresh"
     fi
 
-    banner "Running $method [VECTORIZE: ${vec_name}] with $histogram_num_bins bins${thresh_label}"
+    banner "Running $fam Vectorized $method [${vec_name}] with $histogram_num_bins bins${thresh_label}"
 
     # CSV datasets: one run_cv per task, sweeping all NUM_FOLDS folds.
     for entry in "${CSV_DATASETS[@]}"; do
       IFS='|' read -r dir label <<<"$entry"
-      rest="--label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
+      rest="--label_col \"$label\" --numerical_split_type \"$method\" $ensemble_arg $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
       run_cv "$dir" "$rest"
     done
   done
 done
+done  # ENSEMBLES
 
 finalize_log
