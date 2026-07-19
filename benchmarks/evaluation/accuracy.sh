@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Accuracy evaluation: 10 seeds over all CC18 train folds.
+# Accuracy evaluation: 10-fold cross-validation over all CC18 binary tasks.
+# Each task ships a matching train/test split per fold
+# (repeat0_fold{0..9}_sample0_{train,test}.csv); every fold is trained at the
+# binary's fixed --seed and evaluated on its held-out _test.csv. The per-fold
+# 'test-accuracy:' values are the samples; mean +/- std over folds is the CV
+# estimate. RF and GBT are run as separate invocations (GBT via
+# EXTRA_TRAIN_ARGS="--ensemble_method Boosting ...") over the SAME folds, so the
+# preferred held-out 'test-accuracy:' number is directly comparable between them.
 #
 # Usage:  $0 <suffix>
 #   <suffix> becomes part of the result filename, e.g. 'AWS_m7i' ->
@@ -33,16 +40,17 @@ fi
 
 ###### Parameters
 
-SEEDS=(1 2 3 4 5 6 7 8 9 10)
+# Number of CV folds per task (repeat0_fold{0..NUM_FOLDS-1}_sample0).
+NUM_FOLDS=10
 
-if grep -q "Ultra 9 185H" /proc/cpuinfo 2>/dev/null; then
-  NUM_TREES=30
-else
-  NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
-fi
-# Each CC18 fold ships a matching _test.csv, so the binary is given --test_csv
-# and the parser prefers the held-out 'test-accuracy:' line. OOB stays on as a
-# fallback (used only if a test fold is missing / fails to load).
+NUM_TREES=300
+  
+# Every CC18 fold ships a matching _test.csv, so the binary is given --test_csv
+# and the parser prefers the held-out 'test-accuracy:' line -- the only number
+# comparable across RF and GBT. OOB (RF) / train-accuracy (GBT) stays on as a
+# fallback, used only if a test fold is missing / fails to load. The model seed
+# is fixed in the binary (--seed default = 1), so folds -- not seeds -- are the
+# sample axis: exactly one training run per fold, no seed sweep.
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=-1 --compute_oob_performances=true"
 
 histogram_num_bins=64  # NOTE! AVX512 will be used on Vectorized method
@@ -110,17 +118,16 @@ fi
 CSV_DATASETS=()
 # Only enumerate task_*/ folders; datasets renamed to issue_<name>/ are
 # skipped (used to mark folds the binary cannot train on, e.g. an
-# all-missing column that aborts dataspec creation).
+# all-missing column that aborts dataspec creation). Each entry is
+# "task_dir|label"; run_cv derives the per-fold train/test CSV paths from the
+# task dir. Fold 0's train CSV must exist for the task to be included; the label
+# is read from it (identical header across all folds).
 for d in "$CC18_DIR"/task_*/; do
   csv="${d}repeat0_fold0_sample0_train.csv"
   [[ -f "$csv" ]] || continue
   # Label is always the last header column; strip BOM/CR/spaces defensively.
   label=$(head -n 1 "$csv" | awk -F',' '{print $NF}' | tr -d '\r\n ' | sed 's/^\xef\xbb\xbf//')
-  # Sibling held-out test fold (3rd field). Empty if absent; the command
-  # builders only append --test_csv when the file actually exists.
-  test_csv="${d}repeat0_fold0_sample0_test.csv"
-  [[ -f "$test_csv" ]] || test_csv=""
-  CSV_DATASETS+=("$csv|$label|$test_csv")
+  CSV_DATASETS+=("$d|$label")
 done
 if [[ "${#CSV_DATASETS[@]}" -eq 0 ]]; then
   echo "ERROR: found no CC18 datasets under $CC18_DIR" >&2
@@ -153,6 +160,12 @@ EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
 # Vectorized build configs (adjust if your repo uses different config names)
 VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
 VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
+
+if [[ "$EXTRA_TRAIN_ARGS" == *"ensemble_method=Boosting"* ]]; then
+  NUM_TREES=300
+else
+  NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
+fi
 
 # Vectorization applies only to these methods (Oblique only)
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
@@ -232,17 +245,34 @@ if [[ "$RUN_CPU" == "true" || "$RUN_VECTORIZED" == "true" ]]; then
 fi
 BINARY="./bazel-bin/examples/train_oblique_forest"
 
-run_cmd() {
-  echo "$*" | tee -a "$logfile"
-  local seed out rc total=${#SEEDS[@]} i=0
-  for seed in "${SEEDS[@]}"; do
-    i=$((i+1))
-    echo "----- Run $i/$total (seed=$seed) -----" | tee -a "$logfile"
+# Run one algorithm over all NUM_FOLDS CV folds of a task at the binary's fixed
+# seed. $1 = task dir (trailing slash); $2 = every flag except the fold-varying
+# --input_mode/--train_csv/--test_csv (i.e. --label_col + split/method +
+# BASE_ARGS + EXTRA_TRAIN_ARGS). One representative command line (fold 0) is
+# logged first so parse_log_to_csv can extract dataset+algorithm; each fold then
+# runs under its own "----- Run k/NUM_FOLDS (fold=k) -----" marker, and its
+# held-out 'test-accuracy:' becomes that fold's sample. A missing fold still
+# emits its marker (blank sample) so CSV columns stay fold-aligned.
+run_cv() {
+  local dir="$1" rest="$2"
+  echo "$BINARY --input_mode csv --train_csv \"${dir}repeat0_fold0_sample0_train.csv\" $rest" | tee -a "$logfile"
+  local fold train test test_arg cmd out rc
+  for (( fold=0; fold<NUM_FOLDS; fold++ )); do
+    train="${dir}repeat0_fold${fold}_sample0_train.csv"
+    test="${dir}repeat0_fold${fold}_sample0_test.csv"
+    echo "----- Run $((fold+1))/$NUM_FOLDS (fold=$fold) -----" | tee -a "$logfile"
+    if [[ ! -f "$train" ]]; then
+      echo "WARNING: missing $train (skipping fold $fold)" | tee -a "$logfile"
+      continue
+    fi
+    test_arg=""
+    [[ -f "$test" ]] && test_arg="--test_csv \"$test\""
+    cmd="$BINARY --input_mode csv --train_csv \"$train\" $rest $test_arg"
     rc=0
-    out=$(bash -c "$* --seed=$seed" 2>&1) || rc=$?
+    out=$(bash -c "$cmd" 2>&1) || rc=$?
     echo "$out" | tee -a "$logfile"
     if (( rc != 0 )); then
-      echo "WARNING: command exited with status $rc on seed $seed (continuing)" | tee -a "$logfile"
+      echo "WARNING: command exited with status $rc on fold $fold (continuing)" | tee -a "$logfile"
     fi
   done
 }
@@ -328,13 +358,11 @@ for split in "${SPLIT_TYPES[@]}"; do
         banner "Running $method [$split]${thresh_label}"
       fi
 
-      # CSV datasets
+      # CSV datasets: one run_cv per task, sweeping all NUM_FOLDS folds.
       for entry in "${CSV_DATASETS[@]}"; do
-        IFS='|' read -r path label test_csv <<<"$entry"
-        test_arg=""
-        [[ -n "$test_csv" && -f "$test_csv" ]] && test_arg="--test_csv \"$test_csv\""
-        cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $test_arg $EXTRA_TRAIN_ARGS"
-        run_cmd "$cmd"
+        IFS='|' read -r dir label <<<"$entry"
+        rest="--label_col \"$label\" $feature_arg --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
+        run_cv "$dir" "$rest"
       done
     done
   done
@@ -392,13 +420,11 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
 
         banner "Running $method [GPU: $gpu_mode] with $histogram_num_bins bins${thresh_label}"
 
-        # CSV datasets
+        # CSV datasets: one run_cv per task, sweeping all NUM_FOLDS folds.
         for entry in "${CSV_DATASETS[@]}"; do
-          IFS='|' read -r path label test_csv <<<"$entry"
-          test_arg=""
-          [[ -n "$test_csv" && -f "$test_csv" ]] && test_arg="--test_csv \"$test_csv\""
-          cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg $test_arg $EXTRA_TRAIN_ARGS"
-          run_cmd "$cmd"
+          IFS='|' read -r dir label <<<"$entry"
+          rest="--label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"$method\" --use_gpu=true $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
+          run_cv "$dir" "$rest"
         done
       done
     done
@@ -479,13 +505,11 @@ for method in "${selected_vec_methods[@]}"; do
 
     banner "Running $method [VECTORIZE: ${vec_name}] with $histogram_num_bins bins${thresh_label}"
 
-    # CSV datasets
+    # CSV datasets: one run_cv per task, sweeping all NUM_FOLDS folds.
     for entry in "${CSV_DATASETS[@]}"; do
-      IFS='|' read -r path label test_csv <<<"$entry"
-      test_arg=""
-      [[ -n "$test_csv" && -f "$test_csv" ]] && test_arg="--test_csv \"$test_csv\""
-      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $test_arg $EXTRA_TRAIN_ARGS"
-      run_cmd "$cmd"
+      IFS='|' read -r dir label <<<"$entry"
+      rest="--label_col \"$label\" --numerical_split_type \"$method\" $BASE_ARGS $extra $thresh_arg $EXTRA_TRAIN_ARGS"
+      run_cv "$dir" "$rest"
     done
   done
 done

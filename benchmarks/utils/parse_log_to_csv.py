@@ -4,8 +4,9 @@
 Log type is taken from an explicit 3rd argument when given, otherwise it is
 inferred from the filename (substring 'runtime' or 'accuracy'):
   *runtime*.log  -> per-run timing samples (uses MEDIAN samples line)
-  *accuracy*.log -> per-seed final accuracy (last 'Train tree N/N ... accuracy:'
-                    per run; RF OOB accuracy or GBT train-accuracy)
+  *accuracy*.log -> per-fold held-out accuracy (preferred 'test-accuracy:' line
+                    from --test_csv; falls back to the last 'Train tree N/N ...
+                    accuracy:' = RF OOB / GBT train-accuracy when no test fold)
 
 Usage: parse_log_to_csv.py <log_file> <out_csv> [runtime|accuracy]
 
@@ -21,21 +22,26 @@ import re
 import sys
 
 CMD_RE = re.compile(r'^\./bazel-bin/examples/train_oblique_forest (.+?)\s*$')
-RUN_RE = re.compile(r'^----- Run (\d+)/(\d+)(?: \(seed=(\d+)\))? -----$')
+# The sample-axis marker carries either a model seed (legacy seed sweep) or a CV
+# fold index (accuracy.sh 10-fold mode); group 3 captures whichever is present
+# and becomes the per-sample key.
+RUN_RE = re.compile(r'^----- Run (\d+)/(\d+)(?: \((?:seed|fold)=(\d+)\))? -----$')
 # Random Forest logs   "Train tree N/N accuracy:0.83 logloss:..."
 # Gradient Boosted Trees log "Train tree N/N train-loss:... train-accuracy:0.73 [total:...]"
 # One regex captures the accuracy value in either format: the `\b` before
 # `accuracy` also matches the GBT `train-accuracy:` variant (since `-` is a
 # non-word char, there is a word boundary between it and `accuracy`). The
-# accuracy parser keeps the LAST match per seed, i.e. the final-model accuracy
+# accuracy parser keeps the LAST match per sample, i.e. the final-model accuracy
 # in both cases.
-# CAVEAT: GBT's number is TRAIN-set accuracy (the harness builds GBT with
-# validation_set_ratio=0), whereas RF's is OOB accuracy. The two are NOT
-# directly comparable -- GBT train-accuracy is optimistic.
+# CAVEAT: this is only the FALLBACK and is NOT comparable across ensembles --
+# GBT's number is TRAIN-set accuracy (the harness builds GBT with
+# validation_set_ratio=0), optimistic, whereas RF's is OOB accuracy. Prefer the
+# held-out 'test-accuracy:' line (TEST_ACC_RE below), which the accuracy parser
+# uses whenever it is present.
 ACC_RE = re.compile(r'Train tree \d+/\d+.*?\baccuracy:([\d.]+)')
 # Held-out test-set accuracy emitted by train_oblique_forest's --test_csv path
 # ("... test-accuracy:0.94"). Disjoint from ACC_RE (no "Train tree N/N" prefix).
-# When present for a seed it is PREFERRED over the OOB/train-accuracy value.
+# When present for a sample it is PREFERRED over the OOB/train-accuracy value.
 TEST_ACC_RE = re.compile(r'\btest-accuracy:([\d.]+)')
 # STDDEV segment is optional so logs predating it still parse.
 MEDIAN_RUN_RE = re.compile(
@@ -122,8 +128,8 @@ def parse_runtime(log_path):
 
 def parse_accuracy(log_path):
     rows = []
-    # 'seeds' holds the OOB/train-accuracy per seed; 'test' holds the held-out
-    # test-set accuracy per seed (preferred when present).
+    # 'seeds' holds the OOB/train-accuracy per sample (seed or CV fold); 'test'
+    # holds the held-out test-set accuracy per sample (preferred when present).
     state = {'cmd': None, 'seeds': {}, 'test': {}, 'cur_seed': None}
 
     def finish_cmd():
@@ -193,7 +199,7 @@ def main():
 
     if log_type == 'accuracy':
         rows = parse_accuracy(log_path)
-        col_prefix = 'seed'
+        col_prefix = 'fold'
         is_runtime = False
     elif log_type == 'runtime':
         rows = parse_runtime(log_path)

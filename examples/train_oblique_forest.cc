@@ -115,7 +115,7 @@ ABSL_FLAG(int64_t, rows, 4096, "Number of examples (for synthetic mode).");
 ABSL_FLAG(int, cols, 4096, "Number of numerical features (for synthetic mode).");
 ABSL_FLAG(int, label_mod, 2,
           "Number of classes (labels are 1..label_mod, for synthetic mode).");
-ABSL_FLAG(uint32_t, seed, 1234,
+ABSL_FLAG(uint32_t, seed, 1,
           "PRNG seed (for deterministic synthetic mode and model training).");
 ABSL_FLAG(std::string, dataset_layout, "column",
           "Hidden dataset-layout experiment: 'column' (default vertical "

@@ -1,34 +1,21 @@
 GBT Chrono
 
-[X] Correct params to use : 300 trees + depth 6
+[X] Correct params to use : waiting on Richard
 
-[ ] e2e
+[X] is num_bins ignored? No it's correct
 
-Dynamic is working. Runtime Vectorized Hist + Dynamic
+[X] Remove isnan in FindSplitRegerssionHistogram
 
-which one did we run?
 
-Reported time is wrong by runtime.sh . rerun
 
-    - [X] Dynamic Random
-        
-    - [ ] Vectorized Random used? No. fix 
-        n_bins is also ignored. No binning on the fly?
+e2e
+
+    - [ ] Vectorized Dynamic Random
+        [X] Extend vectorized to FindSplitRegerssionHistogram
+            ✅ No other methods benefit 
+            [ ] test accuracy
+                [ ] implement proper CV testing in accuracy.sh
     
 
-chrono
 
-    [ ] Extend vectorized to FindSplitRegerssionHistogram
-        [X] Find a better code way for it to generalize across all methods that use Random Hist
-        ✅ No other methods benefit 
-        [ ] test accuracy
-            [ ] implement test on _test.csv - test set
-
-    [X] Remove isnan in FindSplitRegerssionHistogram
-
-    [X] Add histogramming cols
-
-    [ ] Proportion of AP-EP by dataset
-
-    [ ] Why is 15k x 400k so slow e2e
-
+[ ] chrono all
