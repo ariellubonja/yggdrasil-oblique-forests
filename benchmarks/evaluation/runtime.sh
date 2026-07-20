@@ -139,7 +139,7 @@ METHOD_EXTRA_ARGS["Dynamic Random Histogram"]="--histogram_num_bins=$histogram_n
 BUILD_TARGET="//examples:train_oblique_forest"
 BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --repo_env=CXX=icpx)
 # Optional space-separated extra build configs/flags injected into every
-# bazel_build (e.g. EXTRA_BAZEL_CONFIGS="--config=symmetric_nodewise_control").
+# bazel_build (e.g. EXTRA_BAZEL_CONFIGS="--config=symmetric_depthwise_ap").
 # shellcheck disable=SC2206
 EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
 # Optional extra train_oblique_forest flags injected into every binary command

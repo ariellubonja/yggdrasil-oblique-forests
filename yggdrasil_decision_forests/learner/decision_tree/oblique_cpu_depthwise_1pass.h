@@ -11,8 +11,8 @@
 // It runs single-threaded on the caller thread: RandomForest already trains
 // one tree per thread, so an internal pool here would only oversubscribe.
 //
-// Mutually exclusive at build time with the symmetric-trees variants
-// (SYMMETRIC_DEPTHWISE_AP / SYMMETRIC_NODEWISE_CONTROL).
+// Mutually exclusive at build time with the symmetric-trees variant
+// (SYMMETRIC_DEPTHWISE_AP).
 //
 // Output contract (shared with the symmetric kernel):
 // out_projected[n] is a (P_n * rows_n)-float slab, row-minor within

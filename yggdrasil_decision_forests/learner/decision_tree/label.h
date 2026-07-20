@@ -16,20 +16,17 @@
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_CONFIG_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_CONFIG_H_
 
-#if defined(DEPTHWISE_1_PASS) &&                                            \
-    (defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL) || \
-     defined(BFS_ONLY))
+#if defined(DEPTHWISE_1_PASS) && \
+    (defined(SYMMETRIC_DEPTHWISE_AP) || defined(BFS_ONLY))
 #error "Depthwise oblique mode and symmetric/BFS oblique modes are mutually exclusive"
 #endif
-// The three depthwise scheduler modes are mutually exclusive: each one is a
+// The two depthwise scheduler modes are mutually exclusive: each one is a
 // distinct control / treatment in the symmetric-trees ablation series.
 // SYMMETRIC_DEPTHWISE_AP is the full treatment (shared projections + fused
-// bag-wide Apply); SYMMETRIC_NODEWISE_CONTROL keeps shared projections but
-// drops the fused Apply; BFS_ONLY drops both and isolates the BFS scheduler
-// alone (per-node projection sampling, no symmetric behavior).
-#if (defined(SYMMETRIC_DEPTHWISE_AP) + defined(SYMMETRIC_NODEWISE_CONTROL) + \
-     defined(BFS_ONLY)) > 1
-#error "SYMMETRIC_DEPTHWISE_AP, SYMMETRIC_NODEWISE_CONTROL, and BFS_ONLY are mutually exclusive"
+// bag-wide Apply); BFS_ONLY drops it and isolates the BFS scheduler alone
+// (per-node projection sampling, no symmetric behavior).
+#if (defined(SYMMETRIC_DEPTHWISE_AP) + defined(BFS_ONLY)) > 1
+#error "SYMMETRIC_DEPTHWISE_AP and BFS_ONLY are mutually exclusive"
 #endif
 #if defined(DEPTHWISE_1_PASS)
 #define OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS 1

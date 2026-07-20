@@ -84,18 +84,6 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     }
   } else
 #endif
-#ifdef SYMMETRIC_NODEWISE_CONTROL
-  // Control: same K shared projections per depth, but each node still runs the
-  // node-local Evaluate. Isolates shared-sampling from the bagwide-read effect.
-  const bool has_depthwise_shared_projections =
-      internal_config.depthwise_projection_defs != nullptr &&
-      internal_config.depthwise_monotonic != nullptr;
-  if (has_depthwise_shared_projections) {
-    // … [same loop as above but with projection_evaluator.Evaluate(
-    //     depth_projs[proj_idx], selected_examples, &projection_values) feeding
-    //     EvaluateProjection] …
-  } else
-#endif
   {
 // MAIN LOOP
   for (int projection_idx = 0; projection_idx < num_projections; projection_idx++) {
@@ -157,7 +145,6 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 | DW1 depthwise 1-pass (col-sharing) | `--config=depthwise_1_pass` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
 | DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem in core §13 |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
-| Symmetric nodewise control | `--config=symmetric_nodewise_control` | shared sampling, node-local Evaluate | control |
 | Subtree gather cache | *(code removed 2026-07-16)* | was `oblique.cc` `#ifdef SUBTREE_GATHER_CACHE`; recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
 

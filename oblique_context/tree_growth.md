@@ -169,8 +169,8 @@ Selected by `DecisionTreeCoreTrain` (training.cc:5138) at **compile time**:
 
 ```cpp
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyLocal: {
-#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_DEPTHWISE_AP) ||         \
-    defined(SYMMETRIC_NODEWISE_CONTROL) || defined(BFS_ONLY)
+#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_DEPTHWISE_AP) || \
+    defined(BFS_ONLY)
       return GrowTreeLocalBFS(…);
 #else
       return GrowTreeLocal(…);
@@ -232,7 +232,7 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
         std::vector<float>().swap(projected[n]);
       }
     } else
-#elif defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
+#elif defined(SYMMETRIC_DEPTHWISE_AP)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1 &&
         current_depth <= SymmetricMaxDepth()) {               // env YDF_SYMMETRIC_MAX_DEPTH
       // CatBoost-style symmetric trees: sample K projections ONCE for this
@@ -242,7 +242,6 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
       std::vector<internal::Projection> shared_projections(num_proj);
       std::vector<int8_t> shared_monotonic(num_proj, 0);
       for (int p = 0; p < num_proj; ++p) internal::SampleProjection(…);
-#ifdef SYMMETRIC_DEPTHWISE_AP
       // build sel_spans; projected(num_nodes);
       RETURN_IF_ERROR(ApplyProjectionsSymmetricDepthwiseAP(
           train_dataset, config_link.numerical_features(),
@@ -250,10 +249,6 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
           absl::MakeSpan(projected)));
       // per node: node_config.{depthwise_projection_defs,depthwise_monotonic,
       //                        precomputed_projected_values} → NodeTrain
-#else
-      // Symmetric_Nodewise_Control: shared defs, but NO fused Apply — each node
-      // falls through to the node-local Evaluate path in oblique.cc.
-#endif
     } else if (dt_config.has_sparse_oblique_split()) {
       // Symmetric → DFS handoff (deeper than YDF_SYMMETRIC_MAX_DEPTH): finish each
       // frontier node's subtree with GrowTreeLocal (pushes nothing back to node_queue).
