@@ -5263,8 +5263,8 @@ absl::Status DecisionTreeCoreTrain(
   switch (dt_config.growing_strategy_case()) {
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyLocal: {
       const auto constraints = NodeConstraints::CreateNodeConstraints();
-#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_DEPTHWISE_AP) ||         \
-    defined(SYMMETRIC_NODEWISE_CONTROL) || defined(BFS_ONLY)
+#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_DEPTHWISE_AP) || \
+    defined(BFS_ONLY)
       return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                               deployment, weights, 1, internal_config,
                               constraints, false, dt->mutable_root(), random,
@@ -5551,7 +5551,7 @@ int32_t Depthwise1PassMinDepth() {
 }
 #endif
 
-#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
+#if defined(SYMMETRIC_DEPTHWISE_AP)
 // Deepest level (inclusive) that runs the symmetric bagwide path; levels deeper
 // than this hand each frontier node off to the stack-based DFS grower
 // (GrowTreeLocal) to finish its subtree. Read once from YDF_SYMMETRIC_MAX_DEPTH
@@ -5731,7 +5731,7 @@ absl::Status GrowTreeLocalBFS(
         std::vector<float>().swap(projected[n]);
       }
     } else
-#elif defined(SYMMETRIC_DEPTHWISE_AP) || defined(SYMMETRIC_NODEWISE_CONTROL)
+#elif defined(SYMMETRIC_DEPTHWISE_AP)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1 &&
         current_depth <= SymmetricMaxDepth()) {
       // CatBoost-style symmetric trees: sample K projections ONCE for this
@@ -5753,8 +5753,7 @@ absl::Status GrowTreeLocalBFS(
       // value (set by the last NodeTrain). Pin it to current_depth so
       // kSampleProjection, SymBuildBag / SymSortBag / SymSweep (and the
       // outer kProjectionEvaluate) all accrue to the correct (tree, depth)
-      // cell. Nodewise control is deliberately left unscoped: its NodeTrain
-      // sum already matches TreeTrain.
+      // cell.
       ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
           current_depth;
       // K shared samples per depth — tiny, but scoped so the depth-level
@@ -5772,7 +5771,6 @@ absl::Status GrowTreeLocalBFS(
                  ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
 #endif
 
-#ifdef SYMMETRIC_DEPTHWISE_AP
       const int num_nodes = depth_batch.size();
       std::vector<absl::Span<const UnsignedExampleIdx>> sel_spans(num_nodes);
       for (int n = 0; n < num_nodes; ++n) {
@@ -5842,20 +5840,6 @@ absl::Status GrowTreeLocalBFS(
                                   node_queue));
         std::vector<float>().swap(projected[n]);  // free early
       }
-#else
-      // Symmetric_Nodewise_Control: reuse the depth's sampled projections
-      // across nodes, but deliberately do not call the bagwide fused Apply
-      // kernel. Each node falls through to the normal node-local
-      // ProjectionEvaluator::Evaluate path in oblique.cc.
-      for (auto& nae : depth_batch) {
-        auto node_config = internal_config;
-        node_config.depthwise_projection_defs = &shared_projections;
-        node_config.depthwise_monotonic = &shared_monotonic;
-        RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
-                                  deployment, weights, node_config, random,
-                                  cache, std::move(nae), node_queue));
-      }
-#endif
     } else if (dt_config.has_sparse_oblique_split()) {
       // Symmetric -> DFS handoff. Reached only when current_depth >
       // SymmetricMaxDepth(): finish each frontier node's subtree with the

@@ -17,7 +17,6 @@ build:depthwise_1_pass            --cxxopt="-DDEPTHWISE_1_PASS=1"
 build:dw1_shared_rows             --config=depthwise_1_pass --cxxopt="-DDW1_SHARED_ROWS=1"
 build:row_major_dataset_layout    --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 build:symmetric_depthwise_ap      --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
-build:symmetric_nodewise_control  --cxxopt="-DSYMMETRIC_NODEWISE_CONTROL=1"   # don't combine with the above
 build:bfs_only                    --cxxopt="-DBFS_ONLY=1"                     # mutually exclusive with symmetric_*
 build:oblique_gpu                 --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 build:chrono_profile              --cxxopt="-DCHRONO_PROFILE=2"   # every scope

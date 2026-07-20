@@ -342,7 +342,7 @@ Upstream: `FindBestConditionOblique` (oblique.cc:777) → `FindBestConditionSing
 single-thread branch (training.cc:1896).
 
 **The full body — with every variant `#ifdef` branch (SYMMETRIC_DEPTHWISE_AP precomputed-slab
-hook, SYMMETRIC_NODEWISE_CONTROL) — is in
+hook) — is in
 `oblique_context/kernel_variants.md`.** Any kernel that produces the same slab values in slab
 order `slab[p*rows_n + i]` can feed the `precomputed_projected_values` hook without touching
 the finders (§12.4).
@@ -395,7 +395,6 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 | DW1 depthwise 1-pass (col-sharing) | `--config=depthwise_1_pass` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
 | DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem §13 |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
-| Symmetric nodewise control | `--config=symmetric_nodewise_control` | shared sampling, node-local Evaluate | control |
 | Subtree gather cache | *(code removed 2026-07-16)* | recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
 
