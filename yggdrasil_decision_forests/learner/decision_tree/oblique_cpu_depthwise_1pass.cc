@@ -189,9 +189,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     max_attr = std::max(max_attr, attribute_idx);
   }
 
-  // ── Phase 1: PreSize ──────────────────────────────────────────────
-  // Slab pre-size (zero-init: the column sweep accumulates) + task build.
-  // ~5% of AP time
+  // ── Phase 1: PreSize --- ~5% of AP time
+  // Slab pre-size (zero-init: the column sweep accumulates) + task build
   std::vector<Dw1Task> tasks;
   {
     CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1PreSize);
@@ -199,9 +198,13 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     size_t blk_begin = 0;
     size_t blk_floats = 0;
     for (size_t n = 0; n < N; ++n) {
+      // Accounts for variable n. projections / node
       const size_t slab =
           selected_examples_per_node[n].size() * projections_per_node[n].size();
       out_projected[n].assign(slab, 0.f);
+
+      // TODO Ariel When is slab over budget? What happens then?
+      // Also why is there 3 paths in this if {}
       if (slab > budget) {
         if (blk_begin < n) tasks.push_back({blk_begin, n, /*big=*/false});
         tasks.push_back({n, n + 1, /*big=*/true});
