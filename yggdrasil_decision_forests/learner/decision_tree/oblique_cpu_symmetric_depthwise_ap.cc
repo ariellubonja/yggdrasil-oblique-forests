@@ -3,7 +3,6 @@
 #ifdef SYMMETRIC_DEPTHWISE_AP
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -166,15 +165,9 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
 
       std::vector<const float*> col_ptrs(M);
       std::vector<float> ws(M);
-#ifdef ENABLE_ISNAN
-      std::vector<float> nas(M);
-#endif
       for (size_t m = 0; m < M; ++m) {
         col_ptrs[m] = evaluator.AttributeData(proj[m].attribute_idx);
         ws[m] = proj[m].weight;
-#ifdef ENABLE_ISNAN
-        nas[m] = evaluator.NaReplacementValue(proj[m].attribute_idx);
-#endif
       }
 
       if (single_node) {
@@ -186,9 +179,6 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
             float v = col_ptrs[m] != nullptr
                           ? col_ptrs[m][ex]
                           : evaluator.AttributeValue(proj[m].attribute_idx, ex);
-#ifdef ENABLE_ISNAN
-            if (std::isnan(v)) v = nas[m];
-#endif
             value += ws[m] * v;
           }
           out[i] = value;
@@ -202,9 +192,6 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
             float v = col_ptrs[m] != nullptr
                           ? col_ptrs[m][ex]
                           : evaluator.AttributeValue(proj[m].attribute_idx, ex);
-#ifdef ENABLE_ISNAN
-            if (std::isnan(v)) v = nas[m];
-#endif
             value += ws[m] * v;
           }
           const uint32_t n = node_of_bag[i];

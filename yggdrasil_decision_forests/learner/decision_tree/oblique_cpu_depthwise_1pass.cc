@@ -3,7 +3,6 @@
 #ifdef DEPTHWISE_1_PASS
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -125,21 +124,13 @@ inline void EvaluateNodeProjMajor(
   struct FeatRef {
     const float* col;
     float weight;
-#ifdef ENABLE_ISNAN
-    float na;
-#endif
   };
   std::vector<FeatRef> feats;
   for (size_t p = 0; p < projs.size(); ++p) {
     feats.clear();
     for (const auto& feat : projs[p]) {
       feats.push_back({evaluator.AttributeData(feat.attribute_idx),
-                       feat.weight
-#ifdef ENABLE_ISNAN
-                       ,
-                       evaluator.NaReplacementValue(feat.attribute_idx)
-#endif
-      });
+                       feat.weight});
     }
     float* o = out_ptr + p * rows_n;
     for (size_t i = 0; i < rows_n; ++i) {
@@ -147,9 +138,6 @@ inline void EvaluateNodeProjMajor(
       float acc = 0.f;
       for (const auto& f : feats) {
         float v = f.col[ex];
-#ifdef ENABLE_ISNAN
-        if (std::isnan(v)) v = f.na;
-#endif
         acc += f.weight * v;
       }
       o[i] = acc;
@@ -168,9 +156,6 @@ inline void EvaluateProjectionRowsGeneric(
     float acc = 0.f;
     for (const auto& feat : proj) {
       float v = evaluator.AttributeValue(feat.attribute_idx, ex);
-#ifdef ENABLE_ISNAN
-      if (std::isnan(v)) v = evaluator.NaReplacementValue(feat.attribute_idx);
-#endif
       acc += feat.weight * v;
     }
     out_for_proj[i] = acc;
