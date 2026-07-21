@@ -24,7 +24,9 @@ build:chrono_profile_coarse       --cxxopt="-DCHRONO_PROFILE=1"   # top-level sc
 build:inline_projection_evaluate  --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
 build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
-build:enable_std_upper_bound_avx2 / _avx512   # SIMD upper_bound; define is also default-on globally
+build:disable_std_upper_bound_vectorization --cxxopt="-DDISABLE_STD_UPPER_BOUND_VECTORIZATION=1"
+  # SIMD upper_bound is default-ON with runtime cpuid+bin-count dispatch; this turns it off.
+  # (enable_std_upper_bound_avx2/_avx512 remain as deprecated no-op aliases for old scripts.)
 build --copt=-march=native --cxxopt="-O3"     # global
 build:linux --repo_env=CC=icx --repo_env=CXX=icpx   # oneAPI icx pin (gcc is 30-40% slower on the hot path)
 build:debug  --cxxopt=-O0 -g -fno-inline …    # breakpoints need this separate config

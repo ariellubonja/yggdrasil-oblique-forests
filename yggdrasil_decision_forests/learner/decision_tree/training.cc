@@ -15,9 +15,8 @@
 
 #include "yggdrasil_decision_forests/learner/decision_tree/training.h"
 
-#if defined(__x86_64__) && \
-    (defined(__AVX2__) || defined(__AVX512F__)) && \
-    defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+#if defined(__x86_64__) && !defined(DISABLE_STD_UPPER_BOUND_VECTORIZATION)
+#define YDF_SIMD_UPPER_BOUND 1
 #include <immintrin.h>
 #endif
 
@@ -2211,12 +2210,59 @@ static inline int EqualWidthThresholdIndex(const float attribute,
 //   * non-equal-width, 64 bins    -> AVX2 8x8 SIMD upper_bound
 //   * non-equal-width, 256 bins   -> AVX-512 16x16 SIMD upper_bound
 //   * otherwise                   -> scalar std::upper_bound
-// The SIMD fast paths require ENABLE_STD_UPPER_BOUND_VECTORIZATION and the
-// corresponding ISA; otherwise they compile out and the scalar path is used.
+// On x86-64 BOTH SIMD kernels are always compiled (per-function
+// __attribute__((target)), no TU-wide -mavx2/-mavx512f required) and Init()
+// picks one at runtime from cpuid + the bin count; a CPU without the ISA falls
+// back to the scalar path. --config=disable_std_upper_bound_vectorization
+// compiles the SIMD paths out entirely (scalar-only).
 //
 // Ariel: 256-bin AVX-512 was ~3-4x faster than std::upper_bound on
 // trunk_3000000_x_4096 (i9-185h). TODO Ariel: try 128-bin AVX-512 variant to
 // handle the case where someone sets num_candidates to 128.
+#ifdef YDF_SIMD_UPPER_BOUND
+inline bool CpuSupportsAvx2() {
+  static const bool supported = __builtin_cpu_supports("avx2");
+  return supported;
+}
+
+inline bool CpuSupportsAvx512f() {
+  static const bool supported = __builtin_cpu_supports("avx512f");
+  return supported;
+}
+
+// Two-level SIMD upper_bound over 64 sorted thresholds: an 8-wide coarse
+// compare picks the 8-threshold group, an 8-wide fine compare picks the slot.
+// `coarse8` holds the last threshold of each group. Only called when
+// CpuSupportsAvx2(); the target attribute lets it use AVX2 intrinsics in a TU
+// that may be compiled without -mavx2.
+__attribute__((target("avx2,popcnt"))) inline int Avx2UpperBoundIndex64(
+    const float x, const float* thr64, const float* coarse8) {
+  const __m256 vx = _mm256_set1_ps(x);
+  const unsigned mc = static_cast<unsigned>(
+      _mm256_movemask_ps(_mm256_cmp_ps(vx, _mm256_load_ps(coarse8),
+                                       _CMP_GE_OQ)));
+  const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(mc));
+  if (K >= 8) return 63;
+  const __m256 vthr = _mm256_load_ps(thr64 + (K << 3));
+  const unsigned mf = static_cast<unsigned>(
+      _mm256_movemask_ps(_mm256_cmp_ps(vx, vthr, _CMP_GE_OQ)));
+  return static_cast<int>((K << 3) + _mm_popcnt_u32(mf)) - 1;
+}
+
+// Same scheme, 16x16 over 256 thresholds. Only called when CpuSupportsAvx512f().
+__attribute__((target("avx512f,popcnt"))) inline int Avx512UpperBoundIndex256(
+    const float x, const float* thr256, const float* coarse16) {
+  const __m512 vx = _mm512_set1_ps(x);
+  const __mmask16 mc =
+      _mm512_cmp_ps_mask(vx, _mm512_load_ps(coarse16), _CMP_GE_OQ);
+  const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(mc));
+  if (K >= 16) return 255;
+  const __m512 vthr = _mm512_load_ps(thr256 + (K << 4));
+  const __mmask16 mf = _mm512_cmp_ps_mask(vx, vthr, _CMP_GE_OQ);
+  return static_cast<int>((K << 4) + _mm_popcnt_u32(mf)) - 1;
+}
+#endif  // YDF_SIMD_UPPER_BOUND
+
 struct HistogramBinner {
   // Sorted thresholds (== the histogram bins). Always populated; used by the
   // scalar fallback and by the debug cross-check of the equal-width fast path.
@@ -2225,14 +2271,15 @@ struct HistogramBinner {
   float max_value = 0.f;
   int num_bins = 0;
   bool use_equal_width = false;
-#if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+#ifdef YDF_SIMD_UPPER_BOUND
+  // Threshold copies + per-group coarse tables for the SIMD kernels. Plain
+  // float arrays (not __m256/__m512 members) so the struct compiles without
+  // TU-wide ISA flags; the target-attributed kernels load them.
   alignas(64) float thr256[256];
-  __m512 coarse16;
+  alignas(64) float coarse16[16];
   bool avx512_256 = false;
-#endif
-#if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
   alignas(32) float thr64[64];
-  __m256 coarse8;
+  alignas(32) float coarse8[8];
   bool avx2_64 = false;
 #endif
 
@@ -2245,23 +2292,19 @@ struct HistogramBinner {
         (type == proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH ||
          type == proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
     scalar_thr = thr;
-#if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+#ifdef YDF_SIMD_UPPER_BOUND
+    // Runtime kernel selection: bin count picks the kernel shape, cpuid gates
+    // the ISA. Anything else falls through to scalar std::upper_bound.
     avx512_256 = false;
-    if (thr.size() == 256) {
+    if (thr.size() == 256 && CpuSupportsAvx512f()) {
       for (int i = 0; i < 256; ++i) thr256[i] = thr[i];
-      alignas(64) float tmp[16];
-      for (int g = 0; g < 16; ++g) tmp[g] = thr256[(g + 1) * 16 - 1];
-      coarse16 = _mm512_load_ps(tmp);
+      for (int g = 0; g < 16; ++g) coarse16[g] = thr256[(g + 1) * 16 - 1];
       avx512_256 = true;
     }
-#endif
-#if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
     avx2_64 = false;
-    if (thr.size() == 64) {
+    if (thr.size() == 64 && CpuSupportsAvx2()) {
       for (int i = 0; i < 64; ++i) thr64[i] = thr[i];
-      alignas(32) float tmp[8];
-      for (int g = 0; g < 8; ++g) tmp[g] = thr64[(g + 1) * 8 - 1];
-      coarse8 = _mm256_load_ps(tmp);
+      for (int g = 0; g < 8; ++g) coarse8[g] = thr64[(g + 1) * 8 - 1];
       avx2_64 = true;
     }
 #endif
@@ -2292,21 +2335,9 @@ struct HistogramBinner {
 #endif
       return idx;
     }
-#if defined(__AVX512F__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
+#ifdef YDF_SIMD_UPPER_BOUND
     if (avx512_256) {
-      const __m512 vx = _mm512_set1_ps(x);
-      const __mmask16 m = _mm512_cmp_ps_mask(vx, coarse16, _CMP_GE_OQ);
-      const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(m));
-      int idx;
-      if (K >= 16) {
-        idx = 255;
-      } else {
-        const float* base = thr256 + (K << 4);
-        const __m512 vthr = _mm512_load_ps(base);
-        const __mmask16 mf = _mm512_cmp_ps_mask(vx, vthr, _CMP_GE_OQ);
-        const unsigned cnt = static_cast<unsigned>(_mm_popcnt_u32(mf));
-        idx = static_cast<int>((K << 4) + cnt) - 1;
-      }
+      const int idx = Avx512UpperBoundIndex256(x, thr256, coarse16);
 #ifndef NDEBUG
       // The SIMD upper_bound (the non-equal-width / "random" path) must match
       // the scalar std::upper_bound. Debug-only; compiled out in opt.
@@ -2315,24 +2346,8 @@ struct HistogramBinner {
 #endif
       return idx;
     }
-#endif
-#if defined(__AVX2__) && defined(ENABLE_STD_UPPER_BOUND_VECTORIZATION)
     if (avx2_64) {
-      const __m256 vx = _mm256_set1_ps(x);
-      const unsigned mc = static_cast<unsigned>(
-          _mm256_movemask_ps(_mm256_cmp_ps(vx, coarse8, _CMP_GE_OQ)));
-      const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(mc));
-      int idx;
-      if (K >= 8) {
-        idx = 63;
-      } else {
-        const float* base = thr64 + (K << 3);
-        const __m256 vthr = _mm256_load_ps(base);
-        const unsigned mf = static_cast<unsigned>(
-            _mm256_movemask_ps(_mm256_cmp_ps(vx, vthr, _CMP_GE_OQ)));
-        const unsigned cnt = static_cast<unsigned>(_mm_popcnt_u32(mf));
-        idx = static_cast<int>((K << 3) + cnt) - 1;
-      }
+      const int idx = Avx2UpperBoundIndex64(x, thr64, coarse8);
 #ifndef NDEBUG
       // The SIMD upper_bound (the non-equal-width / "random" path) must match
       // the scalar std::upper_bound. Debug-only; compiled out in opt.

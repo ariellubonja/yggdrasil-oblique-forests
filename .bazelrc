@@ -70,16 +70,24 @@ build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
 
 # STD::UPPER_BOUND VECTORIZATION
-build:enable_std_upper_bound_avx2 --cxxopt="-mavx2" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
-build:enable_std_upper_bound_avx512 --cxxopt="-mavx512f" --cxxopt="-mfma" --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
+# ON by default: the SIMD histogram binners (HistogramBinner in
+# learner/decision_tree/training.cc — AVX2 8x8 for 64 bins, AVX-512 16x16 for
+# 256 bins) are always compiled on x86-64 via per-function
+# __attribute__((target)) (no TU-wide -mavx2/-mavx512f needed) and selected at
+# RUNTIME from cpuid + the bin count; non-matching CPUs / bin counts fall back
+# to scalar std::upper_bound. This config removes the SIMD paths entirely
+# (scalar-only), e.g. for A/B measurement.
+build:disable_std_upper_bound_vectorization --cxxopt="-DDISABLE_STD_UPPER_BOUND_VECTORIZATION=1"
+# DEPRECATED no-op aliases (SIMD is now default-on with runtime dispatch); kept
+# only so older benchmark scripts that still pass them don't break. The define
+# they add is no longer read by any code.
+build:enable_std_upper_bound_avx2 --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
+build:enable_std_upper_bound_avx512 --cxxopt="-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1"
 
-# Default ON: tune for the host CPU + enable std::upper_bound AVX2 vectorization
-# for every build (no --config needed). -march=native already implies -mavx2/-mfma
-# on AVX2 hosts, so only the vectorization define is added here.
+# Default ON: tune for the host CPU.
 # NOTE: -march=native is host-specific and breaks cross-compiles (e.g. wasm);
 # scope under build:linux/build:macos if you ever cross-compile.
 build --copt=-march=native --cxxopt="-O3"
-build --cxxopt=-DENABLE_STD_UPPER_BOUND_VECTORIZATION=1
 
 
 # DEFAULTS
