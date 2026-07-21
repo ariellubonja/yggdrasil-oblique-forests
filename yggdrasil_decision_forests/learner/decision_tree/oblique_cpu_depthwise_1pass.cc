@@ -11,9 +11,8 @@
 #include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
-#include "hwy/base.h"
-#include "hwy/contrib/sort/vqsort.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_bag.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 
 namespace yggdrasil_decision_forests::model::decision_tree {
@@ -59,39 +58,6 @@ struct ColEntry {
   float weight;
 };
 
-#ifdef DW1_SHARED_ROWS
-// One row of a block's merged bag, packed for hwy::VQSort. The block's bag is
-// the union of its nodes' selected_examples; we sort it by example id so each
-// touched column is read in one ascending pass (stride-1 when the union covers
-// the row range) instead of a per-node gather.
-//
-// 8-byte entry: VQSort orders by the 32-bit example id (the K32V32 `key`); the
-// 32-bit `value` carries ONLY the owning node (index within the depth batch).
-// The row's local slot in the node's output slab is NOT stored: each node's
-// selected_examples is sorted ascending (DCHECK in SplitExamplesInPlace), so
-// within the row-sorted bag a node's rows appear in slab order, and `local` is
-// recovered as a per-node running counter during the colwalk. At 8 B/row the
-// colwalk's once-per-column bag stream is half the footprint of a 16 B K64V64
-// {row, node|local} entry (and beats the old 12 B {row,node,local} AoS).
-static_assert(sizeof(UnsignedExampleIdx) <= sizeof(uint32_t),
-              "DW1 shared-rows packs the example id into a 32-bit K32V32 key; "
-              "rebuild without --define=ydf_example_idx_num_bits=64.");
-using BagRow = hwy::K32V32;
-
-inline BagRow MakeBagRow(UnsignedExampleIdx row, int32_t node) {
-  BagRow e;
-  e.key = static_cast<uint32_t>(row);
-  e.value = static_cast<uint32_t>(node);
-  return e;
-}
-inline UnsignedExampleIdx BagRowExample(const BagRow& e) {
-  return static_cast<UnsignedExampleIdx>(e.key);
-}
-inline int32_t BagRowNode(const BagRow& e) {
-  return static_cast<int32_t>(e.value);
-}
-#endif
-
 struct Dw1Task {
   size_t begin_node;
   size_t end_node;  // exclusive; big nodes come as [n, n+1) with big=true
@@ -105,7 +71,6 @@ struct Dw1Scratch {
   std::vector<int32_t> touched;    // touched column ids, sorted ascending
   std::vector<int32_t> col_count;  // per-column counters, sized max_attr+1
 #ifdef DW1_SHARED_ROWS
-  std::vector<BagRow> bag;             // block's merged bag, sorted by row id
   std::vector<int32_t> node_ref_off;   // per block-node: start in ref_*, else -1
   std::vector<int32_t> node_ref_cnt;   // per block-node: #refs to current column
   std::vector<int32_t> node_local;     // per block-node: rows seen this column
@@ -172,8 +137,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
+    absl::Span<const int32_t> prev_first_child, DepthBagState* bag_state,
     absl::Span<std::vector<float>> out_projected) {
-  
+
   CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
   const size_t N = selected_examples_per_node.size();
   if (N == 0) return absl::OkStatus();
@@ -184,6 +150,26 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   for (const auto attribute_idx : numerical_features) {
     max_attr = std::max(max_attr, attribute_idx);
   }
+
+#ifdef DW1_SHARED_ROWS
+  // Per-block ex-sorted arenas: the depth bag distributed into one contiguous
+  // slice per small block. SoA (arena_ex/arena_node, node ids block-local) so
+  // the colwalk reads it without the `- begin_node` subtract. thread_local so
+  // capacity amortizes across depths/trees on this pool thread. block_of_node
+  // maps a depth-batch node to its small-block id (-1 for big / fallback
+  // nodes); block_off holds prefix offsets; block_begin[b] is block b's first
+  // depth-batch node index.
+  thread_local std::vector<int32_t> block_of_node;
+  thread_local std::vector<size_t> block_begin;
+  thread_local std::vector<size_t> block_off;
+  thread_local std::vector<size_t> block_cursor;
+  thread_local std::vector<UnsignedExampleIdx> arena_ex;
+  thread_local std::vector<int32_t> arena_node;
+  size_t total_rows = 0;
+  for (size_t n = 0; n < N; ++n) {
+    total_rows += selected_examples_per_node[n].size();
+  }
+#endif
 
   // ── Phase 1: PreSize --- ~5% of AP time
   // Slab pre-size (zero-init: the column sweep accumulates) + task build
@@ -216,6 +202,67 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     }
     if (blk_begin < N) tasks.push_back({blk_begin, N, /*big=*/false});
   }
+
+#ifdef DW1_SHARED_ROWS
+  // ── Depth bag + per-block distribution (billed to kDw1SharedBag) ────
+  // Obtain this depth's example-sorted (bag, node_of_bag) once for the whole
+  // frontier (O(bag) relabel of the previous depth's bag in the steady state,
+  // concat + VQSort fallback otherwise), then split it into per-small-block
+  // ex-sorted arenas. This replaces the old per-block bag build + VQSort inside
+  // run_task: one relabel + one stable distribution pass per depth instead of a
+  // sort per block. Big nodes' rows stay in the bag (the next depth's relabel
+  // needs every surviving row) but are skipped by the distribution (they run
+  // projection-major in run_task).
+  AdvanceDepthBag(selected_examples_per_node, prev_first_child, total_rows,
+                  DepthBagChrono::kDw1SharedRows, bag_state);
+  {
+    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SharedBag);
+    // Assign small-block ids + sizes (big tasks -> block_of_node[n] == -1).
+    block_of_node.assign(N, -1);
+    block_begin.clear();
+    block_off.clear();
+    block_off.push_back(0);
+    size_t arena_total = 0;
+    for (const auto& task : tasks) {
+      if (task.big) continue;
+      const int32_t b = static_cast<int32_t>(block_begin.size());
+      size_t blk_rows = 0;
+      for (size_t n = task.begin_node; n < task.end_node; ++n) {
+        block_of_node[n] = b;
+        blk_rows += selected_examples_per_node[n].size();
+      }
+      block_begin.push_back(task.begin_node);
+      arena_total += blk_rows;
+      block_off.push_back(arena_total);
+    }
+
+    // Stable distribution: walk the ex-sorted depth bag once, routing each
+    // entry to its block's arena. Within a block a node's rows keep ascending
+    // example order (the depth bag is ex-sorted and rows are disjoint across
+    // nodes), so the colwalk's running-counter slab-slot recovery is preserved.
+    arena_ex.resize(arena_total);
+    arena_node.resize(arena_total);
+    block_cursor.resize(block_begin.size());
+    for (size_t b = 0; b < block_begin.size(); ++b) {
+      block_cursor[b] = block_off[b];
+    }
+    const UnsignedExampleIdx* bag = bag_state->bag.data();
+    // node_of_bag is empty only for a single-node depth; the fused DW1 branch
+    // requires depth_batch.size() > 1, so it is populated here, but guard
+    // defensively (single node -> all entries node 0).
+    const bool single = bag_state->node_of_bag.empty();
+    const uint32_t* nob =
+        single ? nullptr : bag_state->node_of_bag.data();
+    for (size_t i = 0; i < total_rows; ++i) {
+      const uint32_t n = single ? 0u : nob[i];
+      const int32_t b = block_of_node[n];
+      if (b < 0) continue;  // big node: processed projection-major, no arena
+      const size_t w = block_cursor[b]++;
+      arena_ex[w] = bag[i];
+      arena_node[w] = static_cast<int32_t>(n - block_begin[b]);  // block-local
+    }
+  }
+#endif  // DW1_SHARED_ROWS
 
   // ── Phase 2: Sweep ────────────────────────────────────────────────
   // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
@@ -306,41 +353,23 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 /* #region SHARED_ROWS */
 
 // TODO BEFORE ANYTHING! RUN CHRONO ON SHARED_ROWS AP
-#ifdef DW1_SHARED_ROWS // ~10% of Shared-rows AP
-      // Shared-rows colwalk. Build the block's merged bag once (the union of
-      // its nodes' selected_examples, sorted by example id), then read each
-      // touched column in ONE ascending pass over that bag — stride-1 when the
-      // union covers the row range — instead of the per-node gather in the
-      // #else branch. Each value fans out (scatter) to every (node,projection)
-      // of its owning node that references the column: the gather path's
-      // per-(node,proj) sequential writes become random writes into the block's
-      // output slabs. This is the sparse-reads-for-sparse-writes trade; here
-      // YDF_DW1_BLOCK_FLOATS bounds the scatter-write working set rather than
-      // column reuse, so shrink it if the slabs spill LLC.
-      CHRONO_BEGIN(dw1_shared_bag);
+#ifdef DW1_SHARED_ROWS
+      // Shared-rows colwalk. This block's example-sorted bag was already
+      // distributed from the depth bag into arena[a_begin, a_end) (SoA
+      // arena_ex/arena_node, node ids block-local) before the task loop — no
+      // per-block bag build or sort here. Read each touched column in ONE
+      // ascending pass over the arena slice and fan each value out (scatter) to
+      // every (node,projection) of its owning node referencing the column: the
+      // gather path's per-(node,proj) sequential writes become random writes
+      // into the block's output slabs. This is the sparse-reads-for-sparse-
+      // writes trade; YDF_DW1_BLOCK_FLOATS bounds the scatter-write working set,
+      // so shrink it if the slabs spill LLC.
       const int32_t begin_node_i = static_cast<int32_t>(task.begin_node);
       const size_t block_nodes = task.end_node - task.begin_node;
-      auto& bag = scratch.bag;
-      bag.clear();
-      for (size_t n = task.begin_node; n < task.end_node; ++n) {
-        const auto sel = selected_examples_per_node[n];
-        // The K32V32 bag entry does not store `local`; the colwalk recovers it
-        // from the order in which this node's rows appear in the row-sorted
-        // bag. That only matches the slab slot if sel is sorted ascending (the
-        // upstream SplitExamplesInPlace DCHECK guarantees this, but that DCHECK
-        // is compiled out in opt, so re-assert it next to the code that relies
-        // on it). If this ever fires, the bag entry must carry `local` again.
-        DCHECK(std::is_sorted(sel.begin(), sel.end()));
-        for (const UnsignedExampleIdx row : sel) {
-          bag.push_back(MakeBagRow(row, static_cast<int32_t>(n)));
-        }
-      }
-      // Rows are disjoint across nodes (the depth frontier partitions the bag),
-      // so ordering by row id (the sort key) alone is a total order.
-      //
-      // TODO step 2: aren't bags individually sorted? if so, a linear scan
-      // (merge of the already-sorted per-node runs) should be sufficient?
-      hwy::VQSort(bag.data(), bag.size(), hwy::SortAscending());
+      const int32_t blk = block_of_node[task.begin_node];  // small-block id
+      const size_t a_begin = block_off[blk];
+      const size_t a_end = block_off[blk + 1];
+
       auto& node_ref_off = scratch.node_ref_off;
       auto& node_ref_cnt = scratch.node_ref_cnt;
       if (node_ref_off.size() < block_nodes) {
@@ -351,8 +380,6 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         node_ref_cnt.assign(block_nodes, 0);
         scratch.node_local.assign(block_nodes, 0);
       }
-      CHRONO_END(dw1_shared_bag,
-                 ::yggdrasil_decision_forests::chrono_prof::kDw1SharedBag);
 
       CHRONO_BEGIN(dw1_sweep_colwalk); // ~86% of AP runtime
       {
@@ -361,7 +388,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         auto& col_touched = scratch.col_touched;
         auto& node_local = scratch.node_local;
         size_t pos = 0;
-        
+
         for (const int32_t c : touched) {
           const float* col = evaluator.AttributeData(c);
           const size_t slice_begin = pos;
@@ -370,7 +397,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
           // Group column c's refs by node. Entries were bucketed node-major, so
           // within the slice the node id is non-decreasing and each node's refs
-          // form one contiguous run [off, off+cnt) in ref_proj / ref_w.
+          // form one contiguous run [off, off+cnt) in ref_proj / ref_w. Entries
+          // still carry the global node id, so map to block-local here.
           ref_proj.resize(slice_end - slice_begin);
           ref_w.resize(slice_end - slice_begin);
           col_touched.clear();
@@ -394,26 +422,27 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           CHRONO_END(dw1_colwalk_group_by_node,
                      ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkGroupByNode);
 
-          // One ascending pass over the bag: dense read of col, scatter write
-          // of each contribution to its node's projections referencing c.
+          // One ascending pass over the block's arena slice: dense read of col,
+          // scatter write of each contribution to its node's projections
+          // referencing c. arena_node is already block-local (no subtract).
           CHRONO_BEGIN(dw1_colwalk_bag_scatter);
-          for (const BagRow& be : bag) {
-            const int32_t node = BagRowNode(be);
-            const int32_t bn = node - begin_node_i;
+          for (size_t j = a_begin; j < a_end; ++j) {
+            const int32_t bn = arena_node[j];
             const int32_t off = node_ref_off[bn];
             if (off < 0) continue;  // owning node has no projection on column c
-            
-            const float v = col[BagRowExample(be)];
-            
+
+            const float v = col[arena_ex[j]];
+
             const int32_t cnt = node_ref_cnt[bn];
-            // Bag is row-sorted and the node's selected_examples is sorted
-            // ascending, so its rows are visited in slab order: the running
-            // counter IS the row's local slot. Advances once per node row
-            // (every entry that reaches here), so it stays in lockstep.
+            // The arena slice is ex-sorted and each node's selected_examples is
+            // sorted ascending, so its rows are visited in slab order: the
+            // running counter IS the row's local slot. Advances once per node
+            // row (every entry that reaches here), so it stays in lockstep.
             const int32_t local = node_local[bn]++;
+            const size_t node = static_cast<size_t>(bn) + task.begin_node;
             float* slab = out_projected[node].data();
             const size_t rows_n = selected_examples_per_node[node].size();
-            
+
             for (int32_t t = 0; t < cnt; ++t) {
               slab[static_cast<size_t>(ref_proj[off + t]) * rows_n + local] +=
                   ref_w[off + t] * v;

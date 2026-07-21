@@ -5592,19 +5592,52 @@ absl::Status GrowTreeLocalBFS(
                         std::move(leaf_examples), depth, constraints,
                         set_leaf_already_set});
 
-#ifdef SYMMETRIC_DEPTHWISE_AP
-  // Incremental sorted-bag state for the symmetric kernel (see
-  // SymmetricBagState). thread_local so buffer capacity (~16 B/bag row)
-  // amortizes across the trees trained on this pool thread; validity is
-  // per-tree, reset here.
-  static thread_local SymmetricBagState sym_bag_state;
-  sym_bag_state.valid = false;
-  // Node pointers of the previous symmetric depth batch, captured before the
+#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(DEPTHWISE_1_PASS)
+  // Incremental sorted-bag state shared by the symmetric and DW1 shared-rows
+  // fused kernels (see oblique_cpu_depthwise_bag.h). thread_local so buffer
+  // capacity amortizes across the trees trained on this pool thread; validity
+  // is per-tree, reset here. Declared for every DEPTHWISE_1_PASS build too, but
+  // the col-sharing variant never populates first_child nor reads
+  // depth_bag_state (all guarded by DW1_SHARED_ROWS below), so it pays nothing.
+  static thread_local DepthBagState depth_bag_state;
+  depth_bag_state.valid = false;
+  // Node pointers of the previous fused depth batch, captured before the
   // NodeTrains consume the batch; after those NodeTrains ran, IsLeaf() tells
   // which parents split, which yields the parent->child batch-index mapping
-  // the kernel's relabel pass needs.
-  std::vector<NodeWithChildren*> sym_prev_nodes;
-  std::vector<int32_t> sym_first_child;
+  // the kernel's relabel pass needs. This is a BFS-scheduler fact, identical
+  // for both fused kernels.
+  std::vector<NodeWithChildren*> prev_nodes;
+  std::vector<int32_t> first_child;
+
+  // Rebuild first_child from the previous batch's node pointers: NodeTrain
+  // pushes (neg, pos) per split parent in parent order, so children occupy
+  // consecutive index pairs in this depth's batch. Left empty (=> the kernel
+  // falls back to concat+VQSort) on the first fused depth or if the
+  // reconstruction doesn't tile the batch.
+  [[maybe_unused]] const auto rebuild_first_child = [&](int num_nodes) {
+    first_child.clear();
+    if (prev_nodes.empty()) return;
+    first_child.resize(prev_nodes.size());
+    int32_t next_child = 0;
+    for (size_t i = 0; i < prev_nodes.size(); ++i) {
+      if (prev_nodes[i]->IsLeaf()) {
+        first_child[i] = -1;
+      } else {
+        first_child[i] = next_child;
+        next_child += 2;
+      }
+    }
+    if (next_child != num_nodes) first_child.clear();
+  };
+  // Capture this batch's node pointers before the NodeTrain loop moves the
+  // batch entries; consumed at the next fused depth by rebuild_first_child.
+  [[maybe_unused]] const auto capture_prev_nodes =
+      [&](const std::vector<internal::NodeAndExamples>& batch) {
+        prev_nodes.resize(batch.size());
+        for (size_t n = 0; n < batch.size(); ++n) {
+          prev_nodes[n] = batch[n].node;
+        }
+      };
 #endif
 
   while (!node_queue.empty()) {
@@ -5671,6 +5704,13 @@ absl::Status GrowTreeLocalBFS(
         sel_spans[n] = depth_batch[n].selected_examples.active;
       }
 
+#ifdef DW1_SHARED_ROWS
+      // Parent->child batch-index mapping for the shared-rows depth-bag relabel
+      // (see rebuild_first_child above). Only the shared-rows variant reads it;
+      // the col-sharing kernel ignores prev_first_child / bag_state.
+      rebuild_first_child(num_nodes);
+#endif
+
       std::vector<std::vector<float>> projected(num_nodes);
 #ifdef YDF_LINECOUNT_A
       {
@@ -5707,15 +5747,26 @@ absl::Status GrowTreeLocalBFS(
       CALLGRIND_START_INSTRUMENTATION;
       CALLGRIND_ZERO_STATS;
 #endif
+      // first_child / &depth_bag_state drive the shared-rows depth bag; the
+      // col-sharing build compiles the same call and ignores both (first_child
+      // stays empty, depth_bag_state unused).
       RETURN_IF_ERROR(ApplyProjectionsDepthwise1Pass(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),
-          absl::MakeConstSpan(all_node_projs), absl::MakeSpan(projected)));
+          absl::MakeConstSpan(all_node_projs),
+          absl::MakeConstSpan(first_child), &depth_bag_state,
+          absl::MakeSpan(projected)));
 #ifdef YDF_CALLGRIND_DEPTH
       { char nm[64];
         std::snprintf(nm, sizeof nm, "dw1_depth_%d", (int)current_depth);
         CALLGRIND_DUMP_STATS_AT(nm); }
       CALLGRIND_STOP_INSTRUMENTATION;
+#endif
+
+#ifdef DW1_SHARED_ROWS
+      // Capture this batch's node pointers before the NodeTrain loop moves the
+      // batch entries; consumed at the next depth by rebuild_first_child.
+      capture_prev_nodes(depth_batch);
 #endif
 
       for (int n = 0; n < num_nodes; ++n) {
@@ -5778,24 +5829,8 @@ absl::Status GrowTreeLocalBFS(
       }
 
       // Parent->child batch-index mapping for the kernel's incremental
-      // sorted-bag relabel. NodeTrain pushes (neg, pos) per split parent in
-      // parent order, so children occupy consecutive index pairs in this
-      // depth's batch. Left empty (=> kernel falls back to concat+VQSort)
-      // on the first depth or if the reconstruction doesn't tile the batch.
-      sym_first_child.clear();
-      if (!sym_prev_nodes.empty()) {
-        sym_first_child.resize(sym_prev_nodes.size());
-        int32_t next_child = 0;
-        for (size_t i = 0; i < sym_prev_nodes.size(); ++i) {
-          if (sym_prev_nodes[i]->IsLeaf()) {
-            sym_first_child[i] = -1;
-          } else {
-            sym_first_child[i] = next_child;
-            next_child += 2;
-          }
-        }
-        if (next_child != num_nodes) sym_first_child.clear();
-      }
+      // sorted-bag relabel (see rebuild_first_child above).
+      rebuild_first_child(num_nodes);
 
       std::vector<std::vector<float>> projected(num_nodes);
       // tls_ctx.cur_depth already pinned to current_depth above (before the
@@ -5804,16 +5839,12 @@ absl::Status GrowTreeLocalBFS(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),
           absl::MakeConstSpan(shared_projections),
-          absl::MakeConstSpan(sym_first_child), &sym_bag_state,
+          absl::MakeConstSpan(first_child), &depth_bag_state,
           absl::MakeSpan(projected)));
 
-      // Capture this batch's node pointers before the NodeTrain loop moves
-      // the batch entries; consumed at the next depth to build
-      // sym_first_child.
-      sym_prev_nodes.resize(num_nodes);
-      for (int n = 0; n < num_nodes; ++n) {
-        sym_prev_nodes[n] = depth_batch[n].node;
-      }
+      // Capture this batch's node pointers before the NodeTrain loop moves the
+      // batch entries; consumed at the next depth to build first_child.
+      capture_prev_nodes(depth_batch);
 
       // FindBestConditionSparseObliqueTemplate consumes:
       //   internal_config.depthwise_projection_defs  (K shared projections)
@@ -5848,6 +5879,11 @@ absl::Status GrowTreeLocalBFS(
       // node_queue, so once every frontier node is forwarded the BFS loop drains
       // and the tree is complete. Shallow levels (at/above the cut) stay
       // symmetric; deep levels get DFS subtree cache locality.
+      // This depth was not processed by the fused kernel, so the depth bag was
+      // not advanced: invalidate it so a later fused depth can't relabel from a
+      // stale chain (moot here since the DFS handoff drains the queue, but keeps
+      // engaged->skipped->engaged airtight rather than coincidentally safe).
+      depth_bag_state.valid = false;
       for (auto& nae : depth_batch) {
         RETURN_IF_ERROR(GrowTreeLocal(
             train_dataset, config, config_link, dt_config, deployment, weights,
@@ -5871,6 +5907,13 @@ absl::Status GrowTreeLocalBFS(
       // depth_batch in their own branches above and never reach here.
 #ifdef BFS_ONLY
       CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kBfsNodeLoop);
+#endif
+#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(DW1_SHARED_ROWS)
+      // This depth was not processed by a fused kernel (oblique off, or the DW1
+      // depth/size guards excluded it), so the depth bag was not advanced.
+      // Invalidate it so a later fused depth takes the concat+VQSort fallback
+      // instead of relabelling from a stale chain.
+      depth_bag_state.valid = false;
 #endif
 // TODO Ariel - make this use GrowTreeLocal.
 // Or is GrowTreeLocal even mandatory for Depthwise 1-pass? It has a performance penalty
