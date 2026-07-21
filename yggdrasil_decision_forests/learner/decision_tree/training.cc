@@ -5592,6 +5592,21 @@ absl::Status GrowTreeLocalBFS(
                         std::move(leaf_examples), depth, constraints,
                         set_leaf_already_set});
 
+#ifdef SYMMETRIC_DEPTHWISE_AP
+  // Incremental sorted-bag state for the symmetric kernel (see
+  // SymmetricBagState). thread_local so buffer capacity (~16 B/bag row)
+  // amortizes across the trees trained on this pool thread; validity is
+  // per-tree, reset here.
+  static thread_local SymmetricBagState sym_bag_state;
+  sym_bag_state.valid = false;
+  // Node pointers of the previous symmetric depth batch, captured before the
+  // NodeTrains consume the batch; after those NodeTrains ran, IsLeaf() tells
+  // which parents split, which yields the parent->child batch-index mapping
+  // the kernel's relabel pass needs.
+  std::vector<NodeWithChildren*> sym_prev_nodes;
+  std::vector<int32_t> sym_first_child;
+#endif
+
   while (!node_queue.empty()) {
     const int32_t current_depth = node_queue.front().depth;
     std::vector<internal::NodeAndExamples> depth_batch;
@@ -5762,6 +5777,26 @@ absl::Status GrowTreeLocalBFS(
         sel_spans[n] = depth_batch[n].selected_examples.active;
       }
 
+      // Parent->child batch-index mapping for the kernel's incremental
+      // sorted-bag relabel. NodeTrain pushes (neg, pos) per split parent in
+      // parent order, so children occupy consecutive index pairs in this
+      // depth's batch. Left empty (=> kernel falls back to concat+VQSort)
+      // on the first depth or if the reconstruction doesn't tile the batch.
+      sym_first_child.clear();
+      if (!sym_prev_nodes.empty()) {
+        sym_first_child.resize(sym_prev_nodes.size());
+        int32_t next_child = 0;
+        for (size_t i = 0; i < sym_prev_nodes.size(); ++i) {
+          if (sym_prev_nodes[i]->IsLeaf()) {
+            sym_first_child[i] = -1;
+          } else {
+            sym_first_child[i] = next_child;
+            next_child += 2;
+          }
+        }
+        if (next_child != num_nodes) sym_first_child.clear();
+      }
+
       std::vector<std::vector<float>> projected(num_nodes);
       // tls_ctx.cur_depth already pinned to current_depth above (before the
       // shared SampleProjection loop), so Sym* scopes accrue correctly.
@@ -5769,7 +5804,16 @@ absl::Status GrowTreeLocalBFS(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),
           absl::MakeConstSpan(shared_projections),
+          absl::MakeConstSpan(sym_first_child), &sym_bag_state,
           absl::MakeSpan(projected)));
+
+      // Capture this batch's node pointers before the NodeTrain loop moves
+      // the batch entries; consumed at the next depth to build
+      // sym_first_child.
+      sym_prev_nodes.resize(num_nodes);
+      for (int n = 0; n < num_nodes; ++n) {
+        sym_prev_nodes[n] = depth_batch[n].node;
+      }
 
       // FindBestConditionSparseObliqueTemplate consumes:
       //   internal_config.depthwise_projection_defs  (K shared projections)
