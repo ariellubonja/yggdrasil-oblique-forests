@@ -20,15 +20,17 @@ agree if the averaging is sound).
 
 Provenance / freshness
 ----------------------
-Each <name>_avg_per_depth.csv starts with a single "#"-comment metadata line
-that fingerprints the raw source CSV it was derived from, e.g.
+Each per-depth CSV carries a single metadata cell in the rightmost column of
+the header row that fingerprints the raw source CSV it was derived from, e.g.
 
-  #avg_per_depth_meta format=1 source=dfs_colmajor_multicore.csv sha256=<hex> \
-      src_size=1481554 src_mtime=2026-07-07T13:38:00Z generated=2026-07-07T14:40:00Z
+  depth,nodes,...,----GetCandidateAttributes,#avg_per_depth_meta format=1 \
+      source=dfs_colmajor_multicore.csv sha256=<hex> src_size=1481554 \
+      src_mtime=2026-07-07T13:38:00Z generated=2026-07-07T14:40:00Z
 
 The authoritative change signal is the sha256 of the source's *bytes*; format
-is bumped when this script's output schema changes. Because the first line is
-a comment, read these with e.g. pandas' ``read_csv(path, comment="#")``.
+is bumped when this script's output schema changes. The metadata token holds no
+commas, so it stays a single CSV field; read_meta() also still reads the legacy
+leading-"#"-comment layout.
 
 Layout
 ------
@@ -72,8 +74,6 @@ from datetime import datetime, timezone
 FORMAT_VERSION = 1
 AVG_SUFFIX = "_avg_per_depth.csv"
 META_PREFIX = "#avg_per_depth_meta "
-# csv.writer under open(newline="") emits CRLF; match it for the meta line.
-LINE_TERM = "\r\n"
 
 
 def norm(name):
@@ -230,13 +230,23 @@ def parse_meta_line(line):
 
 
 def read_meta(avg_path):
-    """Metadata dict recorded in an existing per-depth CSV, or None."""
+    """Metadata dict recorded in an existing per-depth CSV, or None.
+
+    Current layout keeps the metadata in the rightmost cell of the header row;
+    the legacy layout put it on a leading "#"-comment line. Both are read."""
     try:
         with open(avg_path, newline="") as f:
             first = f.readline()
+            meta = parse_meta_line(first.rstrip("\r\n"))
+            if meta is not None:
+                return meta  # legacy leading-comment layout
+            f.seek(0)
+            header = next(csv.reader(f), [])
     except OSError:
         return None
-    return parse_meta_line(first.rstrip("\r\n"))
+    if header and header[-1].startswith(META_PREFIX):
+        return parse_meta_line(header[-1])
+    return None
 
 
 def staleness_reason(raw_path, avg_path, sha):
@@ -263,11 +273,24 @@ def write_avg(path, sha=None):
     out_dir = os.path.dirname(out_path) or "."
     os.makedirs(out_dir, exist_ok=True)
     source_rel = os.path.relpath(path, out_dir)
+    meta_cell = format_meta_line(source_meta(path, sha, source_rel))
+    # TreeTrain is only recorded on the depth-0 row (a row that is otherwise all
+    # zeros). We drop that row and carry its TreeTrain value one cell down into
+    # the depth-1 row's TreeTrain column.
+    normed = [norm(m) for m in metrics]
+    tt_idx = normed.index("TreeTrain") if "TreeTrain" in normed else None
+    carry = avg[0][1][tt_idx] if (tt_idx is not None and 0 in avg) else None
     with open(out_path, "w", newline="") as f:
-        f.write(format_meta_line(source_meta(path, sha, source_rel)) + LINE_TERM)
         w = csv.writer(f)
-        w.writerow(["depth"] + metrics)
+        # Metadata now lives in the rightmost cell of the header row.
+        w.writerow(["depth"] + metrics + [meta_cell])
         for depth, (n, means) in avg.items():
+            if depth == 0:
+                continue  # drop the all-zero depth-0 row
+            means = list(means)
+            if carry is not None:
+                means[tt_idx] = carry
+                carry = None
             w.writerow([depth] + [f"{m:.2f}" for m in means])
     print(f"Wrote {out_path}")
     sanity_check(path, metrics, samples)
