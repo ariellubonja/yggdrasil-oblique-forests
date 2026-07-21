@@ -31,6 +31,7 @@
 #include "google/protobuf/repeated_field.h"
 #include "yggdrasil_decision_forests/dataset/types.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_bag.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_types.h"
 
 namespace yggdrasil_decision_forests::model::decision_tree {
@@ -39,12 +40,20 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 // RandomForest already trains one tree per thread, so parallelizing here
 // would oversubscribe the machine. The whole level's (node, projection)
 // work is processed inline.
+//
+// `prev_first_child` + `bag_state` drive the shared-rows colwalk's depth bag
+// (see oblique_cpu_depthwise_bag.h): the DW1_SHARED_ROWS build relabels the
+// previous depth's sorted bag into this depth's, then distributes it into
+// per-block ex-sorted arenas. The col-sharing build (no DW1_SHARED_ROWS)
+// compiles the same signature and ignores both arguments — its path has no
+// bag and must not pay for one. Pass an empty span + nullptr from that path.
 absl::Status ApplyProjectionsDepthwise1Pass(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
+    absl::Span<const int32_t> prev_first_child, DepthBagState* bag_state,
     absl::Span<std::vector<float>> out_projected);
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
