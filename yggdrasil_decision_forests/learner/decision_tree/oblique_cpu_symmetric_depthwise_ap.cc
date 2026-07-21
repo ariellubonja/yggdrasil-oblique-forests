@@ -10,78 +10,11 @@
 #include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
-#include "hwy/base.h"
-#include "hwy/contrib/sort/vqsort.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_bag.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
 
 namespace yggdrasil_decision_forests::model::decision_tree {
-
-namespace {
-
-// Derives the new depth's sorted (example, node) bag from the previous
-// depth's, in one streaming pass and zero comparisons-for-order (see the
-// header): each surviving entry keeps its position in example-sorted order
-// (a stable partition of a sorted list is sorted, so a depth's bag is the
-// previous depth's bag minus leafed-out rows); only the owning-node label
-// advances parent -> child. The child is identified by one equality test
-// against the negative child's next-unconsumed span element: a row id lives
-// in exactly one child span (all bootstrap copies of a row take the same
-// side of the split), and each child span is the sorted subsequence of the
-// parent's entries, so it is consumed strictly in order.
-//
-// Self-validating: every entry's claimed child span element is checked, and
-// any mismatch (as well as count mismatches) returns false, in which case
-// the caller falls back to the full concat+sort rebuild. Writes the result
-// into the scratch buffers and swaps them in on success.
-bool RelabelBagForNewDepth(
-    absl::Span<const absl::Span<const UnsignedExampleIdx>>
-        selected_examples_per_node,
-    absl::Span<const int32_t> prev_first_child, const size_t new_bag_size,
-    SymmetricBagState* s) {
-  const size_t N = selected_examples_per_node.size();
-  const size_t old_size = s->bag.size();
-  s->bag_scratch.resize(new_bag_size);
-  s->node_scratch.resize(new_bag_size);
-  s->cursor.assign(N, 0);
-
-  const UnsignedExampleIdx* old_bag = s->bag.data();
-  // Empty node_of_bag == the previous depth had a single node (batch idx 0).
-  const uint32_t* old_node =
-      s->node_of_bag.empty() ? nullptr : s->node_of_bag.data();
-  const uint32_t prev_n = static_cast<uint32_t>(prev_first_child.size());
-
-  size_t out = 0;
-  for (size_t i = 0; i < old_size; ++i) {
-    const uint32_t p = old_node != nullptr ? old_node[i] : 0u;
-    if (p >= prev_n) return false;
-    const int32_t c = prev_first_child[p];
-    if (c < 0) continue;  // Parent became a leaf: the row leaves the bag.
-    const UnsignedExampleIdx ex = old_bag[i];
-
-    uint32_t nc = static_cast<uint32_t>(c);
-    const auto neg = selected_examples_per_node[c];
-    if (!(s->cursor[c] < neg.size() && neg[s->cursor[c]] == ex)) nc = c + 1;
-    if (nc >= N) return false;
-    size_t& cur = s->cursor[nc];
-    const auto child = selected_examples_per_node[nc];
-    if (cur >= child.size() || child[cur] != ex) return false;
-    ++cur;
-
-    if (out >= new_bag_size) return false;
-    s->bag_scratch[out] = ex;
-    s->node_scratch[out] = nc;
-    ++out;
-  }
-  if (out != new_bag_size) return false;
-
-  s->bag.swap(s->bag_scratch);
-  s->node_of_bag.swap(s->node_scratch);
-  DCHECK(std::is_sorted(s->bag.begin(), s->bag.end()));
-  return true;
-}
-
-}  // namespace
 
 absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     const dataset::VerticalDataset& train_dataset,
@@ -142,76 +75,13 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
   }
 
   // ── Phase 2: obtain the sorted bag ────────────────────────────────
-  // Fast path (billed to kSymSortBag, whose per-depth column it replaces):
-  // relabel the previous depth's sorted bag in one O(bag) streaming pass —
-  // no concat, no sort (see RelabelBagForNewDepth and the header note).
-  //
-  // Fallback (first depth of a tree, missing parent->child mapping, or a
-  // failed relabel validation): rebuild from the node spans. N == 1 is a
-  // straight copy of the (already sorted) single span; N > 1 concats the
-  // spans + node ids (kSymBuildBag), packs each (example_idx, node_id) pair
-  // into hwy::K32V32 (key=ex, value=node) and VQSorts by key ascending
-  // (kSymSortBag). VQSort is unstable, but tie-breaking is invariant here:
-  // by the BFS depth-cohort property every copy of one example_idx lives in
-  // the same node, so all ties carry the same value field — reordering
-  // within a tie group is a no-op. (History: stable_sort → counting sort
-  // (~3.5× on HIGGS but O(total_n) walk lost at deep depths) → VQSort,
-  // which beat both across the board — and is now the cold path only.)
-  bool have_bag = false;
-  if (bag_state->valid && !prev_first_child.empty()) {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSymSortBag);
-    have_bag = RelabelBagForNewDepth(selected_examples_per_node,
-                                     prev_first_child, bag_size, bag_state);
-  }
-  if (!have_bag) {
-    if (single_node) {
-      // Copy the span into the state: the rolling buffer is repartitioned in
-      // place by this depth's SplitExamplesInPlace, so the span's contents
-      // will not survive to seed the next depth's relabel. One bag-sized
-      // copy per tree (root level), vs. a concat+VQSort per depth saved.
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSymBuildBag);
-      bag_state->bag.assign(selected_examples_per_node[0].begin(),
-                            selected_examples_per_node[0].end());
-      bag_state->node_of_bag.clear();  // implicit: all entries node 0
-    } else {
-      auto& bag = bag_state->bag;
-      auto& node_of_bag = bag_state->node_of_bag;
-      {
-        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSymBuildBag);
-        bag.resize(bag_size);
-        node_of_bag.resize(bag_size);
-        size_t cur = 0;
-        for (size_t n = 0; n < N; ++n) {
-          for (const UnsignedExampleIdx e : selected_examples_per_node[n]) {
-            bag[cur] = e;
-            node_of_bag[cur] = static_cast<uint32_t>(n);
-            ++cur;
-          }
-        }
-      }
-      {
-        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSymSortBag);
-        static_assert(sizeof(UnsignedExampleIdx) == sizeof(uint32_t),
-                      "K32V32 path assumes 32-bit example_idx");
-
-        thread_local std::vector<hwy::K32V32> hwy_buf;
-        hwy_buf.resize(bag_size);
-
-        for (size_t i = 0; i < bag_size; ++i) {
-          hwy_buf[i].key = static_cast<uint32_t>(bag[i]);
-          hwy_buf[i].value = node_of_bag[i];
-        }
-
-        hwy::VQSort(hwy_buf.data(), bag_size, hwy::SortAscending());
-
-        for (size_t i = 0; i < bag_size; ++i) {
-          bag[i] = static_cast<UnsignedExampleIdx>(hwy_buf[i].key);
-          node_of_bag[i] = hwy_buf[i].value;
-        }
-      }
-    }
-  }
-  bag_state->valid = true;
+  // Delegated to the shared depth-bag module: incremental O(bag) relabel of
+  // the previous depth's sorted bag in the steady state, concat + VQSort
+  // fallback otherwise (see oblique_cpu_depthwise_bag.{h,cc}). Billed to
+  // kSymBuildBag / kSymSortBag exactly as before via the kSymmetric tag. On
+  // return bag_state->{bag,node_of_bag} describe this depth and .valid is set.
+  AdvanceDepthBag(selected_examples_per_node, prev_first_child, bag_size,
+                  DepthBagChrono::kSymmetric, bag_state);
   const UnsignedExampleIdx* bag_data = bag_state->bag.data();
 
   // ── Phase 3: Sweep ────────────────────────────────────────────────
