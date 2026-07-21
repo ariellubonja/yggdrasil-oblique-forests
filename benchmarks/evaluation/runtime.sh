@@ -57,17 +57,15 @@ NUM_THREADS=-1
 
 histogram_num_bins=64  # 64 -> AVX2, 256 -> AVX512 in vectorized mode.
 
-RUN_CPU=false         # set false to skip the normal (CPU) experiments section
-RUN_VECTORIZED=true   # set true to run AVX2/AVX512 vectorized experiments
+RUN_SCALAR=false      # run the scalar-binner experiments (SIMD compiled out)
+RUN_VECTORIZED=true   # run the AVX2/AVX512 vectorized experiments
 
-# SIMD histogram binning is default-ON in the code (runtime dispatch from cpuid
-# + bin count), so RUN_VECTORIZED=false must compile it out to actually run the
-# scalar binner: every non-vectorized-section build below adds this config when
-# RUN_VECTORIZED=false. When true, all sections use the default (SIMD) build.
-SCALAR_CONFIG=()
-if [[ "$RUN_VECTORIZED" != "true" ]]; then
-  SCALAR_CONFIG=(--config=disable_std_upper_bound_vectorization)
-fi
+# The two flags are independent sections: RUN_SCALAR runs the SCALAR experiments,
+# RUN_VECTORIZED runs the SIMD ones; both true runs both, both false runs
+# neither. SIMD binning is default-ON in the code (runtime dispatch from cpuid
+# + bin count), so the scalar section must compile it out — its build always
+# adds this config. The vectorized section uses the default (SIMD) build.
+SCALAR_CONFIG=(--config=disable_std_upper_bound_vectorization)
 
 # GPU experiments. Only applies to Oblique + HISTOGRAM_RANDOM-style splits.
 # The Oblique path requires --config=oblique_gpu (compiles in the GPU
@@ -159,7 +157,7 @@ EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
 # at RUNTIME, so no build config is needed to vectorize. The "vectorized"
 # experiments below are just the default build driven at bins=64/256; the ISA is
 # a label derived from the bin count, not a compile flag. The scalar baseline is
-# what RUN_VECTORIZED=false builds (SCALAR_CONFIG above).
+# the RUN_SCALAR section, built with SCALAR_CONFIG.
 
 # Methods that have vectorized code paths. Per-split applicability:
 #   Oblique:      Random, Dynamic Random Histogram
@@ -271,10 +269,10 @@ finalize_log() {
   fi
 }
 
-# Normal build (CPU binary; scalar binner iff RUN_VECTORIZED=false). Skipped
-# when only vectorized or GPU experiments will run, since those sections do
-# their own config-specific builds.
-if [[ "$RUN_CPU" == "true" ]]; then
+# Scalar-section build (SIMD binner compiled out). Skipped when only
+# vectorized or GPU experiments will run, since those sections do their own
+# config-specific builds.
+if [[ "$RUN_SCALAR" == "true" ]]; then
   bazel_build "${BAZEL_FLAGS[@]}" "${SCALAR_CONFIG[@]}" "$BUILD_TARGET"
 else
   # Ensure features are disabled for experiments even when no initial build runs.
@@ -401,10 +399,10 @@ is_dynamic_method() {
 # Normal experiments (Oblique and/or Axis Aligned per SPLIT_TYPES)
 # -------------------------
 oblique_selected=false
-if [[ "$RUN_CPU" != "true" ]]; then
-  banner "Skipping CPU experiments (RUN_CPU=false)"
+if [[ "$RUN_SCALAR" != "true" ]]; then
+  banner "Skipping scalar experiments (RUN_SCALAR=false)"
   # We still need `oblique_selected` for the GPU/Vectorized gates below, so
-  # pre-compute it from SPLIT_TYPES without running any CPU experiments.
+  # pre-compute it from SPLIT_TYPES without running any scalar experiments.
   for split in "${SPLIT_TYPES[@]}"; do
     if [[ "$split" != "Axis Aligned" ]]; then
       oblique_selected=true
@@ -412,13 +410,8 @@ if [[ "$RUN_CPU" != "true" ]]; then
   done
 fi
 
-if [[ "$RUN_CPU" == "true" ]]; then
-if [[ "${#SCALAR_CONFIG[@]}" -gt 0 ]]; then
-  normal_binner="scalar binner (SIMD compiled out)"
-else
-  normal_binner="SIMD binner, runtime dispatch"
-fi
-banner "NORMAL EXPERIMENTS (${normal_binner}) histogram_num_bins=${histogram_num_bins}"
+if [[ "$RUN_SCALAR" == "true" ]]; then
+banner "SCALAR EXPERIMENTS (SIMD binner compiled out) histogram_num_bins=${histogram_num_bins}"
 
 for split in "${SPLIT_TYPES[@]}"; do
   # Select compatible methods for this split type
@@ -486,7 +479,7 @@ for split in "${SPLIT_TYPES[@]}"; do
     done
   done
 done
-fi  # RUN_CPU
+fi  # RUN_SCALAR
 
 # -------------------------
 # GPU experiments (Oblique only). One build per GPU mode because `nodewise`
@@ -510,7 +503,7 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
         ;;
     esac
 
-    bazel_build "${BAZEL_FLAGS[@]}" "${SCALAR_CONFIG[@]}" "${gpu_extra_configs[@]}" "$BUILD_TARGET"
+    bazel_build "${BAZEL_FLAGS[@]}" "${gpu_extra_configs[@]}" "$BUILD_TARGET"
 
     banner "GPU EXPERIMENTS [$gpu_mode] (Oblique only) histogram_num_bins=${histogram_num_bins}"
     echo "GPU MODE: $gpu_mode" | tee -a "$logfile"
