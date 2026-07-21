@@ -48,7 +48,7 @@
 /* #region ABSL Flags */
 // Input mode flag: "csv", "synthetic", or "tfrecord"
 ABSL_FLAG(std::string, input_mode, "",
-          "Data input mode: csv, Uniform synthetic, Trunk Synthetic, or tfrecord.");
+          "Data input mode: csv, Trunk Synthetic, or tfrecord.");
 // CSV mode flags
 ABSL_FLAG(std::string, train_csv, "./benchmarks/data/processed_wise1_data.csv",
           "Path to training CSV file (for csv mode). Must include --label_col.");
@@ -148,15 +148,6 @@ using namespace yggdrasil_decision_forests;
 
 /* #region Synthetic Dataset Generation */
 
-enum class SynthType { kUniform, kTrunk };
-
-inline SynthType ParseSynthType(const std::string& s) {
-  if (s == "uniform") return SynthType::kUniform;
-  if (s == "trunk")   return SynthType::kTrunk;
-  LOG(FATAL) << "Unknown synthetic type: " << s;
-  return SynthType::kUniform;  // never reached; avoid warning
-}
-
 // Build a DataSpecification for synthetic data
 dataset::proto::DataSpecification MakeSyntheticSpec(
     int cols, int64_t rows, int label_mod, const std::string &label_col) {
@@ -174,32 +165,6 @@ dataset::proto::DataSpecification MakeSyntheticSpec(
   spec.set_created_num_rows(rows);
   return spec;
 }
-
-// TODO Abseil does not give deterministic RNG - fix it!
-// ------------------------------------------------------------------ uniform
-// dataset::VerticalDataset MakeUniformDataset(
-//         const dataset::proto::DataSpecification& spec,
-//         int64_t rows, int cols, uint32_t seed) {
-//   dataset::VerticalDataset ds;
-//   ds.set_data_spec(spec);
-//   CHECK_OK(ds.CreateColumnsFromDataspec());
-//   ds.Resize(rows);
-// #pragma omp parallel for schedule(static)
-//   for (int c = 0; c < cols; ++c) {
-//     std::seed_seq seq{seed + static_cast<uint32_t>(c)};
-//     absl::BitGen gen(seq);
-//     auto* col =
-//         ds.MutableColumnWithCast<
-//             dataset::VerticalDataset::NumericalColumn>(c)->mutable_values();
-//     for (auto& v : *col) v = absl::Gaussian<float>(gen);
-//   }
-//   // labels: round-robin 0,1,…
-//   auto* ycol = ds.MutableColumnWithCast<
-//       dataset::VerticalDataset::CategoricalColumn>(cols);
-//   auto* yval = ycol->mutable_values();
-//   for (int64_t i = 0; i < rows; ++i) (*yval)[i] = static_cast<int>((i & 1) + 1);    // 1 or 2, not 0/1
-//   return ds;
-// }
 
 // -------------------------------------------------------------------- trunk
 dataset::VerticalDataset MakeTrunkDataset(const dataset::proto::DataSpecification& spec,
@@ -251,7 +216,6 @@ dataset::VerticalDataset BuildSyntheticDataset(
         const std::string& mode,
         const dataset::proto::DataSpecification& spec,
         int64_t rows, int cols, uint32_t seed) {
-  // if (mode == "uniform") return MakeUniformDataset(spec, rows, cols, seed);
   if (mode == "trunk")   return MakeTrunkDataset(spec, rows, cols, seed);
   LOG(FATAL) << "Unknown synthetic mode: " << mode;
   return {};  // never reached
@@ -645,7 +609,7 @@ int main(int argc, char** argv) {
           &data_spec);
     }
   }
-  else if (mode == "uniform" || mode == "trunk") {
+  else if (mode == "trunk") {
     std::string layout = absl::GetFlag(FLAGS_dataset_layout);
     LOG(INFO) << "Generating " << mode << " synthetic dataset: rows="
               << absl::GetFlag(FLAGS_rows)
@@ -713,7 +677,7 @@ int main(int argc, char** argv) {
     ds_ptr = tf_ds.get();
   } else {
   std::cerr << "Unknown input_mode: " << mode
-            << ". Use csv, uniform, trunk, or tfrecord.\n";
+            << ". Use csv, trunk, or tfrecord.\n";
   return 1;
 }
 
