@@ -60,7 +60,7 @@ BASE_ARGS="--num_threads=-1 --compute_oob_performances=true"
 # only produced when "Axis Aligned" is uncommented in SPLIT_TYPES.
 ENSEMBLES=(
   "Bagging"    # Random Forest  (Oblique -> SPORF)
-  "Boosting"   # Gradient Boosted Trees (Oblique -> SPO-GBT)
+  # "Boosting"   # Gradient Boosted Trees (Oblique -> SPO-GBT)
 )
 
 # num_trees per ensemble: GBT is boosted (sequential, deeper effect per tree) so
@@ -116,9 +116,9 @@ SPLIT_TYPES=(
 
 # Numerical split methods (comment out any you don't want)
 METHODS=(
-  "Exact"
-  "Random"
-  # "Dynamic Random Histogram"
+  # "Exact"
+  # "Random"
+  "Dynamic Random Histogram"
 # "Equal Width"
 # "Dynamic Equal Width Histogram"
 )
