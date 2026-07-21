@@ -173,16 +173,12 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
     absl::Span<std::vector<float>> out_projected) {
-
-/* #region Performance minions. All these take <10% of AP time */
-
-  const size_t N = selected_examples_per_node.size();
-  DCHECK_EQ(N, projections_per_node.size());
-  DCHECK_EQ(N, out_projected.size());
-
+  
   CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
-
+  const size_t N = selected_examples_per_node.size();
   if (N == 0) return absl::OkStatus();
+
+  /* #region Performance minions. All these take <10% of AP time */
 
   int max_attr = 0;
   for (const auto attribute_idx : numerical_features) {

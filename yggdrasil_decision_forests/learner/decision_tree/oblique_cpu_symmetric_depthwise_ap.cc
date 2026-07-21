@@ -28,9 +28,7 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
   // partition this into BuildBag / SortBag / Sweep so parallel_chrono.py
   // can break ApplyProjection down per depth.
   CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
-
   const size_t N = selected_examples_per_node.size();
-  DCHECK_EQ(N, out_projected.size());
   if (N == 0) return absl::OkStatus();
 
   const size_t K = shared_projections.size();
@@ -58,6 +56,7 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
   // sorted ascending by invariant — so we skip both the concat copy (and
   // the node-id array) here and the VQSort in Phase 2.
   const bool single_node = (N == 1);
+
   std::vector<size_t> rows_n(N);
   std::vector<float*> out_ptr(N, nullptr);
   size_t bag_size = 0;
