@@ -171,7 +171,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   }
 #endif
 
-  // ── Phase 1: PreSize --- ~5% of AP time
+  /* #region ── Phase 1: PreSize --- ~5% of AP time */
   // Slab pre-size (zero-init: the column sweep accumulates) + task build
   std::vector<Dw1Task> tasks;
   {
@@ -263,6 +263,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     }
   }
 #endif  // DW1_SHARED_ROWS
+
+/* #endregion */
 
   // ── Phase 2: Sweep ────────────────────────────────────────────────
   // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
@@ -443,9 +445,13 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             float* slab = out_projected[node].data();
             const size_t rows_n = selected_examples_per_node[node].size();
 
-            for (int32_t t = 0; t < cnt; ++t) {
-              slab[static_cast<size_t>(ref_proj[off + t]) * rows_n + local] +=
-                  ref_w[off + t] * v;
+            {
+              CHRONO_SCOPE(
+                  ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkSlabAccum);
+              for (int32_t t = 0; t < cnt; ++t) {
+                slab[static_cast<size_t>(ref_proj[off + t]) * rows_n + local] +=
+                    ref_w[off + t] * v;
+              }
             }
           }
 
