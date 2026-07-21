@@ -132,26 +132,8 @@ METHODS=(
 )
 
 # Dynamic split threshold (only affects Dynamic methods)
-# Set true to sweep over all values below; false to use fixed defaults
-USE_THRESHOLD_SWEEP=false
 DYNAMIC_SPLIT_THRESHOLD_DEFAULT=1350             # For Dynamic Random (normal)
-DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT=500   # For Dynamic Random (vectorized)
-
-DYNAMIC_SPLIT_THRESHOLDS=(
-  100
-  350
-  600
-  850
-  1100
-  1350
-  1600
-  1850
-  2100
-  2350
-  2600
-  2850
-  3100
-)
+DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT=250   # For Dynamic Random (vectorized)
 
 # CSV datasets are built from the CC18 binary tasks. Entries are
 # "path|label_col".
@@ -384,11 +366,7 @@ for split in "${SPLIT_TYPES[@]}"; do
 
     # Build list of threshold values to iterate over
     if is_dynamic_method "$method"; then
-      if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-        thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-      else
-        thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
-      fi
+      thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
     else
       thresholds=("")  # single empty entry so the loop runs once
     fi
@@ -456,11 +434,7 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
 
       # Build list of threshold values to iterate over
       if is_dynamic_method "$method"; then
-        if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-          thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-        else
-          thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
-        fi
+        thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
       else
         thresholds=("")
       fi
@@ -549,11 +523,7 @@ for method in "${selected_vec_methods[@]}"; do
 
   # Build list of threshold values to iterate over
   if is_dynamic_method "$method"; then
-    if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-      thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-    else
-      thresholds=("$DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT")
-    fi
+    thresholds=("$DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT")
   else
     thresholds=("")  # single empty entry so the loop runs once
   fi
