@@ -80,8 +80,9 @@ TRUNK_DATASETS=(
 
 BUILD_TARGET="//examples:train_oblique_forest"
 BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --repo_env=CXX=icpx)
-VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
-VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
+# SIMD histogram binning is default-ON; the AVX2 (64 bins) / AVX-512 (256 bins)
+# path is chosen at RUNTIME from the bin count, so the avx2/avx512 impls below
+# use the same default build and differ only by histogram_num_bins.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
@@ -227,12 +228,12 @@ for random_impl in "${RANDOM_IMPLS[@]}"; do
       ;;
     random-avx2)
       histogram_num_bins=64
-      build_args=("${BAZEL_FLAGS[@]}" "$VEC_CONFIG_AVX2")
+      build_args=("${BAZEL_FLAGS[@]}")   # AVX2 selected at runtime from bins=64
       impl_label="Random AVX2"
       ;;
     random-avx512)
       histogram_num_bins=256
-      build_args=("${BAZEL_FLAGS[@]}" "$VEC_CONFIG_AVX512")
+      build_args=("${BAZEL_FLAGS[@]}")   # AVX-512 selected at runtime from bins=256
       impl_label="Random AVX512"
       ;;
     *)

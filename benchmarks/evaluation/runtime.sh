@@ -57,8 +57,15 @@ NUM_THREADS=-1
 
 histogram_num_bins=64  # 64 -> AVX2, 256 -> AVX512 in vectorized mode.
 
-RUN_CPU=false         # set false to skip the normal (CPU) experiments section
-RUN_VECTORIZED=true   # set true to run AVX2/AVX512 vectorized experiments
+RUN_SCALAR=false      # run the scalar-binner experiments (SIMD compiled out)
+RUN_VECTORIZED=true   # run the AVX2/AVX512 vectorized experiments
+
+# The two flags are independent sections: RUN_SCALAR runs the SCALAR experiments,
+# RUN_VECTORIZED runs the SIMD ones; both true runs both, both false runs
+# neither. SIMD binning is default-ON in the code (runtime dispatch from cpuid
+# + bin count), so the scalar section must compile it out — its build always
+# adds this config. The vectorized section uses the default (SIMD) build.
+SCALAR_CONFIG=(--config=disable_std_upper_bound_vectorization)
 
 # GPU experiments. Only applies to Oblique + HISTOGRAM_RANDOM-style splits.
 # The Oblique path requires --config=oblique_gpu (compiles in the GPU
@@ -145,9 +152,12 @@ EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
 # Optional extra train_oblique_forest flags injected into every binary command
 # (e.g. EXTRA_TRAIN_ARGS="--dataset_layout=flat_column").
 EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
-# Vectorized build configs (adjust if your repo uses different config names)
-VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
-VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
+# SIMD histogram binning is default-ON with runtime dispatch: the split-finder
+# picks AVX2 (64 bins) / AVX-512 (256 bins) / scalar from cpuid + the bin count
+# at RUNTIME, so no build config is needed to vectorize. The "vectorized"
+# experiments below are just the default build driven at bins=64/256; the ISA is
+# a label derived from the bin count, not a compile flag. The scalar baseline is
+# the RUN_SCALAR section, built with SCALAR_CONFIG.
 
 # Methods that have vectorized code paths. Per-split applicability:
 #   Oblique:      Random, Dynamic Random Histogram
@@ -259,11 +269,11 @@ finalize_log() {
   fi
 }
 
-# Normal build (plain CPU binary). Skipped when only vectorized or GPU
-# experiments will run, since those sections do their own config-specific
-# builds.
-if [[ "$RUN_CPU" == "true" ]]; then
-  bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
+# Scalar-section build (SIMD binner compiled out). Skipped when only
+# vectorized or GPU experiments will run, since those sections do their own
+# config-specific builds.
+if [[ "$RUN_SCALAR" == "true" ]]; then
+  bazel_build "${BAZEL_FLAGS[@]}" "${SCALAR_CONFIG[@]}" "$BUILD_TARGET"
 else
   # Ensure features are disabled for experiments even when no initial build runs.
   sudo "$SET_CPU_E_FEATURES" --disable
@@ -389,10 +399,10 @@ is_dynamic_method() {
 # Normal experiments (Oblique and/or Axis Aligned per SPLIT_TYPES)
 # -------------------------
 oblique_selected=false
-if [[ "$RUN_CPU" != "true" ]]; then
-  banner "Skipping CPU experiments (RUN_CPU=false)"
+if [[ "$RUN_SCALAR" != "true" ]]; then
+  banner "Skipping scalar experiments (RUN_SCALAR=false)"
   # We still need `oblique_selected` for the GPU/Vectorized gates below, so
-  # pre-compute it from SPLIT_TYPES without running any CPU experiments.
+  # pre-compute it from SPLIT_TYPES without running any scalar experiments.
   for split in "${SPLIT_TYPES[@]}"; do
     if [[ "$split" != "Axis Aligned" ]]; then
       oblique_selected=true
@@ -400,8 +410,8 @@ if [[ "$RUN_CPU" != "true" ]]; then
   done
 fi
 
-if [[ "$RUN_CPU" == "true" ]]; then
-banner "NORMAL EXPERIMENTS (no explicit vector ISA) histogram_num_bins=${histogram_num_bins}"
+if [[ "$RUN_SCALAR" == "true" ]]; then
+banner "SCALAR EXPERIMENTS (SIMD binner compiled out) histogram_num_bins=${histogram_num_bins}"
 
 for split in "${SPLIT_TYPES[@]}"; do
   # Select compatible methods for this split type
@@ -469,7 +479,7 @@ for split in "${SPLIT_TYPES[@]}"; do
     done
   done
 done
-fi  # RUN_CPU
+fi  # RUN_SCALAR
 
 # -------------------------
 # GPU experiments (Oblique only). One build per GPU mode because `nodewise`
@@ -588,14 +598,11 @@ if [[ "$any_vec" != "true" ]]; then
   exit 0
 fi
 
-# Determine ISA based on histogram_num_bins
-vec_cfg=""
+# ISA is selected at RUNTIME from the bin count; here it is only a label.
 vec_name=""
 if [[ "$histogram_num_bins" -eq 64 ]]; then
-  vec_cfg="$VEC_CONFIG_AVX2"
   vec_name="AVX2"
 elif [[ "$histogram_num_bins" -eq 256 ]]; then
-  vec_cfg="$VEC_CONFIG_AVX512"
   vec_name="AVX512"
 else
   banner "Vectorized experiments require histogram_num_bins to be 64 (AVX2) or 256 (AVX512). Current: $histogram_num_bins. Skipping vectorized experiments."
@@ -603,7 +610,8 @@ else
   exit 0
 fi
 
-bazel_build "${BAZEL_FLAGS[@]}" "$vec_cfg" "$BUILD_TARGET"
+# Default build already compiles the SIMD binners; no vectorization config.
+bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
 
 banner "VECTORIZED EXPERIMENTS [${vec_name}] histogram_num_bins=${histogram_num_bins}"
 echo "USING INSTRUCTION SET: ${vec_name}" | tee -a "$logfile"

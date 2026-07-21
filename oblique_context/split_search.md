@@ -228,10 +228,15 @@ absl::StatusOr<std::vector<float>> GenHistogramBins(
 }
 ```
 
-`SIMDUpperBoundBins` (training.cc, `/* #region SIMD upper_bound */`): drop-in
-`std::upper_bound` replacement over the sorted thresholds, specialized for 64 bins (AVX2
-8×8) and 256 bins (AVX-512 16×16); default-enabled via `ENABLE_STD_UPPER_BOUND_VECTORIZATION`
-+ `-march=native` in `.bazelrc`. 256-bin AVX-512 measured ~3–4× vs scalar upper_bound.
+SIMD upper_bound (training.cc, `Avx2UpperBoundIndex64` / `Avx512UpperBoundIndex256`,
+called from `HistogramBinner::Index`): drop-in `std::upper_bound` replacement over the
+sorted thresholds, specialized for 64 bins (AVX2 8×8) and 256 bins (AVX-512 16×16). Both
+kernels are always compiled on x86-64 (per-function `__attribute__((target))`, no TU-wide
+ISA flags) and selected at **runtime** from cpuid + bin count in `HistogramBinner::Init`;
+other bin counts / CPUs fall back to scalar. Compile out with
+`--config=disable_std_upper_bound_vectorization` (macro
+`DISABLE_STD_UPPER_BOUND_VECTORIZATION`). 256-bin AVX-512 measured ~3–4× vs scalar
+upper_bound.
 
 ### EXACT finder (nodes < dynamic_split_threshold, and all EXACT runs)
 

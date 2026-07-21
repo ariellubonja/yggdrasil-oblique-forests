@@ -83,18 +83,26 @@ family_label() {  # $1 = ensemble (Bagging|Boosting), $2 = split type
   fi
 }
 
-histogram_num_bins=64  # NOTE! AVX512 will be used on Vectorized method
+histogram_num_bins=64  # 64 -> AVX2, 256 -> AVX512 in vectorized mode.
 
-RUN_CPU=true          # set false to skip the normal (CPU) experiments section
-RUN_VECTORIZED=true   # AVX2/AVX512 vectorized experiments (Vectorized Random)
+RUN_SCALAR=true       # run the scalar-binner experiments (SIMD compiled out)
+RUN_VECTORIZED=true   # run the AVX2/AVX512 vectorized experiments (Vectorized Random)
 
 # AVX2/AVX512 are x86-only instruction sets. On any non-x86 host (e.g. Apple
-# Silicon) the -mavx2/-mfma cxxopts fail to compile, which would abort the whole
-# script before the CSV is written. Force vectorization off there.
+# Silicon) the SIMD binner never engages anyway (the code gates on __x86_64__),
+# so the "AVX2"/"AVX512" run labels would be lies. Force vectorization off there.
 if [[ "$RUN_VECTORIZED" == "true" && "$(uname -m)" != "x86_64" ]]; then
   echo "CPU ($(uname -m)) does not support AVX instructions; disabling vectorized experiments." >&2
   RUN_VECTORIZED=false
 fi
+
+# The two flags are independent sections: RUN_SCALAR runs the SCALAR
+# experiments, RUN_VECTORIZED runs the SIMD ones; both true runs both, both
+# false runs neither. SIMD binning is default-ON in the code (runtime dispatch
+# from cpuid + bin count), so the scalar section must compile it out — its
+# build always adds this config. The vectorized section uses the default (SIMD)
+# build.
+SCALAR_CONFIG=(--config=disable_std_upper_bound_vectorization)
 
 # GPU experiments. Only applies to Oblique + HISTOGRAM_RANDOM-style splits.
 # The Oblique path requires --config=oblique_gpu (compiles in the GPU
@@ -124,26 +132,8 @@ METHODS=(
 )
 
 # Dynamic split threshold (only affects Dynamic methods)
-# Set true to sweep over all values below; false to use fixed defaults
-USE_THRESHOLD_SWEEP=false
 DYNAMIC_SPLIT_THRESHOLD_DEFAULT=1350             # For Dynamic Random (normal)
-DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT=500   # For Dynamic Random (vectorized)
-
-DYNAMIC_SPLIT_THRESHOLDS=(
-  100
-  350
-  600
-  850
-  1100
-  1350
-  1600
-  1850
-  2100
-  2350
-  2600
-  2850
-  3100
-)
+DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT=250   # For Dynamic Random (vectorized)
 
 # CSV datasets are built from the CC18 binary tasks. Entries are
 # "path|label_col".
@@ -196,9 +186,12 @@ EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
 # (e.g. EXTRA_TRAIN_ARGS="--shrinkage=0.05"). Do NOT set --ensemble_method or
 # --num_trees here: the script now owns both (see ENSEMBLES / ensemble_num_trees).
 EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
-# Vectorized build configs (adjust if your repo uses different config names)
-VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
-VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
+# SIMD histogram binning is default-ON with runtime dispatch: the split-finder
+# picks AVX2 (64 bins) / AVX-512 (256 bins) / scalar from cpuid + the bin count
+# at RUNTIME, so no build config is needed to vectorize. The "vectorized"
+# experiments below are just the default build driven at bins=64/256; the ISA is
+# a label derived from the bin count, not a compile flag. The scalar baseline is
+# the RUN_SCALAR section, built with SCALAR_CONFIG.
 
 # Vectorization applies only to these methods (Oblique only)
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
@@ -271,10 +264,10 @@ finalize_log() {
   fi
 }
 
-# Normal build (plain CPU binary). Skipped when only GPU experiments will
-# run, since the GPU section does its own builds with --config=oblique_gpu.
-if [[ "$RUN_CPU" == "true" || "$RUN_VECTORIZED" == "true" ]]; then
-  bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
+# Scalar-section build (SIMD binner compiled out). Only needed when the scalar
+# experiments run; the vectorized and GPU sections do their own builds.
+if [[ "$RUN_SCALAR" == "true" ]]; then
+  bazel_build "${BAZEL_FLAGS[@]}" "${SCALAR_CONFIG[@]}" "$BUILD_TARGET"
 fi
 BINARY="./bazel-bin/examples/train_oblique_forest"
 
@@ -322,10 +315,10 @@ is_dynamic_method() {
 # Normal experiments (Oblique and/or Axis Aligned per SPLIT_TYPES)
 # -------------------------
 oblique_selected=false
-if [[ "$RUN_CPU" != "true" ]]; then
-  banner "Skipping CPU experiments (RUN_CPU=false)"
+if [[ "$RUN_SCALAR" != "true" ]]; then
+  banner "Skipping scalar experiments (RUN_SCALAR=false)"
   # We still need `oblique_selected` for the GPU/Vectorized gates below, so
-  # pre-compute it from SPLIT_TYPES without running any CPU experiments.
+  # pre-compute it from SPLIT_TYPES without running any scalar experiments.
   for split in "${SPLIT_TYPES[@]}"; do
     if [[ "$split" != "Axis Aligned" ]]; then
       oblique_selected=true
@@ -333,8 +326,8 @@ if [[ "$RUN_CPU" != "true" ]]; then
   done
 fi
 
-if [[ "$RUN_CPU" == "true" ]]; then
-banner "NORMAL EXPERIMENTS (no explicit vector ISA) histogram_num_bins=${histogram_num_bins}"
+if [[ "$RUN_SCALAR" == "true" ]]; then
+banner "SCALAR EXPERIMENTS (SIMD binner compiled out) histogram_num_bins=${histogram_num_bins}"
 
 for ensemble in "${ENSEMBLES[@]}"; do
   nt="$(ensemble_num_trees "$ensemble")"
@@ -373,11 +366,7 @@ for split in "${SPLIT_TYPES[@]}"; do
 
     # Build list of threshold values to iterate over
     if is_dynamic_method "$method"; then
-      if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-        thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-      else
-        thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
-      fi
+      thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
     else
       thresholds=("")  # single empty entry so the loop runs once
     fi
@@ -406,7 +395,7 @@ for split in "${SPLIT_TYPES[@]}"; do
   done
 done
 done  # ENSEMBLES
-fi  # RUN_CPU
+fi  # RUN_SCALAR
 
 # -------------------------
 # GPU experiments (Oblique only). One build per GPU mode because `nodewise`
@@ -445,11 +434,7 @@ if [[ "$RUN_GPU" == "true" && "$oblique_selected" == "true" ]]; then
 
       # Build list of threshold values to iterate over
       if is_dynamic_method "$method"; then
-        if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-          thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-        else
-          thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
-        fi
+        thresholds=("$DYNAMIC_SPLIT_THRESHOLD_DEFAULT")
       else
         thresholds=("")
       fi
@@ -506,14 +491,11 @@ if [[ "${#selected_vec_methods[@]}" -eq 0 ]]; then
   exit 0
 fi
 
-# Determine ISA based on histogram_num_bins
-vec_cfg=""
+# ISA is selected at RUNTIME from the bin count; here it is only a label.
 vec_name=""
 if [[ "$histogram_num_bins" -eq 64 ]]; then
-  vec_cfg="$VEC_CONFIG_AVX2"
   vec_name="AVX2"
 elif [[ "$histogram_num_bins" -eq 256 ]]; then
-  vec_cfg="$VEC_CONFIG_AVX512"
   vec_name="AVX512"
 else
   banner "Vectorized experiments require histogram_num_bins to be 64 (AVX2) or 256 (AVX512). Current: $histogram_num_bins. Skipping vectorized experiments."
@@ -521,7 +503,8 @@ else
   exit 0
 fi
 
-bazel_build "${BAZEL_FLAGS[@]}" "$vec_cfg" "$BUILD_TARGET"
+# Default build already compiles the SIMD binners; no vectorization config.
+bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
 
 banner "VECTORIZED EXPERIMENTS [${vec_name}] (Oblique only) histogram_num_bins=${histogram_num_bins}"
 echo "USING INSTRUCTION SET: ${vec_name}" | tee -a "$logfile"
@@ -540,11 +523,7 @@ for method in "${selected_vec_methods[@]}"; do
 
   # Build list of threshold values to iterate over
   if is_dynamic_method "$method"; then
-    if [[ "$USE_THRESHOLD_SWEEP" == "true" ]]; then
-      thresholds=("${DYNAMIC_SPLIT_THRESHOLDS[@]}")
-    else
-      thresholds=("$DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT")
-    fi
+    thresholds=("$DYNAMIC_SPLIT_THRESHOLD_VECTORIZED_DEFAULT")
   else
     thresholds=("")  # single empty entry so the loop runs once
   fi
