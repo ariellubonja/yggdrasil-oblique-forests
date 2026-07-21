@@ -26,7 +26,7 @@ build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
 build:disable_std_upper_bound_vectorization --cxxopt="-DDISABLE_STD_UPPER_BOUND_VECTORIZATION=1"
   # SIMD upper_bound is default-ON with runtime cpuid+bin-count dispatch; this turns it off.
-  # (enable_std_upper_bound_avx2/_avx512 remain as deprecated no-op aliases for old scripts.)
+  # (No enable_* config needed to vectorize; the ISA is picked at runtime from the bin count.)
 build --copt=-march=native --cxxopt="-O3"     # global
 build:linux --repo_env=CC=icx --repo_env=CXX=icpx   # oneAPI icx pin (gcc is 30-40% slower on the hot path)
 build:debug  --cxxopt=-O0 -g -fno-inline …    # breakpoints need this separate config

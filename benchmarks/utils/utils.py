@@ -162,11 +162,11 @@ def build_binary(args, chrono_mode):
         base_cmd.append('--config=fixed_1000_projections')
     finished_cmd = base_cmd[:] # ← work on a copy
 
-    if args.vectorized == "avx2":
-        finished_cmd.append('--config=enable_std_upper_bound_avx2')
-    elif args.vectorized == "avx512":
-        finished_cmd.append('--config=enable_std_upper_bound_avx512')
-        
+    # SIMD histogram binning is default-ON with runtime dispatch: the split-finder
+    # picks AVX2 / AVX-512 / scalar from cpuid + the bin count at RUNTIME, so
+    # --vectorized needs no build config. It still steers histogram_num_bins
+    # (64 -> AVX2, 256 -> AVX-512) and run labeling elsewhere.
+
     if args.sample_projection_mode == "Slow":
         finished_cmd.append('--config=slow_sample_projections')
     

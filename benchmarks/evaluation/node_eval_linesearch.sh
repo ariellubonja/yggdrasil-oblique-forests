@@ -156,7 +156,10 @@ fi
 # =========================
 BUILD_TARGET="//examples:train_oblique_forest"
 BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --repo_env=CXX=icpx)
-VEC_CONFIG="--config=enable_std_upper_bound_avx2"   # vectorized_avx2 split-finding
+# SIMD histogram binning is default-ON with runtime dispatch (AVX2 at 64 bins),
+# so vectorized split-finding needs no build config. Empty by design; kept as a
+# seam for an explicit scalar A/B (--config=disable_std_upper_bound_vectorization).
+VEC_CONFIG=""
 # Optional extra build configs/flags injected into every bazel_build (QoL from
 # runtime.sh), e.g. EXTRA_BAZEL_CONFIGS="--config=cache_projection_evaluator".
 # shellcheck disable=SC2206
@@ -347,7 +350,8 @@ build_cmd_base() {
 # DEPTH-SWEEP DRIVER (dw1, symmetric): build once, sweep the env knob.
 # =========================
 if [[ "$MODE" == "dw1" || "$MODE" == "symmetric" ]]; then
-  bazel_build "${BAZEL_FLAGS[@]}" "$MODE_CONFIG" "$VEC_CONFIG" "$BUILD_TARGET"
+  # shellcheck disable=SC2086  # $VEC_CONFIG intentionally word-split (empty by default)
+  bazel_build "${BAZEL_FLAGS[@]}" "$MODE_CONFIG" $VEC_CONFIG "$BUILD_TARGET"
   BINARY="./bazel-bin/examples/train_oblique_forest"
 
   # E-cores now disabled; compute NUM_TREES from runtime nproc (P-cores only).
@@ -431,7 +435,7 @@ BINARY="./bazel-bin/examples/train_oblique_forest"
 for key in "${ORDERED_KEYS[@]}"; do
   cfg="${KEY_CFG[$key]}"
   # shellcheck disable=SC2086
-  bazel_build "${BAZEL_FLAGS[@]}" $cfg "$VEC_CONFIG" "$BUILD_TARGET"
+  bazel_build "${BAZEL_FLAGS[@]}" $cfg $VEC_CONFIG "$BUILD_TARGET"
 
   for layout in ${KEY_LAYOUTS[$key]}; do
     banner "LAYOUT $layout (config: ${cfg:-<plain>})"

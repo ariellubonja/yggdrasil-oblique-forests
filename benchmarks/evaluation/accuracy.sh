@@ -196,9 +196,12 @@ EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
 # (e.g. EXTRA_TRAIN_ARGS="--shrinkage=0.05"). Do NOT set --ensemble_method or
 # --num_trees here: the script now owns both (see ENSEMBLES / ensemble_num_trees).
 EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
-# Vectorized build configs (adjust if your repo uses different config names)
-VEC_CONFIG_AVX2="--config=enable_std_upper_bound_avx2"
-VEC_CONFIG_AVX512="--config=enable_std_upper_bound_avx512"
+# SIMD histogram binning is default-ON with runtime dispatch: the split-finder
+# picks AVX2 (64 bins) / AVX-512 (256 bins) / scalar from cpuid + the bin count
+# at RUNTIME, so no build config is needed to vectorize. The "vectorized"
+# experiments below are just the default build driven at bins=64/256; the ISA is
+# a label derived from the bin count, not a compile flag. (Scalar baseline is
+# --config=disable_std_upper_bound_vectorization.)
 
 # Vectorization applies only to these methods (Oblique only)
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
@@ -506,14 +509,11 @@ if [[ "${#selected_vec_methods[@]}" -eq 0 ]]; then
   exit 0
 fi
 
-# Determine ISA based on histogram_num_bins
-vec_cfg=""
+# ISA is selected at RUNTIME from the bin count; here it is only a label.
 vec_name=""
 if [[ "$histogram_num_bins" -eq 64 ]]; then
-  vec_cfg="$VEC_CONFIG_AVX2"
   vec_name="AVX2"
 elif [[ "$histogram_num_bins" -eq 256 ]]; then
-  vec_cfg="$VEC_CONFIG_AVX512"
   vec_name="AVX512"
 else
   banner "Vectorized experiments require histogram_num_bins to be 64 (AVX2) or 256 (AVX512). Current: $histogram_num_bins. Skipping vectorized experiments."
@@ -521,7 +521,8 @@ else
   exit 0
 fi
 
-bazel_build "${BAZEL_FLAGS[@]}" "$vec_cfg" "$BUILD_TARGET"
+# Default build already compiles the SIMD binners; no vectorization config.
+bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
 
 banner "VECTORIZED EXPERIMENTS [${vec_name}] (Oblique only) histogram_num_bins=${histogram_num_bins}"
 echo "USING INSTRUCTION SET: ${vec_name}" | tee -a "$logfile"
