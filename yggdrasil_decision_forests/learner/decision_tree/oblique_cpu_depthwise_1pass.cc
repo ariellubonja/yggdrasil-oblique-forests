@@ -39,17 +39,17 @@ namespace {
 
 // Output-slab budget (floats) per column-centric block. Also the cutoff
 // above which a node is processed projection-major. Tunable for experiments.
-size_t Dw1BlockFloats() {
-  static const size_t value = [] {
-    const char* e = std::getenv("YDF_DW1_BLOCK_FLOATS");
-    // Measured at 3M×4096: 4 MiB 55.0 s, 16 MiB 49.6, 64 MiB 47.0,
-    // 256 MiB 45.6 — column sharing dominates output-slab residency, with
-    // diminishing returns past 64 MiB. Default 256 MiB (64 Mi floats).
-    return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
-                        : static_cast<size_t>(64) << 20;
-  }();
-  return value;
-}
+// size_t Dw1BlockFloats() {
+//   static const size_t value = [] {
+//     const char* e = std::getenv("YDF_DW1_BLOCK_FLOATS");
+//     // Measured at 3M×4096: 4 MiB 55.0 s, 16 MiB 49.6, 64 MiB 47.0,
+//     // 256 MiB 45.6 — column sharing dominates output-slab residency, with
+//     // diminishing returns past 64 MiB. Default 256 MiB (64 Mi floats).
+//     return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
+//                         : static_cast<size_t>(64) << 20;
+//   }();
+//   return value;
+// }
 
 struct ColEntry {
   int32_t node;   // index within the depth batch
@@ -176,31 +176,34 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   std::vector<Dw1Task> tasks;
   {
     CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1PreSize);
-    const size_t budget = Dw1BlockFloats();
-    size_t blk_begin = 0;
-    size_t blk_floats = 0;
+    // const size_t budget = Dw1BlockFloats();
+    // size_t blk_begin = 0;
+    // size_t blk_floats = 0;
     for (size_t n = 0; n < N; ++n) {
       // Accounts for variable n. projections / node
       const size_t slab =
           selected_examples_per_node[n].size() * projections_per_node[n].size();
       out_projected[n].assign(slab, 0.f);
 
-      // TODO Ariel When is slab over budget? What happens then?
-      // Also why is there 3 paths in this if {}
-      if (slab > budget) {
-        if (blk_begin < n) tasks.push_back({blk_begin, n, /*big=*/false});
-        tasks.push_back({n, n + 1, /*big=*/true});
-        blk_begin = n + 1;
-        blk_floats = 0;
-      } else if (blk_floats + slab > budget) {
-        if (blk_begin < n) tasks.push_back({blk_begin, n, /*big=*/false});
-        blk_begin = n;
-        blk_floats = slab;
-      } else {
-        blk_floats += slab;
-      }
+      // // TODO Ariel When is slab over budget? What happens then?
+      // // Also why is there 3 paths in this if {}
+      // if (slab > budget) {
+      //   if (blk_begin < n) tasks.push_back({blk_begin, n, /*big=*/false});
+      //   tasks.push_back({n, n + 1, /*big=*/true});
+      //   blk_begin = n + 1;
+      //   blk_floats = 0;
+      // } else if (blk_floats + slab > budget) {
+      //   if (blk_begin < n) tasks.push_back({blk_begin, n, /*big=*/false});
+      //   blk_begin = n;
+      //   blk_floats = slab;
+      // } else {
+      //   blk_floats += slab;
+      // }
     }
-    if (blk_begin < N) tasks.push_back({blk_begin, N, /*big=*/false});
+    // if (blk_begin < N) tasks.push_back({blk_begin, N, /*big=*/false});
+    // Budget logic disabled: all nodes form a single column-centric block
+    // (equivalent to an infinite budget).
+    if (N > 0) tasks.push_back({0, N, /*big=*/false});
   }
 
 #ifdef DW1_SHARED_ROWS
@@ -274,16 +277,16 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     // layout; alternate trunk layouts fall back to the generic kernel.
 
     // TODO make the code error out if incompatible layout. don't need fallback
-    bool direct = true;
+    bool col_major_dataset = true;
     for (const auto attribute_idx : numerical_features) {
       if (evaluator.AttributeData(attribute_idx) == nullptr) {
-        direct = false;
+        col_major_dataset = false;
         break;
       }
     }
 
     const auto run_task = [&](const Dw1Task& task, Dw1Scratch& scratch) {
-      if (!direct) {
+      if (!col_major_dataset) {
         CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1SweepGeneric);
         for (size_t n = task.begin_node; n < task.end_node; ++n) {
           const auto sel = selected_examples_per_node[n];
@@ -352,7 +355,6 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
 /* #region SHARED_ROWS */
 
-// TODO BEFORE ANYTHING! RUN CHRONO ON SHARED_ROWS AP
 #ifdef DW1_SHARED_ROWS
       // Shared-rows colwalk. This block's example-sorted bag was already
       // distributed from the depth bag into arena[a_begin, a_end) (SoA
@@ -436,7 +438,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             const int32_t cnt = node_ref_cnt[bn];
             // The arena slice is ex-sorted and each node's selected_examples is
             // sorted ascending, so its rows are visited in slab order: the
-            // running counter IS the row's local slot. Advances once per node
+            // running counter is the row's local slot. Advances once per node
             // row (every entry that reaches here), so it stays in lockstep.
             const int32_t local = node_local[bn]++;
             const size_t node = static_cast<size_t>(bn) + task.begin_node;

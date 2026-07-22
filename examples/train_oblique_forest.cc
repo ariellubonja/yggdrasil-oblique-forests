@@ -66,7 +66,7 @@ ABSL_FLAG(std::string, label_col, "Cancer Status",
 ABSL_FLAG(std::string, model_out_dir, "",
           "Path to output trained model directory (optional)."
           " If empty, model is not saved.");
-ABSL_FLAG(int, num_threads, 1, "Number of threads to use.");
+ABSL_FLAG(int, num_threads, -1, "Number of threads to use.");
 ABSL_FLAG(int, num_trees, 240, "Number of trees in the random forest.");
 ABSL_FLAG(int, tree_depth, -1,
           "Maximum depth of trees (-1 for unlimited).");
