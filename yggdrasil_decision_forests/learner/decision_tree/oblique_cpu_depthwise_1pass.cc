@@ -442,10 +442,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             // row (every entry that reaches here), so it stays in lockstep.
             const int32_t local = node_local[bn]++;
             const size_t node = static_cast<size_t>(bn) + task.begin_node;
-            CHRONO_BEGIN_AP(dw1_colwalk_slab_ptr);
             float* slab = out_projected[node].data();
-            CHRONO_END_AP(dw1_colwalk_slab_ptr,
-                       ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkSlabPtr);
             const size_t rows_n = selected_examples_per_node[node].size();
 
             {
