@@ -142,7 +142,6 @@ _TIMING_COLS = (
     "SymBuildBag", "SymSortBag", "SymSweep",
     "Dw1PreSize", "Dw1Sweep",
     "Dw1SweepColWalk", "Dw1ColWalkGroupByNode", "Dw1ColWalkBagScatter",
-    "Dw1ColWalkSlabAccum",
     "Dw1SweepBig", "Dw1SweepGeneric", "Dw1SharedBag",
     "NodeTrain", "FindBestCondition", "ObliqueSplitSearch",
     "FindObliqueSetup", "EvaluateProj", "EntropyTableSetup", "CartPath",
@@ -324,8 +323,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # depth 7 — ColWalk sub-loops (group-by-node pass + bag scatter pass).
             "Dw1ColWalkGroupByNode":        "-------Dw1ColWalkGroupByNode",
             "Dw1ColWalkBagScatter":         "-------Dw1ColWalkBagScatter",
-            # depth 8 — innermost scatter FMA, nested in Dw1ColWalkBagScatter.
-            "Dw1ColWalkSlabAccum":          "--------Dw1ColWalkSlabAccum",
             "Dw1SweepBig":                  "------Dw1SweepBig",
             "Dw1SweepGeneric":              "------Dw1SweepGeneric",
             # depth 6 — CartPath leaves (CPU Exact/Sort splitter).
@@ -421,7 +418,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "------Dw1SweepColWalk",
             "-------Dw1ColWalkGroupByNode",
             "-------Dw1ColWalkBagScatter",
-            "--------Dw1ColWalkSlabAccum",
             "------Dw1SweepBig",
             "------Dw1SweepGeneric",
             # depth 4 — EvaluateProj split-finder dispatch.
