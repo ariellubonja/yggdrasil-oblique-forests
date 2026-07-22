@@ -99,6 +99,8 @@ enum FuncId {
   kDw1ColWalkBagScatter,   // inner loop 2: bag pass scatter-accumulate into out_projected
   kDw1ColWalkSlabAccum,    // innermost scatter FMA: slab[proj*rows_n+local] += w*v
                            // (fires per arena element, nested in kDw1ColWalkBagScatter)
+  kDw1ColWalkSlabPtr,      // slab base-pointer fetch: out_projected[node].data()
+                           // (fires per arena element, nested in kDw1ColWalkBagScatter)
   kDw1SweepBig,      // EvaluateNodeProjMajor path (oversized single node)
   kDw1SweepGeneric,  // !direct fallback (EvaluateProjectionRowsGeneric)
   kDw1SharedBag,     // -DDW1_SHARED_ROWS: per-block merged-bag build + sort
