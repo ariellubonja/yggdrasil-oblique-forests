@@ -175,7 +175,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   // Slab pre-size (zero-init: the column sweep accumulates) + task build
   std::vector<Dw1Task> tasks;
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1PreSize);
+    CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1PreSize);
     const size_t budget = Dw1BlockFloats();
     size_t blk_begin = 0;
     size_t blk_floats = 0;
@@ -216,7 +216,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   AdvanceDepthBag(selected_examples_per_node, prev_first_child, total_rows,
                   DepthBagChrono::kDw1SharedRows, bag_state);
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SharedBag);
+    CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1SharedBag);
     // Assign small-block ids + sizes (big tasks -> block_of_node[n] == -1).
     block_of_node.assign(N, -1);
     block_begin.clear();
@@ -269,7 +269,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   // ── Phase 2: Sweep ────────────────────────────────────────────────
   // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1Sweep);
+    CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1Sweep);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
 
     // Direct column pointers exist only for the default VerticalDataset
@@ -286,7 +286,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
     const auto run_task = [&](const Dw1Task& task, Dw1Scratch& scratch) {
       if (!direct) {
-        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SweepGeneric);
+        CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1SweepGeneric);
         for (size_t n = task.begin_node; n < task.end_node; ++n) {
           const auto sel = selected_examples_per_node[n];
           const auto& projs = projections_per_node[n];
@@ -301,7 +301,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
       // TODO what is this?
       if (task.big) {
-        CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kDw1SweepBig);
+        CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1SweepBig);
         const size_t n = task.begin_node;
         const auto sel = selected_examples_per_node[n];
         EvaluateNodeProjMajor(evaluator, projections_per_node[n], sel.data(),
@@ -383,7 +383,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         scratch.node_local.assign(block_nodes, 0);
       }
 
-      CHRONO_BEGIN(dw1_sweep_colwalk); // ~86% of AP runtime
+      CHRONO_BEGIN_AP(dw1_sweep_colwalk); // ~86% of AP runtime
       {
         auto& ref_proj = scratch.ref_proj;
         auto& ref_w = scratch.ref_w;
@@ -405,7 +405,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           ref_w.resize(slice_end - slice_begin);
           col_touched.clear();
           int32_t prev_node = -1;
-          CHRONO_BEGIN(dw1_colwalk_group_by_node); // This operation is free - ~0% cost
+          CHRONO_BEGIN_AP(dw1_colwalk_group_by_node); // This operation is free - ~0% cost
           for (size_t k = slice_begin; k < slice_end; ++k) {
             const ColEntry& e = sorted[k];
             const size_t kk = k - slice_begin;
@@ -421,13 +421,13 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             }
             ++node_ref_cnt[bn];
           }
-          CHRONO_END(dw1_colwalk_group_by_node,
+          CHRONO_END_AP(dw1_colwalk_group_by_node,
                      ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkGroupByNode);
 
           // One ascending pass over the block's arena slice: dense read of col,
           // scatter write of each contribution to its node's projections
           // referencing c. arena_node is already block-local (no subtract).
-          CHRONO_BEGIN(dw1_colwalk_bag_scatter);
+          CHRONO_BEGIN_AP(dw1_colwalk_bag_scatter);
           for (size_t j = a_begin; j < a_end; ++j) {
             const int32_t bn = arena_node[j];
             const int32_t off = node_ref_off[bn];
@@ -442,14 +442,14 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             // row (every entry that reaches here), so it stays in lockstep.
             const int32_t local = node_local[bn]++;
             const size_t node = static_cast<size_t>(bn) + task.begin_node;
-            CHRONO_BEGIN(dw1_colwalk_slab_ptr);
+            CHRONO_BEGIN_AP(dw1_colwalk_slab_ptr);
             float* slab = out_projected[node].data();
-            CHRONO_END(dw1_colwalk_slab_ptr,
+            CHRONO_END_AP(dw1_colwalk_slab_ptr,
                        ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkSlabPtr);
             const size_t rows_n = selected_examples_per_node[node].size();
 
             {
-              CHRONO_SCOPE(
+              CHRONO_SCOPE_AP(
                   ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkSlabAccum);
               for (int32_t t = 0; t < cnt; ++t) {
                 slab[static_cast<size_t>(ref_proj[off + t]) * rows_n + local] +=
@@ -458,14 +458,14 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             }
           }
 
-          CHRONO_END(dw1_colwalk_bag_scatter,
+          CHRONO_END_AP(dw1_colwalk_bag_scatter,
                      ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkBagScatter);
 
           for (const int32_t bn : col_touched) node_ref_off[bn] = -1;
           col_count[c] = 0;  // reset for the next block
         }
       }
-      CHRONO_END(dw1_sweep_colwalk,
+      CHRONO_END_AP(dw1_sweep_colwalk,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
 #else
 /* #endregion */
@@ -473,7 +473,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 /* #region Col sharing only */
 // Slower than BFS by <= 15%
 // Takeaway: column sharing via cache residency doesn't work at scale.
-      CHRONO_BEGIN(dw1_sweep_colwalk); // ~93% of the ApplyProjection time in non-Shared-Rows. In Shared-rows, ~66%
+      CHRONO_BEGIN_AP(dw1_sweep_colwalk); // ~93% of the ApplyProjection time in non-Shared-Rows. In Shared-rows, ~66%
       size_t pos = 0;
       for (const int32_t c : touched) {
         const float* col = evaluator.AttributeData(c);
@@ -505,7 +505,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         col_count[c] = 0;  // reset for the next block
       }
 /* #endregion */
-      CHRONO_END(dw1_sweep_colwalk,
+      CHRONO_END_AP(dw1_sweep_colwalk,
                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
 #endif  // DW1_SHARED_ROWS
     };

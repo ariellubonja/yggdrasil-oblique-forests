@@ -1,15 +1,25 @@
 #pragma once
-// CHRONO_PROFILE selects the profiling tier. It is set by the bazel build flag
-// (see .bazelrc): --config=chrono_profile defines CHRONO_PROFILE=2 and
-// --config=chrono_profile_coarse defines CHRONO_PROFILE=1.
-//   undefined : no profiling — every macro below compiles to nothing.
-//   1 (coarse): only the top-level scopes fire, for minimal measurement
-//               overhead — TreeTrain, NodeTrain, SampleProjection,
-//               EvaluateProj, ProjectionEvaluate (ProjEval) and BfsNodeLoop.
-//               Those call sites use the CHRONO_*_COARSE macro family.
-//   2 (fine)  : every scope fires (coarse + all sub-scopes). The fine-only call
-//               sites use the plain CHRONO_SCOPE / CHRONO_BEGIN family and raw
-//               `#if CHRONO_PROFILE >= 2` blocks.
+// Chrono profiling has one always-on coarse base plus two INDEPENDENT fine
+// axes, selected by bazel build flags (see .bazelrc):
+//   --config=coarse_chrono_profile         : -DCHRONO_PROFILE=1
+//   --config=fine_chrono_applyprojection   : -DCHRONO_PROFILE=1 -DFINE_CHRONO_AP
+//   --config=fine_chrono_evaluateprojection: -DCHRONO_PROFILE=1 -DFINE_CHRONO_EP
+//
+//   CHRONO_PROFILE undefined : no profiling — every macro compiles to nothing.
+//   CHRONO_PROFILE defined   : the coarse base is active. The top-level scopes
+//               (TreeTrain, NodeTrain, SampleProjection, EvaluateProj,
+//               ProjectionEvaluate, BfsNodeLoop) plus all node-bookkeeping /
+//               split-manager / GBT scopes fire via the CHRONO_*_COARSE family.
+//   FINE_CHRONO_AP : also fire the inner scopes of ProjectionEvaluator::Evaluate
+//               and its fused-apply variants (symmetric / depthwise_1pass), via
+//               the CHRONO_*_AP family.
+//   FINE_CHRONO_EP : also fire the inner scopes of EvaluateProjection (the
+//               histogram / Cart split search), via the CHRONO_*_EP family.
+// The two fine axes are independent — each includes coarse but not the other;
+// FINE-everywhere = pass both fine configs together. The legacy numeric
+// `CHRONO_PROFILE >= 2` gate and the plain CHRONO_SCOPE / CHRONO_BEGIN family
+// are kept defined purely so the untouched GPU code still compiles; no config
+// sets level 2, so those GPU scopes stay dormant.
 #ifdef CHRONO_PROFILE
 
 #include <array>
@@ -341,9 +351,70 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
           YDF_PP_CAT(_chrono_cbegin_, name))                            \
           .count())
 
-// ===== Fine tier ==================================================
-// Active only at level >= 2. At level 1 (coarse) these collapse to nothing, so
-// the fine-grained sub-scopes add zero overhead.
+// ===== Fine axis: ApplyProjection =================================
+// Active only under -DFINE_CHRONO_AP. Wraps the inner scopes of
+// ProjectionEvaluator::Evaluate and its fused-apply variants (symmetric /
+// depthwise_1pass). Inert otherwise, so a plain coarse or EP-fine build pays
+// zero overhead for these.
+#ifdef FINE_CHRONO_AP
+#define CHRONO_SCOPE_AP(ID) \
+  yggdrasil_decision_forests::chrono_prof::ScopedTimer \
+      YDF_PP_CAT(_chrono_ap_timer_, __LINE__)(ID)
+#define CHRONO_SCOPE_AP_TOP(ID) \
+  yggdrasil_decision_forests::chrono_prof::ScopedTopTimer \
+      YDF_PP_CAT(_chrono_ap_top_timer_, __LINE__)(ID)
+#define CHRONO_BEGIN_AP(name)                                           \
+  const auto YDF_PP_CAT(_chrono_ap_begin_, name) =                      \
+      std::chrono::steady_clock::now()
+#define CHRONO_END_AP(name, id)                                         \
+  ::yggdrasil_decision_forests::chrono_prof::add_time(                  \
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_tree,      \
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth,     \
+      (id),                                                             \
+      std::chrono::duration_cast<std::chrono::nanoseconds>(             \
+          std::chrono::steady_clock::now() -                            \
+          YDF_PP_CAT(_chrono_ap_begin_, name))                          \
+          .count())
+#else  // AP fine axis off: inert
+#define CHRONO_SCOPE_AP(ID)
+#define CHRONO_SCOPE_AP_TOP(ID)
+#define CHRONO_BEGIN_AP(name)
+#define CHRONO_END_AP(name, id)
+#endif  // FINE_CHRONO_AP
+
+// ===== Fine axis: EvaluateProjection ==============================
+// Active only under -DFINE_CHRONO_EP. Wraps the inner scopes of
+// EvaluateProjection (histogram / Cart split search). Inert otherwise.
+#ifdef FINE_CHRONO_EP
+#define CHRONO_SCOPE_EP(ID) \
+  yggdrasil_decision_forests::chrono_prof::ScopedTimer \
+      YDF_PP_CAT(_chrono_ep_timer_, __LINE__)(ID)
+#define CHRONO_SCOPE_EP_TOP(ID) \
+  yggdrasil_decision_forests::chrono_prof::ScopedTopTimer \
+      YDF_PP_CAT(_chrono_ep_top_timer_, __LINE__)(ID)
+#define CHRONO_BEGIN_EP(name)                                           \
+  const auto YDF_PP_CAT(_chrono_ep_begin_, name) =                      \
+      std::chrono::steady_clock::now()
+#define CHRONO_END_EP(name, id)                                         \
+  ::yggdrasil_decision_forests::chrono_prof::add_time(                  \
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_tree,      \
+      ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth,     \
+      (id),                                                             \
+      std::chrono::duration_cast<std::chrono::nanoseconds>(             \
+          std::chrono::steady_clock::now() -                            \
+          YDF_PP_CAT(_chrono_ep_begin_, name))                          \
+          .count())
+#else  // EP fine axis off: inert
+#define CHRONO_SCOPE_EP(ID)
+#define CHRONO_SCOPE_EP_TOP(ID)
+#define CHRONO_BEGIN_EP(name)
+#define CHRONO_END_EP(name, id)
+#endif  // FINE_CHRONO_EP
+
+// ===== Legacy fine tier (GPU only) ================================
+// Active only at level >= 2. No config sets level 2 anymore; kept solely so the
+// untouched GPU code (oblique_gpu.cc) still compiles. Dormant under all current
+// configs.
 #if CHRONO_PROFILE >= 2
 #define CHRONO_SCOPE(ID) \
   yggdrasil_decision_forests::chrono_prof::ScopedTimer \
@@ -384,4 +455,12 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #define CHRONO_SCOPE_COARSE_TOP(ID)
 #define CHRONO_BEGIN_COARSE(name)
 #define CHRONO_END_COARSE(name, id)
+#define CHRONO_SCOPE_AP(ID)
+#define CHRONO_SCOPE_AP_TOP(ID)
+#define CHRONO_BEGIN_AP(name)
+#define CHRONO_END_AP(name, id)
+#define CHRONO_SCOPE_EP(ID)
+#define CHRONO_SCOPE_EP_TOP(ID)
+#define CHRONO_BEGIN_EP(name)
+#define CHRONO_END_EP(name, id)
 #endif

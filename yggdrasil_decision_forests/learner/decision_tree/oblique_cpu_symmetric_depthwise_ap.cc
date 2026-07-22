@@ -61,7 +61,7 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
   std::vector<float*> out_ptr(N, nullptr);
   size_t bag_size = 0;
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSymBuildBag);
+    CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kSymBuildBag);
     for (size_t n = 0; n < N; ++n) {
       rows_n[n] = selected_examples_per_node[n].size();
       bag_size += rows_n[n];
@@ -95,7 +95,7 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
   // each result via the per-node write cursor. The single_node test is
   // hoisted out of the hot i-loop.
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSymSweep);
+    CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kSymSweep);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
 
     // Filled for every N > 1 path (concat rebuild and relabel alike); only

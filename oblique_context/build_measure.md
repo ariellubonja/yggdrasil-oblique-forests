@@ -19,8 +19,10 @@ build:row_major_dataset_layout    --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 build:symmetric_depthwise_ap      --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
 build:bfs_only                    --cxxopt="-DBFS_ONLY=1"                     # mutually exclusive with symmetric_*
 build:oblique_gpu                 --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
-build:chrono_profile              --cxxopt="-DCHRONO_PROFILE=2"   # every scope
-build:chrono_profile_coarse       --cxxopt="-DCHRONO_PROFILE=1"   # top-level scopes only, lower overhead
+build:coarse_chrono_profile          --cxxopt="-DCHRONO_PROFILE=1"                            # coarse base: top-level + node-bookkeeping/split-mgr/GBT scopes
+build:fine_chrono_applyprojection    --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_AP" # coarse + inner scopes of ProjectionEvaluator::Evaluate (sym / dw1)
+build:fine_chrono_evaluateprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_EP" # coarse + inner scopes of EvaluateProjection (histogram / Cart)
+  # Two INDEPENDENT fine axes: each includes coarse but not the other. FINE-everywhere = pass both fine configs together.
 build:inline_projection_evaluate  --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
 build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"

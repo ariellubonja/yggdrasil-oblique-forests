@@ -109,14 +109,22 @@ RandomForestLearner::TrainWithStatusImpl        learner/random_forest/random_for
             └─ push children (DFS: neg pushed, then pos → pos POPPED FIRST)
 ```
 
-Chrono-scope names (what `parallel_chrono.py` CSVs show), coarse tier (`CHRONO_PROFILE=1`):
+Chrono-scope names (what `parallel_chrono.py` CSVs show). The profiler has a coarse
+base plus **two independent fine axes** (`--config=fine_chrono_applyprojection`,
+`--config=fine_chrono_evaluateprojection`); each includes coarse but not the other,
+FINE-everywhere = pass both.
+Coarse base (`--config=coarse_chrono_profile`, always on in the fine configs too):
 `TreeTrain, NodeTrain, SampleProjection, EvaluateProj, ProjectionEvaluate (=ApplyProjection),
-FindObliqueSetup, ObliqueSplitSearch, FindBestCondition, GetCandidateAttributes, BfsNodeLoop`.
-Fine tier (`=2`) adds: `SetLeafValue, SplitExamplesInPlace, HistoPath (HistogramSetup,
-MinMaxNumerical, AssignSamplesToHistogram, SelectBestThresholdHistogram, EntropyTableSetup),
-CartPath (CartSetup, SortInitBuckets, SortFillBuckets, SortFeatures, SortScanSplits),
-Dw1PreSize, Dw1Sweep, Dw1SweepBig, Dw1SweepGeneric, Dw1SweepColWalk, Dw1SharedBag,
+FindObliqueSetup, ObliqueSplitSearch, FindBestCondition, GetCandidateAttributes(+Assign/Shuffle/
+NumToTest), SetLeafValue, SplitExamplesInPlace, SplitManager*/SplitWorker*, ColumnWithCast,
+BfsNodeLoop`, plus all `Gbt*` GBT scopes.
+Fine axis AP (`fine_chrono_applyprojection`) adds the inner scopes of ApplyProjection:
+`Dw1PreSize, Dw1Sweep, Dw1SweepBig, Dw1SweepGeneric, Dw1SweepColWalk, Dw1SharedBag,
 Dw1ColWalkGroupByNode, Dw1ColWalkBagScatter, SymBuildBag, SymSortBag, SymSweep`.
+Fine axis EP (`fine_chrono_evaluateprojection`) adds the inner scopes of the split search:
+`HistoPath (HistogramSetup, MinMaxNumerical, AssignSamplesToHistogram,
+SelectBestThresholdHistogram, EntropyTableSetup), CartPath (CartSetup, SortInitBuckets,
+SortFillBuckets, SortFeatures, SortScanSplits, ScanPresorted)`.
 Invariant used by the tooling: **TreeTrain = ΣNodeTrain + ΣApplyProjection + ΣSampleProjection**
 (the BFS drivers pin `tls_ctx.cur_depth` before depth-level work so per-depth cells line up).
 

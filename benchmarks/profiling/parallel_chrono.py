@@ -27,12 +27,18 @@ def get_args():
     p.add_argument("--rows", type=int, default=3000000)
     p.add_argument("--cols", type=int, default=4096)
     p.add_argument("--save_log", action="store_true")
-    p.add_argument("--chrono_level", type=int, choices=[1, 2], default=1,
-                   help="CHRONO profiling tier (see .bazelrc / parallel_chrono.h): "
-                        "1=coarse (default; only the top-level scopes — "
-                        "TreeTrain, NodeTrain, SampleProjection, EvaluateProj, "
-                        "ProjEval, BfsNodeLoop — for lower measurement overhead), "
-                        "2=fine (coarse scopes plus all sub-scopes).")
+    p.add_argument("--chrono_level", choices=["coarse", "ap", "ep", "both"],
+                   default="coarse",
+                   help="CHRONO profiling selector (see .bazelrc / "
+                        "parallel_chrono.h): 'coarse' (default) = only the "
+                        "top-level scopes (TreeTrain, NodeTrain, "
+                        "SampleProjection, EvaluateProj, ProjEval, BfsNodeLoop) "
+                        "plus node-bookkeeping / split-manager / GBT scopes; "
+                        "'ap' = coarse + inner scopes of "
+                        "ProjectionEvaluator::Evaluate (symmetric / "
+                        "depthwise_1pass); 'ep' = coarse + inner scopes of "
+                        "EvaluateProjection (histogram / Cart split search); "
+                        "'both' = both fine axes at once.")
     p.add_argument("--skip_build", help="Skip building target. Use whatever's in .bazel-bin", action="store_true")
     p.add_argument("--disable_ecores", action=argparse.BooleanOptionalAction, default=True,
                    help="Disable Intel E-cores for stable measurements (default: disabled; pass --no-disable_ecores to keep them on)")
@@ -58,11 +64,15 @@ def get_args():
     return args
 
 
-def chrono_level_name(chrono_level: int) -> str:
-    if chrono_level == 1:
-        return "COARSE"
-    if chrono_level == 2:
-        return "FINE"
+def chrono_level_name(chrono_level: str) -> str:
+    names = {
+        "coarse": "COARSE",
+        "ap": "FINE_AP",
+        "ep": "FINE_EP",
+        "both": "FINE",
+    }
+    if chrono_level in names:
+        return names[chrono_level]
     raise ValueError(f"Unsupported chrono_level: {chrono_level}")
 
 
@@ -202,7 +212,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         df.loc[placeholder, "GpuInit"] = float(m_session.group(1))
 
     # GBT session-level scopes come on a single "GBT chrono (ms): ..." line
-    # (gradient_boosted_trees.cc, CHRONO_PROFILE>=2). They are global, not
+    # (gradient_boosted_trees.cc; now coarse, dumped under #ifdef CHRONO_PROFILE
+    # so they print in every chrono build). They are global, not
     # per-thread/depth, so -- like GpuInit -- park them in a single placeholder
     # row (the first tree=0/depth=0 slot). Only one row gets them so a
     # cross-thread column sum is not double-counted. ms -> s to match the rest.

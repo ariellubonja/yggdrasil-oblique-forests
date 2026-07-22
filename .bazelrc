@@ -55,11 +55,19 @@ build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 # INSTRUMENTATION & DEFAULTS
 
 
-# Two-tier chrono profiling. =2 is fine (every scope); =1 is coarse (only the
-# top-level scopes: TreeTrain, NodeTrain, SampleProjection, EvaluateProj,
-# ProjectionEvaluate, BfsNodeLoop) for lower measurement overhead.
-build:chrono_profile --cxxopt="-DCHRONO_PROFILE=2"
-build:chrono_profile_coarse --cxxopt="-DCHRONO_PROFILE=1"
+# Chrono profiling: one always-on coarse base + two INDEPENDENT fine axes.
+# Coarse fires the top-level scopes (TreeTrain, NodeTrain, SampleProjection,
+# EvaluateProj, ProjectionEvaluate, BfsNodeLoop) plus node-bookkeeping /
+# split-manager / GBT scopes. The two fine axes each add coarse but not each
+# other; for FINE-everywhere pass both fine configs together.
+#   coarse_chrono_profile          : coarse only
+#   fine_chrono_applyprojection    : coarse + inner scopes of ProjectionEvaluator
+#                                    ::Evaluate (symmetric / depthwise_1pass)
+#   fine_chrono_evaluateprojection : coarse + inner scopes of EvaluateProjection
+#                                    (histogram / Cart split search)
+build:coarse_chrono_profile --cxxopt="-DCHRONO_PROFILE=1"
+build:fine_chrono_applyprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_AP"
+build:fine_chrono_evaluateprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_EP"
 # Don't inline ApplyProjection, for more accurate profiling. Very small cost: <2% e2e.
 build:inline_projection_evaluate --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
 # Skip the std::isnan branch in Evaluate. Small cost but possible cache misbehavior.

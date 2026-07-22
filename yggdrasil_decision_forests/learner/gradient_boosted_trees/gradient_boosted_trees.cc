@@ -1177,7 +1177,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   // kGbtStartup: pre-preprocess init (config, model, validation extract,
   // weights, gradient dataset, initial predictions, dart, ranking,
   // early-stopping). Closes just before PreprocessTrainingDataset.
-  CHRONO_BEGIN(gbt_startup_pre);
+  CHRONO_BEGIN_COARSE(gbt_startup_pre);
   const auto begin_training = absl::Now();
   RETURN_IF_ERROR(dataset::CheckNumExamples(train_dataset.nrow()));
 
@@ -1359,23 +1359,23 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
       config.gbt_config->early_stopping_initial_iteration());
   early_stopping.set_trees_per_iterations(mdl->num_trees_per_iter_);
 
-  CHRONO_END(gbt_startup_pre,
+  CHRONO_END_COARSE(gbt_startup_pre,
              ::yggdrasil_decision_forests::chrono_prof::kGbtStartup);
 
   // kGbtPreprocessDataset: presort indices + feature stats. One-shot.
-  CHRONO_BEGIN(gbt_preprocess_dataset);
+  CHRONO_BEGIN_COARSE(gbt_preprocess_dataset);
   ASSIGN_OR_RETURN(
       const auto preprocessing,
       decision_tree::PreprocessTrainingDataset(
           gradient_sub_train_dataset, config.train_config,
           config.train_config_link, config.gbt_config->decision_tree(),
           deployment_.num_threads()));
-  CHRONO_END(gbt_preprocess_dataset,
+  CHRONO_END_COARSE(gbt_preprocess_dataset,
              ::yggdrasil_decision_forests::chrono_prof::kGbtPreprocessDataset);
 
   // kGbtStartup (reopens): post-preprocess init (vector_sequence_computer,
   // snapshot/resume setup, tree_weights / GOSS weights, begin_tree_grow).
-  CHRONO_BEGIN(gbt_startup_post);
+  CHRONO_BEGIN_COARSE(gbt_startup_post);
 
   std::vector<const dataset::VerticalDataset::NumericalVectorSequenceColumn*>
       vector_sequence_columns(train_dataset.ncol(), nullptr);
@@ -1456,7 +1456,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   mdl->set_early_stopping_triggered(false);
 
   const auto begin_tree_grow = absl::Now();
-  CHRONO_END(gbt_startup_post,
+  CHRONO_END_COARSE(gbt_startup_post,
              ::yggdrasil_decision_forests::chrono_prof::kGbtStartup);
   for (; iter_idx < config.gbt_config->num_trees(); iter_idx++) {
     // No per-iter umbrella. The five scopes below partition the loop body:
@@ -1471,7 +1471,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
     {
       // kGbtUpdateGradients: stop check + iter timestamp + dart dropout
       // sampling + loss->UpdateGradients (residual gradient + hessians).
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtUpdateGradients);
+      CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGbtUpdateGradients);
 
       // The user interrupted the training.
       if (stop_training_trigger_ != nullptr && *stop_training_trigger_) {
@@ -1497,7 +1497,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
     {
       // kGbtSampleExamples: subsample_factor lookup + sampling switch
       // (GOSS / SelGB / stochastic) — fills `selected_examples`.
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtSampleExamples);
+      CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGbtSampleExamples);
 
       // Select a random set of examples (without replacement).
       if (adaptive_work) {
@@ -1549,7 +1549,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
       // kGbtTrainTree: GBT-side wrapper around decision_tree::Train. The
       // delta (kGbtTrainTree − Σ kTreeTrain) exposes per-call setup
       // (BuildWeakLearnerInternalConfig, tree alloc, push_back).
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtTrainTree);
+      CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGbtTrainTree);
       // Train a tree on the gradient.
       new_trees.reserve(gradients.size());
       for (int grad_idx = 0; grad_idx < gradients.size(); grad_idx++) {
@@ -1588,7 +1588,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
       // cache update (train + validation) + AddTree.
       // O(N · trees_per_iter · depth) tree-walk; can rival UpdateGradients
       // on deep trees.
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtUpdatePredictions);
+      CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGbtUpdatePredictions);
 
       // Note: Since the batch size is only impacting the training time
       // (i.e. not the update prediction time), and since the adaptive
@@ -1655,7 +1655,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
     // training_logs entry, EarlyStopping.Update, max-duration check), plus
     // MaybeExportTrainingLogs and per-iter CreateSnapshot. Reads ~0 most
     // iters; spikes on validation iters.
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGbtValidationEval);
+    CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGbtValidationEval);
     if (((iter_idx + 1) % config.gbt_config->validation_interval_in_trees()) ==
         0) {
       ASSIGN_OR_RETURN(
@@ -1779,7 +1779,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   // FinalizeModelWithValidationDataset, dart per-tree-output scaling,
   // FinalizeModel (writes intermediate logs), vector_sequence_computer
   // release, decision_tree::SetLeafIndices.
-  CHRONO_BEGIN(gbt_finalize);
+  CHRONO_BEGIN_COARSE(gbt_finalize);
   // Create a final snapshot.
   if (deployment_.try_resume_training() &&
       (snapshots_idxs.empty() || snapshots_idxs.back() < iter_idx)) {
@@ -1819,7 +1819,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   }
 
   decision_tree::SetLeafIndices(mdl->mutable_decision_trees());
-  CHRONO_END(gbt_finalize,
+  CHRONO_END_COARSE(gbt_finalize,
              ::yggdrasil_decision_forests::chrono_prof::kGbtFinalize);
 
   LOG(INFO) << "gradient_boosted_trees.cc Training block took: "
@@ -2111,7 +2111,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   }
 #endif
 
-#if CHRONO_PROFILE >= 2
+#ifdef CHRONO_PROFILE
   // Dump GBT-level chrono accumulators (in global_stats because no
   // TreeScope wraps GBT-side work). Format keeps each line greppable.
   {

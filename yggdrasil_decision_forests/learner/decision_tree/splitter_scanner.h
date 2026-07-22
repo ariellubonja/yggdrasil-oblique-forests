@@ -863,11 +863,11 @@ void FillExampleBucketSet(
     const typename ExampleBucketSet::FeatureBucketType::Filler& feature_filler,
     const typename ExampleBucketSet::LabelBucketType::Filler& label_filler,
     ExampleBucketSet* example_bucket_set, PerThreadCacheV2* cache) {
-  CHRONO_SCOPE(
+  CHRONO_SCOPE_EP(
       ::yggdrasil_decision_forests::chrono_prof::kSortFillExampleBucketSet);
 
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortInitBuckets);
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortInitBuckets);
     // Allocate the buckets.
     example_bucket_set->items.resize(feature_filler.NumBuckets());
 
@@ -882,7 +882,7 @@ void FillExampleBucketSet(
 
   // Fill the buckets.
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortFillBuckets);
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortFillBuckets);
     const auto num_selected_examples = selected_examples.size();
     for (size_t select_idx = 0; select_idx < num_selected_examples;
          select_idx++) {
@@ -897,7 +897,7 @@ void FillExampleBucketSet(
 
   // Finalize the buckets.
   {
-    CHRONO_SCOPE(
+    CHRONO_SCOPE_EP(
         ::yggdrasil_decision_forests::chrono_prof::kSortFinalizeBuckets);
     for (auto& bucket : example_bucket_set->items) {
       label_filler.Finalize(&bucket.label);
@@ -911,7 +911,7 @@ void FillExampleBucketSet(
 
   if constexpr (ExampleBucketSet::FeatureBucketType::kRequireSorting) {
     {
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortFeatures);
+      CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortFeatures);
       std::sort(example_bucket_set->items.begin(),
                 example_bucket_set->items.end(),
                 typename ExampleBucketSet::ExampleBucketType::SortFeature());
@@ -919,7 +919,7 @@ void FillExampleBucketSet(
   }
 
   if constexpr (require_label_sorting) {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortLabels);
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortLabels);
     std::sort(example_bucket_set->items.begin(),
               example_bucket_set->items.end(),
               typename ExampleBucketSet::ExampleBucketType::SortLabel());
@@ -966,7 +966,7 @@ SplitSearchResult ScanSplits(
     const SignedExampleIdx num_examples, const int min_num_obs,
     const int attribute_idx, proto::NodeCondition* condition,
     PerThreadCacheV2* cache) {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortScanSplits);
+  CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortScanSplits);
 
   using FeatureBucketType = typename ExampleBucketSet::FeatureBucketType;
 
@@ -1445,7 +1445,7 @@ SplitSearchResult ScanSplitsPresortedSparse(
     const int min_num_obs, const int attribute_idx,
     const bool duplicate_examples, proto::NodeCondition* condition,
     PerThreadCacheV2* cache) {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kScanPresorted);
+  CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kScanPresorted);
 
   if (duplicate_examples) {
     return ScanSplitsPresortedSparseDuplicateExampleTemplate<
@@ -1761,7 +1761,7 @@ SplitSearchResult FindBestSplitFlatHighway(
   }
 
   // Populate the flat highway arrays.
-  CHRONO_BEGIN(sort_init_buckets);
+  CHRONO_BEGIN_EP(sort_init_buckets);
   if constexpr (std::is_same_v<typename FlatTraits::HWY_T, hwy::K32V32>) {
     cache->hwy_k32v32_buffer.resize(num_selected_examples);
   } else if constexpr (std::is_same_v<typename FlatTraits::HWY_T, double>) {
@@ -1780,11 +1780,11 @@ SplitSearchResult FindBestSplitFlatHighway(
   ExampleBucketType temp_bucket;
   feature_filler.InitializeAndZero(0, &temp_bucket.feature);
   label_filler.InitializeAndZero(&temp_bucket.label);
-  CHRONO_END(sort_init_buckets,
+  CHRONO_END_EP(sort_init_buckets,
              ::yggdrasil_decision_forests::chrono_prof::kSortInitBuckets);
 
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortFillBuckets);
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortFillBuckets);
     for (size_t select_idx = 0; select_idx < num_selected_examples;
          ++select_idx) {
       const UnsignedExampleIdx example_idx = selected_examples[select_idx];
@@ -1797,14 +1797,14 @@ SplitSearchResult FindBestSplitFlatHighway(
   }
 
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortFeatures);
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortFeatures);
     // Run VQSort.
     hwy::VQSort(hwy_buffer, num_selected_examples, hwy::SortAscending());
   }
 
   // Call ScanSplitsFlat.
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSortScanSplits);
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortScanSplits);
     return ScanSplitsFlat<ExampleBucketSet, LabelBucketSet>(
         feature_filler, initializer, cache, selected_examples.size(),
         min_num_obs, attribute_idx, condition);

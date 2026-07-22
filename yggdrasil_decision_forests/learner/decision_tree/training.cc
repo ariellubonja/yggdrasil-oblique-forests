@@ -505,14 +505,14 @@ absl::StatusOr<SplitSearchResult> FindBestConditionClassification(
         return SplitSearchResult::kNoBetterSplitFound;
       }
 
-      CHRONO_BEGIN(column_with_cast);
+      CHRONO_BEGIN_COARSE(column_with_cast);
       ASSIGN_OR_RETURN(
           const auto& attribute_data,
           train_dataset.ColumnWithCastWithStatus<
               dataset::VerticalDataset::NumericalColumn>(attribute_idx));
 
       const auto na_replacement = attribute_column_spec.numerical().mean();
-      CHRONO_END(
+      CHRONO_END_COARSE(
           column_with_cast,
           ::yggdrasil_decision_forests::chrono_prof::kColumnWithCast);
 
@@ -1315,7 +1315,7 @@ absl::StatusOr<SplitterWorkResponse> FindBestConditionFromSplitterWorkRequest(
     // workers, not wall-time. Encloses the oblique scopes (FindObliqueSetup,
     // SampleProjection, ProjectionEvaluate, EvaluateProj) so their coverage
     // inside a job is checkable.
-    CHRONO_SCOPE(
+    CHRONO_SCOPE_COARSE(
         ::yggdrasil_decision_forests::chrono_prof::kSplitWorkerOblique);
     DCHECK_EQ(request.attribute_idx, -1);
     ASSIGN_OR_RETURN(
@@ -1348,7 +1348,7 @@ absl::StatusOr<SplitterWorkResponse> FindBestConditionFromSplitterWorkRequest(
   // jobs are still scheduled (one full numerical splitter per candidate
   // attribute), so they compete with the oblique jobs for the same workers and
   // are worth measuring separately. Same global_stats caveat as above.
-  CHRONO_SCOPE(
+  CHRONO_SCOPE_COARSE(
       ::yggdrasil_decision_forests::chrono_prof::kSplitWorkerAxisAligned);
 
   switch (config.task()) {
@@ -1677,7 +1677,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   // GetCandidateAttributes. Manual begin/end because the locals declared here
   // (common, candidate_attributes, ...) must outlive the scope. Ends just
   // before the first Submit.
-  CHRONO_BEGIN(split_mgr_setup);
+  CHRONO_BEGIN_COARSE(split_mgr_setup);
 
   // Constant and static part of the requests.
   SplitterWorkRequestCommon common{
@@ -1764,7 +1764,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
     s.set = false;
   }
 
-  CHRONO_END(split_mgr_setup,
+  CHRONO_END_COARSE(split_mgr_setup,
              ::yggdrasil_decision_forests::chrono_prof::kSplitManagerSetup);
 
   // Score and value of the best found condition.
@@ -1810,7 +1810,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
 
   // Initial scheduling: all the oblique jobs, then axis-aligned jobs while
   // worker threads remain. Manual begin/end: next_job_to_schedule outlives it.
-  CHRONO_BEGIN(split_mgr_submit);
+  CHRONO_BEGIN_COARSE(split_mgr_submit);
 
   // Schedule all the oblique jobs.
   for (int oblique_job_idx = 0; oblique_job_idx < num_oblique_jobs;
@@ -1843,7 +1843,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
     next_job_to_schedule++;
   }
 
-  CHRONO_END(split_mgr_submit,
+  CHRONO_END_COARSE(split_mgr_submit,
              ::yggdrasil_decision_forests::chrono_prof::kSplitManagerSubmit);
 
   int num_valid_job_tested = 0;
@@ -1855,7 +1855,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
     // Get a new result from a worker splitter. Blocking: this is the manager's
     // "workers busy" wall-time.
     auto maybe_response = [&] {
-      CHRONO_SCOPE(
+      CHRONO_SCOPE_COARSE(
           ::yggdrasil_decision_forests::chrono_prof::kSplitManagerWait);
       return processor.GetResult();
     }();
@@ -1869,7 +1869,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
     // Recording the response + processing the ones that became processable.
     // Closes before the scheduling loop below so Submit is not nested in it.
     {
-      CHRONO_SCOPE(
+      CHRONO_SCOPE_COARSE(
           ::yggdrasil_decision_forests::chrono_prof::kSplitManagerProcess);
 
       {
@@ -1928,7 +1928,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
 
     // Schedule the testing of more conditions.
     {
-      CHRONO_SCOPE(
+      CHRONO_SCOPE_COARSE(
           ::yggdrasil_decision_forests::chrono_prof::kSplitManagerSubmit);
       while (!cache->available_cache_idxs.empty() &&
              next_job_to_schedule < num_jobs) {
@@ -1946,7 +1946,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   // loop's GetResult.
   for (int i = 0; i < num_in_flight; i++) {
     auto maybe_response = [&] {
-      CHRONO_SCOPE(
+      CHRONO_SCOPE_COARSE(
           ::yggdrasil_decision_forests::chrono_prof::kSplitManagerWait);
       return processor.GetResult();
     }();
@@ -2372,7 +2372,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     const utils::IntegerDistributionDouble& label_distribution,
     const int32_t attribute_idx, utils::RandomEngine* random,
     proto::NodeCondition* condition) {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistoPath);
+  CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kHistoPath);
   // Randomly select some threshold values.
   struct CandidateSplit {
     float threshold;
@@ -2389,7 +2389,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
   HistogramBinner binner;
 
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistogramSetup);
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kHistogramSetup);
     DCHECK(condition != nullptr);
     if (!weights.empty()) {
       DCHECK_EQ(weights.size(), labels.size());
@@ -2402,7 +2402,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     }
 
     {
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
+      CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
       if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
                                     &max_value)) {
         return SplitSearchResult::kInvalidAttribute;
@@ -2433,7 +2433,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
 
   // Compute the split score of each threshold.
   {
-    CHRONO_SCOPE(
+    CHRONO_SCOPE_EP(
         ::yggdrasil_decision_forests::chrono_prof::kAssignSamplesToHistogram);
   for (const auto example_idx : selected_examples) {
     const int32_t label = labels[example_idx];
@@ -2477,7 +2477,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       weights.empty() && num_label_classes == 3;
   std::vector<double> count_log_count;
   if (use_unweighted_binary_entropy) {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kEntropyTableSetup);
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kEntropyTableSetup);
     count_log_count = internal::BuildCountLogCountTable(
         static_cast<int64_t>(total_sum));
   }
@@ -2486,7 +2486,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
   // Select the best threshold.
   bool found_split = false;
   {
-  CHRONO_SCOPE(
+  CHRONO_SCOPE_EP(
       ::yggdrasil_decision_forests::chrono_prof::kSelectBestThresholdHistogram);
   for (auto& candidate_split : candidate_splits) {
     if (selected_examples.size() -
@@ -2560,9 +2560,9 @@ FindSplitLabelClassificationFeatureNumericalCart(
     const utils::IntegerDistributionDouble& label_distribution,
     const int32_t attribute_idx, const InternalTrainConfig& internal_config,
     proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartPath);
+  CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kCartPath);
   proto::DecisionTreeTrainingConfig::Internal::SortingStrategy sorting_strategy;
-  CHRONO_BEGIN(cart_setup);
+  CHRONO_BEGIN_EP(cart_setup);
   const auto feature_filler = [&]() {
     if (!weights.empty()) {
       DCHECK_EQ(weights.size(), labels.size());
@@ -2591,7 +2591,7 @@ FindSplitLabelClassificationFeatureNumericalCart(
           label_filler(labels, weights);
       LabelBinaryCategoricalOneValueBucket</*weighted=*/false>::Initializer
           initializer(label_distribution);
-      CHRONO_END(cart_setup,
+      CHRONO_END_EP(cart_setup,
                  ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
 
       if (sorting_strategy ==
@@ -2620,7 +2620,7 @@ FindSplitLabelClassificationFeatureNumericalCart(
           label_filler(labels, weights);
       LabelBinaryCategoricalOneValueBucket</*weighted=*/true>::Initializer
           initializer(label_distribution);
-      CHRONO_END(cart_setup,
+      CHRONO_END_EP(cart_setup,
                  ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
       if (sorting_strategy ==
           proto::DecisionTreeTrainingConfig::Internal::FORCE_PRESORTED) {
@@ -2651,7 +2651,7 @@ FindSplitLabelClassificationFeatureNumericalCart(
           labels, weights);
       LabelCategoricalOneValueBucket</*weighted=*/false>::Initializer
           initializer(label_distribution);
-      CHRONO_END(cart_setup,
+      CHRONO_END_EP(cart_setup,
                  ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
 
       if (sorting_strategy ==
@@ -2680,7 +2680,7 @@ FindSplitLabelClassificationFeatureNumericalCart(
           labels, weights);
       LabelCategoricalOneValueBucket</*weighted=*/true>::Initializer
           initializer(label_distribution);
-      CHRONO_END(cart_setup,
+      CHRONO_END_EP(cart_setup,
                  ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
 
       if (sorting_strategy ==
@@ -2804,7 +2804,7 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
     const utils::NormalDistributionDouble& label_distribution,
     const int32_t attribute_idx, utils::RandomEngine* random,
     proto::NodeCondition* condition) {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistoPath);
+  CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kHistoPath);
   // Candidate threshold values.
   struct CandidateSplit {
     float threshold;
@@ -2821,7 +2821,7 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
   HistogramBinner binner;
 
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kHistogramSetup);
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kHistogramSetup);
     DCHECK(condition != nullptr);
     if constexpr (weighted) {
       DCHECK_EQ(weights.size(), labels.size());
@@ -2836,7 +2836,7 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
     }
     // Determine the minimum and maximum values of the attribute.
     {
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
+      CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kMinMaxNumerical);
       if (!MinMaxNumericalAttribute(selected_examples, attributes, &min_value,
                                     &max_value)) {
         return SplitSearchResult::kInvalidAttribute;
@@ -2868,7 +2868,7 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
 
   // Compute the split score of each threshold.
   {
-    CHRONO_SCOPE(
+    CHRONO_SCOPE_EP(
         ::yggdrasil_decision_forests::chrono_prof::kAssignSamplesToHistogram);
   for (const auto example_idx : selected_examples) {
     const float label = labels[example_idx];
@@ -2906,7 +2906,7 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
   }
 
   // Select the best threshold.
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::
+  CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::
                    kSelectBestThresholdHistogram);
   const double initial_variance = label_distribution.Var();
   int best_candidate_split_idx = -1;
@@ -2970,8 +2970,8 @@ FindSplitLabelHessianRegressionFeatureNumericalCart(
     const InternalTrainConfig& internal_config,
     const NodeConstraints& constraints, const int8_t monotonic_direction,
     proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartPath);
-  CHRONO_BEGIN(cart_setup);
+  CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kCartPath);
+  CHRONO_BEGIN_EP(cart_setup);
   if constexpr (weighted) {
     DCHECK_GE(weights.size(), selected_examples.size());
   } else {
@@ -3004,7 +3004,7 @@ FindSplitLabelHessianRegressionFeatureNumericalCart(
     const auto& sorted_attributes =
         internal_config.preprocessing
             ->presorted_numerical_features()[attribute_idx];
-    CHRONO_END(cart_setup,
+    CHRONO_END_EP(cart_setup,
                ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
     return ScanSplitsPresortedSparse<
         FeatureNumericalLabelHessianNumericalOneValue<weighted>,
@@ -3016,7 +3016,7 @@ FindSplitLabelHessianRegressionFeatureNumericalCart(
         &cache->cache_v2);
   } else if (sorting_strategy ==
              proto::DecisionTreeTrainingConfig::Internal::IN_NODE) {
-    CHRONO_END(cart_setup,
+    CHRONO_END_EP(cart_setup,
                ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
     return FindBestSplit_LabelHessianRegressionFeatureNumerical<weighted>(
         selected_examples, feature_filler, label_filler, initializer,
@@ -3125,8 +3125,8 @@ absl::StatusOr<SplitSearchResult> FindSplitLabelRegressionFeatureNumericalCart(
     const utils::NormalDistributionDouble& label_distribution,
     const int32_t attribute_idx, const InternalTrainConfig& internal_config,
     proto::NodeCondition* condition, SplitterPerThreadCache* cache) {
-  CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kCartPath);
-  CHRONO_BEGIN(cart_setup);
+  CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kCartPath);
+  CHRONO_BEGIN_EP(cart_setup);
   if constexpr (weighted) {
     DCHECK_GE(weights.size(), selected_examples.size());
   } else {
@@ -3155,7 +3155,7 @@ absl::StatusOr<SplitSearchResult> FindSplitLabelRegressionFeatureNumericalCart(
     const auto& sorted_attributes =
         internal_config.preprocessing
             ->presorted_numerical_features()[attribute_idx];
-    CHRONO_END(cart_setup,
+    CHRONO_END_EP(cart_setup,
                ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
     return ScanSplitsPresortedSparse<
         FeatureNumericalLabelNumericalOneValue<weighted>,
@@ -3167,7 +3167,7 @@ absl::StatusOr<SplitSearchResult> FindSplitLabelRegressionFeatureNumericalCart(
         &cache->cache_v2);
   } else if (sorting_strategy ==
              proto::DecisionTreeTrainingConfig::Internal::IN_NODE) {
-    CHRONO_END(cart_setup,
+    CHRONO_END_EP(cart_setup,
                ::yggdrasil_decision_forests::chrono_prof::kCartSetup);
     return FindBestSplit_LabelRegressionFeatureNumerical<weighted>(
         selected_examples, feature_filler, label_filler, initializer,
@@ -4719,17 +4719,17 @@ void GetCandidateAttributes(
     int* num_attributes_to_test, std::vector<int32_t>* candidate_attributes,
     utils::RandomEngine* random) {
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributesAssign);
+    CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributesAssign);
     candidate_attributes->assign(config_link.features().begin(),
                                  config_link.features().end());
   }
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributesShuffle);
+    CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributesShuffle);
     std::shuffle(candidate_attributes->begin(), candidate_attributes->end(),
                  *random);
   }
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributesNumToTest);
+    CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributesNumToTest);
     *num_attributes_to_test = NumAttributesToTest(
         dt_config, candidate_attributes->size(), config.task());
   }
@@ -5346,7 +5346,7 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
   if (!set_leaf_already_set) {
     // Set the node value (i.e. the label distribution).
     {
-      CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSetLeafValue);
+      CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kSetLeafValue);
       RETURN_IF_ERROR(internal_config.set_leaf_value_functor(
           train_dataset, selected_examples.active, weights, config, config_link,
           node));
@@ -5416,7 +5416,7 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
 
   bool has_better_condition;
   {
-    CHRONO_SCOPE(
+    CHRONO_SCOPE_COARSE(
         ::yggdrasil_decision_forests::chrono_prof::kFindBestCondition);
     ASSIGN_OR_RETURN(
         has_better_condition,
@@ -5438,14 +5438,14 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
                           dt_config.store_detailed_label_distribution());
 
   // Separate the positive and negative examples.
-  CHRONO_BEGIN(split_examples_in_place);
+  CHRONO_BEGIN_COARSE(split_examples_in_place);
   ASSIGN_OR_RETURN(
       auto example_split,
       internal::SplitExamplesInPlace(
           *train_dataset_for_splitter, selected_examples,
           node->node().condition(), splitter_dataset_is_compact,
           dt_config.internal_error_on_wrong_splitter_statistics()));
-  CHRONO_END(split_examples_in_place,
+  CHRONO_END_COARSE(split_examples_in_place,
              ::yggdrasil_decision_forests::chrono_prof::kSplitExamplesInPlace);
 
   if (example_split.positive_examples.empty() ||
@@ -5475,7 +5475,7 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
 
   // Set leaf outputs
   {
-    CHRONO_SCOPE(::yggdrasil_decision_forests::chrono_prof::kSetLeafValue);
+    CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kSetLeafValue);
     RETURN_IF_ERROR(internal_config.set_leaf_value_functor(
         train_dataset, example_split.positive_examples.active, weights, config,
         config_link, node->mutable_pos_child()));

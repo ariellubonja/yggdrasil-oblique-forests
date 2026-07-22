@@ -92,8 +92,8 @@ void AdvanceDepthBag(
   const size_t N = selected_examples_per_node.size();
 
   // Resolve the two chrono sub-scope ids for this caller. The FuncId enum
-  // only exists under CHRONO_PROFILE; in coarse builds (level 1) the
-  // CHRONO_SCOPE macro is inert, so the ids are [[maybe_unused]].
+  // only exists under CHRONO_PROFILE; without -DFINE_CHRONO_AP the
+  // CHRONO_SCOPE_AP macro is inert, so the ids are [[maybe_unused]].
 #ifdef CHRONO_PROFILE
   [[maybe_unused]] const ::yggdrasil_decision_forests::chrono_prof::FuncId
       build_id = billing == DepthBagChrono::kSymmetric
@@ -110,7 +110,7 @@ void AdvanceDepthBag(
   // any failure drops through to the fallback below.
   bool have_bag = false;
   if (state->valid && !prev_first_child.empty()) {
-    CHRONO_SCOPE(sort_id);
+    CHRONO_SCOPE_AP(sort_id);
     have_bag = RelabelBagForNewDepth(selected_examples_per_node,
                                      prev_first_child, bag_size, state);
   }
@@ -128,7 +128,7 @@ void AdvanceDepthBag(
       // Copy the span into the state: the rolling buffer is repartitioned in
       // place by this depth's SplitExamplesInPlace, so the span's contents
       // will not survive to seed the next depth's relabel.
-      CHRONO_SCOPE(build_id);
+      CHRONO_SCOPE_AP(build_id);
       state->bag.assign(selected_examples_per_node[0].begin(),
                         selected_examples_per_node[0].end());
       state->node_of_bag.clear();  // implicit: all entries node 0
@@ -136,7 +136,7 @@ void AdvanceDepthBag(
       auto& bag = state->bag;
       auto& node_of_bag = state->node_of_bag;
       {
-        CHRONO_SCOPE(build_id);
+        CHRONO_SCOPE_AP(build_id);
         bag.resize(bag_size);
         node_of_bag.resize(bag_size);
         size_t cur = 0;
@@ -149,7 +149,7 @@ void AdvanceDepthBag(
         }
       }
       {
-        CHRONO_SCOPE(sort_id);
+        CHRONO_SCOPE_AP(sort_id);
         static_assert(sizeof(UnsignedExampleIdx) == sizeof(uint32_t),
                       "K32V32 path assumes 32-bit example_idx");
 

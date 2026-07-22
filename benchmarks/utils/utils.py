@@ -171,12 +171,22 @@ def build_binary(args, chrono_mode):
         finished_cmd.append('--config=slow_sample_projections')
     
     if chrono_mode:
-        # Two-tier chrono: level 2 (fine, default) instruments every scope;
-        # level 1 (coarse) keeps only the top-level scopes for lower overhead.
-        if getattr(args, 'chrono_level', 2) == 1:
-            finished_cmd.append('--config=chrono_profile_coarse')
-        else:
-            finished_cmd.append('--config=chrono_profile')
+        # Coarse base + two independent fine axes (see .bazelrc /
+        # parallel_chrono.h). chrono_level selects which:
+        #   "coarse" -> coarse only
+        #   "ap"     -> coarse + inner scopes of ProjectionEvaluator::Evaluate
+        #   "ep"     -> coarse + inner scopes of EvaluateProjection
+        #   "both"   -> both fine axes (FINE everywhere)
+        _chrono_level = getattr(args, 'chrono_level', 'coarse')
+        _chrono_configs = {
+            'coarse': ['--config=coarse_chrono_profile'],
+            'ap': ['--config=fine_chrono_applyprojection'],
+            'ep': ['--config=fine_chrono_evaluateprojection'],
+            'both': ['--config=fine_chrono_applyprojection',
+                     '--config=fine_chrono_evaluateprojection'],
+        }
+        finished_cmd.extend(_chrono_configs.get(
+            _chrono_level, _chrono_configs['coarse']))
 
     # --use_gpu=true requires the GPU code paths to be compiled in. Without
     # --config=oblique_gpu the OBLIQUE_GPU_ENABLED macro is undefined and
