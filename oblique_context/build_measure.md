@@ -36,8 +36,8 @@ build:profiler --cxxopt=-O2 -g, no fission    # for VTune/perf
 ```
 
 Env knobs (read once, cached in a static): `YDF_RM_MAX_ROWS` (node-size threshold, default
-5000 baked by the harness `main()`; ∞ if binary run without harness), `YDF_DW1_BLOCK_FLOATS`
-(default 64 Mi floats), `YDF_DW1_MIN_DEPTH` (default 0), `YDF_SYMMETRIC_MAX_DEPTH` (default
+5000 baked by the harness `main()`; ∞ if binary run without harness), `YDF_DW1_MIN_DEPTH`
+(default 0), `YDF_SYMMETRIC_MAX_DEPTH` (default
 INT32_MAX; deeper levels hand off to DFS `GrowTreeLocal`).
 
 ## Harness: `examples/train_oblique_forest.cc`

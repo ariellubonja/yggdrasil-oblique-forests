@@ -150,146 +150,94 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 
 ### DW1: `ApplyProjectionsDepthwise1Pass` (oblique_cpu_depthwise_1pass.cc)
 
+> **2026-07-23: block machinery removed.** The per-block budget (`Dw1BlockFloats` /
+> `YDF_DW1_BLOCK_FLOATS`), `Dw1Task`, the big-node projection-major path
+> (`EvaluateNodeProjMajor`, kDw1SweepBig), and the shared-rows per-block arena
+> distribution (`block_of_node`/`block_off`/`arena_ex`/`arena_node`, kDw1SharedBag)
+> are gone — the budget had long been disabled, so every depth already ran as one
+> block. The kernel is now a single depth-wide column-centric sweep; shared-rows
+> reads the depth bag (`bag_state->bag` / `node_of_bag` from `AdvanceDepthBag`)
+> directly instead of copying it into arenas. Verified bit-identical (nodes-* hash)
+> vs the block version for both configs. Old code: commit `c6357624` and earlier.
+
 Idea: at mid depths the frontier holds thousands of small nodes; total column references
-N·K·nnz ≫ F. Invert the loop: bucket every (node, projection, weight) reference by column,
-walk touched columns once ascending; block nodes so output slabs stay cache-resident.
+N·K·nnz ≫ F. Invert the loop: bucket every (node, projection, weight) reference of the
+whole depth by column, then walk touched columns once ascending.
 
 ```cpp
-// Output-slab budget (floats) per column-centric block. Also the cutoff
-// above which a node is processed projection-major.
-size_t Dw1BlockFloats() {   // env YDF_DW1_BLOCK_FLOATS, default 64 Mi floats (256 MiB)
-  // Measured at 3M×4096: 4 MiB 55.0 s, 16 MiB 49.6, 64 MiB 47.0, 256 MiB 45.6.
-  …
-}
-
 struct ColEntry { int32_t node; int32_t proj; int32_t col; float weight; };
-
-#ifdef DW1_SHARED_ROWS
-// 8-byte bag row for hwy::VQSort: key = example id (uint32), value = owning node.
-// The row's local slab slot is NOT stored: selected_examples is sorted ascending,
-// so within the row-sorted bag a node's rows appear in slab order and `local` is
-// recovered as a per-node running counter. Requires 32-bit example ids.
-using BagRow = hwy::K32V32;
-#endif
-
-struct Dw1Task { size_t begin_node; size_t end_node; bool big; };
-struct Dw1Scratch { std::vector<ColEntry> entries, sorted; std::vector<int32_t> touched, col_count;
-                    /* + shared-rows: bag, node_ref_off/cnt, node_local, ref_proj, ref_w, col_touched */ };
-
-// Projection-major kernel for one node (big nodes / fallback). Direct column
-// pointers; the per-load AttributeValue branch chain is hoisted out.
-inline void EvaluateNodeProjMajor(const internal::ProjectionEvaluator& evaluator,
-    const std::vector<internal::Projection>& projs,
-    const UnsignedExampleIdx* sel_ptr, size_t rows_n, float* out_ptr) {
-  struct FeatRef { const float* col; float weight; /* +na if isnan build */ };
-  std::vector<FeatRef> feats;
-  for (size_t p = 0; p < projs.size(); ++p) {
-    feats.clear();
-    for (const auto& feat : projs[p])
-      feats.push_back({evaluator.AttributeData(feat.attribute_idx), feat.weight});
-    float* o = out_ptr + p * rows_n;
-    for (size_t i = 0; i < rows_n; ++i) {
-      const UnsignedExampleIdx ex = sel_ptr[i];
-      float acc = 0.f;
-      for (const auto& f : feats) acc += f.weight * f.col[ex];
-      o[i] = acc;
-    }
-  }
-}
 
 absl::Status ApplyProjectionsDepthwise1Pass(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>> selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
+    absl::Span<const int32_t> prev_first_child, DepthBagState* bag_state,
     absl::Span<std::vector<float>> out_projected) {
-  const size_t N = selected_examples_per_node.size();
   CHRONO_SCOPE_COARSE(…kProjectionEvaluate);
+  const size_t N = selected_examples_per_node.size();
   if (N == 0) return absl::OkStatus();
   int max_attr = /* max over numerical_features */;
+  // shared-rows only: total_rows = Σ selected_examples_per_node[n].size()
 
   // ── Phase 1: PreSize (kDw1PreSize, ~5% of AP) ────────────────────────
-  // Slab pre-size (zero-init: the column sweep accumulates) + task build:
-  // pack consecutive nodes into blocks of ≤ Dw1BlockFloats() slab floats;
-  // nodes whose slab alone exceeds the budget become big=true tasks.
-  std::vector<Dw1Task> tasks;
-  { for (size_t n = 0; n < N; ++n) {
-      const size_t slab = selected_examples_per_node[n].size() * projections_per_node[n].size();
-      out_projected[n].assign(slab, 0.f);
-      /* … block packing … */ } }
+  // Slab pre-size only (zero-init: the column sweep accumulates).
+  for (size_t n = 0; n < N; ++n)
+    out_projected[n].assign(sel_n * projs_n, 0.f);
+
+#ifdef DW1_SHARED_ROWS
+  // Depth bag: example-sorted (bag, node_of_bag) for the whole frontier.
+  // O(bag) relabel of the previous depth in the steady state (billed to
+  // kDw1SharedRows via DepthBagChrono), concat + VQSort fallback otherwise.
+  AdvanceDepthBag(selected_examples_per_node, prev_first_child, total_rows,
+                  DepthBagChrono::kDw1SharedRows, bag_state);
+#endif
 
   // ── Phase 2: Sweep (kDw1Sweep, dominant) ─────────────────────────────
-  {
-    internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
-    bool direct = /* all AttributeData(attr) != nullptr */;
+  internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
+  bool col_major_dataset = /* all AttributeData(attr) != nullptr */;
+  if (!col_major_dataset) { /* kDw1SweepGeneric: EvaluateProjectionRowsGeneric
+                               per (node,proj); alternate layouts only */ }
 
-    const auto run_task = [&](const Dw1Task& task, Dw1Scratch& scratch) {
-      if (!direct) { /* kDw1SweepGeneric: EvaluateProjectionRowsGeneric per (node,proj) */ return; }
-      if (task.big) {  // kDw1SweepBig
-        EvaluateNodeProjMajor(evaluator, projections_per_node[n], sel.data(),
-                              sel.size(), out_projected[n].data());
-        return;
-      }
+  // Bucket every (node,proj,weight) reference by column: entries pushed
+  // node-major, touched ascending, counting sort → `sorted`, col_count
+  // becomes the per-column end cursor.  [≤2% of AP]
 
-      // Column-centric block: bucket references by column (counting sort into
-      // `sorted`, touched ascending)…   [≤2% of AP]
-      for (size_t n = task.begin_node; n < task.end_node; ++n)
-        for (size_t p = 0; p < projs.size(); ++p)
-          for (const auto& feat : projs[p]) {
-            entries.push_back({n, p, feat.attribute_idx, feat.weight});
-            if (col_count[feat.attribute_idx]++ == 0) touched.push_back(feat.attribute_idx);
-          }
-      std::sort(touched.begin(), touched.end());
-      /* counting sort entries → sorted, col_count becomes end-cursor per column */
-
-#ifdef DW1_SHARED_ROWS   // ~10% of Shared-rows AP: bag build+sort
-      // Shared-rows colwalk. Build the block's merged bag once (union of its
-      // nodes' selected_examples, sorted by example id via hwy::VQSort on K32V32),
-      // then read each touched column in ONE ascending pass over that bag and
-      // SCATTER each value to every (node,projection) referencing the column.
-      // Trades per-node sparse gather reads for sparse slab writes.
-      // (Rows are disjoint across nodes: the depth frontier partitions the bag.)
-      for each touched column c:                    // kDw1SweepColWalk, ~86% of AP
-        group c's refs by node (contiguous runs in ref_proj/ref_w)   // kDw1ColWalkGroupByNode, ~0%
-        for (const BagRow& be : bag) {              // kDw1ColWalkBagScatter — the hot loop
-          const int32_t bn = BagRowNode(be) - begin_node_i;
-          const int32_t off = node_ref_off[bn];
-          if (off < 0) continue;   // owning node has no projection on column c (74–98% skipped!)
-          const float v = col[BagRowExample(be)];
-          const int32_t local = node_local[bn]++;   // running counter == slab slot (sorted bag)
-          float* slab = out_projected[node].data();
-          const size_t rows_n = selected_examples_per_node[node].size();
-          for (int32_t t = 0; t < cnt; ++t)
-            slab[ref_proj[off + t] * rows_n + local] += ref_w[off + t] * v;   // scatter-write
-        }
-#else
-      /* Col-sharing colwalk (kDw1SweepColWalk, ~93% of AP). Per column, replay its
-         (node,proj) entries; each entry re-gathers the column at ITS node's rows: */
-      size_t pos = 0;
-      for (const int32_t c : touched) {
-        const float* col = evaluator.AttributeData(c);
-        const size_t end = static_cast<size_t>(col_count[c]);
-        for (; pos < end; ++pos) {
-          const ColEntry& e = sorted[pos];
-          const auto sel = selected_examples_per_node[e.node];
-          const size_t rows_n = sel.size();
-          const UnsignedExampleIdx* sel_ptr = sel.data();
-          float* o = out_projected[e.node].data() + e.proj * rows_n;
-          const float w = e.weight;
-          for (size_t i = 0; i < rows_n; ++i) {     // ★ the measured gather (line ~477)
-            float v = col[sel_ptr[i]];
-            o[i] += w * v;
-          }
-        }
-        col_count[c] = 0;
-      }
-#endif
-    };
-
-    // Single-threaded by design: RandomForest already trains one tree per thread.
-    Dw1Scratch scratch;
-    for (const auto& task : tasks) run_task(task, scratch);
+#ifdef DW1_SHARED_ROWS
+  // Shared-rows colwalk over the whole depth. Per touched column c
+  // (kDw1SweepColWalk, ~86% of AP):
+  //   1. group c's refs by node → contiguous runs in ref_proj/ref_w,
+  //      node_ref_off/cnt indexed by depth-batch node id (kDw1ColWalkGroupByNode, ~0%)
+  //   2. ONE ascending pass over the depth bag (kDw1ColWalkBagScatter — the hot loop):
+  for (size_t s = 0; s < total_rows; ++s) {
+    const int32_t n = single ? 0 : nob[s];        // node_of_bag
+    const int32_t off = node_ref_off[n];
+    if (off < 0) continue;   // owning node has no ref to column c (74–98% skipped!)
+    const float v = col[bag[s]];                  // dense-ish column read
+    const int32_t local = node_local[n]++;        // running counter == slab slot (sorted bag)
+    float* slab = out_projected[n].data();
+    for (int32_t t = 0; t < cnt; ++t)
+      slab[ref_proj[off + t] * rows_n + local] += ref_w[off + t] * v;  // scatter-write
   }
+  //   3. reset node_ref_off for the touched nodes.
+#else
+  /* Col-sharing colwalk (kDw1SweepColWalk, ~93% of AP). Per column, replay its
+     (node,proj) entries; each entry re-gathers the column at ITS node's rows: */
+  size_t pos = 0;
+  for (const int32_t c : touched) {
+    const float* col = evaluator.AttributeData(c);
+    const size_t end = static_cast<size_t>(col_count[c]);
+    for (; pos < end; ++pos) {
+      const ColEntry& e = sorted[pos];
+      const auto sel = selected_examples_per_node[e.node];
+      float* o = out_projected[e.node].data() + e.proj * sel.size();
+      const float w = e.weight;
+      for (size_t i = 0; i < sel.size(); ++i)     // ★ the measured gather
+        o[i] += w * col[sel.data()[i]];
+    }
+  }
+#endif
+  // Single-threaded by design: RandomForest already trains one tree per thread.
   return absl::OkStatus();
 }
 ```

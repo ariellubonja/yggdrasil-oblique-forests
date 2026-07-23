@@ -413,7 +413,7 @@ dead end) and the full driver hookup are in the shard.
 
 ## 11. Building, running, measuring → `oblique_context/build_measure.md`
 
-The `.bazelrc` experiment configs, env knobs (`YDF_RM_MAX_ROWS`, `YDF_DW1_BLOCK_FLOATS`,
+The `.bazelrc` experiment configs, env knobs (`YDF_RM_MAX_ROWS`,
 `YDF_DW1_MIN_DEPTH`, `YDF_SYMMETRIC_MAX_DEPTH`), harness defaults
 (`examples/train_oblique_forest.cc`: Oblique + Dynamic Random Histogram, 64 bins, threshold
 250, P exp .5, density 1.5, seed 1234, one tree/thread), input modes, the trunk generator, the
