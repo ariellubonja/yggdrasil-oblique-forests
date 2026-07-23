@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
@@ -191,11 +192,11 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     std::vector<int32_t> col_touched;          // node ids touched this column
 
     const UnsignedExampleIdx* bag = bag_state->bag.data();
-    // node_of_bag is empty only for a single-node depth; the fused DW1 branch
-    // requires depth_batch.size() > 1, so it is populated here, but guard
-    // defensively (single node -> all entries node 0).
-    const bool single = bag_state->node_of_bag.empty();
-    const uint32_t* nob = single ? nullptr : bag_state->node_of_bag.data();
+    // AdvanceDepthBag always sizes node_of_bag to the bag (all zeros for a
+    // single-node batch), so the kernel reads it unconditionally and is
+    // agnostic of batch shape/depth.
+    DCHECK_EQ(bag_state->node_of_bag.size(), total_rows);
+    const uint32_t* nob = bag_state->node_of_bag.data();
 
     CHRONO_BEGIN_AP(dw1_sweep_colwalk); // ~86% of AP runtime
     {
@@ -237,7 +238,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         // write of each contribution to its node's projections referencing c.
         CHRONO_BEGIN_AP(dw1_colwalk_bag_scatter);
         for (size_t s = 0; s < total_rows; ++s) { // loop over examples
-          const int32_t n = single ? 0 : static_cast<int32_t>(nob[s]);
+          const int32_t n = static_cast<int32_t>(nob[s]);
           const int32_t off = node_ref_off[n];
           if (off < 0) continue;  // owning node has no projection on column c
 

@@ -98,8 +98,9 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kSymSweep);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
 
-    // Filled for every N > 1 path (concat rebuild and relabel alike); only
-    // the single-node sweep below skips node routing entirely.
+    // AdvanceDepthBag always sizes node_of_bag to the bag (all zeros for a
+    // single-node depth); the single-node sweep below skips node routing
+    // purely as a performance fast path.
     const uint32_t* node_of_bag = bag_state->node_of_bag.data();
 
     std::vector<uint32_t> write_cursor;

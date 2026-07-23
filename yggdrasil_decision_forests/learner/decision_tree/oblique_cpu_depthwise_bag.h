@@ -41,8 +41,9 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 // driver only resets `valid` at tree start.
 struct DepthBagState {
   // The sorted-by-example bag of the depth most recently processed, and the
-  // owning node's depth-batch index per entry. `node_of_bag` may be empty
-  // when the depth had a single node (all entries implicitly node 0).
+  // owning node's depth-batch index per entry. `node_of_bag` is always sized
+  // to `bag` (all zeros for a single-node depth), so consumers read it
+  // unconditionally.
   std::vector<UnsignedExampleIdx> bag;
   std::vector<uint32_t> node_of_bag;
   // Ping-pong scratch swapped with bag/node_of_bag by the relabel pass.

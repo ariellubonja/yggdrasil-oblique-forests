@@ -45,14 +45,13 @@ bool RelabelBagForNewDepth(
   s->cursor.assign(N, 0);
 
   const UnsignedExampleIdx* old_bag = s->bag.data();
-  // Empty node_of_bag == the previous depth had a single node (batch idx 0).
-  const uint32_t* old_node =
-      s->node_of_bag.empty() ? nullptr : s->node_of_bag.data();
+  DCHECK_EQ(s->node_of_bag.size(), old_size);
+  const uint32_t* old_node = s->node_of_bag.data();
   const uint32_t prev_n = static_cast<uint32_t>(prev_first_child.size());
 
   size_t out = 0;
   for (size_t i = 0; i < old_size; ++i) {
-    const uint32_t p = old_node != nullptr ? old_node[i] : 0u;
+    const uint32_t p = old_node[i];
     if (p >= prev_n) return false;
     const int32_t c = prev_first_child[p];
     if (c < 0) continue;  // Parent became a leaf: the row leaves the bag.
@@ -131,7 +130,7 @@ void AdvanceDepthBag(
       CHRONO_SCOPE_AP(build_id);
       state->bag.assign(selected_examples_per_node[0].begin(),
                         selected_examples_per_node[0].end());
-      state->node_of_bag.clear();  // implicit: all entries node 0
+      state->node_of_bag.assign(state->bag.size(), 0u);
     } else {
       auto& bag = state->bag;
       auto& node_of_bag = state->node_of_bag;
