@@ -195,19 +195,21 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     }
 
     // ── Per-node example counts at one depth, dumped to a file ─────────
-    // At YDF_DW1_NODE_SIZES_DEPTH (default 25) append one line per node of
-    // this depth with its example count, to YDF_DW1_NODE_SIZES_FILE
-    // (default dw1_node_sizes.txt). Off with YDF_DW1_NODE_SIZES_DEPTH=-1.
+    // At every depth (default) append one line per node of that depth with its
+    // example count, to YDF_DW1_NODE_SIZES_FILE (default dw1_node_sizes.txt).
+    // Restrict to a single depth with YDF_DW1_NODE_SIZES_DEPTH=<d>; off with
+    // YDF_DW1_NODE_SIZES_DEPTH=-1.
     {
+      // -2 = every depth (the default), -1 = off, >=0 = that depth only.
       static const int32_t kNodeSizesDepth = [] {
         const char* e = std::getenv("YDF_DW1_NODE_SIZES_DEPTH");
-        return e == nullptr ? 25 : static_cast<int32_t>(std::atoi(e));
+        return e == nullptr ? -2 : static_cast<int32_t>(std::atoi(e));
       }();
       static const std::string kNodeSizesFile = [] {
         const char* e = std::getenv("YDF_DW1_NODE_SIZES_FILE");
         return std::string(e == nullptr ? "dw1_node_sizes.txt" : e);
       }();
-      if (current_depth == kNodeSizesDepth) {
+      if (kNodeSizesDepth == -2 || current_depth == kNodeSizesDepth) {
         std::ostringstream os;
         size_t depth_examples = 0;
         for (size_t n = 0; n < N; ++n) {
