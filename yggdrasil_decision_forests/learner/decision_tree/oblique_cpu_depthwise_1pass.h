@@ -47,6 +47,9 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 // per-block ex-sorted arenas. The col-sharing build (no DW1_SHARED_ROWS)
 // compiles the same signature and ignores both arguments — its path has no
 // bag and must not pay for one. Pass an empty span + nullptr from that path.
+//
+// `current_depth` is used only by the per-depth column-stats debug print
+// (YDF_DW1_COL_STATS); the kernel itself is depth-agnostic.
 absl::Status ApplyProjectionsDepthwise1Pass(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
@@ -54,7 +57,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
     absl::Span<const int32_t> prev_first_child, DepthBagState* bag_state,
-    absl::Span<std::vector<float>> out_projected);
+    absl::Span<std::vector<float>> out_projected, int32_t current_depth);
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 

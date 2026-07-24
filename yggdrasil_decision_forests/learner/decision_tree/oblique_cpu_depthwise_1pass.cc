@@ -5,6 +5,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <mutex>
+#include <sstream>
+#include <string>
 #include <vector>
 
 #include "absl/log/check.h"
@@ -64,7 +70,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
     absl::Span<const int32_t> prev_first_child, DepthBagState* bag_state,
-    absl::Span<std::vector<float>> out_projected) {
+    absl::Span<std::vector<float>> out_projected, int32_t current_depth) {
 
   CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
   const size_t N = selected_examples_per_node.size();
@@ -173,6 +179,117 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       sorted[col_count[e.col]++] = e;
     }
 
+    // Trees are trained one per thread and depth increases monotonically
+    // within a tree, so a thread-local counter bumped whenever the depth
+    // stops increasing labels the tree — without depending on the chrono
+    // build (tls_ctx only exists under -DCHRONO_PROFILE). Shared by the two
+    // debug blocks below.
+    int stats_tree;
+    {
+      static thread_local int tls_tree = -1;
+      static thread_local int32_t prev_depth = -1;
+      if (current_depth <= prev_depth) ++tls_tree;
+      if (tls_tree < 0) tls_tree = 0;
+      prev_depth = current_depth;
+      stats_tree = tls_tree;
+    }
+
+    // ── Per-node example counts at one depth, dumped to a file ─────────
+    // At YDF_DW1_NODE_SIZES_DEPTH (default 25) append one line per node of
+    // this depth with its example count, to YDF_DW1_NODE_SIZES_FILE
+    // (default dw1_node_sizes.txt). Off with YDF_DW1_NODE_SIZES_DEPTH=-1.
+    {
+      static const int32_t kNodeSizesDepth = [] {
+        const char* e = std::getenv("YDF_DW1_NODE_SIZES_DEPTH");
+        return e == nullptr ? 25 : static_cast<int32_t>(std::atoi(e));
+      }();
+      static const std::string kNodeSizesFile = [] {
+        const char* e = std::getenv("YDF_DW1_NODE_SIZES_FILE");
+        return std::string(e == nullptr ? "dw1_node_sizes.txt" : e);
+      }();
+      if (current_depth == kNodeSizesDepth) {
+        std::ostringstream os;
+        size_t depth_examples = 0;
+        for (size_t n = 0; n < N; ++n) {
+          depth_examples += selected_examples_per_node[n].size();
+        }
+        os << "----DEPTH " << current_depth << "---- tree=" << stats_tree
+           << " nodes=" << N << " examples=" << depth_examples << "\n";
+        for (size_t n = 0; n < N; ++n) {
+          os << "n" << n << ": " << selected_examples_per_node[n].size()
+             << " examples\n";
+        }
+        // Trees run in parallel: one locked append per depth keeps the
+        // per-tree blocks whole.
+        static std::mutex mu;
+        std::lock_guard<std::mutex> lock(mu);
+        std::ofstream f(kNodeSizesFile, std::ios::app);
+        f << os.str();
+      }
+    }
+
+    // ── Per-depth column reference stats (debug print) ─────────────────
+    // For every column: in how many nodes of this depth it appears, and how
+    // many elements are read from it — Σ over the distinct nodes referencing
+    // the column of that node's row count (a node referencing the column from
+    // several projections re-reads the same examples, so it counts once).
+    // One column per line, under a ----DEPTH X---- header; the whole block is
+    // buffered and emitted in one write so parallel trees don't interleave.
+    // Silence with YDF_DW1_COL_STATS=0; add untouched columns (c17: 0) with
+    // YDF_DW1_COL_STATS_ALL=1.
+    {
+      static const bool kColStats = [] {
+        const char* e = std::getenv("YDF_DW1_COL_STATS");
+        return e == nullptr || std::string(e) != "0";
+      }();
+      static const bool kColStatsAll = [] {
+        const char* e = std::getenv("YDF_DW1_COL_STATS_ALL");
+        return e != nullptr && std::string(e) == "1";
+      }();
+      if (kColStats) {
+        size_t depth_examples = 0;
+        for (size_t n = 0; n < N; ++n) {
+          depth_examples += selected_examples_per_node[n].size();
+        }
+        std::ostringstream os;
+        os << "\n----DEPTH " << current_depth << "---- [DW1 colstats] tree="
+           << stats_tree << " nodes=" << N << " examples=" << depth_examples
+           << " touched_cols=" << touched.size() << "/"
+           << numerical_features.size() << " refs=" << entries.size() << "\n\n";
+
+        size_t next_touched = 0;  // walks `touched` to fill untouched gaps
+        size_t slice_begin = 0;   // start of the current column's slice
+        for (const int32_t c : touched) {
+          if (kColStatsAll) {
+            for (int32_t u = (next_touched == 0 ? 0 : touched[next_touched - 1] + 1);
+                 u < c; ++u) {
+              os << "c" << u << ": 0\n";
+            }
+          }
+          ++next_touched;
+          const size_t slice_end = static_cast<size_t>(col_count[c]);
+          size_t examples = 0;
+          int32_t nodes = 0, prev_node = -1;
+          for (size_t k = slice_begin; k < slice_end; ++k) {
+            if (sorted[k].node != prev_node) {  // slice is node-major
+              ++nodes;
+              examples += selected_examples_per_node[sorted[k].node].size();
+              prev_node = sorted[k].node;
+            }
+          }
+          os << "c" << c << ": " << nodes << " nodes, " << examples
+             << " examples\n";
+          slice_begin = slice_end;
+        }
+        if (kColStatsAll && !touched.empty()) {
+          for (int32_t u = touched.back() + 1; u <= max_attr; ++u) {
+            os << "c" << u << ": 0\n";
+          }
+        }
+        std::cout << os.str() << std::flush;
+      }
+    }
+
 /* #endregion */
 
 /* #region SHARED_ROWS */
@@ -184,9 +301,15 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     // the gather path's per-(node,proj) sequential writes become random
     // writes into the output slabs. This is the sparse-reads-for-sparse-
     // writes trade.
+
+    // Where the first element of ref_proj that node n has
     std::vector<int32_t> node_ref_off(N, -1);  // per node: start in ref_*, else -1
+    // How many projections of node n reference column c
     std::vector<int32_t> node_ref_cnt(N, 0);   // per node: #refs to current column
+    
+    // How many examples of node n have been processed so far
     std::vector<int32_t> node_local(N, 0);     // per node: rows seen this column
+
     std::vector<int32_t> ref_proj;             // current column's (proj, weight)
     std::vector<float> ref_w;                  //   runs, grouped by node
     std::vector<int32_t> col_touched;          // node ids touched this column
@@ -233,6 +356,11 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         }
         CHRONO_END_AP(dw1_colwalk_group_by_node,
                    ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkGroupByNode);
+
+        // std::cout << "node_ref_off node_ref_cnt" << std::endl;
+        // for (int i = 0 ; i < 25; i++) {
+        //     std::cout << node_ref_off[i] << " " << node_ref_cnt[i] << std::endl;
+        // }
 
         // One ascending pass over the depth bag: dense read of col, scatter
         // write of each contribution to its node's projections referencing c.

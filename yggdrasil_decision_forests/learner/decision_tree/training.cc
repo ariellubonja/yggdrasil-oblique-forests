@@ -5770,7 +5770,7 @@ absl::Status GrowTreeLocalBFS(
           absl::MakeConstSpan(sel_spans),
           absl::MakeConstSpan(all_node_projs),
           absl::MakeConstSpan(first_child), &depth_bag_state,
-          absl::MakeSpan(projected)));
+          absl::MakeSpan(projected), current_depth));
 #ifdef YDF_CALLGRIND_DEPTH
       { char nm[64];
         std::snprintf(nm, sizeof nm, "dw1_depth_%d", (int)current_depth);
