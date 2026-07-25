@@ -8,8 +8,6 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include <mutex>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -23,6 +21,14 @@
 namespace yggdrasil_decision_forests::model::decision_tree {
 
 namespace {
+
+// Manual switch for the per-depth debug instrumentation below (the
+// `----DEPTH d----` / `[DW1 colstats]` / `[DW1 colshare]` dumps and the
+// dw1_node_sizes.txt file). Flip to `true` and rebuild to collect them; the
+// env knobs (YDF_DW1_COL_STATS, YDF_DW1_COL_SHARE_OUT,
+// YDF_DW1_NODE_SIZES_*) only take effect while this is on. Off by default so
+// normal runs stay silent and pay nothing for the stats pass.
+constexpr bool kDw1DebugStats = false;
 
 // Column-centric depthwise sweep.
 //
@@ -187,19 +193,17 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       sorted[col_count[e.col]++] = e;
     }
 
-    // Trees are trained one per thread and depth increases monotonically
-    // within a tree, so a thread-local counter bumped whenever the depth
-    // stops increasing labels the tree — without depending on the chrono
-    // build (tls_ctx only exists under -DCHRONO_PROFILE). Shared by the two
-    // debug blocks below.
-    int stats_tree;
+    // Depth increases monotonically within a tree, so a counter bumped
+    // whenever the depth stops increasing labels the tree — without depending
+    // on the chrono build (tls_ctx only exists under -DCHRONO_PROFILE).
+    // Shared by the two debug blocks below. Like the rest of this region it
+    // assumes a single training thread (run with one tree at a time).
+    if constexpr (kDw1DebugStats) {
+    static int stats_tree = 0;
     {
-      static thread_local int tls_tree = -1;
-      static thread_local int32_t prev_depth = -1;
-      if (current_depth <= prev_depth) ++tls_tree;
-      if (tls_tree < 0) tls_tree = 0;
+      static int32_t prev_depth = -1;
+      if (current_depth <= prev_depth) ++stats_tree;
       prev_depth = current_depth;
-      stats_tree = tls_tree;
     }
 
     // ── Per-node example counts at one depth, dumped to a file ─────────
@@ -218,23 +222,17 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         return std::string(e == nullptr ? "dw1_node_sizes.txt" : e);
       }();
       if (kNodeSizesDepth == -2 || current_depth == kNodeSizesDepth) {
-        std::ostringstream os;
         size_t depth_examples = 0;
         for (size_t n = 0; n < N; ++n) {
           depth_examples += selected_examples_per_node[n].size();
         }
-        os << "----DEPTH " << current_depth << "---- tree=" << stats_tree
-           << " nodes=" << N << " examples=" << depth_examples << "\n";
-        for (size_t n = 0; n < N; ++n) {
-          os << "n" << n << ": " << selected_examples_per_node[n].size()
-             << " examples\n";
-        }
-        // Trees run in parallel: one locked append per depth keeps the
-        // per-tree blocks whole.
-        static std::mutex mu;
-        std::lock_guard<std::mutex> lock(mu);
         std::ofstream f(kNodeSizesFile, std::ios::app);
-        f << os.str();
+        f << "----DEPTH " << current_depth << "---- tree=" << stats_tree
+          << " nodes=" << N << " examples=" << depth_examples << "\n";
+        for (size_t n = 0; n < N; ++n) {
+          f << "n" << n << ": " << selected_examples_per_node[n].size()
+            << " examples\n";
+        }
       }
     }
 
@@ -243,37 +241,52 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     // many elements are read from it — Σ over the distinct nodes referencing
     // the column of that node's row count (a node referencing the column from
     // several projections re-reads the same examples, so it counts once).
-    // One column per line, under a ----DEPTH X---- header; the whole block is
-    // buffered and emitted in one write so parallel trees don't interleave.
+    // One column per line, under a ----DEPTH X---- header.
     // Silence with YDF_DW1_COL_STATS=0; add untouched columns (c17: 0) with
-    // YDF_DW1_COL_STATS_ALL=1.
+    // YDF_DW1_COL_STATS_ALL=1; keep only the one-line summary below with
+    // YDF_DW1_COL_STATS=summary.
     {
-      static const bool kColStats = [] {
+      static const std::string kColStatsMode = [] {
         const char* e = std::getenv("YDF_DW1_COL_STATS");
-        return e == nullptr || std::string(e) != "0";
+        return std::string(e == nullptr ? "" : e);
       }();
+      static const bool kColStats = kColStatsMode != "0";
+      static const bool kColStatsPerCol = kColStats && kColStatsMode != "summary";
       static const bool kColStatsAll = [] {
         const char* e = std::getenv("YDF_DW1_COL_STATS_ALL");
         return e != nullptr && std::string(e) == "1";
       }();
-      if (kColStats) {
+      static const std::string kColShareFile = [] {
+        const char* e = std::getenv("YDF_DW1_COL_SHARE_OUT");
+        return std::string(e == nullptr ? "" : e);
+      }();
+      if (kColStats || !kColShareFile.empty()) {
         size_t depth_examples = 0;
         for (size_t n = 0; n < N; ++n) {
           depth_examples += selected_examples_per_node[n].size();
         }
-        std::ostringstream os;
-        os << "\n----DEPTH " << current_depth << "---- [DW1 colstats] tree="
-           << stats_tree << " nodes=" << N << " examples=" << depth_examples
-           << " touched_cols=" << touched.size() << "/"
-           << numerical_features.size() << " refs=" << entries.size() << "\n\n";
+        if (kColStatsPerCol) {
+          std::cout << "\n----DEPTH " << current_depth
+                    << "---- [DW1 colstats] tree=" << stats_tree
+                    << " nodes=" << N << " examples=" << depth_examples
+                    << " touched_cols=" << touched.size() << "/"
+                    << numerical_features.size() << " refs=" << entries.size()
+                    << "\n\n";
+        }
+
+        size_t pairs = 0;       // Σ_c distinct nodes referencing c
+        size_t useful = 0;      // Σ_c rows of those nodes
+        size_t nodewise = 0;    // Σ_refs rows of the referencing node
+        size_t shared_cols = 0; // columns referenced by >= 2 nodes
+        int32_t max_nodes_col = 0;
 
         size_t next_touched = 0;  // walks `touched` to fill untouched gaps
         size_t slice_begin = 0;   // start of the current column's slice
         for (const int32_t c : touched) {
-          if (kColStatsAll) {
+          if (kColStatsPerCol && kColStatsAll) {
             for (int32_t u = (next_touched == 0 ? 0 : touched[next_touched - 1] + 1);
                  u < c; ++u) {
-              os << "c" << u << ": 0\n";
+              std::cout << "c" << u << ": 0\n";
             }
           }
           ++next_touched;
@@ -281,24 +294,74 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           size_t examples = 0;
           int32_t nodes = 0, prev_node = -1;
           for (size_t k = slice_begin; k < slice_end; ++k) {
+            const size_t rows_k =
+                selected_examples_per_node[sorted[k].node].size();
+            nodewise += rows_k;  // every ref: the stock path re-gathers
             if (sorted[k].node != prev_node) {  // slice is node-major
               ++nodes;
-              examples += selected_examples_per_node[sorted[k].node].size();
+              examples += rows_k;
               prev_node = sorted[k].node;
             }
           }
-          os << "c" << c << ": " << nodes << " nodes, " << examples
-             << " examples\n";
+          pairs += static_cast<size_t>(nodes);
+          useful += examples;
+          if (nodes >= 2) ++shared_cols;
+          max_nodes_col = std::max(max_nodes_col, nodes);
+          if (kColStatsPerCol) {
+            std::cout << "c" << c << ": " << nodes << " nodes, " << examples
+                      << " examples\n";
+          }
           slice_begin = slice_end;
         }
-        if (kColStatsAll && !touched.empty()) {
+        if (kColStatsPerCol && kColStatsAll && !touched.empty()) {
           for (int32_t u = touched.back() + 1; u <= max_attr; ++u) {
-            os << "c" << u << ": 0\n";
+            std::cout << "c" << u << ": 0\n";
           }
         }
-        std::cout << os.str() << std::flush;
+
+        const size_t swept = touched.size() * depth_examples;
+        const double share =
+            touched.empty() ? 0.0
+                            : static_cast<double>(pairs) / touched.size();
+        const double eff =
+            swept == 0 ? 0.0 : static_cast<double>(useful) / swept;
+        const double amort =
+            swept == 0 ? 0.0 : static_cast<double>(nodewise) / swept;
+        if (kColStats) {
+          std::cout << "[DW1 colshare] tree=" << stats_tree
+                    << " depth=" << current_depth << " nodes=" << N
+                    << " rows=" << depth_examples << " cols=" << touched.size()
+                    << "/" << numerical_features.size()
+                    << " refs=" << entries.size() << " pairs=" << pairs
+                    << " share=" << share << " shared_cols=" << shared_cols
+                    << " max_nodes_col=" << max_nodes_col
+                    << " useful=" << useful << " swept=" << swept
+                    << " eff=" << eff << " nodew=" << nodewise
+                    << " amort=" << amort << "\n"
+                    << std::flush;
+        }
+        if (!kColShareFile.empty()) {
+          // The first write of the process truncates so a run starts from a
+          // clean file.
+          static bool share_header = false;
+          std::ofstream f(kColShareFile, share_header ? std::ios::app
+                                                      : std::ios::trunc);
+          if (!share_header) {
+            f << "tree,depth,nodes,rows,cols_touched,num_features,refs,pairs,"
+                 "share,shared_cols,max_nodes_col,useful,swept,eff,nodewise,"
+                 "amort\n";
+            share_header = true;
+          }
+          f << stats_tree << "," << current_depth << "," << N << ","
+            << depth_examples << "," << touched.size() << ","
+            << numerical_features.size() << "," << entries.size() << ","
+            << pairs << "," << share << "," << shared_cols << ","
+            << max_nodes_col << "," << useful << "," << swept << "," << eff
+            << "," << nodewise << "," << amort << "\n";
+        }
       }
     }
+    }  // if constexpr (kDw1DebugStats)
 
 /* #endregion */
 
