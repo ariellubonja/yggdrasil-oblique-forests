@@ -142,7 +142,7 @@ bool RelabelBagForNewDepthHot(
   DCHECK(std::is_sorted(s->bag.begin(), s->bag.end()));
   return true;
 }
-#endif  // DW1_HOT_NODES
+#endif
 
 // Full rebuild of the bag from the node spans, used whenever the incremental
 // relabel is unavailable or fails its self-validation. N == 1 is a straight
@@ -215,8 +215,7 @@ void RebuildBagFromSpans(
     }
   }
 }
-
-}  // namespace
+}
 
 void AdvanceDepthBag(
     absl::Span<const absl::Span<const UnsignedExampleIdx>>

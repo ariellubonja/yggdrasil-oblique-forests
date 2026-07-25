@@ -1498,16 +1498,6 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
   int remaining_attributes_to_test;
   std::vector<int32_t>& candidate_attributes = cache->candidate_attributes;
 
-  // Oblique runs still execute the axis-aligned numerical splitter below, but
-  // its timing is noise when profiling oblique splits. The
-  // kGetCandidateAttributes scope is therefore only collected for the
-  // axis-aligned path.
-  [[maybe_unused]] const bool is_oblique =
-      dt_config.split_axis_case() ==
-          proto::DecisionTreeTrainingConfig::kSparseObliqueSplit ||
-      dt_config.split_axis_case() ==
-          proto::DecisionTreeTrainingConfig::kMhldObliqueSplit;
-
   {
     CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
 
@@ -5619,9 +5609,11 @@ size_t Dw1HotMinRows() {
 #endif
 
 #if defined(DW1_HOT_OVERLAP)
-// Percentage of a candidate node's DISTINCT columns that must also be read by
-// another candidate for the node to stay in the fused kernel. Read once from
-// DW1_HOT_MIN_SHARE (default 50).
+// TODO Ariel linesearch this
+// Percentage of a node's distinct columns that must also be read by
+// another for the node to stay in the fused kernel.
+// 
+// Read once from DW1_HOT_MIN_SHARE. Default 50.
 //
 // Rationale: the colwalk's unit of work is one ascending pass over the whole
 // depth bag per TOUCHED column. A node whose columns no other fused node reads
@@ -5641,7 +5633,6 @@ size_t Dw1HotMinSharePct() {
   return value;
 }
 
-// One line per fused depth on the gate's effect (DW1_HOT_OVERLAP_STATS=1).
 bool Dw1HotOverlapStats() {
   static const bool value = [] {
     const char* e = std::getenv("DW1_HOT_OVERLAP_STATS");
@@ -5697,9 +5688,8 @@ absl::Status GrowTreeLocalBFS(
 
 #if defined(SYMMETRIC_DEPTHWISE_AP) || defined(DEPTHWISE_1_PASS)
   // Incremental sorted-bag state shared by the symmetric and DW1 shared-rows
-  // fused kernels (see oblique_cpu_depthwise_bag.h). thread_local so buffer
-  // capacity amortizes across the trees trained on this pool thread; validity
-  // is per-tree, reset here. Declared for every DEPTHWISE_1_PASS build too, but
+  // fused kernels. thread_local so buffer capacity amortizes across trees; validity
+  // is per-tree, reset here. Declared for DEPTHWISE_1_PASS too, but
   // the col-sharing variant never populates first_child nor reads
   // depth_bag_state (all guarded by DW1_SHARED_ROWS below), so it pays nothing.
   static thread_local DepthBagState depth_bag_state;
@@ -5719,15 +5709,14 @@ absl::Status GrowTreeLocalBFS(
   std::vector<uint32_t> prev_hot_to_full;
 #endif
 #ifdef DW1_HOT_OVERLAP
-  // Scratch for the column-overlap gate, hoisted out of the depth loop so the
-  // O(max_attr) counter array is allocated once per tree rather than per depth
-  // (that per-node/per-depth O(F) cost is what dominates ultra-wide datasets).
+  // Memory space for the column overlap gate. Hoisted out of the kernel so the
+  // O(max_attr) counter array is allocated once per tree rather than 1/depth
   // ov_col_nodes is reset only over the columns actually touched, so the
   // per-depth cost stays O(refs).
-  std::vector<int32_t> ov_col_nodes;   // column -> #candidates reading it
+  std::vector<int32_t> ov_col_nodes;   // per column: n. nodes reading it
   std::vector<int32_t> ov_touched;     // columns to reset after each gate pass
-  std::vector<int32_t> ov_cand_cols;   // flat CSR: candidate -> distinct columns
-  std::vector<size_t> ov_cand_off;     // size num_candidates + 1
+  std::vector<int32_t> ov_cand_cols;   // flat CSR of candidate -> distinct columns
+  std::vector<size_t> ov_cand_off;     
   std::vector<char> ov_parent_hot;     // node -> was its parent hot last depth?
   {
     int ov_max_attr = 0;
@@ -5879,16 +5868,11 @@ absl::Status GrowTreeLocalBFS(
 
 #ifdef DW1_HOT_OVERLAP
       // ── Column-overlap gate ───────────────────────────────────────────
-      // The row gate above bounds the kernel's write streams; this one
-      // bounds its wasted reads. The colwalk's unit of work is one ascending
-      // pass over the WHOLE depth bag per touched column, so a candidate
-      // whose columns no other candidate reads pays a full-bag pass for each
-      // of them and lengthens every other column's pass by its own rows.
-      // Such a node is cheaper under the stock per-node Evaluate.
+      // The colwalk's unit of work is one ascending
+      // pass over the whole depth's bag per touched column. A candidate
+      // whose columns no other candidate reads is cheaper under the stock per-node Evaluate.
       //
-      // Criterion: of the node's DISTINCT columns (a node re-reading a column
-      // from several of its projections is still one reader -- the colwalk
-      // serves them all from one pass), the fraction also read by another
+      // Criterion: of the node's DISTINCT columns, the fraction also read by another
       // candidate must be >= DW1_HOT_MIN_SHARE %.
       //
       // ONE pass over the row gate's candidates: dropping a node only ever
@@ -5940,10 +5924,9 @@ absl::Status GrowTreeLocalBFS(
       // The overlap gate is NOT monotone down the tree: whether a node's
       // columns are shared depends on what its siblings happened to sample,
       // so this depth's hot set need not be a subset of the children of the
-      // previous depth's hot set -- exactly the precondition of the O(bag)
-      // relabel (a hot row must already be in the previous hot bag). The
-      // relabel self-validates and would fall back on its own, but only after
-      // a wasted full pass over the bag, so detect the break up front
+      // previous depth's hot set. 
+      // The relabel would fall back on its own, but only after
+      // a wasted full bag pass: instead detect the break up front
       // (O(num_nodes)) and send the depth straight to the concat+VQSort
       // rebuild.
       if (depth_bag_state.valid && !first_child.empty() &&
@@ -5988,7 +5971,7 @@ absl::Status GrowTreeLocalBFS(
                      depth_bag_state.valid ? "relabel" : "rebuild");
         std::fflush(stdout);
       }
-#endif  // DW1_HOT_OVERLAP
+#endif
 
       std::vector<int32_t> hot_of_node(num_nodes, -1);  // node -> hot idx, -1 cold
       for (size_t k = 0; k < hot_nodes.size(); ++k) {

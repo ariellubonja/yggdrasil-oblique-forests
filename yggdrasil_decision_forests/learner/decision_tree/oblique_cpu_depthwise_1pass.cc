@@ -325,12 +325,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 /* #region SHARED_ROWS */
 
 #ifdef DW1_SHARED_ROWS
-    // Shared-rows colwalk. Read each touched column in ONE ascending pass
-    // over the depth's example-sorted bag and fan each value out (scatter)
-    // to every (node,projection) of its owning node referencing the column:
-    // the gather path's per-(node,proj) sequential writes become random
-    // writes into the output slabs. This is the sparse-reads-for-sparse-
-    // writes trade.
+    // Read each touched column in ONE depthwise bag pass and scatter each value to the 
+    // (node,projection) addesses that reference the column.
+    // Trades sparse reads for sparse writes.
 
     // Where the first element of ref_proj that node n has
     std::vector<int32_t> node_ref_off(N, -1);  // per node: start in ref_*, else -1
@@ -348,7 +345,6 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     // AdvanceDepthBag always sizes node_of_bag to the bag (all zeros for a
     // single-node batch), so the kernel reads it unconditionally and is
     // agnostic of batch shape/depth.
-    DCHECK_EQ(bag_state->node_of_bag.size(), total_rows);
     const uint32_t* nob = bag_state->node_of_bag.data();
 
     CHRONO_BEGIN_AP(dw1_sweep_colwalk); // ~86% of AP runtime
@@ -428,7 +424,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 #else
 /* #endregion */
 
-/* #region Col sharing only */
+/* #region Col sharing DW1 - Control for Column cache locality */
 // Slower than BFS by <= 15%
 // Takeaway: column sharing via cache residency doesn't work at scale.
     CHRONO_BEGIN_AP(dw1_sweep_colwalk); // ~93% of the ApplyProjection time in non-Shared-Rows. In Shared-rows, ~66%
