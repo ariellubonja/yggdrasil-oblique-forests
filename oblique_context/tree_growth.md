@@ -197,7 +197,7 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
 
 #if defined(DEPTHWISE_1_PASS)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() > 1 &&
-        current_depth >= Depthwise1PassMinDepth()) {          // env YDF_DW1_MIN_DEPTH, default 0
+        current_depth >= Depthwise1PassMinDepth()) {          // env DW1_MIN_DEPTH, default 0
       // Fused-per-level CPU Apply. Sample projections per node (ordinary SPO-RF
       // semantics), then precompute each node's projected-value slab.
       const int num_proj = GetNumProjections(dt_config, config_link.numerical_features_size());
@@ -216,7 +216,7 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
       std::vector<absl::Span<const UnsignedExampleIdx>> sel_spans(num_nodes);
       for (int n = 0; n < num_nodes; ++n) sel_spans[n] = depth_batch[n].selected_examples.active;
       std::vector<std::vector<float>> projected(num_nodes);
-      // … [truncated: YDF_LINECOUNT_A distinct-cache-line tally; YDF_CALLGRIND_DEPTH
+      // … [truncated: LINECOUNT_A distinct-cache-line tally; CALLGRIND_DEPTH
       //    per-depth instrumentation brackets]
       RETURN_IF_ERROR(ApplyProjectionsDepthwise1Pass(
           train_dataset, config_link.numerical_features(),
@@ -234,7 +234,7 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
     } else
 #elif defined(SYMMETRIC_DEPTHWISE_AP)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1 &&
-        current_depth <= SymmetricMaxDepth()) {               // env YDF_SYMMETRIC_MAX_DEPTH
+        current_depth <= SymmetricMaxDepth()) {               // env SYMMETRIC_MAX_DEPTH
       // CatBoost-style symmetric trees: sample K projections ONCE for this
       // depth, shared across all nodes. The aggregate of nodes' selected
       // examples at depth d == the bag, so the projection sweep becomes
@@ -250,7 +250,7 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
       // per node: node_config.{depthwise_projection_defs,depthwise_monotonic,
       //                        precomputed_projected_values} → NodeTrain
     } else if (dt_config.has_sparse_oblique_split()) {
-      // Symmetric → DFS handoff (deeper than YDF_SYMMETRIC_MAX_DEPTH): finish each
+      // Symmetric → DFS handoff (deeper than SYMMETRIC_MAX_DEPTH): finish each
       // frontier node's subtree with GrowTreeLocal (pushes nothing back to node_queue).
       for (auto& nae : depth_batch) RETURN_IF_ERROR(GrowTreeLocal(…, std::move(nae.…)));
     } else

@@ -535,8 +535,8 @@ absl::StatusOr<std::unique_ptr<dataset::VerticalDataset>> Load(
 int main(int argc, char** argv) {
   const auto t_main_start = std::chrono::high_resolution_clock::now();
   absl::ParseCommandLine(argc, argv);
-  if (std::getenv("YDF_RM_MAX_ROWS") == nullptr) {
-    setenv("YDF_RM_MAX_ROWS", "5000", /*overwrite=*/0);
+  if (std::getenv("RM_MAX_ROWS") == nullptr) {
+    setenv("RM_MAX_ROWS", "5000", /*overwrite=*/0);
   }
   // The RF learner has a benchmark shortcut that exit(0)s right after the
   // training block (skipping model finalization + return) to speed up
@@ -545,7 +545,7 @@ int main(int argc, char** argv) {
   // (--model_out_dir). GBT has no such shortcut, so this only affects RF.
   if (!absl::GetFlag(FLAGS_test_csv).empty() ||
       !absl::GetFlag(FLAGS_model_out_dir).empty()) {
-    setenv("YDF_NO_EARLY_EXIT", "1", /*overwrite=*/1);
+    setenv("NO_EARLY_EXIT", "1", /*overwrite=*/1);
   }
   dataset::RowMajorFeatureMatrix::SetActive(nullptr);
   const auto mode = absl::GetFlag(FLAGS_input_mode);

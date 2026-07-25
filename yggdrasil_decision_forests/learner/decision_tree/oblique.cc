@@ -1275,7 +1275,7 @@ absl::Status LDACache::GetSW(const std::vector<int>& selected_features,
 
 size_t RowMajorMaxRows() {
   static const size_t value = [] {
-    const char* e = std::getenv("YDF_RM_MAX_ROWS");
+    const char* e = std::getenv("RM_MAX_ROWS");
     return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
                         : std::numeric_limits<size_t>::max();
   }();
@@ -1324,7 +1324,7 @@ ProjectionEvaluator::ProjectionEvaluator(
   }
 }
 
-YDF_PROJECTION_EVALUATE_NOINLINE
+PROJECTION_EVALUATE_NOINLINE
 absl::Status ProjectionEvaluator::Evaluate(
     const Projection& projection,
     const absl::Span<const UnsignedExampleIdx> selected_examples,

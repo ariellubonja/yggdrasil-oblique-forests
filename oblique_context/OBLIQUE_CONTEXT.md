@@ -133,7 +133,7 @@ depth ladder → `nodewise_ap.csv`
 depth 1, children 2i/2i+1 ⇒ depth d holds ids [2^(d-1), 2^d); `nnz`/`ap_ns` summed over the
 node's projections). This is the only way to ask
 whether AP cost concentrates in a few nodes — the per-depth tables aggregate that away.
-Knobs `YDF_NODEWISE_{TREE,DEPTHS,OUT,RESERVE}`; the dump self-checks Σ`ap_ns` per
+Knobs `NODEWISE_{TREE,DEPTHS,OUT,RESERVE}`; the dump self-checks Σ`ap_ns` per
 (tree,depth) against the coarse `ProjEval` cell (must match exactly; the fused
 symmetric / dw1 kernels bypass `Evaluate` and will trip it).
 Invariant used by the tooling: **TreeTrain = ΣNodeTrain + ΣApplyProjection + ΣSampleProjection**
@@ -177,10 +177,10 @@ Class (oblique.h; trimmed to the members that matter):
 // Default: `ProjectionEvaluator::Evaluate` is NOT inlined, so profilers attribute
 // time/FLOPs to the function itself. Cost within noise (~1%). Opt back in with
 // --config=inline_projection_evaluate.
-#ifdef YDF_INLINE_PROJECTION_EVALUATE
-#define YDF_PROJECTION_EVALUATE_NOINLINE
+#ifdef INLINE_PROJECTION_EVALUATE
+#define PROJECTION_EVALUATE_NOINLINE
 #else
-#define YDF_PROJECTION_EVALUATE_NOINLINE __attribute__((noinline))
+#define PROJECTION_EVALUATE_NOINLINE __attribute__((noinline))
 #endif
 
 class ProjectionEvaluator {
@@ -188,7 +188,7 @@ class ProjectionEvaluator {
   ProjectionEvaluator(const dataset::VerticalDataset& train_dataset,
                       const google::protobuf::RepeatedField<int32_t>& numerical_features);
 
-  YDF_PROJECTION_EVALUATE_NOINLINE
+  PROJECTION_EVALUATE_NOINLINE
   absl::Status Evaluate(const Projection& projection,
                         absl::Span<const UnsignedExampleIdx> selected_examples,
                         std::vector<float>* values) const;
@@ -262,7 +262,7 @@ ProjectionEvaluator::ProjectionEvaluator(
 accumulator (this exact summation order is the bit-identity contract):
 
 ```cpp
-YDF_PROJECTION_EVALUATE_NOINLINE
+PROJECTION_EVALUATE_NOINLINE
 absl::Status ProjectionEvaluator::Evaluate(
     const Projection& projection,
     const absl::Span<const UnsignedExampleIdx> selected_examples,
@@ -413,7 +413,8 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 | BFS-only control | `--config=bfs_only` | `GrowTreeLocalBFS` fallback branch | scheduler ablation |
 | DW1 depthwise 1-pass (col-sharing) | `--config=depthwise_1_pass` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
 | DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem §13 |
-| DW1 hot-nodes hybrid | `--config=dw1_sr_hot_nodes` (implies dw1_shared_rows) + `YDF_DW1_HOT_MIN_ROWS` | gate in `GrowTreeLocalBFS` (training.cc); cold branch in `oblique.cc`; `AdvanceDepthBagHot` | shared-rows kernel for the depth's big nodes only, stock `Evaluate` for the rest; bit-identical at every threshold; **unmeasured (2026-07-25)** |
+| DW1 hot-nodes hybrid | `--config=dw1_sr_hot_nodes` (implies dw1_shared_rows) + `DW1_HOT_MIN_ROWS` | gate in `GrowTreeLocalBFS` (training.cc); cold branch in `oblique.cc`; `AdvanceDepthBagHot` | shared-rows kernel for the depth's big nodes only, stock `Evaluate` for the rest; bit-identical at every threshold; **unmeasured (2026-07-25)** |
+| DW1 hot-nodes + column-overlap gate | `--config=dw1_sr_hot_overlap` (implies dw1_sr_hot_nodes) + `DW1_HOT_MIN_SHARE` | second gate in `GrowTreeLocalBFS` | also drops candidates whose columns no other candidate reads (the colwalk sweeps the whole bag per touched column). Non-monotone ⇒ that depth's bag falls back to concat+VQSort. Bit-identical; **unmeasured (2026-07-25)** |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
 | Subtree gather cache | *(code removed 2026-07-16)* | recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
@@ -425,8 +426,8 @@ dead end) and the full driver hookup are in the shard.
 
 ## 11. Building, running, measuring → `oblique_context/build_measure.md`
 
-The `.bazelrc` experiment configs, env knobs (`YDF_RM_MAX_ROWS`,
-`YDF_DW1_MIN_DEPTH`, `YDF_SYMMETRIC_MAX_DEPTH`), harness defaults
+The `.bazelrc` experiment configs, env knobs (`RM_MAX_ROWS`,
+`DW1_MIN_DEPTH`, `SYMMETRIC_MAX_DEPTH`), harness defaults
 (`examples/train_oblique_forest.cc`: Oblique + Dynamic Random Histogram, 64 bins, threshold
 250, P exp .5, density 1.5, seed 1234, one tree/thread), input modes, the trunk generator, the
 standard dataset shapes, and the measurement tooling (`runtime.sh`, `accuracy.sh`,

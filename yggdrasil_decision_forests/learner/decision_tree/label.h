@@ -33,6 +33,11 @@
 #if defined(DW1_HOT_NODES) && !defined(DW1_SHARED_ROWS)
 #error "DW1_HOT_NODES requires DW1_SHARED_ROWS (use --config=dw1_sr_hot_nodes)"
 #endif
+// The column-overlap gate refines the hot-nodes row gate; it has no meaning
+// without a hot/cold split to refine.
+#if defined(DW1_HOT_OVERLAP) && !defined(DW1_HOT_NODES)
+#error "DW1_HOT_OVERLAP requires DW1_HOT_NODES (use --config=dw1_sr_hot_overlap)"
+#endif
 #if defined(DEPTHWISE_1_PASS)
 #define OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS 1
 #endif

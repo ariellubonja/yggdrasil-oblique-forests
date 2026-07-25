@@ -54,7 +54,7 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 // spans that the kernel never sees; `prev_first_child` is then unused.
 //
 // `current_depth` is used only by the per-depth column-stats debug print
-// (YDF_DW1_COL_STATS); the kernel itself is depth-agnostic.
+// (DW1_COL_STATS); the kernel itself is depth-agnostic.
 absl::Status ApplyProjectionsDepthwise1Pass(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,

@@ -45,10 +45,10 @@
 // instead of its callers. Measured cost is within noise (~1%) on Oblique
 // Exact. Opt back into inlining with:
 //   bazel build --config=inline_projection_evaluate ...
-#ifdef YDF_INLINE_PROJECTION_EVALUATE
-#define YDF_PROJECTION_EVALUATE_NOINLINE
+#ifdef INLINE_PROJECTION_EVALUATE
+#define PROJECTION_EVALUATE_NOINLINE
 #else
-#define YDF_PROJECTION_EVALUATE_NOINLINE __attribute__((noinline))
+#define PROJECTION_EVALUATE_NOINLINE __attribute__((noinline))
 #endif
 
 #include <cstddef>
@@ -178,7 +178,7 @@ namespace internal {
 // translation units in oblique_gpu_kernels.cu.cc / randomprojection.cu without
 // pulling in the absl/protobuf-heavy transitive includes of this header.
 
-// Node-size threshold (YDF_RM_MAX_ROWS env var) used by node-size-gated
+// Node-size threshold (RM_MAX_ROWS env var) used by node-size-gated
 // experiment kernels. Experiment knob, read once. Unset => no threshold.
 size_t RowMajorMaxRows();
 
@@ -203,7 +203,7 @@ class ProjectionEvaluator {
   // If one of the input feature of the projection is missing, this input
   // feature is replaced by the mean value of feature as computed on the
   // training dataset. This is the same logic used during inference.
-  YDF_PROJECTION_EVALUATE_NOINLINE
+  PROJECTION_EVALUATE_NOINLINE
   absl::Status Evaluate(const Projection& projection,
                         absl::Span<const UnsignedExampleIdx> selected_examples,
                         std::vector<float>* values) const;

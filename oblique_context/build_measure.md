@@ -16,6 +16,7 @@
 build:depthwise_1_pass            --cxxopt="-DDEPTHWISE_1_PASS=1"
 build:dw1_shared_rows             --config=depthwise_1_pass --cxxopt="-DDW1_SHARED_ROWS=1"
 build:dw1_sr_hot_nodes            --config=dw1_shared_rows --cxxopt="-DDW1_HOT_NODES=1"   # fused kernel for big nodes only; #error without dw1_shared_rows
+build:dw1_sr_hot_overlap          --config=dw1_sr_hot_nodes --cxxopt="-DDW1_HOT_OVERLAP=1" # + drop candidates whose columns nobody else reads; #error without dw1_sr_hot_nodes
 build:row_major_dataset_layout    --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 build:symmetric_depthwise_ap      --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
 build:bfs_only                    --cxxopt="-DBFS_ONLY=1"                     # mutually exclusive with symmetric_*
@@ -25,7 +26,7 @@ build:fine_chrono_applyprojection    --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DF
 build:fine_chrono_evaluateprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_EP" # coarse + inner scopes of EvaluateProjection (histogram / Cart)
 build:nodewise_chrono                --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DNODEWISE_CHRONO=1" # coarse + one CSV row per (node, projection) AP call, gated by depth
   # Three INDEPENDENT axes: each includes coarse but not the others. FINE-everywhere = pass both fine configs together.
-build:inline_projection_evaluate  --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
+build:inline_projection_evaluate  --cxxopt="-DINLINE_PROJECTION_EVALUATE"
 build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
 build:disable_std_upper_bound_vectorization --cxxopt="-DDISABLE_STD_UPPER_BOUND_VECTORIZATION=1"
@@ -37,16 +38,56 @@ build:debug  --cxxopt=-O0 -g -fno-inline …    # breakpoints need this separate
 build:profiler --cxxopt=-O2 -g, no fission    # for VTune/perf
 ```
 
-Env knobs (read once, cached in a static): `YDF_RM_MAX_ROWS` (node-size threshold, default
-5000 baked by the harness `main()`; ∞ if binary run without harness), `YDF_DW1_MIN_DEPTH`
-(default 0), `YDF_SYMMETRIC_MAX_DEPTH` (default
-INT32_MAX; deeper levels hand off to DFS `GrowTreeLocal`), `YDF_DW1_HOT_MIN_ROWS`
+Env knobs (read once, cached in a static): `RM_MAX_ROWS` (node-size threshold, default
+5000 baked by the harness `main()`; ∞ if binary run without harness), `DW1_MIN_DEPTH`
+(default 0), `SYMMETRIC_MAX_DEPTH` (default
+INT32_MAX; deeper levels hand off to DFS `GrowTreeLocal`), `DW1_HOT_MIN_ROWS`
 (`dw1_sr_hot_nodes` only, default 1000: a node is fused iff `sel.size() >=` it, everything
 smaller runs the stock per-node `Evaluate`; **0 = every node hot = plain `dw1_shared_rows`**,
 the purity control. The trained model is bit-identical at every value, so a hash sweep over
 this knob — `compare_models.sh` on `--model_out_dir` outputs — is the correctness test;
 sweep it for perf, `{250, 500, 1000, 2000, 4000}`, in Quick mode first. Not combinable with
-`--config=nodewise_chrono`).
+`--config=nodewise_chrono`), `DW1_HOT_MIN_SHARE` (`dw1_sr_hot_overlap` only, default 50:
+percent of a candidate's distinct columns that must also be read by another candidate;
+**0 = keep every candidate = plain `dw1_sr_hot_nodes`**, the purity control. Bit-identical at
+every value, so the same hash sweep is the correctness test),
+`DW1_HOT_OVERLAP_STATS=1` (one line per fused depth: candidates → kept/dropped, and
+`bag=relabel|rebuild` — whether the gate cost that depth a concat+VQSort; single-thread only).
+
+### Column-sharing stats — `DW1_COL_SHARE_OUT` (any `depthwise_1_pass` build)
+
+Measures the quantity the depthwise kernels exist to exploit: how many nodes of a depth
+reference the same column. Lives in `oblique_cpu_depthwise_1pass.cc`'s colstats block and is
+**compiled out by default**: flip `constexpr bool kDw1DebugStats = true` there and rebuild,
+or the env knobs below do nothing. That block assumes a **single training thread** (no
+locking) — run it with `--num_trees=1 --num_threads=1`. Stats are taken over **the frontier
+the kernel was handed** — so the same flags on `--config=dw1_shared_rows` (full frontier) and
+`--config=dw1_sr_hot_nodes` (hot nodes only) give the two sides of the hot-gate comparison,
+and since the gate leaves trees bit-identical the rows join 1:1 on `(tree, depth)`.
+
+- `DW1_COL_STATS` — `0` off, `summary` one line per (tree, depth), anything else
+  (default) the per-column dump `c<id>: <nodes> nodes, <examples> examples` **plus** the
+  summary line. `DW1_COL_STATS_ALL=1` adds untouched columns as `c17: 0`.
+- `DW1_COL_SHARE_OUT=<path>` — same numbers as CSV (`tree,depth,nodes,rows,
+  cols_touched,num_features,refs,pairs,share,shared_cols,max_nodes_col,useful,swept,eff,
+  nodewise,amort`); works with `DW1_COL_STATS=0`. First write of the process truncates.
+- `benchmarks/utils/compare_dw1_colshare.py full.csv hot.csv -l full -l hot` joins two runs.
+- Set `DW1_NODE_SIZES_DEPTH=-1` too, or the unrelated node-size dump also fires.
+
+`share` = mean nodes per touched column (1.0 = no sharing); `swept` = `cols_touched × depth
+rows` = what the shared-rows colwalk streams; `eff` = `useful/swept`; `amort` = stock
+nodewise read volume / `swept`. **`amort` counts floats, not lines** — the sweep is
+sequential (16 floats/line) while the nodewise gather gets ≈1.9 useful floats/line at depth
+(§13), so the line-level ratio is ≈8× the printed one. These are exact counts, deterministic
+given seed+data, so unlike timings they are valid off a Mac.
+
+Measured 2026-07-25, trunk, 2 trees, `DW1_HOT_MIN_ROWS=1000`, totals over all fused
+depths (full frontier → hot only): **100k×29** share 115.4 → 4.9, eff 0.323 → 0.336, swept
+62.7M → 37.9M floats; **8192×4096** share 2.54 → 1.02, eff 0.044 → 0.400, swept 486M → 16.7M
+floats, hot keeps 31 % of the fused rows. Conclusion: the hot gate does destroy column
+sharing (23× fewer nodes/column on tall-narrow, down to none on wide) but sharing was not
+converting into savings — `eff` is flat/better because `cols_touched` and the bag shrink
+together, and the sweep's read volume falls with it.
 
 ### `--config=nodewise_chrono` — per-node ApplyProjection cost
 
@@ -65,10 +106,10 @@ emitted once, when its `NodeTrain` scope closes. `nnz` and `ap_ns` are sums over
 projections; the row set is fixed within a node, so `n_gathers = n_rows·nnz` survives the sum.
 
 ```text
-YDF_NODEWISE_TREE=0             tree to record; -1 = all trees
-YDF_NODEWISE_DEPTHS=5,10,15,20  depth list, or "*" for every depth
-YDF_NODEWISE_OUT=nodewise_ap.csv
-YDF_NODEWISE_RESERVE=<n>        records reserved per recording tree (default 1<<20 single-tree,
+NODEWISE_TREE=0             tree to record; -1 = all trees
+NODEWISE_DEPTHS=5,10,15,20  depth list, or "*" for every depth
+NODEWISE_OUT=nodewise_ap.csv
+NODEWISE_RESERVE=<n>        records reserved per recording tree (default 1<<20 single-tree,
                                 1<<16 all-trees) — pre-allocated before the pool starts so no
                                 realloc lands mid-measurement
 # columns: tree,depth,node_id,n_rows,nnz,n_gathers,ap_ns,num_proj   (sorted by depth, node_id)
@@ -105,7 +146,7 @@ Volume: HIGGS, one tree, depths 5/10/15/20 ≈ 55k rows ≈ 1.8 MB. One full tre
 ≈ 2.6M rows ≈ 80 MB, so widen the ladder deliberately. Note the default ladder covers only
 2.6 % of a tree's nodes and 15 % of its AP, with **no** coverage of depths 21–40 where ~88 %
 of the nodes live — enough for within-depth spread, not for a global Lorenz curve. For that,
-`YDF_NODEWISE_DEPTHS` = every 5th depth plus all of d≤12 reaches ~48 % of AP for ~8 MB.
+`NODEWISE_DEPTHS` = every 5th depth plus all of d≤12 reaches ~48 % of AP for ~8 MB.
 
 ## Harness: `examples/train_oblique_forest.cc`
 
@@ -116,7 +157,7 @@ Defaults that define the benchmark protocol: `--feature_split_type=Oblique`,
 `--growing_strategy=Local`, `--ensemble_method=Bagging`,
 `--bootstrap_training_dataset=true`, `--num_threads=1` (runtime.sh uses `-1` = all),
 `--num_trees=240` (runtime.sh overrides), `--seed=1234`, `--tree_depth=-1`,
-`--min_examples` set to 1 for Bagging. `main()` bakes `YDF_RM_MAX_ROWS=5000` if unset and
+`--min_examples` set to 1 for Bagging. `main()` bakes `RM_MAX_ROWS=5000` if unset and
 clears any active row-major matrix.
 
 Input modes: `--input_mode=csv --train_csv=… --label_col=…` (HIGGS:

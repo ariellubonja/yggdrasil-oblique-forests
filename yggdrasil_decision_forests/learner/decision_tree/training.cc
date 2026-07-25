@@ -16,7 +16,7 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/training.h"
 
 #if defined(__x86_64__) && !defined(DISABLE_STD_UPPER_BOUND_VECTORIZATION)
-#define YDF_SIMD_UPPER_BOUND 1
+#define SIMD_UPPER_BOUND 1
 #include <immintrin.h>
 #endif
 
@@ -38,12 +38,17 @@
 #include <utility>
 #include <vector>
 
-#ifdef YDF_CALLGRIND_DEPTH
+#ifdef CALLGRIND_DEPTH
 #include <cstdio>
 #include <valgrind/callgrind.h>
 #endif
 
-#ifdef YDF_LINECOUNT_A
+#ifdef DW1_HOT_OVERLAP
+// Optional per-depth trace of the column-overlap gate (DW1_HOT_OVERLAP_STATS).
+#include <cstdio>
+#endif
+
+#ifdef LINECOUNT_A
 // Method A: exact distinct-64B-cache-line counter for the DW1 oblique gather
 // (col[sel_ptr[i]]). Per depth, over every node processed by the depthwise
 // kernel, accumulate rows (= sum of node sizes) and distinct cache lines
@@ -52,7 +57,7 @@
 // the *geometric* per-node metric the cachegrind/callgrind methods (B/C)
 // estimate via D1 misses; here it is computed exactly, natively, multithreaded,
 // so it scales to deep trees (HIGGS ~depth 60). Output dumped at process exit
-// to $YDF_LINECOUNT_OUT (CSV) and stderr. No-op unless YDF_LINECOUNT_A defined.
+// to $LINECOUNT_OUT (CSV) and stderr. No-op unless LINECOUNT_A defined.
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -77,7 +82,7 @@ struct Dw1LineCountAccum {
     nodes[depth] += n_nodes;
   }
   ~Dw1LineCountAccum() {
-    const char* out = std::getenv("YDF_LINECOUNT_OUT");
+    const char* out = std::getenv("LINECOUNT_OUT");
     std::FILE* f = (out != nullptr) ? std::fopen(out, "w") : nullptr;
     std::fprintf(stderr,
                  "\n=== Method A: DW1 gather useful-floats per 64B line by "
@@ -97,7 +102,7 @@ struct Dw1LineCountAccum {
 };
 Dw1LineCountAccum g_dw1_linecount;
 }  // namespace
-#endif  // YDF_LINECOUNT_A
+#endif  // LINECOUNT_A
 
 #include "absl/base/optimization.h"
 #include "absl/log/log.h"
@@ -2219,7 +2224,7 @@ static inline int EqualWidthThresholdIndex(const float attribute,
 // Ariel: 256-bin AVX-512 was ~3-4x faster than std::upper_bound on
 // trunk_3000000_x_4096 (i9-185h). TODO Ariel: try 128-bin AVX-512 variant to
 // handle the case where someone sets num_candidates to 128.
-#ifdef YDF_SIMD_UPPER_BOUND
+#ifdef SIMD_UPPER_BOUND
 inline bool CpuSupportsAvx2() {
   static const bool supported = __builtin_cpu_supports("avx2");
   return supported;
@@ -2261,7 +2266,7 @@ __attribute__((target("avx512f,popcnt"))) inline int Avx512UpperBoundIndex256(
   const __mmask16 mf = _mm512_cmp_ps_mask(vx, vthr, _CMP_GE_OQ);
   return static_cast<int>((K << 4) + _mm_popcnt_u32(mf)) - 1;
 }
-#endif  // YDF_SIMD_UPPER_BOUND
+#endif  // SIMD_UPPER_BOUND
 
 struct HistogramBinner {
   // Sorted thresholds (== the histogram bins). Always populated; used by the
@@ -2271,7 +2276,7 @@ struct HistogramBinner {
   float max_value = 0.f;
   int num_bins = 0;
   bool use_equal_width = false;
-#ifdef YDF_SIMD_UPPER_BOUND
+#ifdef SIMD_UPPER_BOUND
   // Threshold copies + per-group coarse tables for the SIMD kernels. Plain
   // float arrays (not __m256/__m512 members) so the struct compiles without
   // TU-wide ISA flags; the target-attributed kernels load them.
@@ -2292,7 +2297,7 @@ struct HistogramBinner {
         (type == proto::NumericalSplit::HISTOGRAM_EQUAL_WIDTH ||
          type == proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
     scalar_thr = thr;
-#ifdef YDF_SIMD_UPPER_BOUND
+#ifdef SIMD_UPPER_BOUND
     // Runtime kernel selection: bin count picks the kernel shape, cpuid gates
     // the ISA. Anything else falls through to scalar std::upper_bound.
     avx512_256 = false;
@@ -2335,7 +2340,7 @@ struct HistogramBinner {
 #endif
       return idx;
     }
-#ifdef YDF_SIMD_UPPER_BOUND
+#ifdef SIMD_UPPER_BOUND
     if (avx512_256) {
       const int idx = Avx512UpperBoundIndex256(x, thr256, coarse16);
 #ifndef NDEBUG
@@ -5579,12 +5584,12 @@ absl::Status GrowTreeLocal(
 // Depth at which the fused-per-level Apply (depthwise_1pass) switches on.
 // Levels shallower than this run the
 // plain per-node BFS fallback; levels at or below (deeper than) it run the
-// fused kernel. Read once from YDF_DW1_MIN_DEPTH (default 0 = fused everywhere,
+// fused kernel. Read once from DW1_MIN_DEPTH (default 0 = fused everywhere,
 // the pre-existing behavior). Intended for a depth line-search: BFS above the
 // cut, depthwise_1pass after.
 int32_t Depthwise1PassMinDepth() {
   static const int32_t value = [] {
-    const char* e = std::getenv("YDF_DW1_MIN_DEPTH");
+    const char* e = std::getenv("DW1_MIN_DEPTH");
     return e != nullptr ? static_cast<int32_t>(std::strtol(e, nullptr, 10)) : 0;
   }();
   return value;
@@ -5595,7 +5600,7 @@ int32_t Depthwise1PassMinDepth() {
 // Row count above which a node (of this depth) is "hot" and is evaluated by the
 // fused shared-rows kernel; smaller nodes fall back to the stock per-node 
 // ProjectionEvaluator::Evaluate. Read once from
-// YDF_DW1_HOT_MIN_ROWS (default 1000 ~ the mean-n_gathers cut measured on HIGGS
+// DW1_HOT_MIN_ROWS (default 1000 ~ the mean-n_gathers cut measured on HIGGS
 // in nodewise_ap.csv, P=6 x nnz~1.5 => ~9 gathers/row).
 //
 // The gate is on ROWS rather than on n_gathers so that it is monotone down the
@@ -5605,9 +5610,42 @@ int32_t Depthwise1PassMinDepth() {
 // bag. 0 = every node hot = the ungated dw1_shared_rows behavior.
 size_t Dw1HotMinRows() {
   static const size_t value = [] {
-    const char* e = std::getenv("YDF_DW1_HOT_MIN_ROWS");
+    const char* e = std::getenv("DW1_HOT_MIN_ROWS");
     return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
                         : static_cast<size_t>(1000);
+  }();
+  return value;
+}
+#endif
+
+#if defined(DW1_HOT_OVERLAP)
+// Percentage of a candidate node's DISTINCT columns that must also be read by
+// another candidate for the node to stay in the fused kernel. Read once from
+// DW1_HOT_MIN_SHARE (default 50).
+//
+// Rationale: the colwalk's unit of work is one ascending pass over the whole
+// depth bag per TOUCHED column. A node whose columns no other fused node reads
+// therefore buys a full-bag pass per such column while consuming only its own
+// rows of it -- and simultaneously lengthens every other column's pass. Below
+// the threshold the node is cheaper to evaluate with the stock per-node
+// Evaluate. 0 keeps every candidate == plain dw1_sr_hot_nodes (purity control).
+//
+// Unlike the row gate this is NOT monotone down the tree, so the depth bag can
+// no longer telescope unconditionally; see the gate site in GrowTreeLocalBFS.
+size_t Dw1HotMinSharePct() {
+  static const size_t value = [] {
+    const char* e = std::getenv("DW1_HOT_MIN_SHARE");
+    return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
+                        : static_cast<size_t>(50);
+  }();
+  return value;
+}
+
+// One line per fused depth on the gate's effect (DW1_HOT_OVERLAP_STATS=1).
+bool Dw1HotOverlapStats() {
+  static const bool value = [] {
+    const char* e = std::getenv("DW1_HOT_OVERLAP_STATS");
+    return e != nullptr && std::string(e) == "1";
   }();
   return value;
 }
@@ -5616,15 +5654,15 @@ size_t Dw1HotMinRows() {
 #if defined(SYMMETRIC_DEPTHWISE_AP)
 // Deepest level (inclusive) that runs the symmetric bagwide path; levels deeper
 // than this hand each frontier node off to the stack-based DFS grower
-// (GrowTreeLocal) to finish its subtree. Read once from YDF_SYMMETRIC_MAX_DEPTH
+// (GrowTreeLocal) to finish its subtree. Read once from SYMMETRIC_MAX_DEPTH
 // (default INT32_MAX = symmetric everywhere, the pre-existing behavior). The
-// tree root is depth 1, so YDF_SYMMETRIC_MAX_DEPTH=5 keeps depths 1..5 symmetric
+// tree root is depth 1, so SYMMETRIC_MAX_DEPTH=5 keeps depths 1..5 symmetric
 // and switches to DFS from depth 6. Intended for a symmetric<->DFS depth
 // line-search: large frontiers up top stay symmetric (dense bag, stride-1 column
 // reads) while small scattered deep nodes get DFS subtree cache locality.
 int32_t SymmetricMaxDepth() {
   static const int32_t value = [] {
-    const char* e = std::getenv("YDF_SYMMETRIC_MAX_DEPTH");
+    const char* e = std::getenv("SYMMETRIC_MAX_DEPTH");
     return e != nullptr ? static_cast<int32_t>(std::strtol(e, nullptr, 10))
                         : INT32_MAX;
   }();
@@ -5679,6 +5717,25 @@ absl::Status GrowTreeLocalBFS(
   // an entry's parent up in first_child. Empty => no previous hot set (first
   // fused depth, or the previous depth had no hot node) => bag rebuild.
   std::vector<uint32_t> prev_hot_to_full;
+#endif
+#ifdef DW1_HOT_OVERLAP
+  // Scratch for the column-overlap gate, hoisted out of the depth loop so the
+  // O(max_attr) counter array is allocated once per tree rather than per depth
+  // (that per-node/per-depth O(F) cost is what dominates ultra-wide datasets).
+  // ov_col_nodes is reset only over the columns actually touched, so the
+  // per-depth cost stays O(refs).
+  std::vector<int32_t> ov_col_nodes;   // column -> #candidates reading it
+  std::vector<int32_t> ov_touched;     // columns to reset after each gate pass
+  std::vector<int32_t> ov_cand_cols;   // flat CSR: candidate -> distinct columns
+  std::vector<size_t> ov_cand_off;     // size num_candidates + 1
+  std::vector<char> ov_parent_hot;     // node -> was its parent hot last depth?
+  {
+    int ov_max_attr = 0;
+    for (const auto attribute_idx : config_link.numerical_features()) {
+      ov_max_attr = std::max(ov_max_attr, attribute_idx);
+    }
+    ov_col_nodes.assign(static_cast<size_t>(ov_max_attr) + 1, 0);
+  }
 #endif
 
   // Rebuild first_child from the previous batch's node pointers: NodeTrain
@@ -5800,14 +5857,127 @@ absl::Status GrowTreeLocalBFS(
       // time), so gating on rows keeps nearly all the fused work at a small
       // fraction of the write streams.
       const size_t hot_min_rows = Dw1HotMinRows();
-      std::vector<int32_t> hot_of_node(num_nodes, -1);  // node -> hot idx, -1 cold
       std::vector<uint32_t> hot_nodes;                  // hot idx -> node
       hot_nodes.reserve(num_nodes);
       for (int n = 0; n < num_nodes; ++n) {
         if (sel_spans[n].size() >= hot_min_rows) {
-          hot_of_node[n] = static_cast<int32_t>(hot_nodes.size());
           hot_nodes.push_back(static_cast<uint32_t>(n));
         }
+      }
+
+#ifdef DW1_HOT_OVERLAP
+      // ── Column-overlap gate ───────────────────────────────────────────
+      // The row gate above bounds the kernel's write streams; this one
+      // bounds its wasted reads. The colwalk's unit of work is one ascending
+      // pass over the WHOLE depth bag per touched column, so a candidate
+      // whose columns no other candidate reads pays a full-bag pass for each
+      // of them and lengthens every other column's pass by its own rows.
+      // Such a node is cheaper under the stock per-node Evaluate.
+      //
+      // Criterion: of the node's DISTINCT columns (a node re-reading a column
+      // from several of its projections is still one reader -- the colwalk
+      // serves them all from one pass), the fraction also read by another
+      // candidate must be >= DW1_HOT_MIN_SHARE %.
+      //
+      // ONE pass over the row gate's candidates: dropping a node only ever
+      // lowers other columns' reader counts, so iterating would drop strictly
+      // more nodes, with no fixpoint worth the cost or the instability.
+      size_t ov_stats_candidates = 0, ov_stats_cand_cols = 0;
+      {
+        const size_t min_share_pct = Dw1HotMinSharePct();
+        const size_t num_candidates = hot_nodes.size();
+        ov_cand_cols.clear();
+        ov_cand_off.assign(1, 0);
+        for (const uint32_t n : hot_nodes) {
+          const size_t begin = ov_cand_cols.size();
+          for (const auto& proj : all_node_projs[n]) {
+            for (const auto& feat : proj) {
+              ov_cand_cols.push_back(feat.attribute_idx);
+            }
+          }
+          const auto begin_it = ov_cand_cols.begin() + begin;
+          std::sort(begin_it, ov_cand_cols.end());
+          ov_cand_cols.erase(std::unique(begin_it, ov_cand_cols.end()),
+                             ov_cand_cols.end());
+          ov_cand_off.push_back(ov_cand_cols.size());
+        }
+        // Per column: how many candidates read it. ov_cand_cols is deduped
+        // per node, so one increment per entry is exactly that count.
+        for (const int32_t c : ov_cand_cols) {
+          if (ov_col_nodes[c]++ == 0) ov_touched.push_back(c);
+        }
+        size_t kept = 0;
+        for (size_t k = 0; k < num_candidates; ++k) {
+          const size_t begin = ov_cand_off[k], end = ov_cand_off[k + 1];
+          size_t shared = 0;
+          for (size_t i = begin; i < end; ++i) {
+            if (ov_col_nodes[ov_cand_cols[i]] >= 2) ++shared;
+          }
+          const size_t total = end - begin;
+          if (total == 0 || shared * 100 >= min_share_pct * total) {
+            hot_nodes[kept++] = hot_nodes[k];
+          }
+        }
+        ov_stats_candidates = num_candidates;
+        ov_stats_cand_cols = ov_touched.size();
+        hot_nodes.resize(kept);
+        for (const int32_t c : ov_touched) ov_col_nodes[c] = 0;
+        ov_touched.clear();
+      }
+
+      // The overlap gate is NOT monotone down the tree: whether a node's
+      // columns are shared depends on what its siblings happened to sample,
+      // so this depth's hot set need not be a subset of the children of the
+      // previous depth's hot set -- exactly the precondition of the O(bag)
+      // relabel (a hot row must already be in the previous hot bag). The
+      // relabel self-validates and would fall back on its own, but only after
+      // a wasted full pass over the bag, so detect the break up front
+      // (O(num_nodes)) and send the depth straight to the concat+VQSort
+      // rebuild.
+      if (depth_bag_state.valid && !first_child.empty() &&
+          !prev_hot_to_full.empty()) {
+        ov_parent_hot.assign(num_nodes, 0);
+        for (const uint32_t ph : prev_hot_to_full) {
+          if (ph >= first_child.size()) {
+            depth_bag_state.valid = false;
+            break;
+          }
+          const int32_t c = first_child[ph];
+          if (c < 0) continue;  // Parent became a leaf.
+          ov_parent_hot[c] = 1;
+          ov_parent_hot[c + 1] = 1;
+        }
+        if (depth_bag_state.valid) {
+          for (const uint32_t n : hot_nodes) {
+            if (!ov_parent_hot[n]) {
+              depth_bag_state.valid = false;
+              break;
+            }
+          }
+        }
+      }
+
+      if (Dw1HotOverlapStats()) {
+        // Like the kernel's debug dumps, this assumes a single training thread
+        // (run one tree at a time); no locking. `bag` is what the gate cost the
+        // depth bag: `relabel` = the O(bag) telescoping pass still applies,
+        // `rebuild` = monotonicity broke and this depth pays a concat+VQSort.
+        std::fprintf(stdout,
+                     "[DW1 hotoverlap] depth=%d nodes=%d candidates=%zu "
+                     "kept=%zu dropped=%zu cand_cols=%zu min_share=%zu%% "
+                     "bag=%s\n",
+                     static_cast<int>(current_depth), num_nodes,
+                     ov_stats_candidates, hot_nodes.size(),
+                     ov_stats_candidates - hot_nodes.size(), ov_stats_cand_cols,
+                     Dw1HotMinSharePct(),
+                     depth_bag_state.valid ? "relabel" : "rebuild");
+        std::fflush(stdout);
+      }
+#endif  // DW1_HOT_OVERLAP
+
+      std::vector<int32_t> hot_of_node(num_nodes, -1);  // node -> hot idx, -1 cold
+      for (size_t k = 0; k < hot_nodes.size(); ++k) {
+        hot_of_node[hot_nodes[k]] = static_cast<int32_t>(k);
       }
       const int num_hot = static_cast<int>(hot_nodes.size());
 
@@ -5830,7 +6000,7 @@ absl::Status GrowTreeLocalBFS(
 #else
       std::vector<std::vector<float>> projected(num_nodes);
 #endif  // DW1_HOT_NODES
-#ifdef YDF_LINECOUNT_A
+#ifdef LINECOUNT_A
       {
         // Exact per-node distinct-cache-line tally for this depth level. sel is
         // sorted ascending (DCHECK in SplitExamplesInPlace), so distinct lines =
@@ -5857,7 +6027,7 @@ absl::Status GrowTreeLocalBFS(
         g_dw1_linecount.Add(current_depth, num_nodes, r_sum, l_sum);
       }
 #endif
-#ifdef YDF_CALLGRIND_DEPTH
+#ifdef CALLGRIND_DEPTH
       // Instrument ONLY the kernel: run callgrind with --instr-atstart=no so the
       // ~8 GB CSV load and all non-kernel training run at light JIT overhead (not
       // 50-100x cache-sim). Start instrumentation + zero counters here, dump and
@@ -5905,7 +6075,7 @@ absl::Status GrowTreeLocalBFS(
           absl::MakeConstSpan(first_child), &depth_bag_state,
           absl::MakeSpan(projected), current_depth));
 #endif  // DW1_HOT_NODES
-#ifdef YDF_CALLGRIND_DEPTH
+#ifdef CALLGRIND_DEPTH
       { char nm[64];
         std::snprintf(nm, sizeof nm, "dw1_depth_%d", (int)current_depth);
         CALLGRIND_DUMP_STATS_AT(nm); }

@@ -145,6 +145,7 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 | DW1 depthwise 1-pass (col-sharing) | `--config=depthwise_1_pass` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
 | DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem in core §13 |
 | DW1 hot-nodes hybrid | `--config=dw1_sr_hot_nodes` (implies dw1_shared_rows) | gate in `GrowTreeLocalBFS`; cold branch in `oblique.cc`; `AdvanceDepthBagHot` | fused kernel for big nodes only; bit-identical at every threshold; unmeasured (2026-07-25) |
+| DW1 hot-nodes + column-overlap gate | `--config=dw1_sr_hot_overlap` (implies dw1_sr_hot_nodes) + `DW1_HOT_MIN_SHARE` | second gate in `GrowTreeLocalBFS` | also drops candidates whose columns nobody else reads; non-monotone ⇒ VQSort bag rebuild on those depths; bit-identical; **unmeasured (2026-07-25)** |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
 | Subtree gather cache | *(code removed 2026-07-16)* | was `oblique.cc` `#ifdef SUBTREE_GATHER_CACHE`; recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
@@ -152,7 +153,7 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 ### DW1: `ApplyProjectionsDepthwise1Pass` (oblique_cpu_depthwise_1pass.cc)
 
 > **2026-07-23: block machinery removed.** The per-block budget (`Dw1BlockFloats` /
-> `YDF_DW1_BLOCK_FLOATS`), `Dw1Task`, the big-node projection-major path
+> `DW1_BLOCK_FLOATS`), `Dw1Task`, the big-node projection-major path
 > (`EvaluateNodeProjMajor`, kDw1SweepBig), and the shared-rows per-block arena
 > distribution (`block_of_node`/`block_off`/`arena_ex`/`arena_node`, kDw1SharedBag)
 > are gone — the budget had long been disabled, so every depth already ran as one
@@ -263,7 +264,7 @@ territory). Known ceiling: the recorded depth ladder covers only ~15 % of a tree
 the hot row share falls with depth (70.6 % at d20), so whole-tree hot AP share is likely
 ~50–65 %, not 91.8 %.
 
-**Gate.** Hot iff `sel.size() >= YDF_DW1_HOT_MIN_ROWS` (default 1000 ≈ the mean-`n_gathers`
+**Gate.** Hot iff `sel.size() >= DW1_HOT_MIN_ROWS` (default 1000 ≈ the mean-`n_gathers`
 cut, since `n_gathers ≈ 9·rows` on HIGGS). Rows rather than `n_gathers` because the gate
 must be **monotone down the tree** (child rows ≤ parent rows ⇒ a hot node's parent is hot),
 which is what lets the depth bag keep telescoping. `=0` ⇒ everything hot ⇒ exactly the
@@ -315,16 +316,69 @@ per node n: defs = hot ? &hot_projs[k] : &all_node_projs[n];  mono = &all_node_m
   longer partitions cleanly (cold AP is nested in `NodeTrain`). Not combinable with
   `--config=nodewise_chrono` (hot nodes bypass `Evaluate` ⇒ the dump selfcheck trips).
 - Side effect: peak slab memory shrinks (slabs allocated for hot nodes only).
+- **Cost of the gate — column sharing** (2026-07-25, counts are machine-independent):
+  fewer nodes per frontier ⇒ fewer nodes per column, by construction. Measured with
+  `DW1_COL_SHARE_OUT` (see `build_measure.md`), 2 trees, `T=1000`, full frontier → hot:
+  trunk 100k×29 mean nodes/column **115.4 → 4.9**, 8192×4096 **2.54 → 1.02** (i.e. none).
+  But that sharing was not buying anything: the colwalk streams `cols_touched × bag rows`
+  and both terms shrink together, so the landed fraction is **flat on tall-narrow (0.323 →
+  0.336) and 9× better on wide (0.044 → 0.400)**, with total swept floats down 1.7× and 29×.
+  Sharing is the wrong figure of merit here; swept volume is the one that tracks cost.
 
 **Verified 2026-07-25** (macOS, correctness only — perf numbers must come from m7i/8488C):
 trunk 20k×32 / 100k×29 / 8192×4096, `nodes-*` hash identical across
-`YDF_DW1_HOT_MIN_ROWS ∈ {0, 1, 100, 250, 1000, 4000, 10000, 1e9}` **and** identical to the
+`DW1_HOT_MIN_ROWS ∈ {0, 1, 100, 250, 1000, 4000, 10000, 1e9}` **and** identical to the
 ungated `--config=dw1_shared_rows` control; same under a DCHECK-enabled build
 (`--cxxopt=-UNDEBUG`: bag sortedness, `node_of_bag` sizing, kernel bag/valid asserts). A
 temporary trace on 20k×32 (T=1000) confirmed the intended shape: the incremental relabel
 fires at every fused depth after the first (10/11 calls; the one fallback is the first fused
 depth, which has no previous hot bag), the gate prunes hard (depth 8: 122 nodes → 2 hot;
 depth 11: 302 → 2), and `hot=0` latches from depth 13 down.
+
+### DW1 hot-nodes + column-overlap gate (`--config=dw1_sr_hot_overlap`, added 2026-07-25)
+
+Second gate stacked on the row gate above, in the same place in `GrowTreeLocalBFS`. The row
+gate bounds the kernel's *write streams*; this one bounds its *wasted reads*.
+
+**Why.** The colwalk's unit of work is one ascending pass over the whole depth bag per
+**touched** column. A candidate whose columns no other candidate reads therefore buys a
+full-bag pass for each of them while consuming only its own rows of it — and lengthens every
+other column's pass by those same rows. At the limit (one hot node) the "shared" kernel
+degenerates into exactly the stock gather plus scatter-write bookkeeping: strictly worse than
+not fusing. Measured before building it (2026-07-25, `DW1_COL_SHARE_OUT`): trunk
+8192×4096 hot frontier `share = 1.02` nodes/column, `eff = 0.40`.
+
+**Criterion.** Of a candidate's **distinct** columns (a node re-reading a column from several
+of its projections is one reader — the colwalk serves them all from one pass), the fraction
+also read by another candidate must be ≥ `DW1_HOT_MIN_SHARE` % (default 50; **0 keeps
+every candidate = plain `dw1_sr_hot_nodes`**, the purity control). Evaluated in ONE pass:
+dropping a node only lowers other columns' reader counts, so iterating would drop strictly
+more, with no fixpoint worth the cost or the instability. Cost is O(refs) per depth plus one
+O(max_attr) counter array hoisted to per-tree (reset only over touched columns).
+
+**Monotonicity is deliberately given up** (user decision, 2026-07-25). Sharing depends on
+what a node's *siblings* sampled, so a hot child no longer implies a hot parent, and this
+depth's hot set need not be a subset of the children of the previous depth's — exactly the
+precondition of the O(bag) relabel. `RelabelBagForNewDepthHot` self-validates and would fall
+back on its own, but only after a wasted full pass over the bag, so the driver detects the
+break up front (mark the children of `prev_hot_to_full` via `first_child`, check every hot
+node is marked; O(num_nodes)) and clears `depth_bag_state.valid` so `AdvanceDepthBagHot` goes
+straight to concat+VQSort. `DW1_HOT_OVERLAP_STATS=1` reports `bag=relabel|rebuild` per
+depth so that cost is visible.
+
+**Measured gate behaviour** (2026-07-25, 1 tree, `MIN_ROWS=1000`; counts are machine-
+independent). trunk 8192×4096: at 50 % it drops **every** candidate at every depth, i.e. it
+switches the fused kernel off entirely on wide — the correct call given `eff` there. trunk
+100k×29: a near-no-op through the middle depths (all candidates kept, `share` in the
+hundreds) that fires exactly on the degenerate tail (depths 13-14, 1-2 candidates left → all
+dropped). At 100 % it also bites at depths 4-5 and 11-12. So on tall-narrow this is a tail
+cleanup, not a restructuring; on wide it is a kill switch.
+
+**Verified 2026-07-25** (macOS, correctness only): `nodes-*` hash on trunk 20k×32 and
+8192×4096 identical across `DW1_HOT_MIN_SHARE ∈ {0, 50, 100}` × `MIN_ROWS ∈ {0, 1000}`
+**and** equal to the `dw1_shared_rows` control (`cfa6ab94…` / `00dd44bc…`); same under
+`--cxxopt=-UNDEBUG` with zero DCHECK failures. Both bag paths confirmed live on one run
+(`bag=rebuild` at depths 2-6 and 14+, `bag=relabel` at 7-13).
 
 ### Symmetric: `ApplyProjectionsSymmetricDepthwiseAP` (oblique_cpu_symmetric_depthwise_ap.cc)
 
@@ -361,7 +415,7 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
   //    concat (kSymBuildBag) + hwy::K32V32 VQSort by example id (kSymSortBag)
   //    — ties are same-node so the unstable sort is safe.
   //    Verified bit-identical trees vs the sort path (trunk shapes, incl.
-  //    YDF_SYMMETRIC_MAX_DEPTH handoff); relabel path taken at every non-root
+  //    SYMMETRIC_MAX_DEPTH handoff); relabel path taken at every non-root
   //    depth, zero fallbacks.
   // ── Phase 3: Sweep (kSymSweep) — K bag-wide passes:
   std::vector<uint32_t> write_cursor(N);
@@ -390,10 +444,10 @@ no shared-rows fix will.
 
 ### Dead end: `SubtreeGatherCache` (code removed 2026-07-16; was oblique_types.h + oblique.cc `#ifdef SUBTREE_GATHER_CACHE`, added in `9f32e817`)
 
-Epoch-tagged per-thread block cache: when a node first dropped to ≤`YDF_RM_MAX_ROWS` rows its
+Epoch-tagged per-thread block cache: when a node first dropped to ≤`RM_MAX_ROWS` rows its
 example list became the current block; feature columns gathered lazily into dense
 block-local arrays reused by descendants (DFS made it effective), budget
-`YDF_SG_BUDGET_MB`. **⛔ +43 % at 1.5M×4096**: with P=⌈√F⌉ and nnz≈1.5, a node and its
+`SG_BUDGET_MB`. **⛔ +43 % at 1.5M×4096**: with P=⌈√F⌉ and nnz≈1.5, a node and its
 descendants share only ~2 % of features — gathers never amortize. The worked example of
 Standing conclusion #2 ("adding memory traffic to fix locality loses"). Code deleted from
 the branch; recover from commit `9f32e817` (measurement log:

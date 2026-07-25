@@ -287,11 +287,11 @@ inline std::vector<std::thread::id>& tree_thread_id() {
 // records ≈ 80 MB, which is why the gate defaults to a depth ladder.
 //
 // Runtime knobs (read once, before the thread pool starts):
-//   YDF_NODEWISE_TREE    tree index to record; -1 = every tree. Default 0.
-//   YDF_NODEWISE_DEPTHS  comma-separated depth list, or "*"/"all" for every
+//   NODEWISE_TREE    tree index to record; -1 = every tree. Default 0.
+//   NODEWISE_DEPTHS  comma-separated depth list, or "*"/"all" for every
 //                        depth. Default "5,10,15,20".
-//   YDF_NODEWISE_OUT     output CSV path. Default "nodewise_ap.csv".
-//   YDF_NODEWISE_RESERVE records reserved per recording tree. Default 1<<20
+//   NODEWISE_OUT     output CSV path. Default "nodewise_ap.csv".
+//   NODEWISE_RESERVE records reserved per recording tree. Default 1<<20
 //                        for a single tree, 1<<16 when recording all trees.
 #ifdef NODEWISE_CHRONO
 
@@ -341,10 +341,10 @@ struct NodewiseGate {
 inline const NodewiseGate& NodewiseGateConfig() {
   static const NodewiseGate* g = [] {
     auto* p = new NodewiseGate();
-    const char* tree_env = std::getenv("YDF_NODEWISE_TREE");
+    const char* tree_env = std::getenv("NODEWISE_TREE");
     p->tree = (tree_env != nullptr) ? std::atoi(tree_env) : 0;
 
-    const char* depths_env = std::getenv("YDF_NODEWISE_DEPTHS");
+    const char* depths_env = std::getenv("NODEWISE_DEPTHS");
     p->depths_spec = (depths_env != nullptr) ? depths_env : "5,10,15,20";
     if (p->depths_spec == "*" || p->depths_spec == "all") {
       p->any_depth = true;
@@ -361,10 +361,10 @@ inline const NodewiseGate& NodewiseGateConfig() {
       }
     }
 
-    const char* out_env = std::getenv("YDF_NODEWISE_OUT");
+    const char* out_env = std::getenv("NODEWISE_OUT");
     p->out_path = (out_env != nullptr) ? out_env : "nodewise_ap.csv";
 
-    const char* reserve_env = std::getenv("YDF_NODEWISE_RESERVE");
+    const char* reserve_env = std::getenv("NODEWISE_RESERVE");
     p->reserve = (reserve_env != nullptr)
                      ? static_cast<size_t>(std::atoll(reserve_env))
                      : (p->tree >= 0 ? (size_t{1} << 20) : (size_t{1} << 16));

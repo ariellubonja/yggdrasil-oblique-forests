@@ -31,7 +31,7 @@ build:dw1_shared_rows --cxxopt="-DDW1_SHARED_ROWS=1"
 # their size. Gating to the big nodes caps the write streams at a few thousand
 # (~100-200 KB) at every depth while keeping ~most of the AP work fused.
 #
-# Runtime knob YDF_DW1_HOT_MIN_ROWS (default 1000): a node is hot iff
+# Runtime knob DW1_HOT_MIN_ROWS (default 1000): a node is hot iff
 # selected_examples.size() >= it. Rows (not n_gathers) because the gate must be
 # monotone down the tree -- child rows <= parent rows -- which is what lets the
 # depth bag keep telescoping across depths. =0 makes every node hot and should
@@ -45,6 +45,32 @@ build:dw1_shared_rows --cxxopt="-DDW1_SHARED_ROWS=1"
 build:dw1_sr_hot_nodes --config=dw1_shared_rows
 build:dw1_sr_hot_nodes --cxxopt="-DDW1_HOT_NODES=1"
 
+# DW1 hot-nodes + COLUMN-OVERLAP gate: on top of the row gate above, a candidate
+# node also has to share its columns with the other candidates to stay in the
+# fused kernel.
+# Motivation: the colwalk sweeps the whole depth bag once per TOUCHED column, so
+# a node whose columns nobody else reads still pays a full-bag pass for each of
+# them, and contributes its own rows to every other column's pass. Measured
+# 2026-07-25 (DW1_COL_SHARE_OUT): on trunk 8192x4096 the hot frontier has
+# share=1.02 nodes/column -- i.e. no sharing at all -- and lands only 40% of what
+# it sweeps; a single-hot-node depth degenerates into the stock gather plus
+# scatter-write bookkeeping, strictly worse than not fusing.
+#
+# Runtime knob DW1_HOT_MIN_SHARE (default 50, percent): of a candidate's
+# DISTINCT columns, the fraction also read by another candidate must be >= it.
+# =0 keeps every candidate and reproduces --config=dw1_sr_hot_nodes exactly
+# (purity control). Sampling is still untouched, so the trained model stays
+# bit-identical at every (MIN_ROWS, MIN_SHARE) pair -- the hash sweep remains the
+# correctness check.
+#
+# Cost: this gate is NOT monotone down the tree (sharing depends on what the
+# siblings sampled), so a depth's hot set need not be a subset of the children of
+# the previous depth's hot set -- the precondition of the O(bag) relabel. The
+# driver detects that exactly and falls back to the concat+VQSort bag rebuild for
+# that depth (deliberate; accepted 2026-07-25).
+build:dw1_sr_hot_overlap --config=dw1_sr_hot_nodes
+build:dw1_sr_hot_overlap --cxxopt="-DDW1_HOT_OVERLAP=1"
+
 # Synthetic-layout experiments for ProjectionEvaluator: change numerical-feature
 # storage for trunk synthetic datasets only. Scheduler-independent; combinable
 # with default Nodewise or Depthwise.
@@ -56,7 +82,7 @@ build:row_major_dataset_layout --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 # projections shared across all nodes at depth d, one bag-wide sweep per
 # candidate. Hooks into GrowTreeLocalBFS's depth-batch loop. Implies BFS.
 # NOTE: does not include CatBoost's shared-entropy logic (1 entropy calc/depth).
-# Runtime knob YDF_SYMMETRIC_MAX_DEPTH (default INT32_MAX = symmetric everywhere)
+# Runtime knob SYMMETRIC_MAX_DEPTH (default INT32_MAX = symmetric everywhere)
 # caps the symmetric depth: levels deeper than it hand each frontier node off to
 # the DFS grower (GrowTreeLocal). =0 is all-DFS. See SymmetricMaxDepth() in
 # learner/decision_tree/training.cc; swept by benchmarks' dw1_depth_linesearch.sh
@@ -110,10 +136,10 @@ build:fine_chrono_evaluateprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DF
 # Rows are sorted by (depth, node_id) at dump time.
 #
 # Runtime knobs (see utils/parallel_chrono.h):
-#   YDF_NODEWISE_TREE=0            tree to record; -1 = all trees
-#   YDF_NODEWISE_DEPTHS=5,10,15,20 depth list, or "*" for every depth
-#   YDF_NODEWISE_OUT=nodewise_ap.csv
-#   YDF_NODEWISE_RESERVE=<n>       records reserved per recording tree
+#   NODEWISE_TREE=0            tree to record; -1 = all trees
+#   NODEWISE_DEPTHS=5,10,15,20 depth list, or "*" for every depth
+#   NODEWISE_OUT=nodewise_ap.csv
+#   NODEWISE_RESERVE=<n>       records reserved per recording tree
 # Defaults are ~55k records / ~1.8 MB on HIGGS. One full tree at every depth is
 # ~2.6M records / ~80 MB, so widen the depth list deliberately.
 #
@@ -122,7 +148,7 @@ build:fine_chrono_evaluateprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DF
 # trip the dump-time selfcheck against the coarse ProjEval totals.
 build:nodewise_chrono --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DNODEWISE_CHRONO=1"
 # Don't inline ApplyProjection, for more accurate profiling. Very small cost: <2% e2e.
-build:inline_projection_evaluate --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
+build:inline_projection_evaluate --cxxopt="-DINLINE_PROJECTION_EVALUATE"
 # Skip the std::isnan branch in Evaluate. Small cost but possible cache misbehavior.
 build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 

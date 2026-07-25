@@ -10,7 +10,7 @@ broad, slow decline around **~1.5** through the bulk-work depths — well above 
 
 ## Method A
 Exact, native, multithreaded distinct-cache-line counter. At the DW1 kernel call
-site (`training.cc`, guarded by `#ifdef YDF_LINECOUNT_A`), per depth and over every
+site (`training.cc`, guarded by `#ifdef LINECOUNT_A`), per depth and over every
 node processed by `ApplyProjectionsDepthwise1Pass`, accumulate:
 - `rows += sel.size()` (gather iterations / useful floats)
 - `lines += 1 + #{(sel[i]>>4) != (sel[i-1]>>4)}` (distinct 64B lines; `sel` is
@@ -18,7 +18,7 @@ node processed by `ApplyProjectionsDepthwise1Pass`, accumulate:
 
 `useful/line = rows/lines`. This is the exact geometric metric the cachegrind (B)
 and callgrind (C) methods estimate from D1 miss counts. Output: per-depth CSV to
-`$YDF_LINECOUNT_OUT`, dumped at process exit.
+`$LINECOUNT_OUT`, dumped at process exit.
 
 ## Run
 ```
@@ -27,7 +27,7 @@ and callgrind (C) methods estimate from D1 miss counts. Output: per-depth CSV to
   --feature_split_type=Oblique --max_num_projections=200 --growing_strategy=Local
 ```
 Full HIGGS (11M x 28), 16 bootstrap trees, depth -> 72. Wall 2m38s, peak RSS 21.9 GB.
-Build: `--config=depthwise_1_pass --copt=-march=native` + `--per_file_copt=...training.cc@-DYDF_LINECOUNT_A`.
+Build: `--config=depthwise_1_pass --copt=-march=native` + `--per_file_copt=...training.cc@-DLINECOUNT_A`.
 
 ## Findings
 Kernel level = tree depth - 1 (so HIGGS level k aligns to toy level k).
@@ -73,7 +73,7 @@ gather-once-reuse) remains motivated.
 - `/tmp/methodA_full.csv` — per-depth raw (depth,nodes,rows,lines,useful_per_line)
 - `/tmp/methodA_higgs_curve.png` — curve vs toy
 - `/tmp/analyzeA.py` — analysis/plot script
-- Binary: `/tmp/binA`; instrumentation in `training.cc` under `YDF_LINECOUNT_A`.
+- Binary: `/tmp/binA`; instrumentation in `training.cc` under `LINECOUNT_A`.
 
 ## Method C status
 Launched on full HIGGS under callgrind (`/tmp/binC`, `/tmp/cgC/`) but the 8 GB CSV

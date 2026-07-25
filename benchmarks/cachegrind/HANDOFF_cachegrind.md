@@ -41,12 +41,12 @@ for (size_t i = 0; i < rows_n; ++i) {        // Critical section
 ## Three measurement methods
 - **A — exact distinct-cache-line counter (NOT yet built; recommended for deep trees).** Native run (full scale, multi-threaded, ~1× overhead). At the kernel call site accumulate per depth: `rows += rows_n; lines += count_distinct(sel[i] >> 4)`; `useful/line = rows/lines`. This *is* the exact metric. **Best choice for HIGGS depth-60 curve** — minutes, no Valgrind.
 - **B — cachegrind, tree_depth diff (no recompile).** Run binary at `--tree_depth=2..N`, diff line-291 `Dr`/`D1mr` between consecutive runs. Kernel fires only when `depth_batch.size()>1`, so gathers start at the first 2-node level. **O(N) runs — does NOT scale to deep trees** (depth-60 ⇒ ~60 near-full trainings under cachegrind = infeasible). Easiest to set up though (no code change).
-- **C — callgrind per-depth dumps (recompile).** `CALLGRIND_ZERO_STATS`/`CALLGRIND_DUMP_STATS_AT` bracket the kernel call, gated `#ifdef YDF_CALLGRIND_DEPTH`. **O(1) runs** — one callgrind run dumps every depth. Scales to deep trees, but it's one full single-thread training under callgrind (~50–100× native single-thread). Fiddlier: needs source edit, rebuild, and `callgrind_annotate` parsing (callgrind stores relative line positions).
+- **C — callgrind per-depth dumps (recompile).** `CALLGRIND_ZERO_STATS`/`CALLGRIND_DUMP_STATS_AT` bracket the kernel call, gated `#ifdef CALLGRIND_DEPTH`. **O(1) runs** — one callgrind run dumps every depth. Scales to deep trees, but it's one full single-thread training under callgrind (~50–100× native single-thread). Fiddlier: needs source edit, rebuild, and `callgrind_annotate` parsing (callgrind stores relative line positions).
 
 B and C agreed to the last digit on the toy → both validated.
 
 ## Current state of THIS box (left by prior session)
-- `training.cc` has guarded callgrind hooks: `#ifdef YDF_CALLGRIND_DEPTH` include block (~line 42) + ZERO/DUMP around the kernel call (~lines 5464/5471). No-op without the define. **Backup: `training.cc.bak_callgrind`.**
+- `training.cc` has guarded callgrind hooks: `#ifdef CALLGRIND_DEPTH` include block (~line 42) + ZERO/DUMP around the kernel call (~lines 5464/5471). No-op without the define. **Backup: `training.cc.bak_callgrind`.**
 - **`bazel-bin/.../train_oblique_forest` is currently the INSTRUMENTED C build** (define applied to training.cc only via `--per_file_copt`). For normal benchmarking, rebuild without that flag.
 - Artifacts: `/tmp/cgB.m{2..8}.out` (+ `.anno`), `/tmp/cgC/callgrind.out.<pid>.{1..7}`, parsers `/tmp/parseB.py` `/tmp/parseC.py`.
 
@@ -59,7 +59,7 @@ bazel build -c opt --config=profiler --config=depthwise_1_pass \
   --repo_env=CC=/opt/intel/oneapi/compiler/latest/bin/icx \
   --repo_env=CXX=/opt/intel/oneapi/compiler/latest/bin/icpx \
   //examples:train_oblique_forest
-# add  "--per_file_copt=decision_tree/training\.cc@-DYDF_CALLGRIND_DEPTH"  ONLY for the callgrind (C) build
+# add  "--per_file_copt=decision_tree/training\.cc@-DCALLGRIND_DEPTH"  ONLY for the callgrind (C) build
 ```
 Benchmark run command (single-thread for clean Valgrind sim):
 ```bash
@@ -77,5 +77,5 @@ Notes: `--input_mode=trunk` (synthetic; `uniform` is commented out). `tree_depth
 ## Persistent memory (carried over)
 See `~/claude-memory/` (copied from the laptop). Most relevant:
 - `dw1-gather-useful-per-line-by-depth.md` — the curve above + method.
-- `dynamic-row-col-major-dispatch.md` — BFS/DFS paths, row-major layout, YDF_RM_MAX_ROWS.
+- `dynamic-row-col-major-dispatch.md` — BFS/DFS paths, row-major layout, RM_MAX_ROWS.
 - `ablation-ideas-tested-individually.md` — never stack optimization ideas; one --config per idea.

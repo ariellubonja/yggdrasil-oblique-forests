@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # One script, three sweeps selected by --mode:
 #
-#   --mode=dw1        (default) Sweep YDF_DW1_MIN_DEPTH across tree depth in
+#   --mode=dw1        (default) Sweep DW1_MIN_DEPTH across tree depth in
 #                     increments of --step (default 4). Levels shallower than the
 #                     threshold run plain per-node BFS; levels at/below it run the
 #                     fused depthwise_1pass Apply. d=0 is depthwise everywhere;
@@ -13,14 +13,14 @@ set -euo pipefail
 #                     crossover depth where depthwise_1pass starts paying off.
 #                     Built once with --config=depthwise_1_pass.
 #
-#   --mode=symmetric  Sweep YDF_SYMMETRIC_MAX_DEPTH across tree depth in
+#   --mode=symmetric  Sweep SYMMETRIC_MAX_DEPTH across tree depth in
 #                     increments of --step (default 5): symmetric to depth 5, 10,
 #                     15, ... then DFS (GrowTreeLocal) for deeper levels. The tree
-#                     root is depth 1, so YDF_SYMMETRIC_MAX_DEPTH=5 keeps depths
+#                     root is depth 1, so SYMMETRIC_MAX_DEPTH=5 keeps depths
 #                     1..5 symmetric and switches to DFS from depth 6. The
 #                     all-symmetric endpoint (threshold >= maxdepth) is skipped --
 #                     it is already measured by a plain --config=symmetric_*
-#                     runtime.sh run. (YDF_SYMMETRIC_MAX_DEPTH=0 would be the
+#                     runtime.sh run. (SYMMETRIC_MAX_DEPTH=0 would be the
 #                     all-DFS endpoint; not swept by default.) Built once with
 #                     --config=symmetric_depthwise_ap.
 #
@@ -104,14 +104,14 @@ fi
 case "$MODE" in
   dw1)
     MODE_CONFIG="--config=depthwise_1_pass"
-    SWEEP_ENV="YDF_DW1_MIN_DEPTH"
+    SWEEP_ENV="DW1_MIN_DEPTH"
     SWEEP_COL="dw1_min_depth"
     DEPTH_STEP="${STEP_OVERRIDE:-4}"
     OUT_PREFIX="dw1_depth_linesearch"
     ;;
   symmetric)
     MODE_CONFIG="--config=symmetric_depthwise_ap"
-    SWEEP_ENV="YDF_SYMMETRIC_MAX_DEPTH"
+    SWEEP_ENV="SYMMETRIC_MAX_DEPTH"
     SWEEP_COL="symmetric_max_depth"
     DEPTH_STEP="${STEP_OVERRIDE:-5}"
     OUT_PREFIX="symmetric_depth_linesearch"
@@ -269,7 +269,7 @@ write_provenance() {
 # Run one sweep point: NUM_RUNS reps, median + sample stddev, append a CSV row.
 # Mirrors runtime.sh's run_cmd timing/median math + OOM/ERROR tolerance.
 #   run_point <dataset_label> <point_value> <env_prefix> <cmd>
-# env_prefix is e.g. "YDF_SYMMETRIC_MAX_DEPTH=5" (depth modes) or "" (layout).
+# env_prefix is e.g. "SYMMETRIC_MAX_DEPTH=5" (depth modes) or "" (layout).
 run_point() {
   local dataset_label="$1" point="$2" env_prefix="$3" cmd="$4"
   echo "${env_prefix:+$env_prefix }$cmd" | tee -a "$logfile"

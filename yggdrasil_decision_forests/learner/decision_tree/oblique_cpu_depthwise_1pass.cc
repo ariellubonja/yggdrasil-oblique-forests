@@ -1,3 +1,14 @@
+// Motivation: At mid depths the frontier holds thousands of small nodes, and the union of
+// their sampled columns covers the feature space many times over: total
+// column references N*K*d >> F. The previous kernel visited columns in
+// (node, projection) order — K*d random column hops per node, the same DRAM
+// pattern as the nodewise baseline. This kernel inverts the loop: bucket
+// every (node, projection, weight) reference of the whole depth by column,
+// then walk the touched columns once in ascending order. Each column's
+// gathers become one ordered pass over the depth's row bands
+// (page/TLB/DRAM-row friendly) instead of being scattered across the whole
+// depth.
+
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_1pass.h"
 
 #ifdef DEPTHWISE_1_PASS
@@ -22,26 +33,9 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 
 namespace {
 
-// Manual switch for the per-depth debug instrumentation below (the
-// `----DEPTH d----` / `[DW1 colstats]` / `[DW1 colshare]` dumps and the
-// dw1_node_sizes.txt file). Flip to `true` and rebuild to collect them; the
-// env knobs (YDF_DW1_COL_STATS, YDF_DW1_COL_SHARE_OUT,
-// YDF_DW1_NODE_SIZES_*) only take effect while this is on. Off by default so
-// normal runs stay silent and pay nothing for the stats pass.
+// Manual switch for the per-depth node & column stats
 constexpr bool kDw1DebugStats = false;
 
-// Column-centric depthwise sweep.
-//
-// At mid depths the frontier holds thousands of small nodes, and the union of
-// their sampled columns covers the feature space many times over: total
-// column references N*K*d >> F. The previous kernel visited columns in
-// (node, projection) order — K*d random column hops per node, the same DRAM
-// pattern as the nodewise baseline. This kernel inverts the loop: bucket
-// every (node, projection, weight) reference of the whole depth by column,
-// then walk the touched columns once in ascending order. Each column's
-// gathers become one ordered pass over the depth's row bands
-// (page/TLB/DRAM-row friendly) instead of being scattered across the whole
-// depth.
 
 struct ColEntry {
   int32_t node;   // index within the depth batch
@@ -52,6 +46,7 @@ struct ColEntry {
 
 // Original per-(node, projection) kernel via AttributeValue. Only used when
 // direct column pointers are unavailable (alternate dataset layouts).
+// Differs from oblique.cc version bcs. outputs to a slab, not own vector
 inline void EvaluateProjectionRowsGeneric(
     const internal::ProjectionEvaluator& evaluator,
     const internal::Projection& proj, const UnsignedExampleIdx* sel_ptr,
@@ -208,17 +203,17 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
     // ── Per-node example counts at one depth, dumped to a file ─────────
     // At every depth (default) append one line per node of that depth with its
-    // example count, to YDF_DW1_NODE_SIZES_FILE (default dw1_node_sizes.txt).
-    // Restrict to a single depth with YDF_DW1_NODE_SIZES_DEPTH=<d>; off with
-    // YDF_DW1_NODE_SIZES_DEPTH=-1.
+    // example count, to DW1_NODE_SIZES_FILE (default dw1_node_sizes.txt).
+    // Restrict to a single depth with DW1_NODE_SIZES_DEPTH=<d>; off with
+    // DW1_NODE_SIZES_DEPTH=-1.
     {
       // -2 = every depth (the default), -1 = off, >=0 = that depth only.
       static const int32_t kNodeSizesDepth = [] {
-        const char* e = std::getenv("YDF_DW1_NODE_SIZES_DEPTH");
+        const char* e = std::getenv("DW1_NODE_SIZES_DEPTH");
         return e == nullptr ? -2 : static_cast<int32_t>(std::atoi(e));
       }();
       static const std::string kNodeSizesFile = [] {
-        const char* e = std::getenv("YDF_DW1_NODE_SIZES_FILE");
+        const char* e = std::getenv("DW1_NODE_SIZES_FILE");
         return std::string(e == nullptr ? "dw1_node_sizes.txt" : e);
       }();
       if (kNodeSizesDepth == -2 || current_depth == kNodeSizesDepth) {
@@ -242,22 +237,22 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     // the column of that node's row count (a node referencing the column from
     // several projections re-reads the same examples, so it counts once).
     // One column per line, under a ----DEPTH X---- header.
-    // Silence with YDF_DW1_COL_STATS=0; add untouched columns (c17: 0) with
-    // YDF_DW1_COL_STATS_ALL=1; keep only the one-line summary below with
-    // YDF_DW1_COL_STATS=summary.
+    // Silence with DW1_COL_STATS=0; add untouched columns (c17: 0) with
+    // DW1_COL_STATS_ALL=1; keep only the one-line summary below with
+    // DW1_COL_STATS=summary.
     {
       static const std::string kColStatsMode = [] {
-        const char* e = std::getenv("YDF_DW1_COL_STATS");
+        const char* e = std::getenv("DW1_COL_STATS");
         return std::string(e == nullptr ? "" : e);
       }();
       static const bool kColStats = kColStatsMode != "0";
       static const bool kColStatsPerCol = kColStats && kColStatsMode != "summary";
       static const bool kColStatsAll = [] {
-        const char* e = std::getenv("YDF_DW1_COL_STATS_ALL");
+        const char* e = std::getenv("DW1_COL_STATS_ALL");
         return e != nullptr && std::string(e) == "1";
       }();
       static const std::string kColShareFile = [] {
-        const char* e = std::getenv("YDF_DW1_COL_SHARE_OUT");
+        const char* e = std::getenv("DW1_COL_SHARE_OUT");
         return std::string(e == nullptr ? "" : e);
       }();
       if (kColStats || !kColShareFile.empty()) {
