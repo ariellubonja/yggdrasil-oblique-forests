@@ -15,6 +15,7 @@
 ```text
 build:depthwise_1_pass            --cxxopt="-DDEPTHWISE_1_PASS=1"
 build:dw1_shared_rows             --config=depthwise_1_pass --cxxopt="-DDW1_SHARED_ROWS=1"
+build:dw1_sr_hot_nodes            --config=dw1_shared_rows --cxxopt="-DDW1_HOT_NODES=1"   # fused kernel for big nodes only; #error without dw1_shared_rows
 build:row_major_dataset_layout    --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 build:symmetric_depthwise_ap      --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
 build:bfs_only                    --cxxopt="-DBFS_ONLY=1"                     # mutually exclusive with symmetric_*
@@ -39,7 +40,13 @@ build:profiler --cxxopt=-O2 -g, no fission    # for VTune/perf
 Env knobs (read once, cached in a static): `YDF_RM_MAX_ROWS` (node-size threshold, default
 5000 baked by the harness `main()`; ∞ if binary run without harness), `YDF_DW1_MIN_DEPTH`
 (default 0), `YDF_SYMMETRIC_MAX_DEPTH` (default
-INT32_MAX; deeper levels hand off to DFS `GrowTreeLocal`).
+INT32_MAX; deeper levels hand off to DFS `GrowTreeLocal`), `YDF_DW1_HOT_MIN_ROWS`
+(`dw1_sr_hot_nodes` only, default 1000: a node is fused iff `sel.size() >=` it, everything
+smaller runs the stock per-node `Evaluate`; **0 = every node hot = plain `dw1_shared_rows`**,
+the purity control. The trained model is bit-identical at every value, so a hash sweep over
+this knob — `compare_models.sh` on `--model_out_dir` outputs — is the correctness test;
+sweep it for perf, `{250, 500, 1000, 2000, 4000}`, in Quick mode first. Not combinable with
+`--config=nodewise_chrono`).
 
 ### `--config=nodewise_chrono` — per-node ApplyProjection cost
 

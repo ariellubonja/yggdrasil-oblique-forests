@@ -93,6 +93,42 @@ void AdvanceDepthBag(
     absl::Span<const int32_t> prev_first_child, size_t bag_size,
     DepthBagChrono billing, DepthBagState* state);
 
+#ifdef DW1_HOT_NODES
+// Hot-nodes variant of AdvanceDepthBag (see .bazelrc:dw1_sr_hot_nodes): the bag
+// covers only the depth's HOT nodes, so it is smaller than the depth's example
+// set and its labels index the HOT arrays (0..K-1), which is what the kernel
+// reads. Called by the BFS driver (not by the kernel) because only the driver
+// holds the full-domain node spans the relabel walks.
+//
+// The parent -> child hop still runs in the FULL node domain -- a hot parent's
+// rows may land in a cold child, and the membership test consumes the child
+// spans in order -- so the pass takes the full spans plus two index maps:
+//   `prev_hot_to_full` : previous depth's hot index -> previous batch index,
+//                        i.e. the inverse of the labels stored in state->bag.
+//   `hot_of_node`      : this depth's batch index -> hot index, or -1 if cold.
+// A row whose new owner is cold is dropped from the bag, exactly like a row
+// whose parent leafed out. This is consistent because the gate is monotone
+// (child rows <= parent rows => a hot node's parent is hot), so every hot node's
+// rows are present in the previous hot bag and the relabel keeps telescoping.
+//
+// `hot_selected_examples_per_node` is the hot subsequence of the full spans (in
+// hot-index order) and is used only by the concat+VQSort fallback.
+// `hot_bag_size` must equal the sum of those spans' sizes and be > 0.
+//
+// Same billing rule as AdvanceDepthBag, one level up: the driver must wrap this
+// call in a kProjectionEvaluate scope (the kernel no longer advances the bag in
+// this build) so bag time stays inside ApplyProjection.
+void AdvanceDepthBagHot(
+    absl::Span<const absl::Span<const UnsignedExampleIdx>>
+        selected_examples_per_node,
+    absl::Span<const absl::Span<const UnsignedExampleIdx>>
+        hot_selected_examples_per_node,
+    absl::Span<const int32_t> prev_first_child,
+    absl::Span<const uint32_t> prev_hot_to_full,
+    absl::Span<const int32_t> hot_of_node, size_t hot_bag_size,
+    DepthBagState* state);
+#endif  // DW1_HOT_NODES
+
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
 #endif  // YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_DEPTHWISE_BAG_H_

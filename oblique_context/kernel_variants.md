@@ -144,6 +144,7 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 | BFS-only control | `--config=bfs_only` | `GrowTreeLocalBFS` fallback branch | scheduler ablation |
 | DW1 depthwise 1-pass (col-sharing) | `--config=depthwise_1_pass` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
 | DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem in core §13 |
+| DW1 hot-nodes hybrid | `--config=dw1_sr_hot_nodes` (implies dw1_shared_rows) | gate in `GrowTreeLocalBFS`; cold branch in `oblique.cc`; `AdvanceDepthBagHot` | fused kernel for big nodes only; bit-identical at every threshold; unmeasured (2026-07-25) |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
 | Subtree gather cache | *(code removed 2026-07-16)* | was `oblique.cc` `#ifdef SUBTREE_GATHER_CACHE`; recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
@@ -241,6 +242,89 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   return absl::OkStatus();
 }
 ```
+
+### DW1 hot-nodes hybrid (`--config=dw1_sr_hot_nodes`, added 2026-07-25)
+
+**One idea:** run the shared-rows colwalk on the depth's **big nodes only**; every other
+node of the same depth is evaluated by the stock per-node `ProjectionEvaluator::Evaluate`.
+Nothing about the kernel itself changes — it just gets a smaller frontier.
+
+Motivation (`nodewise_ap.csv`, HIGGS tree 0, depths 5/10/15/20): nodes above the pooled
+mean `n_gathers` are **7.5 % of nodes but 91.8 % of AP time** (90.8 % of rows). The
+shared-rows postmortem's failure (a) — scatter-write RFO amplification — scales with the
+**number** of nodes at the depth (one interleaved slab write stream per node-with-a-ref per
+column pass): at depth 20 that is 45.8 k streams ≈ 2.9 MB ≫ the per-thread cache share.
+Gating to the hot set caps it at ~2–4 k streams (~120–230 KB) at every depth while keeping
+most of the fused work. Failure (b) (the `off<0` bag skip-scan) is **not** addressed: on
+HIGGS a column is referenced by ~27 % of nodes regardless of the gate, so with K≈2 k hot
+nodes ~500 still share each column pass and per-column amortization survives; on wide
+trunks sharing collapses to ~1 node/column with or without the gate (wide stays symmetric's
+territory). Known ceiling: the recorded depth ladder covers only ~15 % of a tree's AP and
+the hot row share falls with depth (70.6 % at d20), so whole-tree hot AP share is likely
+~50–65 %, not 91.8 %.
+
+**Gate.** Hot iff `sel.size() >= YDF_DW1_HOT_MIN_ROWS` (default 1000 ≈ the mean-`n_gathers`
+cut, since `n_gathers ≈ 9·rows` on HIGGS). Rows rather than `n_gathers` because the gate
+must be **monotone down the tree** (child rows ≤ parent rows ⇒ a hot node's parent is hot),
+which is what lets the depth bag keep telescoping. `=0` ⇒ everything hot ⇒ exactly the
+ungated `dw1_shared_rows` (purity control). Per-depth "above average" was rejected: at
+depth 5 it keeps 1 of 16 nodes despite all 16 being huge.
+
+**Sampling is untouched** — all nodes still sample their own projections at depth level in
+node-major RNG order. The gate only picks *which kernel evaluates* a node, and both kernels
+accumulate in ascending attribute order into an fp32 zero ⇒ **the model is bit-identical at
+every threshold value**, which is the correctness check (see below).
+
+Flow inside the `DEPTHWISE_1_PASS` branch of `GrowTreeLocalBFS` (all `#ifdef DW1_HOT_NODES`;
+other builds unchanged):
+
+```text
+sample all_node_projs[n][p]                  (unchanged, full frontier)
+hot_of_node[n] = k or -1 ; hot_nodes[k] = n  (gate on sel_spans[n].size())
+hot_sel_spans[k] = sel_spans[n] ; hot_projs[k] = std::move(all_node_projs[n])
+                                             (move: hot defs point into hot_projs,
+                                              cold defs stay in all_node_projs)
+if K > 0:
+  { CHRONO_SCOPE_COARSE(kProjectionEvaluate);   // driver-side, sequential (not nested)
+    AdvanceDepthBagHot(full sel_spans, hot_sel_spans, first_child,
+                       prev_hot_to_full, hot_of_node, hot_rows, &depth_bag_state); }
+  ApplyProjectionsDepthwise1Pass(hot_sel_spans, hot_projs, …, projected /*size K*/)
+else: depth_bag_state.valid = false           // latches: monotone gate ⇒ no deeper hot node
+capture_prev_nodes(depth_batch) ; prev_hot_to_full = hot_nodes
+per node n: defs = hot ? &hot_projs[k] : &all_node_projs[n];  mono = &all_node_mono[n];
+            slab = hot ? projected[k] : (empty)   → NodeTrain
+```
+
+- **Why the driver advances the bag** (`oblique_cpu_depthwise_bag.{h,cc}`,
+  `AdvanceDepthBagHot`): the bag covers only hot rows and its labels are hot indices, but
+  the parent→child hop runs in the **full** node domain (a hot parent's rows may land in a
+  cold child, and the membership test consumes child spans in order). Only the driver holds
+  the full spans + both index maps, so the kernel's internal `AdvanceDepthBag` call is
+  `#ifndef DW1_HOT_NODES`. Relabel = the same streaming pass plus two index lookups
+  (`prev_hot_to_full` in, `hot_of_node` out) and one extra drop condition (new owner cold —
+  same mechanism as the existing leaf drop). Self-validation + concat/VQSort fallback (over
+  the hot spans, whose positions *are* the hot labels) unchanged.
+- **Why the cold branch in `oblique.cc` is mandatory:** a cold node gets defs+mono but no
+  slab, so `has_precomputed_projected` is false; without the new `else if (defs && mono)`
+  branch it would fall into the driver's main loop and **re-sample**, consuming the RNG
+  twice. That branch just loops `Evaluate` + `EvaluateProjection` over the handed-down
+  projections.
+- **Chrono:** hot AP bills to `ProjectionEvaluate` at depth level as before (bag advance
+  included); cold AP bills to the same cell from inside `NodeTrain` (`Evaluate` carries its
+  own scope) — so at a mixed depth `TreeTrain = ΣNodeTrain + ΣAP + ΣSampleProjection` no
+  longer partitions cleanly (cold AP is nested in `NodeTrain`). Not combinable with
+  `--config=nodewise_chrono` (hot nodes bypass `Evaluate` ⇒ the dump selfcheck trips).
+- Side effect: peak slab memory shrinks (slabs allocated for hot nodes only).
+
+**Verified 2026-07-25** (macOS, correctness only — perf numbers must come from m7i/8488C):
+trunk 20k×32 / 100k×29 / 8192×4096, `nodes-*` hash identical across
+`YDF_DW1_HOT_MIN_ROWS ∈ {0, 1, 100, 250, 1000, 4000, 10000, 1e9}` **and** identical to the
+ungated `--config=dw1_shared_rows` control; same under a DCHECK-enabled build
+(`--cxxopt=-UNDEBUG`: bag sortedness, `node_of_bag` sizing, kernel bag/valid asserts). A
+temporary trace on 20k×32 (T=1000) confirmed the intended shape: the incremental relabel
+fires at every fused depth after the first (10/11 calls; the one fallback is the first fused
+depth, which has no previous hot bag), the gate prunes hard (depth 8: 122 nodes → 2 hot;
+depth 11: 302 → 2), and `hot=0` latches from depth 13 down.
 
 ### Symmetric: `ApplyProjectionsSymmetricDepthwiseAP` (oblique_cpu_symmetric_depthwise_ap.cc)
 

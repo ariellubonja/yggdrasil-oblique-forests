@@ -48,6 +48,11 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 // compiles the same signature and ignores both arguments — its path has no
 // bag and must not pay for one. Pass an empty span + nullptr from that path.
 //
+// Under DW1_HOT_NODES the frontier handed in is the depth's HOT nodes only and
+// the driver has already advanced `bag_state` (over exactly those rows, labelled
+// by hot index) before the call, because the relabel needs the full-domain node
+// spans that the kernel never sees; `prev_first_child` is then unused.
+//
 // `current_depth` is used only by the per-depth column-stats debug print
 // (YDF_DW1_COL_STATS); the kernel itself is depth-agnostic.
 absl::Status ApplyProjectionsDepthwise1Pass(

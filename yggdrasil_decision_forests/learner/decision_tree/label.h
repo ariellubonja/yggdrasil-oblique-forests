@@ -28,6 +28,11 @@
 #if (defined(SYMMETRIC_DEPTHWISE_AP) + defined(BFS_ONLY)) > 1
 #error "SYMMETRIC_DEPTHWISE_AP and BFS_ONLY are mutually exclusive"
 #endif
+// The hot-nodes gate is a modifier ON the shared-rows colwalk (it exists to
+// bound that kernel's write streams), never a standalone scheduler.
+#if defined(DW1_HOT_NODES) && !defined(DW1_SHARED_ROWS)
+#error "DW1_HOT_NODES requires DW1_SHARED_ROWS (use --config=dw1_sr_hot_nodes)"
+#endif
 #if defined(DEPTHWISE_1_PASS)
 #define OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS 1
 #endif

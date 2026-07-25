@@ -413,6 +413,7 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 | BFS-only control | `--config=bfs_only` | `GrowTreeLocalBFS` fallback branch | scheduler ablation |
 | DW1 depthwise 1-pass (col-sharing) | `--config=depthwise_1_pass` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
 | DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem §13 |
+| DW1 hot-nodes hybrid | `--config=dw1_sr_hot_nodes` (implies dw1_shared_rows) + `YDF_DW1_HOT_MIN_ROWS` | gate in `GrowTreeLocalBFS` (training.cc); cold branch in `oblique.cc`; `AdvanceDepthBagHot` | shared-rows kernel for the depth's big nodes only, stock `Evaluate` for the rest; bit-identical at every threshold; **unmeasured (2026-07-25)** |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
 | Subtree gather cache | *(code removed 2026-07-16)* | recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |

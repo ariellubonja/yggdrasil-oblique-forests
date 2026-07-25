@@ -311,7 +311,44 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
             best_condition->condition().higher_condition().threshold();
       }
     }
-  } else
+  }
+#ifdef DW1_HOT_NODES
+  // Cold node under the DW1 hot-nodes gate: the depth-level driver sampled this
+  // node's projections (same RNG order as every other node) but left it out of
+  // the fused kernel, so there is no slab. Evaluate the handed-down projections
+  // here with the stock per-node kernel. Re-entering the main loop below instead
+  // would re-sample and consume the RNG a second time.
+  //
+  // Same values as the fused path: both accumulate a projection in ascending
+  // attribute order into a fp32 zero, so the tree is bit-identical whatever the
+  // gate decides. Evaluate() carries its own kProjectionEvaluate scope, so this
+  // node's AP still bills to the ApplyProjection cell (nested inside NodeTrain,
+  // unlike the hot nodes' depth-level slab time).
+  else if (internal_config.depthwise_projection_defs != nullptr &&
+           internal_config.depthwise_monotonic != nullptr) {
+    const auto& depth_projs = *internal_config.depthwise_projection_defs;
+    const auto& depth_mono = *internal_config.depthwise_monotonic;
+    for (size_t proj_idx = 0; proj_idx < depth_projs.size(); ++proj_idx) {
+      if (depth_projs[proj_idx].empty()) continue;
+      RETURN_IF_ERROR(projection_evaluator.Evaluate(
+          depth_projs[proj_idx], selected_examples, &projection_values));
+      ASSIGN_OR_RETURN(
+          const auto result,
+          EvaluateProjection(dynamic_dt_config, label_stats, dense_example_idxs,
+                             selected_weights, selected_labels,
+                             projection_values, internal_config,
+                             depth_projs[proj_idx].front().attribute_idx,
+                             constraints, depth_mono[proj_idx], best_condition,
+                             cache, random));
+      if (result == SplitSearchResult::kBetterSplitFound) {
+        best_projection = depth_projs[proj_idx];
+        best_threshold =
+            best_condition->condition().higher_condition().threshold();
+      }
+    }
+  }
+#endif  // DW1_HOT_NODES
+  else
 #endif
   {
 /* #endregion */

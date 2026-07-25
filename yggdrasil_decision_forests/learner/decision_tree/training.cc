@@ -5591,6 +5591,28 @@ int32_t Depthwise1PassMinDepth() {
 }
 #endif
 
+#if defined(DW1_HOT_NODES)
+// Row count above which a node (of this depth) is "hot" and is evaluated by the
+// fused shared-rows kernel; smaller nodes fall back to the stock per-node 
+// ProjectionEvaluator::Evaluate. Read once from
+// YDF_DW1_HOT_MIN_ROWS (default 1000 ~ the mean-n_gathers cut measured on HIGGS
+// in nodewise_ap.csv, P=6 x nnz~1.5 => ~9 gathers/row).
+//
+// The gate is on ROWS rather than on n_gathers so that it is monotone down the
+// tree (a child never has more rows than its parent) -- which is exactly what
+// lets the shared-rows depth bag keep telescoping: a hot node's parent is
+// necessarily hot, so its rows are always present in the previous depth's hot
+// bag. 0 = every node hot = the ungated dw1_shared_rows behavior.
+size_t Dw1HotMinRows() {
+  static const size_t value = [] {
+    const char* e = std::getenv("YDF_DW1_HOT_MIN_ROWS");
+    return e != nullptr ? static_cast<size_t>(std::strtoull(e, nullptr, 10))
+                        : static_cast<size_t>(1000);
+  }();
+  return value;
+}
+#endif
+
 #if defined(SYMMETRIC_DEPTHWISE_AP)
 // Deepest level (inclusive) that runs the symmetric bagwide path; levels deeper
 // than this hand each frontier node off to the stack-based DFS grower
@@ -5651,6 +5673,13 @@ absl::Status GrowTreeLocalBFS(
   // for both fused kernels.
   std::vector<NodeWithChildren*> prev_nodes;
   std::vector<int32_t> first_child;
+#ifdef DW1_HOT_NODES
+  // Previous fused depth's hot index -> its index in prev_nodes / first_child.
+  // The depth bag's labels are hot indices, so the relabel needs this to look
+  // an entry's parent up in first_child. Empty => no previous hot set (first
+  // fused depth, or the previous depth had no hot node) => bag rebuild.
+  std::vector<uint32_t> prev_hot_to_full;
+#endif
 
   // Rebuild first_child from the previous batch's node pointers: NodeTrain
   // pushes (neg, pos) per split parent in parent order, so children occupy
@@ -5754,7 +5783,53 @@ absl::Status GrowTreeLocalBFS(
       rebuild_first_child(num_nodes);
 #endif
 
+#ifdef DW1_HOT_NODES
+      // ── Hot gate ──────────────────────────────────────────────────────
+      // Split the frontier by size: the fused kernel runs on the big ("hot")
+      // nodes only, the rest are evaluated node-by-node by the stock
+      // ProjectionEvaluator::Evaluate (oblique.cc's cold branch). Sampling
+      // above is untouched -- every node still drew its own projections in the
+      // same RNG order -- so the gate only picks WHICH kernel evaluates a node
+      // and the trained tree is invariant to the threshold.
+      //
+      // Why size: the shared-rows colwalk's cost is one interleaved slab write
+      // stream per node-with-a-reference on every column pass, and it collapses
+      // once those streams stop fitting in the per-thread cache share. That
+      // count scales with the NUMBER of nodes at the depth, while the AP work
+      // is concentrated in the few big ones (HIGGS: ~7.5% of nodes ~ 92% of AP
+      // time), so gating on rows keeps nearly all the fused work at a small
+      // fraction of the write streams.
+      const size_t hot_min_rows = Dw1HotMinRows();
+      std::vector<int32_t> hot_of_node(num_nodes, -1);  // node -> hot idx, -1 cold
+      std::vector<uint32_t> hot_nodes;                  // hot idx -> node
+      hot_nodes.reserve(num_nodes);
+      for (int n = 0; n < num_nodes; ++n) {
+        if (sel_spans[n].size() >= hot_min_rows) {
+          hot_of_node[n] = static_cast<int32_t>(hot_nodes.size());
+          hot_nodes.push_back(static_cast<uint32_t>(n));
+        }
+      }
+      const int num_hot = static_cast<int>(hot_nodes.size());
+
+      // Compact the hot nodes' spans and projections into dense hot-indexed
+      // arrays: the kernel's slabs, bag labels and per-node scratch are all
+      // sized/indexed by the frontier it is given. The projections are MOVED,
+      // so a hot node's defs pointer below points into hot_projs and a cold
+      // node's into all_node_projs -- no copy either way.
+      std::vector<absl::Span<const UnsignedExampleIdx>> hot_sel_spans(num_hot);
+      std::vector<std::vector<internal::Projection>> hot_projs(num_hot);
+      size_t hot_rows = 0;
+      for (int k = 0; k < num_hot; ++k) {
+        const uint32_t n = hot_nodes[k];
+        hot_sel_spans[k] = sel_spans[n];
+        hot_projs[k] = std::move(all_node_projs[n]);
+        hot_rows += sel_spans[n].size();
+      }
+
+      std::vector<std::vector<float>> projected(num_hot);
+#else
       std::vector<std::vector<float>> projected(num_nodes);
+#endif  // DW1_HOT_NODES
 #ifdef YDF_LINECOUNT_A
       {
         // Exact per-node distinct-cache-line tally for this depth level. sel is
@@ -5790,6 +5865,36 @@ absl::Status GrowTreeLocalBFS(
       CALLGRIND_START_INSTRUMENTATION;
       CALLGRIND_ZERO_STATS;
 #endif
+#ifdef DW1_HOT_NODES
+      if (num_hot > 0) {
+        {
+          // The hot bag spans only the hot nodes' rows and is labelled by hot
+          // index, but its parent->child hop runs in the full node domain, so
+          // it is advanced here (the kernel sees only the hot arrays) rather
+          // than inside the kernel. Wrapped in the kernel's own coarse scope --
+          // sequentially, not nested -- so bag time keeps landing in the
+          // ApplyProjection cell of this (tree, depth).
+          CHRONO_SCOPE_COARSE(
+              ::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
+          AdvanceDepthBagHot(absl::MakeConstSpan(sel_spans),
+                             absl::MakeConstSpan(hot_sel_spans),
+                             absl::MakeConstSpan(first_child),
+                             absl::MakeConstSpan(prev_hot_to_full),
+                             absl::MakeConstSpan(hot_of_node), hot_rows,
+                             &depth_bag_state);
+        }
+        RETURN_IF_ERROR(ApplyProjectionsDepthwise1Pass(
+            train_dataset, config_link.numerical_features(),
+            absl::MakeConstSpan(hot_sel_spans), absl::MakeConstSpan(hot_projs),
+            absl::MakeConstSpan(first_child), &depth_bag_state,
+            absl::MakeSpan(projected), current_depth));
+      } else {
+        // No hot node at this depth: no bag was produced, so the next fused
+        // depth must rebuild rather than relabel. (The gate is monotone, so in
+        // practice no deeper node is hot either and this latches.)
+        depth_bag_state.valid = false;
+      }
+#else
       // first_child / &depth_bag_state drive the shared-rows depth bag; the
       // col-sharing build compiles the same call and ignores both (first_child
       // stays empty, depth_bag_state unused).
@@ -5799,6 +5904,7 @@ absl::Status GrowTreeLocalBFS(
           absl::MakeConstSpan(all_node_projs),
           absl::MakeConstSpan(first_child), &depth_bag_state,
           absl::MakeSpan(projected), current_depth));
+#endif  // DW1_HOT_NODES
 #ifdef YDF_CALLGRIND_DEPTH
       { char nm[64];
         std::snprintf(nm, sizeof nm, "dw1_depth_%d", (int)current_depth);
@@ -5811,7 +5917,39 @@ absl::Status GrowTreeLocalBFS(
       // batch entries; consumed at the next depth by rebuild_first_child.
       capture_prev_nodes(depth_batch);
 #endif
+#ifdef DW1_HOT_NODES
+      // Same handover for the bag's label space: hot idx -> batch idx, read by
+      // the next fused depth's relabel. Cleared when nothing was fused.
+      if (num_hot > 0) {
+        prev_hot_to_full = hot_nodes;
+      } else {
+        prev_hot_to_full.clear();
+      }
+#endif
 
+#ifdef DW1_HOT_NODES
+      for (int n = 0; n < num_nodes; ++n) {
+        auto node_config = internal_config;
+        const int32_t k = hot_of_node[n];
+        // Hot: hand down the slab (oblique.cc reads projected values straight
+        // out of it). Cold: hand down the pre-sampled projections WITHOUT a
+        // slab -- oblique.cc's cold branch evaluates them with the stock
+        // per-node Evaluate. Handing them down is mandatory: falling through to
+        // the driver's main loop would re-sample and consume the RNG twice.
+        node_config.depthwise_projection_defs =
+            (k >= 0) ? &hot_projs[k] : &all_node_projs[n];
+        node_config.depthwise_monotonic = &all_node_mono[n];
+        if (k >= 0) {
+          node_config.precomputed_projected_values =
+              absl::MakeConstSpan(projected[k]);
+        }
+        RETURN_IF_ERROR(NodeTrain(train_dataset, config, config_link, dt_config,
+                                  deployment, weights, node_config, random,
+                                  cache, std::move(depth_batch[n]),
+                                  node_queue));
+        if (k >= 0) std::vector<float>().swap(projected[k]);
+      }
+#else
       for (int n = 0; n < num_nodes; ++n) {
         auto node_config = internal_config;
         node_config.depthwise_projection_defs = &all_node_projs[n];
@@ -5824,6 +5962,7 @@ absl::Status GrowTreeLocalBFS(
                                   node_queue));
         std::vector<float>().swap(projected[n]);
       }
+#endif  // DW1_HOT_NODES
     } else
 #elif defined(SYMMETRIC_DEPTHWISE_AP)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1 &&
@@ -5957,6 +6096,9 @@ absl::Status GrowTreeLocalBFS(
       // Invalidate it so a later fused depth takes the concat+VQSort fallback
       // instead of relabelling from a stale chain.
       depth_bag_state.valid = false;
+#endif
+#ifdef DW1_HOT_NODES
+      prev_hot_to_full.clear();
 #endif
 // TODO Ariel - make this use GrowTreeLocal.
 // Or is GrowTreeLocal even mandatory for Depthwise 1-pass? It has a performance penalty

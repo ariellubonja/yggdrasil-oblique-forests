@@ -102,14 +102,22 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     }
   }
 
-#ifdef DW1_SHARED_ROWS
+#if defined(DW1_SHARED_ROWS) && !defined(DW1_HOT_NODES)
   // ── Depth bag ──────────────────────────────────────────────────────
   // Obtain this depth's example-sorted (bag, node_of_bag) once for the whole
   // frontier (O(bag) relabel of the previous depth's bag in the steady state,
   // concat + VQSort fallback otherwise). The colwalk below reads it directly.
   AdvanceDepthBag(selected_examples_per_node, prev_first_child, total_rows,
                   DepthBagChrono::kDw1SharedRows, bag_state);
-#endif  // DW1_SHARED_ROWS
+#endif  // DW1_SHARED_ROWS && !DW1_HOT_NODES
+#if defined(DW1_HOT_NODES)
+  // Hot-nodes build: the spans handed in are the depth's HOT nodes only, and
+  // the bag (over exactly those rows, labelled by hot index) was advanced by
+  // the BFS driver before this call -- only the driver holds the full-domain
+  // spans + hot/full index maps the relabel needs
+  DCHECK(bag_state != nullptr && bag_state->valid);
+  DCHECK_EQ(bag_state->bag.size(), total_rows);
+#endif  // DW1_HOT_NODES
 
   // ── Phase 2: Sweep ────────────────────────────────────────────────
   // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
