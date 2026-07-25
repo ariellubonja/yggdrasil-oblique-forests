@@ -44,24 +44,6 @@ struct ColEntry {
   float weight;
 };
 
-// Original per-(node, projection) kernel via AttributeValue. Only used when
-// direct column pointers are unavailable (alternate dataset layouts).
-// Differs from oblique.cc version bcs. outputs to a slab, not own vector
-inline void EvaluateProjectionRowsGeneric(
-    const internal::ProjectionEvaluator& evaluator,
-    const internal::Projection& proj, const UnsignedExampleIdx* sel_ptr,
-    size_t rows_n, float* out_for_proj) {
-  for (size_t i = 0; i < rows_n; ++i) {
-    const UnsignedExampleIdx ex = sel_ptr[i];
-    float acc = 0.f;
-    for (const auto& feat : proj) {
-      float v = evaluator.AttributeValue(feat.attribute_idx, ex);
-      acc += feat.weight * v;
-    }
-    out_for_proj[i] = acc;
-  }
-}
-
 }  // namespace
 
 absl::Status ApplyProjectionsDepthwise1Pass(
@@ -126,30 +108,15 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1Sweep);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
 
-    // Direct column pointers exist only for the default VerticalDataset
-    // layout; alternate trunk layouts fall back to the generic kernel.
-
-    // TODO make the code error out if incompatible layout. don't need fallback
-    bool col_major_dataset = true;
-    for (const auto attribute_idx : numerical_features) {
-      if (evaluator.AttributeData(attribute_idx) == nullptr) {
-        col_major_dataset = false;
-        break;
-      }
-    }
-
-    if (!col_major_dataset) {
-      CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1SweepGeneric);
-      for (size_t n = 0; n < N; ++n) {
-        const auto sel = selected_examples_per_node[n];
-        const auto& projs = projections_per_node[n];
-        for (size_t p = 0; p < projs.size(); ++p) {
-          EvaluateProjectionRowsGeneric(
-              evaluator, projs[p], sel.data(), sel.size(),
-              out_projected[n].data() + p * sel.size());
-        }
-      }
-      return absl::OkStatus();
+    // The column-centric sweep below walks raw column pointers, which exist
+    // only for the default column-major VerticalDataset layout. Alternate
+    // layouts (row-major mirror) are not supported yet.
+    if (!evaluator.IsColumnMajor()) {
+      return absl::UnimplementedError(
+          "The depthwise-1-pass oblique kernel requires the column-major "
+          "VerticalDataset layout. Alternate dataset layouts (e.g. "
+          "--config=row_major_dataset_layout with --dataset_layout=row) are "
+          "not supported with --config=depthwise_1_pass yet.");
     }
 
     // Column-centric sweep: bucket references by column, then walk the

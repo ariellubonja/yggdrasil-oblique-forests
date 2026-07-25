@@ -216,6 +216,11 @@ class ProjectionEvaluator {
     return *numerical_attributes_[attribute_idx];
   }
 
+  // True iff the evaluator reads the default column-major VerticalDataset
+  // store, i.e. AttributeData() returns usable column pointers. False in the
+  // alternate-layout modes (row-major mirror), where they are all null.
+  bool IsColumnMajor() const { return row_major_matrix_ == nullptr; }
+
   const float* AttributeData(int attribute_idx) const {
     return numerical_attribute_data_[attribute_idx];
   }
