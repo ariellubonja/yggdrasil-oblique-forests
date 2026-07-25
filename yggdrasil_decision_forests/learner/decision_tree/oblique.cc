@@ -1294,7 +1294,12 @@ absl::Status ProjectionEvaluator::Evaluate(
     std::vector<float>* values) const {
   RETURN_IF_ERROR(constructor_status_);
 
-  CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
+  // Deposits into the coarse (tree, depth) table exactly as CHRONO_SCOPE_COARSE
+  // did; under --config=nodewise_chrono the same interval also lands in a
+  // per-(node, projection) record. Identical to CHRONO_SCOPE_COARSE otherwise.
+  CHRONO_SCOPE_NODEWISE_AP(
+      ::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate,
+      selected_examples.size(), projection.size());
   values->resize(selected_examples.size());
 
   for (size_t selected_idx = 0; selected_idx < selected_examples.size(); selected_idx++) {

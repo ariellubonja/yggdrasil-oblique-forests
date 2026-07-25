@@ -5335,6 +5335,13 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
     node_cnt()[t][d]++;
     sample_cnt()[t][d] += selected_examples.size();
   }
+
+  // NODEWISE_CHRONO only: arms this node's ApplyProjection recorder if
+  // (t, depth) is gated in, and emits its one record on scope exit. Declared
+  // after the kNodeTrain timer so it unwinds first — the single push_back stays
+  // inside the NodeTrain interval it belongs to. Inert in every other build.
+  CHRONO_NODEWISE_NODE(t, d, node_and_examples.node_id,
+                       selected_examples.size());
 #endif
 
   if (selected_examples.empty()) {
@@ -5518,6 +5525,17 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
            : std::nullopt,
        depth + 1, pos_constraints, true});
 
+#ifdef NODEWISE_CHRONO
+  // Heap indices for the two children just pushed (neg is at size()-2, pos at
+  // the back). Set after the fact so the initializers above stay identical in
+  // every other build, where NodeAndExamples has no node_id at all.
+  node_stack[node_stack.size() - 2].node_id =
+      chrono_prof::NodewiseChildId(node_and_examples.node_id,
+                                   /*positive=*/false, depth + 1);
+  node_stack.back().node_id = chrono_prof::NodewiseChildId(
+      node_and_examples.node_id, /*positive=*/true, depth + 1);
+#endif
+
   return absl::OkStatus();
 }
 
@@ -5537,6 +5555,13 @@ absl::Status GrowTreeLocal(
   node_stack.push_back({root, std::move(selected_examples),
                         std::move(leaf_examples), depth, constraints,
                         set_leaf_already_set});
+#ifdef NODEWISE_CHRONO
+  // The tree root enters at depth 1 and is heap index 1. Any other entry depth
+  // means this is a detached subtree (the fused kernels' BFS->DFS handoff),
+  // whose position in the tree is not known here: leave the id 0 = unknown, and
+  // NodewiseChildId keeps propagating 0 to the whole subtree.
+  node_stack.back().node_id = (depth == 1) ? 1 : 0;
+#endif
 
   while (!node_stack.empty()) {
     auto current_node = std::move(node_stack.back());
@@ -5606,6 +5631,9 @@ absl::Status GrowTreeLocalBFS(
   node_queue.push_back({root, std::move(selected_examples),
                         std::move(leaf_examples), depth, constraints,
                         set_leaf_already_set});
+#ifdef NODEWISE_CHRONO
+  node_queue.back().node_id = (depth == 1) ? 1 : 0;
+#endif
 
 #if defined(SYMMETRIC_DEPTHWISE_AP) || defined(DEPTHWISE_1_PASS)
   // Incremental sorted-bag state shared by the symmetric and DW1 shared-rows

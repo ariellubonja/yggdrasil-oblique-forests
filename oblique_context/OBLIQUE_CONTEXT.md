@@ -110,9 +110,9 @@ RandomForestLearner::TrainWithStatusImpl        learner/random_forest/random_for
 ```
 
 Chrono-scope names (what `parallel_chrono.py` CSVs show). The profiler has a coarse
-base plus **two independent fine axes** (`--config=fine_chrono_applyprojection`,
-`--config=fine_chrono_evaluateprojection`); each includes coarse but not the other,
-FINE-everywhere = pass both.
+base plus **three independent axes** (`--config=fine_chrono_applyprojection`,
+`--config=fine_chrono_evaluateprojection`, `--config=nodewise_chrono`); each includes
+coarse but not the others, FINE-everywhere = pass both fine configs.
 Coarse base (`--config=coarse_chrono_profile`, always on in the fine configs too):
 `TreeTrain, NodeTrain, SampleProjection, EvaluateProj, ProjectionEvaluate (=ApplyProjection),
 FindObliqueSetup, ObliqueSplitSearch, FindBestCondition, GetCandidateAttributes(+Assign/Shuffle/
@@ -125,6 +125,17 @@ Fine axis EP (`fine_chrono_evaluateprojection`) adds the inner scopes of the spl
 `HistoPath (HistogramSetup, MinMaxNumerical, AssignSamplesToHistogram,
 SelectBestThresholdHistogram, EntropyTableSetup), CartPath (CartSetup, SortInitBuckets,
 SortFillBuckets, SortFeatures, SortScanSplits, ScanPresorted)`.
+Axis nodewise (`nodewise_chrono`) adds **no scopes**; it keeps the coarse tables
+byte-identical and adds a second sink on the same clock read inside
+`ProjectionEvaluator::Evaluate`, accumulating one CSV row per **node** at a gated
+depth ladder → `nodewise_ap.csv`
+(`tree,depth,node_id,n_rows,nnz,n_gathers,ap_ns,num_proj`; `node_id` = heap index, root = 1 at
+depth 1, children 2i/2i+1 ⇒ depth d holds ids [2^(d-1), 2^d); `nnz`/`ap_ns` summed over the
+node's projections). This is the only way to ask
+whether AP cost concentrates in a few nodes — the per-depth tables aggregate that away.
+Knobs `YDF_NODEWISE_{TREE,DEPTHS,OUT,RESERVE}`; the dump self-checks Σ`ap_ns` per
+(tree,depth) against the coarse `ProjEval` cell (must match exactly; the fused
+symmetric / dw1 kernels bypass `Evaluate` and will trip it).
 Invariant used by the tooling: **TreeTrain = ΣNodeTrain + ΣApplyProjection + ΣSampleProjection**
 (the BFS drivers pin `tls_ctx.cur_depth` before depth-level work so per-depth cells line up).
 

@@ -67,6 +67,13 @@ struct NodeAndExamples {
   NodeConstraints constraints;
   // If true, the leaf value of the node has already been set.
   bool set_leaf_already_set;
+#ifdef NODEWISE_CHRONO
+  // Heap index of the node (see chrono_prof::NodewiseChildId). Present only
+  // under --config=nodewise_chrono so every other build keeps this struct — one
+  // instance per node on the growth stack — byte-identical. Defaulted so the
+  // existing aggregate initializers, which do not list it, still compile.
+  uint64_t node_id = 0;
+#endif
 };
 
 // Initializes the item mask i.e. the bitmap of the items to consider or to

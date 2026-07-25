@@ -22,7 +22,8 @@ build:oblique_gpu                 --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=en
 build:coarse_chrono_profile          --cxxopt="-DCHRONO_PROFILE=1"                            # coarse base: top-level + node-bookkeeping/split-mgr/GBT scopes
 build:fine_chrono_applyprojection    --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_AP" # coarse + inner scopes of ProjectionEvaluator::Evaluate (sym / dw1)
 build:fine_chrono_evaluateprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_EP" # coarse + inner scopes of EvaluateProjection (histogram / Cart)
-  # Two INDEPENDENT fine axes: each includes coarse but not the other. FINE-everywhere = pass both fine configs together.
+build:nodewise_chrono                --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DNODEWISE_CHRONO=1" # coarse + one CSV row per (node, projection) AP call, gated by depth
+  # Three INDEPENDENT axes: each includes coarse but not the others. FINE-everywhere = pass both fine configs together.
 build:inline_projection_evaluate  --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
 build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
@@ -39,6 +40,65 @@ Env knobs (read once, cached in a static): `YDF_RM_MAX_ROWS` (node-size threshol
 5000 baked by the harness `main()`; ∞ if binary run without harness), `YDF_DW1_MIN_DEPTH`
 (default 0), `YDF_SYMMETRIC_MAX_DEPTH` (default
 INT32_MAX; deeper levels hand off to DFS `GrowTreeLocal`).
+
+### `--config=nodewise_chrono` — per-node ApplyProjection cost
+
+Answers "does a small subset of nodes carry most of the AP cost?", which the depth-aggregated
+CSVs cannot: they sum AP over every node at a depth. This axis leaves the coarse tables
+byte-identical and adds a **second sink on the same clock read** in
+`ProjectionEvaluator::Evaluate` (`ScopedNodewiseApTimer`, `utils/parallel_chrono.h`) — no
+extra `steady_clock::now()`, so the interval is the one the coarse tables already report.
+The accumulation happens after the closing clock read, outside the interval it describes — so
+`ApplyProjection` is undistorted, but the *enclosing* scopes (`NodeTrain`,
+`ObliqueSplitSearch`, `TreeTrain`) absorb three adds per projection and one `push_back` per
+node. Don't A/B e2e runtime against a non-nodewise build.
+
+Rows are per **node**: the node's Evaluate calls accumulate in thread-local state and are
+emitted once, when its `NodeTrain` scope closes. `nnz` and `ap_ns` are sums over the node's
+projections; the row set is fixed within a node, so `n_gathers = n_rows·nnz` survives the sum.
+
+```text
+YDF_NODEWISE_TREE=0             tree to record; -1 = all trees
+YDF_NODEWISE_DEPTHS=5,10,15,20  depth list, or "*" for every depth
+YDF_NODEWISE_OUT=nodewise_ap.csv
+YDF_NODEWISE_RESERVE=<n>        records reserved per recording tree (default 1<<20 single-tree,
+                                1<<16 all-trees) — pre-allocated before the pool starts so no
+                                realloc lands mid-measurement
+# columns: tree,depth,node_id,n_rows,nnz,n_gathers,ap_ns,num_proj   (sorted by depth, node_id)
+#   node_id   heap index: root = 1 (both growers enter at depth 1), children of i are 2i (neg)
+#             and 2i+1 (pos) ⇒ depth d holds ids [2^(d-1), 2^d), and the bits after the leading
+#             1 spell the root→node branch path. 0 = unknown (unrooted subtree / depth > 63).
+#   nnz       Σ projection.size() over the node's projections
+#   n_gathers n_rows*nnz; ns/gather = ap_ns/n_gathers is the rate metric (see §13 depth decay)
+#   num_proj  Evaluate calls for the node (0 ⇒ AP never ran)
+```
+
+The id is threaded down the growth stack: `internal::NodeAndExamples::node_id`
+(training.h, `#ifdef NODEWISE_CHRONO` so other builds keep the struct byte-identical), set on
+the root push in `GrowTreeLocal`/`GrowTreeLocalBFS` and on both children after NodeTrain's
+pushes via `chrono_prof::NodewiseChildId`. Works under DFS and BFS alike. The one path that
+yields `node_id = 0` is the fused kernels' BFS→DFS handoff, which grows a detached subtree —
+and those builds are excluded from this axis anyway.
+
+`NodewiseNodeScope` (training.cc, in NodeTrain's `#ifdef CHRONO_PROFILE` block) arms the
+recorder and emits the row. Nodes that never reach AP would otherwise vanish and inflate every
+concentration statistic, so they emit a `num_proj=0, nnz=0, ap_ns=0` row. In practice that path
+is dormant under the harness (`--min_examples=1` for Bagging, and the splitter enforces
+min_examples on both children, so every node that enters NodeTrain reaches AP); a "leaf" here
+is a node that ran AP and found no valid split, and appears with its real cost.
+
+Verified invariants, checked at dump time and logged as `NODEWISE_AP selfcheck`: per
+(tree, depth), Σ`ap_ns` == the coarse `ProjEval` cell **exactly**, and the row count ==
+the coarse `nodes` count. Externally verified too: ids are unique and inside `[2^(d-1), 2^d)`
+at every depth, and a gated shallow depth returns a complete level (depth 5 ⇒ 16 rows,
+ids 16…31). Combine only with the stock nodewise kernel — the fused symmetric /
+dw1 Apply paths never call `Evaluate`, produce no records, and trip the self-check.
+
+Volume: HIGGS, one tree, depths 5/10/15/20 ≈ 55k rows ≈ 1.8 MB. One full tree at every depth
+≈ 2.6M rows ≈ 80 MB, so widen the ladder deliberately. Note the default ladder covers only
+2.6 % of a tree's nodes and 15 % of its AP, with **no** coverage of depths 21–40 where ~88 %
+of the nodes live — enough for within-depth spread, not for a global Lorenz curve. For that,
+`YDF_NODEWISE_DEPTHS` = every 5th depth plus all of d≤12 reaches ~48 % of AP for ~8 MB.
 
 ## Harness: `examples/train_oblique_forest.cc`
 

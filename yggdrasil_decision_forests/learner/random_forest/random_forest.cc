@@ -674,6 +674,24 @@ RandomForestLearner::TrainWithStatusImpl(
   tree_thread_id().resize(rf_config.num_trees());
   node_cnt().resize(rf_config.num_trees());
   sample_cnt().resize(rf_config.num_trees());
+
+#ifdef NODEWISE_CHRONO
+  // Per-(node, projection) ApplyProjection records. Sized and reserved here, on
+  // the single-threaded setup path, so the gate env-vars are parsed and the
+  // buffers are allocated before any tree thread starts — no worker ever pays
+  // for initialization or a realloc mid-measurement.
+  node_ap_recs().resize(rf_config.num_trees());
+  ReserveNodewiseApRecs();
+  {
+    const auto& nw_gate = NodewiseGateConfig();
+    LOG(INFO) << "NODEWISE_AP recording tree "
+              << (nw_gate.tree < 0 ? std::string("ALL")
+                                   : std::to_string(nw_gate.tree))
+              << " at depths " << nw_gate.depths_spec << " -> "
+              << nw_gate.out_path << " (reserve " << nw_gate.reserve
+              << " records/tree)";
+  }
+#endif
 #endif
 
   {
@@ -1224,6 +1242,34 @@ RandomForestLearner::TrainWithStatusImpl(
   LOG(INFO) << "session GpuInit "
             << global_stats[kGpuInit].load(std::memory_order_relaxed) * 1e-9
             << "s";
+
+#ifdef NODEWISE_CHRONO
+  // Per-(node, projection) ApplyProjection records. Must run before the
+  // early exit(0) below, like the per-depth logs above.
+  {
+    const auto nw = DumpNodewiseApCsv();
+    if (nw.ok) {
+      LOG(INFO) << "NODEWISE_AP wrote " << nw.records << " records to "
+                << nw.path;
+    } else {
+      LOG(WARNING) << "NODEWISE_AP failed to write " << nw.records
+                   << " records to " << nw.path;
+    }
+    // Both sinks are fed by the same timer, so per (tree, depth) the record
+    // sums must equal the coarse ProjEval cell exactly. Mismatches mean AP time
+    // reached the coarse table via a path that bypasses the recorder (expected
+    // if this axis is combined with the fused symmetric / dw1 kernels).
+    if (nw.selfcheck_mismatches == 0) {
+      LOG(INFO) << "NODEWISE_AP selfcheck OK: " << nw.selfcheck_cells
+                << " (tree,depth) cells match the coarse ProjEval totals";
+    } else {
+      LOG(WARNING) << "NODEWISE_AP selfcheck FAILED: "
+                   << nw.selfcheck_mismatches << " of " << nw.selfcheck_cells
+                   << " (tree,depth) cells disagree with the coarse ProjEval "
+                      "totals";
+    }
+  }
+#endif
 
   LOG(INFO) << "\n==========================================\n\n";
 #endif

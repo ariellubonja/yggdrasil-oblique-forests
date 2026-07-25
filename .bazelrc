@@ -64,6 +64,38 @@ build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 build:coarse_chrono_profile --cxxopt="-DCHRONO_PROFILE=1"
 build:fine_chrono_applyprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_AP"
 build:fine_chrono_evaluateprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_EP"
+
+# Nodewise ApplyProjection cost: a third axis on the coarse base. The coarse
+# per-(tree, depth) tables aggregate AP over every node at a depth, so they
+# cannot say whether that cost is spread evenly or carried by a few nodes. This
+# axis keeps the coarse tables byte-identical and adds a SECOND sink on the same
+# clock read -- no extra steady_clock::now() calls -- emitting one CSV row per
+# NODE at a gated set of depths, holding that node's total ApplyProjection cost.
+# Nodes that never reach AP (leaves) get an ap_ns=0 row, so the CSV carries the
+# full node population at those depths.
+#
+# Columns: tree,depth,node_id,n_rows,nnz,n_gathers,ap_ns,num_proj
+#   node_id   heap index of the node: root = 1 (the growers enter at depth 1),
+#             children of i are 2i (neg) and 2i+1 (pos). So depth d holds ids
+#             [2^(d-1), 2^d) -- depth 5 has at most 2^4 = 16 nodes -- and the
+#             id's bits after the leading 1 spell the root->node branch path.
+#   nnz       SUM of projection.size() over the node's projections
+#   n_gathers n_rows * nnz; ns/gather = ap_ns / n_gathers is the rate metric
+#   num_proj  Evaluate calls for the node (0 => AP never ran)
+# Rows are sorted by (depth, node_id) at dump time.
+#
+# Runtime knobs (see utils/parallel_chrono.h):
+#   YDF_NODEWISE_TREE=0            tree to record; -1 = all trees
+#   YDF_NODEWISE_DEPTHS=5,10,15,20 depth list, or "*" for every depth
+#   YDF_NODEWISE_OUT=nodewise_ap.csv
+#   YDF_NODEWISE_RESERVE=<n>       records reserved per recording tree
+# Defaults are ~55k records / ~1.8 MB on HIGGS. One full tree at every depth is
+# ~2.6M records / ~80 MB, so widen the depth list deliberately.
+#
+# Combine only with the stock nodewise kernel: the fused symmetric / dw1 Apply
+# paths never call ProjectionEvaluator::Evaluate, so they produce no records and
+# trip the dump-time selfcheck against the coarse ProjEval totals.
+build:nodewise_chrono --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DNODEWISE_CHRONO=1"
 # Don't inline ApplyProjection, for more accurate profiling. Very small cost: <2% e2e.
 build:inline_projection_evaluate --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
 # Skip the std::isnan branch in Evaluate. Small cost but possible cache misbehavior.
