@@ -25,6 +25,7 @@
 #include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
+#include "hwy/contrib/sort/vqsort.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_bag.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
@@ -86,23 +87,15 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   }
 
 #if defined(DW1_SHARED_ROWS) && !defined(DW1_HOT_NODES)
-  // ── Depth bag ──────────────────────────────────────────────────────
+  // ── Depth bag 
   // Obtain this depth's example-sorted (bag, node_of_bag) once for the whole
   // frontier (O(bag) relabel of the previous depth's bag in the steady state,
   // concat + VQSort fallback otherwise). The colwalk below reads it directly.
   AdvanceDepthBag(selected_examples_per_node, prev_first_child, total_rows,
                   DepthBagChrono::kDw1SharedRows, bag_state);
 #endif  // DW1_SHARED_ROWS && !DW1_HOT_NODES
-#if defined(DW1_HOT_NODES)
-  // Hot-nodes build: the spans handed in are the depth's HOT nodes only, and
-  // the bag (over exactly those rows, labelled by hot index) was advanced by
-  // the BFS driver before this call -- only the driver holds the full-domain
-  // spans + hot/full index maps the relabel needs
-  DCHECK(bag_state != nullptr && bag_state->valid);
-  DCHECK_EQ(bag_state->bag.size(), total_rows);
-#endif  // DW1_HOT_NODES
 
-  // ── Phase 2: Sweep ────────────────────────────────────────────────
+  // ── Phase 2: Sweep 
   // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
   {
     CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1Sweep);
@@ -140,7 +133,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         }
       }
     }
-    std::sort(touched.begin(), touched.end());
+    // Column ids are unique here (one push per first touch), so VQSort's
+    // instability is irrelevant.
+    hwy::VQSort(touched.data(), touched.size(), hwy::SortAscending());
 
     // Counting sort by column: col_count becomes the running fill cursor.
     // <1% of AP time

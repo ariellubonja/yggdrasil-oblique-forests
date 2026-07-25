@@ -5856,6 +5856,18 @@ absl::Status GrowTreeLocalBFS(
       // is concentrated in the few big ones (HIGGS: ~7.5% of nodes ~ 92% of AP
       // time), so gating on rows keeps nearly all the fused work at a small
       // fraction of the write streams.
+      //
+      // Billed to kProjectionEvaluate (opened here, closed after the hot
+      // compaction below): the gates are AP work -- they only decide which
+      // kernel evaluates which node -- and without a scope their cost is
+      // invisible to every per-scope table, surfacing only as TreeTrain
+      // residual. That would make an A/B of --config=dw1_sr_hot_overlap vs
+      // --config=dw1_sr_hot_nodes read the overlap gate as free while e2e says
+      // otherwise. This region is DISJOINT from (not nested in) the other two
+      // kProjectionEvaluate scopes at this depth -- AdvanceDepthBagHot's and
+      // the kernel's own -- so the three sum to the depth's true AP time
+      // (add_time accumulates; only the call count goes 2 -> 3).
+      CHRONO_BEGIN_COARSE(dw1_hot_gate);
       const size_t hot_min_rows = Dw1HotMinRows();
       std::vector<uint32_t> hot_nodes;                  // hot idx -> node
       hot_nodes.reserve(num_nodes);
@@ -5959,7 +5971,10 @@ absl::Status GrowTreeLocalBFS(
 
       if (Dw1HotOverlapStats()) {
         // Like the kernel's debug dumps, this assumes a single training thread
-        // (run one tree at a time); no locking. `bag` is what the gate cost the
+        // (run one tree at a time); no locking. It also sits inside the gate's
+        // kProjectionEvaluate region, so the fprintf bills to AP -- do not read
+        // timings from a run with this on (it is a structural dump, not a
+        // measurement). `bag` is what the gate cost the
         // depth bag: `relabel` = the O(bag) telescoping pass still applies,
         // `rebuild` = monotonicity broke and this depth pays a concat+VQSort.
         std::fprintf(stdout,
@@ -5995,6 +6010,12 @@ absl::Status GrowTreeLocalBFS(
         hot_projs[k] = std::move(all_node_projs[n]);
         hot_rows += sel_spans[n].size();
       }
+      // Closes the gate region opened before the row gate. Ends here so the
+      // slab-vector construction below stays unbilled, exactly as the non-hot
+      // build leaves its `projected(num_nodes)` unbilled -- the control and
+      // this branch differ only by the gates themselves.
+      CHRONO_END_COARSE(dw1_hot_gate,
+                 ::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
 
       std::vector<std::vector<float>> projected(num_hot);
 #else

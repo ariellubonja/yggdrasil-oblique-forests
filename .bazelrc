@@ -68,6 +68,15 @@ build:dw1_sr_hot_nodes --cxxopt="-DDW1_HOT_NODES=1"
 # the previous depth's hot set -- the precondition of the O(bag) relabel. The
 # driver detects that exactly and falls back to the concat+VQSort bag rebuild for
 # that depth (deliberate; accepted 2026-07-25).
+#
+# CHRONO: both gates (row + overlap) and the hot compaction are billed to
+# ApplyProjection by their own coarse scope in GrowTreeLocalBFS, disjoint from
+# AdvanceDepthBagHot's and the kernel's, so the ApplyProjection cell is a fair
+# A/B between dw1_sr_hot_overlap and dw1_sr_hot_nodes. Under DW1_HOT_NODES that
+# cell also mixes two nesting levels -- the fused depth-level AP (sibling of
+# NodeTrain) and the cold nodes' Evaluate (nested INSIDE NodeTrain) -- so the
+# TreeTrain = SUM(NodeTrain) + SUM(ApplyProjection) + SUM(SampleProjection)
+# identity no longer holds; it over-counts by the cold-node AP.
 build:dw1_sr_hot_overlap --config=dw1_sr_hot_nodes
 build:dw1_sr_hot_overlap --cxxopt="-DDW1_HOT_OVERLAP=1"
 
