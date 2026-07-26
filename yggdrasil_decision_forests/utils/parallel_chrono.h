@@ -124,7 +124,7 @@ enum FuncId {
   kDw1ColWalkBagScatter,   // inner loop 2: bag pass scatter-accumulate into out_projected
   kDw1SweepBig,      // EvaluateNodeProjMajor path (oversized single node)
   kDw1SweepGeneric,  // !direct fallback (EvaluateProjectionRowsGeneric)
-  kDw1SharedBag,     // -DDW1_SHARED_ROWS: per-block merged-bag build + sort
+  kDw1SharedBag,     // DW1 shared-rows: per-block merged-bag build + sort
                      // (the stride-1-read colwalk variant; the sweep itself
                      //  still accrues to kDw1SweepColWalk for A/B comparison)
 

@@ -142,9 +142,9 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 |---|---|---|---|
 | Stock nodewise Evaluate | *(none)* | `oblique.cc` `ProjectionEvaluator::Evaluate` | baseline |
 | BFS-only control | `--config=bfs_only` | `GrowTreeLocalBFS` fallback branch | scheduler ablation |
-| DW1 depthwise 1-pass (col-sharing) | `--config=depthwise_1_pass` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
-| DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem in core §13 |
-| DW1 hot-nodes hybrid (row gate + column-overlap gate) | `--config=dw1_sr_hot_overlap` (implies dw1_shared_rows) + `DW1_HOT_MIN_ROWS` / `DW1_HOT_MIN_SHARE` | both gates in `GrowTreeLocalBFS`; cold branch in `oblique.cc`; `AdvanceDepthBagHot` | fused kernel for the big nodes that share columns; the overlap gate is non-monotone ⇒ VQSort bag rebuild on those depths; bit-identical at every threshold pair; **unmeasured (2026-07-25)** |
+| DW1 depthwise 1-pass (shared-rows colwalk + hot gates) | `--config=depthwise_1_pass` + `DW1_HOT_MIN_ROWS` / `DW1_HOT_MIN_SHARE` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass`; gates in `GrowTreeLocalBFS` (training.cc); cold branch in `oblique.cc`; `AdvanceDepthBagHot` | shared-rows colwalk for the depth's big nodes that also share columns with each other, stock `Evaluate` for the rest. The overlap gate is non-monotone ⇒ that depth's bag falls back to concat+VQSort. Bit-identical at every threshold pair; **unmeasured (2026-07-25)** |
+| └ ungated shared-rows (`DW1_HOT_MIN_ROWS=0 DW1_HOT_MIN_SHARE=0`) | runtime setting of the above, no rebuild | same file | ⛔ 1.3–3.8× slower; postmortem in core §13 |
+| DW1 col-sharing control | `--config=dw1_colwalk_control` | same file, `#ifdef DW1_COLWALK_CONTROL` branch | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
 | Subtree gather cache | *(code removed 2026-07-16)* | was `oblique.cc` `#ifdef SUBTREE_GATHER_CACHE`; recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
@@ -173,26 +173,21 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>> selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
-    absl::Span<const int32_t> prev_first_child, DepthBagState* bag_state,
-    absl::Span<std::vector<float>> out_projected) {
+    DepthBagState* bag_state, absl::Span<std::vector<float>> out_projected) {
   CHRONO_SCOPE_COARSE(…kProjectionEvaluate);
   const size_t N = selected_examples_per_node.size();
   if (N == 0) return absl::OkStatus();
   int max_attr = /* max over numerical_features */;
-  // shared-rows only: total_rows = Σ selected_examples_per_node[n].size()
+  // not in the colwalk control: total_rows = Σ selected_examples_per_node[n].size()
 
   // ── Phase 1: PreSize (kDw1PreSize, ~5% of AP) ────────────────────────
   // Slab pre-size only (zero-init: the column sweep accumulates).
   for (size_t n = 0; n < N; ++n)
     out_projected[n].assign(sel_n * projs_n, 0.f);
 
-#ifdef DW1_SHARED_ROWS
-  // Depth bag: example-sorted (bag, node_of_bag) for the whole frontier.
-  // O(bag) relabel of the previous depth in the steady state (billed to
-  // kDw1SharedRows via DepthBagChrono), concat + VQSort fallback otherwise.
-  AdvanceDepthBag(selected_examples_per_node, prev_first_child, total_rows,
-                  DepthBagChrono::kDw1SharedRows, bag_state);
-#endif
+  // The depth bag (example-sorted bag / node_of_bag) arrives ready in
+  // *bag_state: the DRIVER advances it (AdvanceDepthBagHot) because the
+  // relabel needs full-domain spans the kernel never sees.
 
   // ── Phase 2: Sweep (kDw1Sweep, dominant) ─────────────────────────────
   internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
@@ -204,7 +199,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   // node-major, touched ascending, counting sort → `sorted`, col_count
   // becomes the per-column end cursor.  [≤2% of AP]
 
-#ifdef DW1_SHARED_ROWS
+#ifndef DW1_COLWALK_CONTROL
   // Shared-rows colwalk over the whole depth. Per touched column c
   // (kDw1SweepColWalk, ~86% of AP):
   //   1. group c's refs by node → contiguous runs in ref_proj/ref_w,
@@ -243,7 +238,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 }
 ```
 
-### DW1 hot-nodes hybrid (`--config=dw1_sr_hot_overlap`, added 2026-07-25)
+### DW1 hot-nodes hybrid — the default `depthwise_1_pass` kernel (added 2026-07-25,
+folded in as the default 2026-07-25)
 
 **One idea:** run the shared-rows colwalk on the depth's **big, column-sharing nodes only**;
 every other node of the same depth is evaluated by the stock per-node
@@ -273,8 +269,8 @@ the hot row share falls with depth (70.6 % at d20), so whole-tree hot AP share i
 cut, since `n_gathers ≈ 9·rows` on HIGGS). Rows rather than `n_gathers` because the gate
 must be **monotone down the tree** (child rows ≤ parent rows ⇒ a hot node's parent is hot),
 which is what lets the depth bag keep telescoping (part 2 gives that up). `=0` ⇒ every node
-a candidate ⇒ with `DW1_HOT_MIN_SHARE=0` too, exactly the ungated `dw1_shared_rows` (purity
-control). Per-depth "above average" was rejected: at
+a candidate ⇒ with `DW1_HOT_MIN_SHARE=0` too, exactly the ungated shared-rows kernel (purity
+control; no separate config since the fold-in). Per-depth "above average" was rejected: at
 depth 5 it keeps 1 of 16 nodes despite all 16 being huge.
 
 **Sampling is untouched** — all nodes still sample their own projections at depth level in
@@ -282,8 +278,8 @@ node-major RNG order. The gate only picks *which kernel evaluates* a node, and b
 accumulate in ascending attribute order into an fp32 zero ⇒ **the model is bit-identical at
 every threshold value**, which is the correctness check (see below).
 
-Flow inside the `DEPTHWISE_1_PASS` branch of `GrowTreeLocalBFS` (all `#ifdef DW1_HOT_NODES`;
-other builds unchanged):
+Flow inside the `DEPTHWISE_1_PASS` branch of `GrowTreeLocalBFS` (all `#ifndef
+DW1_COLWALK_CONTROL`; the control build is unchanged):
 
 ```text
 sample all_node_projs[n][p]                  (unchanged, full frontier)
@@ -306,8 +302,8 @@ per node n: defs = hot ? &hot_projs[k] : &all_node_projs[n];  mono = &all_node_m
   `AdvanceDepthBagHot`): the bag covers only hot rows and its labels are hot indices, but
   the parent→child hop runs in the **full** node domain (a hot parent's rows may land in a
   cold child, and the membership test consumes child spans in order). Only the driver holds
-  the full spans + both index maps, so the kernel's internal `AdvanceDepthBag` call is
-  `#ifndef DW1_HOT_NODES`. Relabel = the same streaming pass plus two index lookups
+  the full spans + both index maps, so the kernel no longer advances the bag itself (that
+  internal `AdvanceDepthBag` call was deleted at the fold-in). Relabel = the same streaming pass plus two index lookups
   (`prev_hot_to_full` in, `hot_of_node` out) and one extra drop condition (new owner cold —
   same mechanism as the existing leaf drop). Self-validation + concat/VQSort fallback (over
   the hot spans, whose positions *are* the hot labels) unchanged.
@@ -334,7 +330,7 @@ per node n: defs = hot ? &hot_projs[k] : &all_node_projs[n];  mono = &all_node_m
 **Verified 2026-07-25** (macOS, correctness only — perf numbers must come from m7i/8488C):
 trunk 20k×32 / 100k×29 / 8192×4096, `nodes-*` hash identical across
 `DW1_HOT_MIN_ROWS ∈ {0, 1, 100, 250, 1000, 4000, 10000, 1e9}` **and** identical to the
-ungated `--config=dw1_shared_rows` control; same under a DCHECK-enabled build
+then-separate ungated `dw1_shared_rows` build; same under a DCHECK-enabled build
 (`--cxxopt=-UNDEBUG`: bag sortedness, `node_of_bag` sizing, kernel bag/valid asserts). A
 temporary trace on 20k×32 (T=1000) confirmed the intended shape: the incremental relabel
 fires at every fused depth after the first (10/11 calls; the one fallback is the first fused
@@ -382,7 +378,7 @@ cleanup, not a restructuring; on wide it is a kill switch.
 
 **Verified 2026-07-25** (macOS, correctness only): `nodes-*` hash on trunk 20k×32 and
 8192×4096 identical across `DW1_HOT_MIN_SHARE ∈ {0, 50, 100}` × `MIN_ROWS ∈ {0, 1000}`
-**and** equal to the `dw1_shared_rows` control (`cfa6ab94…` / `00dd44bc…`); same under
+**and** equal to the then-separate `dw1_shared_rows` build (`cfa6ab94…` / `00dd44bc…`); same under
 `--cxxopt=-UNDEBUG` with zero DCHECK failures. Both bag paths confirmed live on one run
 (`bag=rebuild` at depths 2-6 and 14+, `bag=relabel` at 7-13).
 

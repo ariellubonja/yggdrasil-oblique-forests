@@ -79,7 +79,7 @@ bool RelabelBagForNewDepth(
   return true;
 }
 
-#ifdef DW1_HOT_NODES
+#if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
 // Hot-nodes variant of RelabelBagForNewDepth (see the header's
 // AdvanceDepthBagHot): identical streaming pass, except that the bag's labels
 // live in the hot index space while the parent -> child hop and the
@@ -252,7 +252,7 @@ void AdvanceDepthBag(
   state->valid = true;
 }
 
-#ifdef DW1_HOT_NODES
+#if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
 void AdvanceDepthBagHot(
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
@@ -284,7 +284,7 @@ void AdvanceDepthBagHot(
   }
   state->valid = true;
 }
-#endif  // DW1_HOT_NODES
+#endif  // DEPTHWISE_1_PASS && !DW1_COLWALK_CONTROL
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 

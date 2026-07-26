@@ -53,8 +53,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
-    absl::Span<const int32_t> prev_first_child, DepthBagState* bag_state,
-    absl::Span<std::vector<float>> out_projected, int32_t current_depth) {
+    DepthBagState* bag_state, absl::Span<std::vector<float>> out_projected,
+    int32_t current_depth) {
 
   CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
   const size_t N = selected_examples_per_node.size();
@@ -67,7 +67,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     max_attr = std::max(max_attr, attribute_idx);
   }
 
-#ifdef DW1_SHARED_ROWS
+#ifndef DW1_COLWALK_CONTROL
   size_t total_rows = 0;
   for (size_t n = 0; n < N; ++n) {
     total_rows += selected_examples_per_node[n].size();
@@ -85,15 +85,6 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       out_projected[n].assign(slab, 0.f);
     }
   }
-
-#if defined(DW1_SHARED_ROWS) && !defined(DW1_HOT_NODES)
-  // ── Depth bag 
-  // Obtain this depth's example-sorted (bag, node_of_bag) once for the whole
-  // frontier (O(bag) relabel of the previous depth's bag in the steady state,
-  // concat + VQSort fallback otherwise). The colwalk below reads it directly.
-  AdvanceDepthBag(selected_examples_per_node, prev_first_child, total_rows,
-                  DepthBagChrono::kDw1SharedRows, bag_state);
-#endif  // DW1_SHARED_ROWS && !DW1_HOT_NODES
 
   // ── Phase 2: Sweep 
   // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
@@ -324,7 +315,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
 /* #region SHARED_ROWS */
 
-#ifdef DW1_SHARED_ROWS
+#ifndef DW1_COLWALK_CONTROL
     // Read each touched column in ONE depthwise bag pass and scatter each value to the 
     // (node,projection) addesses that reference the column.
     // Trades sparse reads for sparse writes.
@@ -459,7 +450,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 /* #endregion */
     CHRONO_END_AP(dw1_sweep_colwalk,
                ::yggdrasil_decision_forests::chrono_prof::kDw1SweepColWalk);
-#endif  // DW1_SHARED_ROWS
+#endif  // !DW1_COLWALK_CONTROL
   }
 
   return absl::OkStatus();

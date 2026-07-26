@@ -13,9 +13,8 @@
 ## `.bazelrc` experiment configs (the authoritative list on this branch)
 
 ```text
-build:depthwise_1_pass            --cxxopt="-DDEPTHWISE_1_PASS=1"
-build:dw1_shared_rows             --config=depthwise_1_pass --cxxopt="-DDW1_SHARED_ROWS=1"
-build:dw1_sr_hot_overlap          --config=dw1_shared_rows --cxxopt="-DDW1_HOT_NODES=1"   # fused kernel for the big nodes that share columns; #error without dw1_shared_rows
+build:depthwise_1_pass            --cxxopt="-DDEPTHWISE_1_PASS=1"                       # shared-rows colwalk on the depth's hot nodes (gates DW1_HOT_MIN_ROWS / DW1_HOT_MIN_SHARE), stock Evaluate on the rest
+build:dw1_colwalk_control         --config=depthwise_1_pass --cxxopt="-DDW1_COLWALK_CONTROL=1"  # col-sharing sweep only: no depth bag, no shared-rows scatter, DW1_HOT_* inert; #error without depthwise_1_pass
 build:row_major_dataset_layout    --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 build:symmetric_depthwise_ap      --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
 build:bfs_only                    --cxxopt="-DBFS_ONLY=1"                     # mutually exclusive with symmetric_*
@@ -41,15 +40,16 @@ Env knobs (read once, cached in a static): `RM_MAX_ROWS` (node-size threshold, d
 5000 baked by the harness `main()`; ∞ if binary run without harness), `DW1_MIN_DEPTH`
 (default 0), `SYMMETRIC_MAX_DEPTH` (default
 INT32_MAX; deeper levels hand off to DFS `GrowTreeLocal`), `DW1_HOT_MIN_ROWS`
-(`dw1_sr_hot_overlap` only, default 1000: a node is a fusion candidate iff `sel.size() >=` it,
+(`depthwise_1_pass`, inert in `dw1_colwalk_control`, default 1000: a node is a fusion candidate iff `sel.size() >=` it,
 everything smaller runs the stock per-node `Evaluate`; **0 = every node a candidate**. The
 trained model is bit-identical at every value, so a hash sweep over
 this knob — `compare_models.sh` on `--model_out_dir` outputs — is the correctness test;
 sweep it for perf, `{250, 500, 1000, 2000, 4000}`, in Quick mode first. Not combinable with
-`--config=nodewise_chrono`), `DW1_HOT_MIN_SHARE` (`dw1_sr_hot_overlap` only, default 50:
+`--config=nodewise_chrono`), `DW1_HOT_MIN_SHARE` (same builds, default 50:
 percent of a candidate's distinct columns that must also be read by another candidate;
 **0 = keep every candidate = the row gate alone**, the purity control — and with
-`DW1_HOT_MIN_ROWS=0` too, plain `dw1_shared_rows`. Bit-identical at
+`DW1_HOT_MIN_ROWS=0` too, ungated shared-rows on every node (this pair replaces the old
+`dw1_shared_rows` config; it still pays the gate's own per-depth cost). Bit-identical at
 every value, so the same hash sweep is the correctness test),
 `DW1_HOT_OVERLAP_STATS=1` (one line per fused depth: candidates → kept/dropped, and
 `bag=relabel|rebuild` — whether the gate cost that depth a concat+VQSort; single-thread only).
@@ -61,9 +61,9 @@ reference the same column. Lives in `oblique_cpu_depthwise_1pass.cc`'s colstats 
 **compiled out by default**: flip `constexpr bool kDw1DebugStats = true` there and rebuild,
 or the env knobs below do nothing. That block assumes a **single training thread** (no
 locking) — run it with `--num_trees=1 --num_threads=1`. Stats are taken over **the frontier
-the kernel was handed** — so the same flags on `--config=dw1_shared_rows` (full frontier) and
-`--config=dw1_sr_hot_overlap` (hot nodes only) give the two sides of the hot-gate comparison,
-and since the gate leaves trees bit-identical the rows join 1:1 on `(tree, depth)`.
+the kernel was handed** — so the same flags with `DW1_HOT_MIN_ROWS=0 DW1_HOT_MIN_SHARE=0`
+(full frontier) and with the gates on (hot nodes only) give the two sides of the hot-gate
+comparison, and since the gates leave trees bit-identical the rows join 1:1 on `(tree, depth)`.
 
 - `DW1_COL_STATS` — `0` off, `summary` one line per (tree, depth), anything else
   (default) the per-column dump `c<id>: <nodes> nodes, <examples> examples` **plus** the

@@ -312,7 +312,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       }
     }
   }
-#ifdef DW1_HOT_NODES
+#if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
   // Cold node under the DW1 hot-nodes gate: the depth-level driver sampled this
   // node's projections (same RNG order as every other node) but left it out of
   // the fused kernel, so there is no slab. Evaluate the handed-down projections
@@ -347,7 +347,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
       }
     }
   }
-#endif  // DW1_HOT_NODES
+#endif  // DEPTHWISE_1_PASS && !DW1_COLWALK_CONTROL
   else
 #endif
   {

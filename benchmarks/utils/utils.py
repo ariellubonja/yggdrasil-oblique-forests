@@ -36,10 +36,10 @@ def get_base_parser():
     parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast") # TODO deprecate
     parser.add_argument("--fixed_1000_projections", action="store_true")
     parser.add_argument("--depthwise_1_pass", action="store_true",
-                        help="Build with -DDEPTHWISE_1_PASS=1: Depthwise fused "
-                             "per-level CPU ApplyProjection (single-pass "
-                             "kernel across all (row, projection) tasks at "
-                             "the level; thread-parallel, contention-free).")
+                        help="Build with -DDEPTHWISE_1_PASS=1: fused per-level "
+                             "CPU ApplyProjection (shared-rows colwalk on the "
+                             "depth's hot nodes, stock Evaluate on the rest). "
+                             "Control: --bazel_config=dw1_colwalk_control.")
     parser.add_argument("--symmetric_depthwise_ap", action="store_true",
                         help="Build with -DSYMMETRIC_DEPTHWISE_AP=1: "
                              "CatBoost-style symmetric-trees bag-wide "

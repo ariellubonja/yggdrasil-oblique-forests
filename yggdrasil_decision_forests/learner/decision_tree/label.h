@@ -28,11 +28,11 @@
 #if (defined(SYMMETRIC_DEPTHWISE_AP) + defined(BFS_ONLY)) > 1
 #error "SYMMETRIC_DEPTHWISE_AP and BFS_ONLY are mutually exclusive"
 #endif
-// The hot-nodes gates (rows + column overlap) are a modifier ON the shared-rows
-// colwalk (they exist to bound that kernel's write streams), never a standalone
-// scheduler.
-#if defined(DW1_HOT_NODES) && !defined(DW1_SHARED_ROWS)
-#error "DW1_HOT_NODES requires DW1_SHARED_ROWS (use --config=dw1_sr_hot_overlap)"
+// DW1_COLWALK_CONTROL only *subtracts* from the depthwise kernel (it drops the
+// shared-rows colwalk + hot gates and leaves the col-sharing sweep), so it is
+// meaningless without the depthwise scheduler itself.
+#if defined(DW1_COLWALK_CONTROL) && !defined(DEPTHWISE_1_PASS)
+#error "DW1_COLWALK_CONTROL requires DEPTHWISE_1_PASS (use --config=dw1_colwalk_control)"
 #endif
 #if defined(DEPTHWISE_1_PASS)
 #define OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS 1

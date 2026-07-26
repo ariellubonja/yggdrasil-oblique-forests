@@ -411,14 +411,14 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 |---|---|---|---|
 | Stock nodewise Evaluate | *(none)* | `oblique.cc` `ProjectionEvaluator::Evaluate` | baseline |
 | BFS-only control | `--config=bfs_only` | `GrowTreeLocalBFS` fallback branch | scheduler ablation |
-| DW1 depthwise 1-pass (col-sharing) | `--config=depthwise_1_pass` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
-| DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem §13 |
-| DW1 hot-nodes hybrid (row + column-overlap gates) | `--config=dw1_sr_hot_overlap` (implies dw1_shared_rows) + `DW1_HOT_MIN_ROWS` / `DW1_HOT_MIN_SHARE` | both gates in `GrowTreeLocalBFS` (training.cc); cold branch in `oblique.cc`; `AdvanceDepthBagHot` | shared-rows kernel for the depth's big nodes that also share columns with each other (the colwalk sweeps the whole bag per touched column), stock `Evaluate` for the rest. The overlap gate is non-monotone ⇒ that depth's bag falls back to concat+VQSort. Bit-identical at every threshold pair; **unmeasured (2026-07-25)** |
+| DW1 depthwise 1-pass (shared-rows colwalk + hot gates) | `--config=depthwise_1_pass` + `DW1_HOT_MIN_ROWS` / `DW1_HOT_MIN_SHARE` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass`; gates in `GrowTreeLocalBFS` (training.cc); cold branch in `oblique.cc`; `AdvanceDepthBagHot` | shared-rows colwalk for the depth's big nodes that also share columns with each other, stock `Evaluate` for the rest. The overlap gate is non-monotone ⇒ that depth's bag falls back to concat+VQSort. Bit-identical at every threshold pair; **unmeasured (2026-07-25)** |
+| └ ungated shared-rows (`DW1_HOT_MIN_ROWS=0 DW1_HOT_MIN_SHARE=0`) | runtime setting of the above, no rebuild | same file | ⛔ 1.3–3.8× slower; postmortem §13 |
+| DW1 col-sharing control | `--config=dw1_colwalk_control` | same file, `#ifdef DW1_COLWALK_CONTROL` branch | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
 | Subtree gather cache | *(code removed 2026-07-16)* | recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
 
-Kernel internals (DW1 col-sharing + shared-rows, symmetric depthwise AP, the subtree-gather
+Kernel internals (DW1 shared-rows + hot gates + col-sharing control, symmetric depthwise AP, the subtree-gather
 dead end) and the full driver hookup are in the shard.
 
 ---

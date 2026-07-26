@@ -8,10 +8,10 @@ ran on, with the frontier it was HANDED:
     tree,depth,nodes,rows,cols_touched,num_features,refs,pairs,share,
     shared_cols,max_nodes_col,useful,swept,eff,nodewise,amort
 
-Because the hot gate leaves the trained trees bit-identical, a
---config=dw1_shared_rows run and a --config=dw1_sr_hot_overlap run on the same
-seed/data produce the same depths over the same nodes, so the rows join
-one-to-one on (tree, depth) and the deltas are attributable to the gate alone.
+Because the hot gates leave the trained trees bit-identical, an ungated run
+(DW1_HOT_MIN_ROWS=0 DW1_HOT_MIN_SHARE=0) and a gated run on the same seed/data
+produce the same depths over the same nodes, so the rows join one-to-one on
+(tree, depth) and the deltas are attributable to the gates alone.
 
 Columns of the per-depth table:
   nodes   nodes in the frontier the kernel saw (hot only in the gated build)

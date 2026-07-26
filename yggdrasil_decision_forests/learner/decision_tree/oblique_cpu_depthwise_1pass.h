@@ -41,28 +41,19 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 // would oversubscribe the machine. The whole level's (node, projection)
 // work is processed inline.
 //
-// `prev_first_child` + `bag_state` drive the shared-rows colwalk's depth bag
-// (see oblique_cpu_depthwise_bag.h): the DW1_SHARED_ROWS build relabels the
-// previous depth's sorted bag into this depth's, then distributes it into
-// per-block ex-sorted arenas. The col-sharing build (no DW1_SHARED_ROWS)
-// compiles the same signature and ignores both arguments — its path has no
-// bag and must not pay for one. Pass an empty span + nullptr from that path.
+// The frontier handed in is the depth's HOT nodes only; the driver has already
+// advanced `bag_state` over exactly those rows, labelled by hot index (the
+// relabel needs full-domain spans the kernel never sees). Unused by the control.
 //
-// Under DW1_HOT_NODES the frontier handed in is the depth's HOT nodes only and
-// the driver has already advanced `bag_state` (over exactly those rows, labelled
-// by hot index) before the call, because the relabel needs the full-domain node
-// spans that the kernel never sees; `prev_first_child` is then unused.
-//
-// `current_depth` is used only by the per-depth column-stats debug print
-// (DW1_COL_STATS); the kernel itself is depth-agnostic.
+// `current_depth` is used only by the per-depth column-stats debug print.
 absl::Status ApplyProjectionsDepthwise1Pass(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
-    absl::Span<const int32_t> prev_first_child, DepthBagState* bag_state,
-    absl::Span<std::vector<float>> out_projected, int32_t current_depth);
+    DepthBagState* bag_state, absl::Span<std::vector<float>> out_projected,
+    int32_t current_depth);
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 

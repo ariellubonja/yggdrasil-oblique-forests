@@ -43,8 +43,8 @@
 #include <valgrind/callgrind.h>
 #endif
 
-#ifdef DW1_HOT_NODES
-// Optional per-depth trace of the column-overlap gate (DW1_HOT_OVERLAP_STATS).
+#if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
+// Per-depth trace of the column-overlap gate (DW1_HOT_OVERLAP_STATS).
 #include <cstdio>
 #endif
 
@@ -5586,7 +5586,7 @@ int32_t Depthwise1PassMinDepth() {
 }
 #endif
 
-#if defined(DW1_HOT_NODES)
+#if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
 // Row count above which a node (of this depth) is a CANDIDATE for the fused
 // shared-rows kernel (it still has to pass the column-overlap gate below);
 // smaller nodes fall back to the stock per-node
@@ -5688,11 +5688,9 @@ absl::Status GrowTreeLocalBFS(
 #endif
 
 #if defined(SYMMETRIC_DEPTHWISE_AP) || defined(DEPTHWISE_1_PASS)
-  // Incremental sorted-bag state shared by the symmetric and DW1 shared-rows
-  // fused kernels. thread_local so buffer capacity amortizes across trees; validity
-  // is per-tree, reset here. Declared for DEPTHWISE_1_PASS too, but
-  // the col-sharing variant never populates first_child nor reads
-  // depth_bag_state (all guarded by DW1_SHARED_ROWS below), so it pays nothing.
+  // Incremental sorted-bag state of the symmetric and DW1 shared-rows kernels.
+  // thread_local so capacity amortizes across trees; validity is per-tree.
+  // The colwalk control never populates or reads it, so it pays nothing.
   static thread_local DepthBagState depth_bag_state;
   depth_bag_state.valid = false;
   // Node pointers of the previous fused depth batch, captured before the
@@ -5702,7 +5700,7 @@ absl::Status GrowTreeLocalBFS(
   // for both fused kernels.
   std::vector<NodeWithChildren*> prev_nodes;
   std::vector<int32_t> first_child;
-#ifdef DW1_HOT_NODES
+#if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
   // Previous fused depth's hot index -> its index in prev_nodes / first_child.
   // The depth bag's labels are hot indices, so the relabel needs this to look
   // an entry's parent up in first_child. Empty => no previous hot set (first
@@ -5821,14 +5819,13 @@ absl::Status GrowTreeLocalBFS(
         sel_spans[n] = depth_batch[n].selected_examples.active;
       }
 
-#ifdef DW1_SHARED_ROWS
+#ifndef DW1_COLWALK_CONTROL
       // Parent->child batch-index mapping for the shared-rows depth-bag relabel
-      // (see rebuild_first_child above). Only the shared-rows variant reads it;
-      // the col-sharing kernel ignores prev_first_child / bag_state.
+      // (see rebuild_first_child above). Unused by the colwalk control.
       rebuild_first_child(num_nodes);
 #endif
 
-#ifdef DW1_HOT_NODES
+#ifndef DW1_COLWALK_CONTROL
       // ── Hot gate, part 1: rows ────────────────────────────────────────
       // Split the frontier by size: only the big nodes are CANDIDATES for the
       // fused kernel (the column-overlap gate below then thins them further);
@@ -6002,7 +5999,7 @@ absl::Status GrowTreeLocalBFS(
       std::vector<std::vector<float>> projected(num_hot);
 #else
       std::vector<std::vector<float>> projected(num_nodes);
-#endif  // DW1_HOT_NODES
+#endif  // !DW1_COLWALK_CONTROL
 #ifdef LINECOUNT_A
       {
         // Exact per-node distinct-cache-line tally for this depth level. sel is
@@ -6038,7 +6035,7 @@ absl::Status GrowTreeLocalBFS(
       CALLGRIND_START_INSTRUMENTATION;
       CALLGRIND_ZERO_STATS;
 #endif
-#ifdef DW1_HOT_NODES
+#ifndef DW1_COLWALK_CONTROL
       if (num_hot > 0) {
         {
           // The hot bag spans only the hot nodes' rows and is labelled by hot
@@ -6059,8 +6056,7 @@ absl::Status GrowTreeLocalBFS(
         RETURN_IF_ERROR(ApplyProjectionsDepthwise1Pass(
             train_dataset, config_link.numerical_features(),
             absl::MakeConstSpan(hot_sel_spans), absl::MakeConstSpan(hot_projs),
-            absl::MakeConstSpan(first_child), &depth_bag_state,
-            absl::MakeSpan(projected), current_depth));
+            &depth_bag_state, absl::MakeSpan(projected), current_depth));
       } else {
         // No hot node at this depth: no bag was produced, so the next fused
         // depth must rebuild rather than relabel. (The gate is monotone, so in
@@ -6068,16 +6064,12 @@ absl::Status GrowTreeLocalBFS(
         depth_bag_state.valid = false;
       }
 #else
-      // first_child / &depth_bag_state drive the shared-rows depth bag; the
-      // col-sharing build compiles the same call and ignores both (first_child
-      // stays empty, depth_bag_state unused).
+      // The col-sharing control has no depth bag; it ignores depth_bag_state.
       RETURN_IF_ERROR(ApplyProjectionsDepthwise1Pass(
           train_dataset, config_link.numerical_features(),
-          absl::MakeConstSpan(sel_spans),
-          absl::MakeConstSpan(all_node_projs),
-          absl::MakeConstSpan(first_child), &depth_bag_state,
-          absl::MakeSpan(projected), current_depth));
-#endif  // DW1_HOT_NODES
+          absl::MakeConstSpan(sel_spans), absl::MakeConstSpan(all_node_projs),
+          &depth_bag_state, absl::MakeSpan(projected), current_depth));
+#endif  // !DW1_COLWALK_CONTROL
 #ifdef CALLGRIND_DEPTH
       { char nm[64];
         std::snprintf(nm, sizeof nm, "dw1_depth_%d", (int)current_depth);
@@ -6085,22 +6077,17 @@ absl::Status GrowTreeLocalBFS(
       CALLGRIND_STOP_INSTRUMENTATION;
 #endif
 
-#ifdef DW1_SHARED_ROWS
-      // Capture this batch's node pointers before the NodeTrain loop moves the
-      // batch entries; consumed at the next depth by rebuild_first_child.
+#ifndef DW1_COLWALK_CONTROL
+      // Handover to the next fused depth's relabel, captured before the
+      // NodeTrain loop moves the batch: node pointers + the bag's label space
+      // (hot idx -> batch idx).
       capture_prev_nodes(depth_batch);
-#endif
-#ifdef DW1_HOT_NODES
-      // Same handover for the bag's label space: hot idx -> batch idx, read by
-      // the next fused depth's relabel. Cleared when nothing was fused.
       if (num_hot > 0) {
         prev_hot_to_full = hot_nodes;
       } else {
         prev_hot_to_full.clear();
       }
-#endif
 
-#ifdef DW1_HOT_NODES
       for (int n = 0; n < num_nodes; ++n) {
         auto node_config = internal_config;
         const int32_t k = hot_of_node[n];
@@ -6135,7 +6122,7 @@ absl::Status GrowTreeLocalBFS(
                                   node_queue));
         std::vector<float>().swap(projected[n]);
       }
-#endif  // DW1_HOT_NODES
+#endif  // !DW1_COLWALK_CONTROL
     } else
 #elif defined(SYMMETRIC_DEPTHWISE_AP)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1 &&
@@ -6263,14 +6250,15 @@ absl::Status GrowTreeLocalBFS(
 #ifdef BFS_ONLY
       CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kBfsNodeLoop);
 #endif
-#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(DW1_SHARED_ROWS)
+#if defined(SYMMETRIC_DEPTHWISE_AP) || \
+    (defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL))
       // This depth was not processed by a fused kernel (oblique off, or the DW1
       // depth/size guards excluded it), so the depth bag was not advanced.
       // Invalidate it so a later fused depth takes the concat+VQSort fallback
       // instead of relabelling from a stale chain.
       depth_bag_state.valid = false;
 #endif
-#ifdef DW1_HOT_NODES
+#if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
       prev_hot_to_full.clear();
 #endif
 // TODO Ariel - make this use GrowTreeLocal.

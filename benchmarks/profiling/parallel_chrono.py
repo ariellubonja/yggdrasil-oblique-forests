@@ -169,7 +169,7 @@ _THREAD_ID_RX = r"(0x[0-9a-fA-F]+|\d+)"
 # separately with _TIMING_PAIR_RX. This is order-independent and forward
 # compatible -- a new CHRONO scope no longer truncates the line. (The old
 # positional regex stopped at the first unrecognized token, so the
-# DW1_SHARED_ROWS `Dw1SharedBag` token hid SampleProjection and the whole
+# shared-rows `Dw1SharedBag` token hid SampleProjection and the whole
 # NodeTrain tail emitted after it.)
 _PER_DEPTH_RX = re.compile(
     r"thread\s+" + _THREAD_ID_RX +
@@ -316,7 +316,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "CartPath":                     "-----CartPath",
             "HistoPath":                    "-----HistoPath",
             # depth 6 — Dw1Sweep sub-phases (sum to Dw1Sweep modulo ctor/glue).
-            # -DDW1_SHARED_ROWS: merged per-block bag build + sort (replaces the
+            # DW1 shared-rows: merged per-block bag build + sort (replaces the
             # per-node gather; sits beside the Bucket/Scatter/ColWalk siblings).
             "Dw1SharedBag":                 "------Dw1SharedBag",
             "Dw1SweepColWalk":              "------Dw1SweepColWalk",

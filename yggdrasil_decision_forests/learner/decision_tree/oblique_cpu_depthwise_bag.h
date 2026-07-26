@@ -1,6 +1,7 @@
 // Shared depth-bag machinery for the fused-per-level CPU ApplyProjection
-// kernels (symmetric-trees `SYMMETRIC_DEPTHWISE_AP` and DW1 shared-rows
-// `DW1_SHARED_ROWS`). Both kernels need the same object: the current BFS
+// kernels (symmetric-trees `SYMMETRIC_DEPTHWISE_AP` and the DW1 shared-rows
+// colwalk, i.e. `DEPTHWISE_1_PASS` without `DW1_COLWALK_CONTROL`; the colwalk
+// control has no bag). Both kernels need the same object: the current BFS
 // depth's example-sorted bag together with, per bag entry, the owning
 // depth-batch node index. This module owns that state (DepthBagState) and the
 // single routine that advances it one depth (AdvanceDepthBag).
@@ -93,8 +94,8 @@ void AdvanceDepthBag(
     absl::Span<const int32_t> prev_first_child, size_t bag_size,
     DepthBagChrono billing, DepthBagState* state);
 
-#ifdef DW1_HOT_NODES
-// Hot-nodes variant of AdvanceDepthBag (see .bazelrc:dw1_sr_hot_overlap): the bag
+#if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
+// Hot-nodes variant of AdvanceDepthBag (see .bazelrc:depthwise_1_pass): the bag
 // covers only the depth's HOT nodes, so it is smaller than the depth's example
 // set and its labels index the HOT arrays (0..K-1), which is what the kernel
 // reads. Called by the BFS driver (not by the kernel) because only the driver
@@ -127,7 +128,7 @@ void AdvanceDepthBagHot(
     absl::Span<const uint32_t> prev_hot_to_full,
     absl::Span<const int32_t> hot_of_node, size_t hot_bag_size,
     DepthBagState* state);
-#endif  // DW1_HOT_NODES
+#endif  // DEPTHWISE_1_PASS && !DW1_COLWALK_CONTROL
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
