@@ -144,8 +144,7 @@ stack ideas in a measurement.** Controls stay pure. Variants present **on this b
 | BFS-only control | `--config=bfs_only` | `GrowTreeLocalBFS` fallback branch | scheduler ablation |
 | DW1 depthwise 1-pass (col-sharing) | `--config=depthwise_1_pass` | `oblique_cpu_depthwise_1pass.cc` `ApplyProjectionsDepthwise1Pass` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
 | DW1 shared-rows | `--config=dw1_shared_rows` (implies dw1) | same file, `#ifdef DW1_SHARED_ROWS` | ⛔ 1.3–3.8× slower; postmortem in core §13 |
-| DW1 hot-nodes hybrid | `--config=dw1_sr_hot_nodes` (implies dw1_shared_rows) | gate in `GrowTreeLocalBFS`; cold branch in `oblique.cc`; `AdvanceDepthBagHot` | fused kernel for big nodes only; bit-identical at every threshold; unmeasured (2026-07-25) |
-| DW1 hot-nodes + column-overlap gate | `--config=dw1_sr_hot_overlap` (implies dw1_sr_hot_nodes) + `DW1_HOT_MIN_SHARE` | second gate in `GrowTreeLocalBFS` | also drops candidates whose columns nobody else reads; non-monotone ⇒ VQSort bag rebuild on those depths; bit-identical; **unmeasured (2026-07-25)** |
+| DW1 hot-nodes hybrid (row gate + column-overlap gate) | `--config=dw1_sr_hot_overlap` (implies dw1_shared_rows) + `DW1_HOT_MIN_ROWS` / `DW1_HOT_MIN_SHARE` | both gates in `GrowTreeLocalBFS`; cold branch in `oblique.cc`; `AdvanceDepthBagHot` | fused kernel for the big nodes that share columns; the overlap gate is non-monotone ⇒ VQSort bag rebuild on those depths; bit-identical at every threshold pair; **unmeasured (2026-07-25)** |
 | Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
 | Subtree gather cache | *(code removed 2026-07-16)* | was `oblique.cc` `#ifdef SUBTREE_GATHER_CACHE`; recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ gather never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
@@ -244,11 +243,17 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 }
 ```
 
-### DW1 hot-nodes hybrid (`--config=dw1_sr_hot_nodes`, added 2026-07-25)
+### DW1 hot-nodes hybrid (`--config=dw1_sr_hot_overlap`, added 2026-07-25)
 
-**One idea:** run the shared-rows colwalk on the depth's **big nodes only**; every other
-node of the same depth is evaluated by the stock per-node `ProjectionEvaluator::Evaluate`.
-Nothing about the kernel itself changes — it just gets a smaller frontier.
+**One idea:** run the shared-rows colwalk on the depth's **big, column-sharing nodes only**;
+every other node of the same depth is evaluated by the stock per-node
+`ProjectionEvaluator::Evaluate`. Nothing about the kernel itself changes — it just gets a
+smaller frontier. Two gates select that frontier: the **row gate** (part 1, below) and the
+**column-overlap gate** (part 2). They are one config, not two: the overlap gate exists to
+repair the row gate's failure mode, so the row gate alone was never a configuration worth
+shipping — `DW1_HOT_MIN_SHARE=0` reproduces it at runtime as the purity control.
+
+#### Part 1 — the row gate (`DW1_HOT_MIN_ROWS`)
 
 Motivation (`nodewise_ap.csv`, HIGGS tree 0, depths 5/10/15/20): nodes above the pooled
 mean `n_gathers` are **7.5 % of nodes but 91.8 % of AP time** (90.8 % of rows). The
@@ -267,8 +272,9 @@ the hot row share falls with depth (70.6 % at d20), so whole-tree hot AP share i
 **Gate.** Hot iff `sel.size() >= DW1_HOT_MIN_ROWS` (default 1000 ≈ the mean-`n_gathers`
 cut, since `n_gathers ≈ 9·rows` on HIGGS). Rows rather than `n_gathers` because the gate
 must be **monotone down the tree** (child rows ≤ parent rows ⇒ a hot node's parent is hot),
-which is what lets the depth bag keep telescoping. `=0` ⇒ everything hot ⇒ exactly the
-ungated `dw1_shared_rows` (purity control). Per-depth "above average" was rejected: at
+which is what lets the depth bag keep telescoping (part 2 gives that up). `=0` ⇒ every node
+a candidate ⇒ with `DW1_HOT_MIN_SHARE=0` too, exactly the ungated `dw1_shared_rows` (purity
+control). Per-depth "above average" was rejected: at
 depth 5 it keeps 1 of 16 nodes despite all 16 being huge.
 
 **Sampling is untouched** — all nodes still sample their own projections at depth level in
@@ -335,10 +341,10 @@ fires at every fused depth after the first (10/11 calls; the one fallback is the
 depth, which has no previous hot bag), the gate prunes hard (depth 8: 122 nodes → 2 hot;
 depth 11: 302 → 2), and `hot=0` latches from depth 13 down.
 
-### DW1 hot-nodes + column-overlap gate (`--config=dw1_sr_hot_overlap`, added 2026-07-25)
+#### Part 2 — the column-overlap gate (`DW1_HOT_MIN_SHARE`)
 
-Second gate stacked on the row gate above, in the same place in `GrowTreeLocalBFS`. The row
-gate bounds the kernel's *write streams*; this one bounds its *wasted reads*.
+Second gate, applied to the row gate's candidates in the same place in `GrowTreeLocalBFS`.
+The row gate bounds the kernel's *write streams*; this one bounds its *wasted reads*.
 
 **Why.** The colwalk's unit of work is one ascending pass over the whole depth bag per
 **touched** column. A candidate whose columns no other candidate reads therefore buys a
@@ -351,7 +357,7 @@ not fusing. Measured before building it (2026-07-25, `DW1_COL_SHARE_OUT`): trunk
 **Criterion.** Of a candidate's **distinct** columns (a node re-reading a column from several
 of its projections is one reader — the colwalk serves them all from one pass), the fraction
 also read by another candidate must be ≥ `DW1_HOT_MIN_SHARE` % (default 50; **0 keeps
-every candidate = plain `dw1_sr_hot_nodes`**, the purity control). Evaluated in ONE pass:
+every candidate = the row gate alone**, the purity control). Evaluated in ONE pass:
 dropping a node only lowers other columns' reader counts, so iterating would drop strictly
 more, with no fixpoint worth the cost or the instability. Cost is O(refs) per depth plus one
 O(max_attr) counter array hoisted to per-tree (reset only over touched columns).

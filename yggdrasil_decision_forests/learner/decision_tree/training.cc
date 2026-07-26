@@ -43,7 +43,7 @@
 #include <valgrind/callgrind.h>
 #endif
 
-#ifdef DW1_HOT_OVERLAP
+#ifdef DW1_HOT_NODES
 // Optional per-depth trace of the column-overlap gate (DW1_HOT_OVERLAP_STATS).
 #include <cstdio>
 #endif
@@ -5587,8 +5587,9 @@ int32_t Depthwise1PassMinDepth() {
 #endif
 
 #if defined(DW1_HOT_NODES)
-// Row count above which a node (of this depth) is "hot" and is evaluated by the
-// fused shared-rows kernel; smaller nodes fall back to the stock per-node 
+// Row count above which a node (of this depth) is a CANDIDATE for the fused
+// shared-rows kernel (it still has to pass the column-overlap gate below);
+// smaller nodes fall back to the stock per-node
 // ProjectionEvaluator::Evaluate. Read once from
 // DW1_HOT_MIN_ROWS (default 1000 ~ the mean-n_gathers cut measured on HIGGS
 // in nodewise_ap.csv, P=6 x nnz~1.5 => ~9 gathers/row).
@@ -5596,8 +5597,10 @@ int32_t Depthwise1PassMinDepth() {
 // The gate is on ROWS rather than on n_gathers so that it is monotone down the
 // tree (a child never has more rows than its parent) -- which is exactly what
 // lets the shared-rows depth bag keep telescoping: a hot node's parent is
-// necessarily hot, so its rows are always present in the previous depth's hot
-// bag. 0 = every node hot = the ungated dw1_shared_rows behavior.
+// necessarily a candidate, so its rows are always present in the previous
+// depth's hot bag (the overlap gate below is what can break that). 0 = every
+// node a candidate; with DW1_HOT_MIN_SHARE=0 too that is the ungated
+// dw1_shared_rows behavior.
 size_t Dw1HotMinRows() {
   static const size_t value = [] {
     const char* e = std::getenv("DW1_HOT_MIN_ROWS");
@@ -5606,9 +5609,7 @@ size_t Dw1HotMinRows() {
   }();
   return value;
 }
-#endif
 
-#if defined(DW1_HOT_OVERLAP)
 // TODO Ariel linesearch this
 // Percentage of a node's distinct columns that must also be read by
 // another for the node to stay in the fused kernel.
@@ -5620,7 +5621,7 @@ size_t Dw1HotMinRows() {
 // therefore buys a full-bag pass per such column while consuming only its own
 // rows of it -- and simultaneously lengthens every other column's pass. Below
 // the threshold the node is cheaper to evaluate with the stock per-node
-// Evaluate. 0 keeps every candidate == plain dw1_sr_hot_nodes (purity control).
+// Evaluate. 0 keeps every candidate == the row gate alone (purity control).
 //
 // Unlike the row gate this is NOT monotone down the tree, so the depth bag can
 // no longer telescope unconditionally; see the gate site in GrowTreeLocalBFS.
@@ -5707,8 +5708,6 @@ absl::Status GrowTreeLocalBFS(
   // an entry's parent up in first_child. Empty => no previous hot set (first
   // fused depth, or the previous depth had no hot node) => bag rebuild.
   std::vector<uint32_t> prev_hot_to_full;
-#endif
-#ifdef DW1_HOT_OVERLAP
   // Memory space for the column overlap gate. Hoisted out of the kernel so the
   // O(max_attr) counter array is allocated once per tree rather than 1/depth
   // ov_col_nodes is reset only over the columns actually touched, so the
@@ -5830,13 +5829,14 @@ absl::Status GrowTreeLocalBFS(
 #endif
 
 #ifdef DW1_HOT_NODES
-      // ── Hot gate ──────────────────────────────────────────────────────
-      // Split the frontier by size: the fused kernel runs on the big ("hot")
-      // nodes only, the rest are evaluated node-by-node by the stock
+      // ── Hot gate, part 1: rows ────────────────────────────────────────
+      // Split the frontier by size: only the big nodes are CANDIDATES for the
+      // fused kernel (the column-overlap gate below then thins them further);
+      // the rest are evaluated node-by-node by the stock
       // ProjectionEvaluator::Evaluate (oblique.cc's cold branch). Sampling
       // above is untouched -- every node still drew its own projections in the
-      // same RNG order -- so the gate only picks WHICH kernel evaluates a node
-      // and the trained tree is invariant to the threshold.
+      // same RNG order -- so the gates only pick WHICH kernel evaluates a node
+      // and the trained tree is invariant to both thresholds.
       //
       // Why size: the shared-rows colwalk's cost is one interleaved slab write
       // stream per node-with-a-reference on every column pass, and it collapses
@@ -5851,7 +5851,8 @@ absl::Status GrowTreeLocalBFS(
       // kernel evaluates which node -- and without a scope their cost is
       // invisible to every per-scope table, surfacing only as TreeTrain
       // residual. That would make an A/B of --config=dw1_sr_hot_overlap vs
-      // --config=dw1_sr_hot_nodes read the overlap gate as free while e2e says
+      // --config=dw1_shared_rows (or a DW1_HOT_MIN_SHARE sweep) read the gates
+      // as free while e2e says
       // otherwise. This region is DISJOINT from (not nested in) the other two
       // kProjectionEvaluate scopes at this depth -- AdvanceDepthBagHot's and
       // the kernel's own -- so the three sum to the depth's true AP time
@@ -5866,8 +5867,7 @@ absl::Status GrowTreeLocalBFS(
         }
       }
 
-#ifdef DW1_HOT_OVERLAP
-      // ── Column-overlap gate ───────────────────────────────────────────
+      // ── Hot gate, part 2: column overlap ──────────────────────────────
       // The colwalk's unit of work is one ascending
       // pass over the whole depth's bag per touched column. A candidate
       // whose columns no other candidate reads is cheaper under the stock per-node Evaluate.
@@ -5971,7 +5971,6 @@ absl::Status GrowTreeLocalBFS(
                      depth_bag_state.valid ? "relabel" : "rebuild");
         std::fflush(stdout);
       }
-#endif
 
       std::vector<int32_t> hot_of_node(num_nodes, -1);  // node -> hot idx, -1 cold
       for (size_t k = 0; k < hot_nodes.size(); ++k) {

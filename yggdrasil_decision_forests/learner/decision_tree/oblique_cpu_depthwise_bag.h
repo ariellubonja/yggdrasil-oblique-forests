@@ -94,7 +94,7 @@ void AdvanceDepthBag(
     DepthBagChrono billing, DepthBagState* state);
 
 #ifdef DW1_HOT_NODES
-// Hot-nodes variant of AdvanceDepthBag (see .bazelrc:dw1_sr_hot_nodes): the bag
+// Hot-nodes variant of AdvanceDepthBag (see .bazelrc:dw1_sr_hot_overlap): the bag
 // covers only the depth's HOT nodes, so it is smaller than the depth's example
 // set and its labels index the HOT arrays (0..K-1), which is what the kernel
 // reads. Called by the BFS driver (not by the kernel) because only the driver

@@ -9,7 +9,7 @@ ran on, with the frontier it was HANDED:
     shared_cols,max_nodes_col,useful,swept,eff,nodewise,amort
 
 Because the hot gate leaves the trained trees bit-identical, a
---config=dw1_shared_rows run and a --config=dw1_sr_hot_nodes run on the same
+--config=dw1_shared_rows run and a --config=dw1_sr_hot_overlap run on the same
 seed/data produce the same depths over the same nodes, so the rows join
 one-to-one on (tree, depth) and the deltas are attributable to the gate alone.
 
