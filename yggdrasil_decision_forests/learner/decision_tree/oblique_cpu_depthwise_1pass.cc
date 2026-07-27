@@ -118,7 +118,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           entries.push_back({static_cast<int32_t>(node), static_cast<int32_t>(p),
                              feat.attribute_idx, feat.weight});
 
-          // Why?
+          // First ref to this column: record it as touched.
           if (col_count[feat.attribute_idx]++ == 0) {
             touched_cols.push_back(feat.attribute_idx);
           }
@@ -127,11 +127,13 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     }
     hwy::VQSort(touched_cols.data(), touched_cols.size(), hwy::SortAscending());
 
-    // Per-column end offsets: entries[col_count[c-1] .. col_count[c]) is c's slice.
+    // Counts → inclusive end offsets, in place: entries[col_slice_end[c-1] ..
+    // col_slice_end[c]) is c's slice. The move retires the col_count name.
+    std::vector<int32_t> col_slice_end = std::move(col_count);
     size_t offset = 0;
     for (const int32_t col_id : touched_cols) {
-      offset += col_count[col_id];
-      col_count[col_id] = static_cast<int32_t>(offset);
+      offset += col_slice_end[col_id];
+      col_slice_end[col_id] = static_cast<int32_t>(offset);
     }
 
     // Sort entries by column: nodes that share columns get "scheduled" together.
@@ -230,7 +232,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             }
           }
           ++next_touched;
-          const size_t slice_end = static_cast<size_t>(col_count[c]);
+          const size_t slice_end = static_cast<size_t>(col_slice_end[c]);
           size_t examples = 0;
           int32_t nodes = 0, prev_node = -1;
           for (size_t k = slice_begin; k < slice_end; ++k) {
@@ -340,7 +342,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         CHRONO_BEGIN_AP(dw1_colwalk_group_by_node); // This operation is free - ~0% cost
 
         const size_t slice_begin = pos;
-        const size_t slice_end = static_cast<size_t>(col_count[col_id]);
+        const size_t slice_end = static_cast<size_t>(col_slice_end[col_id]);
         pos = slice_end;
 
         // Group column c's refs by node. Entries were bucketed node-major, so
@@ -416,7 +418,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     size_t pos = 0;
     for (const int32_t c : touched_cols) {
       const float* col = evaluator.AttributeData(c);
-      const size_t end = static_cast<size_t>(col_count[c]);
+      const size_t end = static_cast<size_t>(col_slice_end[c]);
       for (; pos < end; ++pos) {
         // TODO entries carries the weight. But we can simply sample the weight when we need it
         //  TODO would dropping the weight make it more cache friendly?
