@@ -41,6 +41,12 @@ struct ColEntry {
   float weight;
 };
 
+// One reference of the current column by a (proj, weight) of some node.
+struct ColRef {
+  int32_t proj;
+  float weight;
+};
+
 }
 
 absl::Status ApplyProjectionsDepthwise1Pass(
@@ -313,16 +319,15 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     // Read each touched column in ONE depthwise bag pass and scatter each value to the 
     // (node,projection) addesses that reference the column. Trades sparse reads for sparse writes.
 
-    // Where the first element of ref_proj that node n has
-    std::vector<int32_t> node_ref_off(N, -1);  // per node: start in ref_*, else -1
+    // Where the first element of refs that node n has
+    std::vector<int32_t> node_ref_off(N, -1);  // per node: start in refs, else -1
     // How many projections of node n reference column c
     std::vector<int32_t> node_ref_cnt(N, 0);   // per node: #refs to current column
     
     // How many examples of node n have been processed so far
     std::vector<int32_t> node_local(N, 0);     // per node: rows seen this column
 
-    std::vector<int32_t> ref_proj;             // current column's (proj, weight)
-    std::vector<float> ref_w;                  //   runs, grouped by node
+    std::vector<ColRef> refs;                  // The (proj, weight) pairs corresponding to the current column
     std::vector<int32_t> cols_nodes;          // node ids that have this column
 
     const UnsignedExampleIdx* bag = bag_state->bag.data();
@@ -347,18 +352,16 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
         // Group column c's refs by node. Entries were bucketed node-major, so
         // within the slice the node id is non-decreasing and each node's refs
-        // form one contiguous run [off, off+cnt) in ref_proj / ref_w.
-        ref_proj.resize(slice_end - slice_begin);
-        ref_w.resize(slice_end - slice_begin);
+        // form one contiguous run [off, off+cnt) in refs.
+        refs.resize(slice_end - slice_begin);
         cols_nodes.clear();
         int32_t prev_node = -1;
-        
+
         for (size_t k = slice_begin; k < slice_end; ++k) {
           const ColEntry& task_quadruple = entries[k];
           const size_t off = k - slice_begin;
-          ref_proj[off] = task_quadruple.proj;
-          ref_w[off] = task_quadruple.weight;
-          
+          refs[off] = {task_quadruple.proj, task_quadruple.weight};
+
           const int32_t output_node = task_quadruple.node;
           
           if (output_node != prev_node) {
@@ -379,24 +382,25 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         CHRONO_BEGIN_AP(dw1_colwalk_bag_scatter);
         const float* col_data = evaluator.AttributeData(col_id);
 
-        for (size_t s = 0; s < total_rows; ++s) { // loop over examples
-          const int32_t n = static_cast<int32_t>(nob[s]);
-          const int32_t off = node_ref_off[n];
+        for (size_t ex_id = 0; ex_id < total_rows; ++ex_id) { // loop over examples
+          const int32_t node = static_cast<int32_t>(nob[ex_id]);
+          const int32_t off = node_ref_off[node];
           if (off < 0) continue;  // owning node has no projection on column c
 
-          const float v = col_data[bag[s]];
+          const float value = col_data[bag[ex_id]];
 
-          const int32_t cnt = node_ref_cnt[n];
+          const int32_t cnt = node_ref_cnt[node];
           // Bag and each node's selected_examples are sorted ascending, so rows
           // arrive in slab order and this running counter is the local slot.
           // It advances once per node row, so it stays in lockstep.
-          const int32_t local = node_local[n]++;
-          float* slab = out_projected[n].data();
-          const size_t rows_n = selected_examples_per_node[n].size();
+          const int32_t local = node_local[node]++;
+          float* slab = out_projected[node].data();
 
           for (int32_t t = 0; t < cnt; ++t) {
-            slab[static_cast<size_t>(ref_proj[off + t]) * rows_n + local] +=
-                ref_w[off + t] * v;
+            const ColRef& ref = refs[off + t];
+            // write to projection ref.proj of node, at offset local
+            slab[static_cast<size_t>(ref.proj) * selected_examples_per_node[node].size() + local] +=
+                ref.weight * value;
           }
         }
 
