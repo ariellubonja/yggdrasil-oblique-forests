@@ -70,8 +70,11 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
   /* #region Performance minions. All these take <10% of AP time */
 
-  // Only used to size the col_count histogram below.
-  const int max_attr = train_dataset.ncol() - 1;
+  // Only used to size the col_count histogram below. Taken from the feature
+  // indices, not ncol(): the label is not always the rightmost column (it is
+  // column 0 in HIGGS_with_header.csv, last in the synthetic specs).
+  const int max_attr =
+      *std::max_element(numerical_features.begin(), numerical_features.end());
 
 #ifndef DW1_COLWALK_CONTROL
   size_t total_rows = 0;
@@ -104,7 +107,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     CHRONO_BEGIN_AP(dw1_sweep_setup);
     std::vector<ColEntry> entries;
     std::vector<ColEntry> sorted;
-    std::vector<int32_t> touched;    // touched column ids, sorted ascending
+    std::vector<int32_t> touched_cols;    // touched column ids, sorted ascending
     std::vector<int32_t> col_count(static_cast<size_t>(max_attr) + 1, 0);
 
     // Fill in entries quadruple: (node, proj, col_id, weight). <= 2% of AP time
@@ -118,29 +121,25 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           
           // Why?
           if (col_count[feat.attribute_idx]++ == 0) {
-            touched.push_back(feat.attribute_idx);
+            touched_cols.push_back(feat.attribute_idx);
           }
         }
       }
     }
-    hwy::VQSort(touched.data(), touched.size(), hwy::SortAscending());
+    hwy::VQSort(touched_cols.data(), touched_cols.size(), hwy::SortAscending());
 
     // Sort entries by column: nodes that share columns get "scheduled" together.
     // By itself it gives column cache locality
     size_t offset = 0;
-    for (const int32_t c : touched) {
-      const int32_t cnt = col_count[c];
-      col_count[c] = static_cast<int32_t>(offset);
+    for (const int32_t col_id : touched_cols) {
+      const int32_t cnt = col_count[col_id];
+      col_count[col_id] = static_cast<int32_t>(offset);
       offset += cnt;
     }
     sorted.resize(entries.size());
     for (const auto& e : entries) {
       sorted[col_count[e.col]++] = e;
     }
-    // Ends before the debug-stats block so its file/stdout I/O stays out.
-    CHRONO_END_AP(dw1_sweep_setup,
-                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepSetup);
-
 
     // Print stats about row occupancy and column hit count
     if constexpr (kDw1DebugStats) {
@@ -207,7 +206,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           std::cout << "\n----DEPTH " << current_depth
                     << "---- [DW1 colstats] tree=" << stats_tree
                     << " nodes=" << N << " examples=" << depth_examples
-                    << " touched_cols=" << touched.size() << "/"
+                    << " touched_cols=" << touched_cols.size() << "/"
                     << numerical_features.size() << " refs=" << entries.size()
                     << "\n\n";
         }
@@ -220,9 +219,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
         size_t next_touched = 0;  // walks `touched` to fill untouched gaps
         size_t slice_begin = 0;   // start of the current column's slice
-        for (const int32_t c : touched) {
+        for (const int32_t c : touched_cols) {
           if (kColStatsPerCol && kColStatsAll) {
-            for (int32_t u = (next_touched == 0 ? 0 : touched[next_touched - 1] + 1);
+            for (int32_t u = (next_touched == 0 ? 0 : touched_cols[next_touched - 1] + 1);
                  u < c; ++u) {
               std::cout << "c" << u << ": 0\n";
             }
@@ -251,16 +250,16 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           }
           slice_begin = slice_end;
         }
-        if (kColStatsPerCol && kColStatsAll && !touched.empty()) {
-          for (int32_t u = touched.back() + 1; u <= max_attr; ++u) {
+        if (kColStatsPerCol && kColStatsAll && !touched_cols.empty()) {
+          for (int32_t u = touched_cols.back() + 1; u <= max_attr; ++u) {
             std::cout << "c" << u << ": 0\n";
           }
         }
 
-        const size_t swept = touched.size() * depth_examples;
+        const size_t swept = touched_cols.size() * depth_examples;
         const double share =
-            touched.empty() ? 0.0
-                            : static_cast<double>(pairs) / touched.size();
+            touched_cols.empty() ? 0.0
+                            : static_cast<double>(pairs) / touched_cols.size();
         const double eff =
             swept == 0 ? 0.0 : static_cast<double>(useful) / swept;
         const double amort =
@@ -268,7 +267,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         if (kColStats) {
           std::cout << "[DW1 colshare] tree=" << stats_tree
                     << " depth=" << current_depth << " nodes=" << N
-                    << " rows=" << depth_examples << " cols=" << touched.size()
+                    << " rows=" << depth_examples << " cols=" << touched_cols.size()
                     << "/" << numerical_features.size()
                     << " refs=" << entries.size() << " pairs=" << pairs
                     << " share=" << share << " shared_cols=" << shared_cols
@@ -291,7 +290,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             share_header = true;
           }
           f << stats_tree << "," << current_depth << "," << N << ","
-            << depth_examples << "," << touched.size() << ","
+            << depth_examples << "," << touched_cols.size() << ","
             << numerical_features.size() << "," << entries.size() << ","
             << pairs << "," << share << "," << shared_cols << ","
             << max_nodes_col << "," << useful << "," << swept << "," << eff
@@ -319,7 +318,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
     std::vector<int32_t> ref_proj;             // current column's (proj, weight)
     std::vector<float> ref_w;                  //   runs, grouped by node
-    std::vector<int32_t> col_touched;          // node ids touched this column
+    std::vector<int32_t> cols_nodes;          // node ids that have this column
 
     const UnsignedExampleIdx* bag = bag_state->bag.data();
     // AdvanceDepthBag always sizes node_of_bag to the bag (all zeros for a
@@ -327,14 +326,18 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     // agnostic of batch shape/depth.
     const uint32_t* nob = bag_state->node_of_bag.data();
 
+    CHRONO_END_AP(dw1_sweep_setup,
+              ::yggdrasil_decision_forests::chrono_prof::kDw1SweepSetup);
+
     CHRONO_BEGIN_AP(dw1_sweep_colwalk); // ~86% of AP runtime
     {
       size_t pos = 0;
 
-      for (const int32_t c : touched) {
-        const float* col = evaluator.AttributeData(c);
+      for (const int32_t col_id : touched_cols) {
+        CHRONO_BEGIN_AP(dw1_colwalk_group_by_node); // This operation is free - ~0% cost
+
         const size_t slice_begin = pos;
-        const size_t slice_end = static_cast<size_t>(col_count[c]);
+        const size_t slice_end = static_cast<size_t>(col_count[col_id]);
         pos = slice_end;
 
         // Group column c's refs by node. Entries were bucketed node-major, so
@@ -342,9 +345,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         // form one contiguous run [off, off+cnt) in ref_proj / ref_w.
         ref_proj.resize(slice_end - slice_begin);
         ref_w.resize(slice_end - slice_begin);
-        col_touched.clear();
+        cols_nodes.clear();
         int32_t prev_node = -1;
-        CHRONO_BEGIN_AP(dw1_colwalk_group_by_node); // This operation is free - ~0% cost
+        
         for (size_t k = slice_begin; k < slice_end; ++k) {
           const ColEntry& e = sorted[k];
           const size_t kk = k - slice_begin;
@@ -355,7 +358,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
             node_ref_off[n] = static_cast<int32_t>(kk);
             node_ref_cnt[n] = 0;
             node_local[n] = 0;  // restart this node's row counter for col c
-            col_touched.push_back(n);
+            cols_nodes.push_back(n);
             prev_node = n;
           }
           ++node_ref_cnt[n];
@@ -363,15 +366,18 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         CHRONO_END_AP(dw1_colwalk_group_by_node,
                    ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkGroupByNode);
 
+
         // One ascending pass over the depth bag: dense read of col, scatter
         // write of each contribution to its node's projections referencing c.
         CHRONO_BEGIN_AP(dw1_colwalk_bag_scatter);
+        const float* col_data = evaluator.AttributeData(col_id);
+
         for (size_t s = 0; s < total_rows; ++s) { // loop over examples
           const int32_t n = static_cast<int32_t>(nob[s]);
           const int32_t off = node_ref_off[n];
           if (off < 0) continue;  // owning node has no projection on column c
 
-          const float v = col[bag[s]];
+          const float v = col_data[bag[s]];
 
           const int32_t cnt = node_ref_cnt[n];
           // Bag and each node's selected_examples are sorted ascending, so rows
@@ -390,7 +396,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         CHRONO_END_AP(dw1_colwalk_bag_scatter,
                    ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkBagScatter);
 
-        for (const int32_t n : col_touched) node_ref_off[n] = -1;
+        for (const int32_t n : cols_nodes) node_ref_off[n] = -1;
       }
     }
     CHRONO_END_AP(dw1_sweep_colwalk,
