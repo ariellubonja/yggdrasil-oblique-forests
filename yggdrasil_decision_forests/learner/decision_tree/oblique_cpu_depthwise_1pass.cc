@@ -387,8 +387,6 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           const int32_t off = node_ref_off[node];
           if (off < 0) continue;  // owning node has no projection on column c
 
-          const float value = col_data[bag[ex_id]];
-
           const int32_t cnt = node_ref_cnt[node];
           // Bag and each node's selected_examples are sorted ascending, so rows
           // arrive in slab order and this running counter is the local slot.
@@ -396,6 +394,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           const int32_t local = node_local[node]++;
           float* slab = out_projected[node].data();
 
+          const float value = col_data[bag[ex_id]];
           for (int32_t t = 0; t < cnt; ++t) {
             const ColRef& ref = refs[off + t];
             // write to projection ref.proj of node, at offset local
