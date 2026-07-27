@@ -132,6 +132,7 @@ _TIMING_COLS = (
     "SplitHistogram", "SortIndices", "ExactSplit", "GpuOther",
     "SymBuildBag", "SymSortBag", "SymSweep",
     "Dw1PreSize", "Dw1Sweep",
+    "Dw1SweepSetup",
     "Dw1SweepColWalk", "Dw1ColWalkGroupByNode", "Dw1ColWalkBagScatter",
     "Dw1SweepBig", "Dw1SweepGeneric", "Dw1SharedBag",
     "NodeTrain", "FindBestCondition", "ObliqueSplitSearch",
@@ -290,6 +291,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # DW1 shared-rows: merged per-block bag build + sort (replaces the
             # per-node gather; sits beside the Bucket/Scatter/ColWalk siblings).
             "Dw1SharedBag":                 "------Dw1SharedBag",
+            # Column bucketing that precedes the sweep's column walk.
+            "Dw1SweepSetup":                "------Dw1SweepSetup",
             "Dw1SweepColWalk":              "------Dw1SweepColWalk",
             # depth 7 — ColWalk sub-loops (group-by-node pass + bag scatter pass).
             "Dw1ColWalkGroupByNode":        "-------Dw1ColWalkGroupByNode",
@@ -377,6 +380,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "-----Dw1PreSize",
             "-----Dw1Sweep",
             "------Dw1SharedBag",
+            "------Dw1SweepSetup",
             "------Dw1SweepColWalk",
             "-------Dw1ColWalkGroupByNode",
             "-------Dw1ColWalkBagScatter",

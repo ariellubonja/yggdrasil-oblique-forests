@@ -1916,6 +1916,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
                     << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
                     // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
                     // per-task loop glue.
+                    << " Dw1SweepSetup " << arr[kDw1SweepSetup] * 1e-9 << "s"
                     << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
                     << " Dw1ColWalkGroupByNode " << arr[kDw1ColWalkGroupByNode] * 1e-9 << "s"
                     << " Dw1ColWalkBagScatter " << arr[kDw1ColWalkBagScatter] * 1e-9 << "s"
@@ -2041,6 +2042,7 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
                     << " Dw1Sweep " << arr[kDw1Sweep] * 1e-9 << "s"
                     // Sub-phases of Dw1Sweep. Sum to Dw1Sweep modulo the
                     // per-task loop glue.
+                    << " Dw1SweepSetup " << arr[kDw1SweepSetup] * 1e-9 << "s"
                     << " Dw1SweepColWalk " << arr[kDw1SweepColWalk] * 1e-9 << "s"
                     << " Dw1ColWalkGroupByNode " << arr[kDw1ColWalkGroupByNode] * 1e-9 << "s"
                     << " Dw1ColWalkBagScatter " << arr[kDw1ColWalkBagScatter] * 1e-9 << "s"

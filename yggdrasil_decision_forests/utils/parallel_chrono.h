@@ -89,6 +89,8 @@ enum FuncId {
 
   // Sub-phases of the Dw1 Sweep, nested inside kDw1Sweep so children sum back to
   // it. All fire per task, never per row, so clock-read overhead is negligible.
+  kDw1SweepSetup,    // bucket the depth's (node,proj,col,weight) refs by column
+                     // (entries fill + touched VQSort + counting sort)
   kDw1SweepColWalk,  // gather/FMA hot loop: o[i] += w * col[sel_ptr[i]]
   kDw1ColWalkGroupByNode,  // inner loop 1: group sorted entries by node into ref_proj/ref_w
   kDw1ColWalkBagScatter,   // inner loop 2: bag pass scatter-accumulate into out_projected

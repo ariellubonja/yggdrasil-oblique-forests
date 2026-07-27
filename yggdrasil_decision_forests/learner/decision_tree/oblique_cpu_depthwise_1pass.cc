@@ -100,6 +100,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
     // Column-centric sweep: bucket references by column, then walk the
     // touched columns ascending.
+    // Begin/end (not RAII) because the buffers below outlive the setup phase.
+    CHRONO_BEGIN_AP(dw1_sweep_setup);
     std::vector<ColEntry> entries;
     std::vector<ColEntry> sorted;
     std::vector<int32_t> touched;    // touched column ids, sorted ascending
@@ -111,7 +113,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         for (const auto& feat : projections_per_node[node][p]) {
           // feat.weight can just be sampled here. No need to be stored. But probably memory size is low
           // Also will need to be sampled in regular ApplyProjection for nodes that disqualify from DW1
-          entries.push_back({node, p, feat.attribute_idx, feat.weight});
+          entries.push_back({static_cast<int32_t>(node), static_cast<int32_t>(p),
+                             feat.attribute_idx, feat.weight});
           
           // Why?
           if (col_count[feat.attribute_idx]++ == 0) {
@@ -122,7 +125,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     }
     hwy::VQSort(touched.data(), touched.size(), hwy::SortAscending());
 
-    // Counting sort by column: col_count becomes the running fill cursor. <1% of AP time
+    // Sort entries by column: nodes that share columns get "scheduled" together.
+    // By itself it gives column cache locality
     size_t offset = 0;
     for (const int32_t c : touched) {
       const int32_t cnt = col_count[c];
@@ -133,11 +137,14 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     for (const auto& e : entries) {
       sorted[col_count[e.col]++] = e;
     }
+    // Ends before the debug-stats block so its file/stdout I/O stays out.
+    CHRONO_END_AP(dw1_sweep_setup,
+                  ::yggdrasil_decision_forests::chrono_prof::kDw1SweepSetup);
 
-    // Depth increases monotonically within a tree, so a counter bumped whenever
-    // it stops increasing labels the tree, with no dependency on the chrono
-    // build. This whole region assumes a single training thread.
+
+    // Print stats about row occupancy and column hit count
     if constexpr (kDw1DebugStats) {
+// assumes Single threaded training
     static int stats_tree = 0;
     {
       static int32_t prev_depth = -1;
@@ -292,7 +299,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         }
       }
     }
-    }  // if constexpr (kDw1DebugStats)
+    }
 
 /* #endregion */
 
@@ -300,8 +307,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 
 #ifndef DW1_COLWALK_CONTROL
     // Read each touched column in ONE depthwise bag pass and scatter each value to the 
-    // (node,projection) addesses that reference the column.
-    // Trades sparse reads for sparse writes.
+    // (node,projection) addesses that reference the column. Trades sparse reads for sparse writes.
 
     // Where the first element of ref_proj that node n has
     std::vector<int32_t> node_ref_off(N, -1);  // per node: start in ref_*, else -1
