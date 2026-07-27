@@ -2,6 +2,8 @@
 // the nodewise kernel hops columns in (node, projection) order. This one buckets
 // the depth's refs by column and walks each touched column once, ascending.
 
+
+/* #region Imports */
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_1pass.h"
 
 #ifdef DEPTHWISE_1_PASS
@@ -22,12 +24,13 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_bag.h"
 #include "yggdrasil_decision_forests/utils/parallel_chrono.h"
+/* #endregion */
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
 namespace {
 
-// Manual switch for the per-depth node & column stats
+// Print per-depth node & column stats?
 constexpr bool kDw1DebugStats = false;
 
 
@@ -38,7 +41,7 @@ struct ColEntry {
   float weight;
 };
 
-}  // namespace
+}
 
 absl::Status ApplyProjectionsDepthwise1Pass(
     const dataset::VerticalDataset& train_dataset,
@@ -48,17 +51,27 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     absl::Span<const std::vector<internal::Projection>> projections_per_node,
     DepthBagState* bag_state, absl::Span<std::vector<float>> out_projected,
     int32_t current_depth) {
-
   CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
+
+  internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
+  // The column-centric sweep below walks raw column pointers, which exist
+  // only for the default column-major VerticalDataset layout. Alternate
+  // layouts (row-major mirror) are not supported yet.
+  if (!evaluator.IsColumnMajor()) {
+    return absl::UnimplementedError(
+        "The depthwise-1-pass oblique kernel requires the column-major "
+        "VerticalDataset layout. Alternate dataset layouts (e.g. "
+        "--config=row_major_dataset_layout with --dataset_layout=row) are "
+        "not supported with --config=depthwise_1_pass yet.");
+  }
+
   const size_t N = selected_examples_per_node.size();
   if (N == 0) return absl::OkStatus();
 
   /* #region Performance minions. All these take <10% of AP time */
 
-  int max_attr = 0;
-  for (const auto attribute_idx : numerical_features) {
-    max_attr = std::max(max_attr, attribute_idx);
-  }
+  // Only used to size the col_count histogram below.
+  const int max_attr = train_dataset.ncol() - 1;
 
 #ifndef DW1_COLWALK_CONTROL
   size_t total_rows = 0;
@@ -71,6 +84,8 @@ absl::Status ApplyProjectionsDepthwise1Pass(
   // Slab pre-size (zero-init: the column sweep accumulates)
   {
     CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1PreSize);
+
+    // Reserve write space (0-filled). ||nodes|| * ||projections|| * (each node's n. examples)
     for (size_t n = 0; n < N; ++n) {
       // Accounts for variable n. projections / node
       const size_t slab =
@@ -79,22 +94,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     }
   }
 
-  // ── Phase 2: Sweep 
-  // Takes the majority of ApplyProjection time: 9.052292408 for PreSize vs.	138.5347208 for Sweep
+  // ── Phase 2: Sweep. Takes the majority of ApplyProjection time
   {
     CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kDw1Sweep);
-    internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
-
-    // The column-centric sweep below walks raw column pointers, which exist
-    // only for the default column-major VerticalDataset layout. Alternate
-    // layouts (row-major mirror) are not supported yet.
-    if (!evaluator.IsColumnMajor()) {
-      return absl::UnimplementedError(
-          "The depthwise-1-pass oblique kernel requires the column-major "
-          "VerticalDataset layout. Alternate dataset layouts (e.g. "
-          "--config=row_major_dataset_layout with --dataset_layout=row) are "
-          "not supported with --config=depthwise_1_pass yet.");
-    }
 
     // Column-centric sweep: bucket references by column, then walk the
     // touched columns ascending.
@@ -103,26 +105,24 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     std::vector<int32_t> touched;    // touched column ids, sorted ascending
     std::vector<int32_t> col_count(static_cast<size_t>(max_attr) + 1, 0);
 
-    // <= 2% of AP time
-    for (size_t n = 0; n < N; ++n) {
-      const auto& projs = projections_per_node[n];
-      for (size_t p = 0; p < projs.size(); ++p) {
-        for (const auto& feat : projs[p]) {
-          entries.push_back({static_cast<int32_t>(n),
-                             static_cast<int32_t>(p), feat.attribute_idx,
-                             feat.weight});
+    // Fill in entries quadruple: (node, proj, col_id, weight). <= 2% of AP time
+    for (size_t node = 0; node < N; ++node) {      
+      for (size_t p = 0; p < projections_per_node[node].size(); ++p) {
+        for (const auto& feat : projections_per_node[node][p]) {
+          // feat.weight can just be sampled here. No need to be stored. But probably memory size is low
+          // Also will need to be sampled in regular ApplyProjection for nodes that disqualify from DW1
+          entries.push_back({node, p, feat.attribute_idx, feat.weight});
+          
+          // Why?
           if (col_count[feat.attribute_idx]++ == 0) {
             touched.push_back(feat.attribute_idx);
           }
         }
       }
     }
-    // Column ids are unique here (one push per first touch), so VQSort's
-    // instability is irrelevant.
     hwy::VQSort(touched.data(), touched.size(), hwy::SortAscending());
 
-    // Counting sort by column: col_count becomes the running fill cursor.
-    // <1% of AP time
+    // Counting sort by column: col_count becomes the running fill cursor. <1% of AP time
     size_t offset = 0;
     for (const int32_t c : touched) {
       const int32_t cnt = col_count[c];
