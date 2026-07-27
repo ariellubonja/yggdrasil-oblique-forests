@@ -1065,8 +1065,8 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " SortIndices " << arr[kGpuSortIndices] * 1e-9 << "s"
                   << " ExactSplit " << arr[kGpuExactSplit] * 1e-9 << "s"
                   << " GpuOther " << arr[kGpuOther] * 1e-9 << "s"
-#ifdef SYMMETRIC_DEPTHWISE_AP
-                  // Sub-phases of ApplyProjectionsSymmetricDepthwiseAP. Sum
+#ifdef SYMMETRIC_OPTIMIZED
+                  // Sub-phases of ApplyProjectionsSymmetricOptimized. Sum
                   // to ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
                   << " SymBuildBag " << arr[kSymBuildBag] * 1e-9 << "s"
                   << " SymSortBag " << arr[kSymSortBag] * 1e-9 << "s"
@@ -1179,8 +1179,8 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " SortIndices " << arr[kGpuSortIndices] * 1e-9 << "s"
                   << " ExactSplit " << arr[kGpuExactSplit] * 1e-9 << "s"
                   << " GpuOther " << arr[kGpuOther] * 1e-9 << "s"
-#ifdef SYMMETRIC_DEPTHWISE_AP
-                  // Sub-phases of ApplyProjectionsSymmetricDepthwiseAP. Sum
+#ifdef SYMMETRIC_OPTIMIZED
+                  // Sub-phases of ApplyProjectionsSymmetricOptimized. Sum
                   // to ProjEval (modulo a few ns of CHRONO_SCOPE overhead).
                   << " SymBuildBag " << arr[kSymBuildBag] * 1e-9 << "s"
                   << " SymSortBag " << arr[kSymSortBag] * 1e-9 << "s"

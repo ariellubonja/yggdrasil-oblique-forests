@@ -1,6 +1,6 @@
-#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_symmetric_depthwise_ap.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_symmetric_optimized.h"
 
-#ifdef SYMMETRIC_DEPTHWISE_AP
+#ifdef SYMMETRIC_OPTIMIZED
 
 #include <algorithm>
 #include <cstddef>
@@ -16,7 +16,7 @@
 
 namespace yggdrasil_decision_forests::model::decision_tree {
 
-absl::Status ApplyProjectionsSymmetricDepthwiseAP(
+absl::Status ApplyProjectionsSymmetricOptimized(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
@@ -30,7 +30,6 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
   // can break ApplyProjection down per depth.
   CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
 
-  DCHECK(bag_state != nullptr);
   const size_t N = selected_examples_per_node.size();
   if (N == 0) return absl::OkStatus();
 
@@ -43,18 +42,8 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     return absl::OkStatus();
   }
 
-  // ── Phase 1: BuildBag ─────────────────────────────────────────────
-  // Per-node row counts + slab storage.
-  //
-  // Slab storage is *reserved*, not zero-filled. The Sweep below writes
-  // every cell of every non-empty projection's slab exactly once (each bag
-  // entry routes to one cell via the per-node write cursor), so the old
-  // out_projected[n].assign(K * rows_n, 0.f) was 100 % overwritten — 264 MB
-  // of dead writes per depth on HIGGS, 384 MB on trunk-4096. We reserve
-  // capacity only (no value-init) and write through raw pointers. As a
-  // consequence out_projected[n].size() stays 0; the consumer builds its
-  // span from .data() with explicit length K * rows_n (see training.cc,
-  // and the output-contract note in the header).
+  // ── Phase 1: BuildBag 
+  // Per-node row counts + slab storage. Not 0-init bcs. whole vector is overwritten
   const bool single_node = (N == 1);
 
   std::vector<size_t> rows_n(N);
@@ -65,7 +54,7 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     for (size_t n = 0; n < N; ++n) {
       rows_n[n] = selected_examples_per_node[n].size();
       bag_size += rows_n[n];
-      out_projected[n].reserve(K * rows_n[n]);  // capacity only, no zero-fill
+      out_projected[n].reserve(K * rows_n[n]);
       out_ptr[n] = out_projected[n].data();
     }
     if (bag_size == 0) {
@@ -74,7 +63,7 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
     }
   }
 
-  // ── Phase 2: obtain the sorted bag ────────────────────────────────
+  // ── Phase 2: obtain the sorted bag 
   // Delegated to the shared depth-bag module: incremental O(bag) relabel of
   // the previous depth's sorted bag in the steady state, concat + VQSort
   // fallback otherwise (see oblique_cpu_depthwise_bag.{h,cc}). Billed to
@@ -158,4 +147,4 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
-#endif  // SYMMETRIC_DEPTHWISE_AP
+#endif  // SYMMETRIC_OPTIMIZED

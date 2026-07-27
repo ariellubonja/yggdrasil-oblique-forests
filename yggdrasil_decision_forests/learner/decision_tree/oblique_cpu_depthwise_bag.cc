@@ -1,6 +1,6 @@
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_bag.h"
 
-#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(DEPTHWISE_1_PASS)
+#if defined(SYMMETRIC_OPTIMIZED) || defined(DEPTHWISE_1_PASS)
 
 #include <algorithm>
 #include <cstddef>
@@ -266,4 +266,4 @@ void AdvanceDepthBagHot(
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
-#endif  // defined(SYMMETRIC_DEPTHWISE_AP) || defined(DEPTHWISE_1_PASS)
+#endif  // defined(SYMMETRIC_OPTIMIZED) || defined(DEPTHWISE_1_PASS)

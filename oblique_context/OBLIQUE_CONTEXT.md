@@ -344,7 +344,8 @@ ideas in a measurement.** Controls stay pure. Variants **on this branch**:
 | DW1 depthwise 1-pass (shared-rows colwalk + hot gates) | `--config=depthwise_1_pass` + `DW1_HOT_MIN_ROWS` / `DW1_HOT_MIN_SHARE` | `oblique_cpu_depthwise_1pass.cc`; gates in `GrowTreeLocalBFS`; cold branch in `oblique.cc`; `AdvanceDepthBagHot` | colwalk for the depth's big column-sharing nodes, stock `Evaluate` for the rest. Non-monotone overlap gate ⇒ that depth's bag falls back to concat+VQSort. Bit-identical at every threshold pair; **unmeasured (2026-07-25)** |
 | └ ungated shared-rows (`DW1_HOT_MIN_ROWS=0 DW1_HOT_MIN_SHARE=0`) | runtime, no rebuild | same file | ⛔ 1.3–3.8× slower; postmortem §13 |
 | DW1 col-sharing control | `--config=dw1_colwalk_control` | same file, `#ifdef DW1_COLWALK_CONTROL` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
-| Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
+| Symmetric optimized (bag-wide kernel) | `--config=symmetric_optimized` | `oblique_cpu_symmetric_optimized.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
+| Symmetric on the DW1 kernel | `--config=symmetric_dw1` | DW1 files; sampling swap in `GrowTreeLocalBFS` | same model as symmetric_optimized (verified bit-identical) ⇒ **the DW1 cross-check**; also its perf lower bound |
 | Subtree gather cache | *(removed 2026-07-16)* | recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
 

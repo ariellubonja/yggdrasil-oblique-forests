@@ -13,7 +13,8 @@
 build:depthwise_1_pass            -DDEPTHWISE_1_PASS=1        # shared-rows colwalk on the depth's hot nodes (DW1_HOT_MIN_ROWS / _SHARE), stock Evaluate on the rest
 build:dw1_colwalk_control         + -DDW1_COLWALK_CONTROL=1   # col-sharing sweep only: no depth bag, no scatter, DW1_HOT_* inert; #error without depthwise_1_pass
 build:row_major_dataset_layout    -DROW_MAJOR_DATASET_LAYOUT=1
-build:symmetric_depthwise_ap      -DSYMMETRIC_DEPTHWISE_AP=1
+build:symmetric_optimized         -DSYMMETRIC_OPTIMIZED=1     # bag-wide symmetric kernel (was: symmetric_depthwise_ap)
+build:symmetric_dw1               + -DSYMMETRIC_DW1=1         # = depthwise_1_pass with symmetric per-depth sampling; #error without depthwise_1_pass
 build:bfs_only                    -DBFS_ONLY=1                # mutually exclusive with symmetric_*
 build:oblique_gpu                 -DOBLIQUE_GPU_ENABLED=1 --define=enable_cuda=1
 build:coarse_chrono_profile          -DCHRONO_PROFILE=1                    # top-level + node-bookkeeping/split-mgr/GBT scopes
@@ -35,7 +36,8 @@ build:profiler -O2 -g, no fission                  # VTune/perf
 Env knobs (read once into a static):
 
 - `RM_MAX_ROWS` — node-size threshold; harness `main()` bakes 5000, ∞ without the harness.
-- `DW1_MIN_DEPTH` (0), `SYMMETRIC_MAX_DEPTH` (INT32_MAX; deeper levels hand off to DFS).
+- `DW1_MIN_DEPTH` (0), `SYMMETRIC_MAX_DEPTH` (INT32_MAX; deeper levels hand off to DFS). Both
+  sit on top of the hard `kMinDepthwiseDepth = 2` floor (training.cc): no depthwise at the root.
 - `DW1_HOT_MIN_ROWS` (`depthwise_1_pass`, default 1000) — fusion candidate iff
   `sel.size() >=` it; **0 = every node**. Sweep `{250, 500, 1000, 2000, 4000}`, Quick first.
 - `DW1_HOT_MIN_SHARE` (default 50) — percent of a candidate's distinct columns another

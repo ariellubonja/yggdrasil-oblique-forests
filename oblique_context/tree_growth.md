@@ -169,7 +169,7 @@ Selected by `DecisionTreeCoreTrain` (training.cc:5138) at **compile time**:
 
 ```cpp
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyLocal: {
-#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_DEPTHWISE_AP) || \
+#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_OPTIMIZED) || \
     defined(BFS_ONLY)
       return GrowTreeLocalBFS(…);
 #else
@@ -196,7 +196,9 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
     }
 
 #if defined(DEPTHWISE_1_PASS)
-    if (dt_config.has_sparse_oblique_split() && depth_batch.size() > 1 &&
+    // kMinDepthwiseDepth = 2: every depthwise variant skips the root (one node ⇒ the
+    // fused pass is just the per-node path). Same floor on the symmetric branch below.
+    if (dt_config.has_sparse_oblique_split() && current_depth >= kMinDepthwiseDepth &&
         current_depth >= Depthwise1PassMinDepth()) {          // env DW1_MIN_DEPTH, default 0
       // Fused-per-level CPU Apply. Sample projections per node (ordinary SPO-RF
       // semantics), then precompute each node's projected-value slab.
@@ -209,6 +211,7 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
       // tls_ctx.cur_depth pinned to current_depth here (BFS depth-level work runs
       // BEFORE this depth's NodeTrains — without the pin it books to the previous depth).
       {  // kSampleProjection: 2^d nodes × K projections, node-major, same RNG engine
+         // [SYMMETRIC_DW1: K draws for node 0, copied to every node — kernel_variants.md]
         for (int n = 0; n < num_nodes; ++n)
           for (int p = 0; p < num_proj; ++p)
             internal::SampleProjection(…, &all_node_projs[n][p], &all_node_mono[n][p], random);
@@ -232,8 +235,8 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
         std::vector<float>().swap(projected[n]);
       }
     } else
-#elif defined(SYMMETRIC_DEPTHWISE_AP)
-    if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1 &&
+#elif defined(SYMMETRIC_OPTIMIZED)
+    if (dt_config.has_sparse_oblique_split() && current_depth >= kMinDepthwiseDepth &&
         current_depth <= SymmetricMaxDepth()) {               // env SYMMETRIC_MAX_DEPTH
       // CatBoost-style symmetric trees: sample K projections ONCE for this
       // depth, shared across all nodes. The aggregate of nodes' selected
@@ -243,13 +246,14 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
       std::vector<int8_t> shared_monotonic(num_proj, 0);
       for (int p = 0; p < num_proj; ++p) internal::SampleProjection(…);
       // build sel_spans; projected(num_nodes);
-      RETURN_IF_ERROR(ApplyProjectionsSymmetricDepthwiseAP(
+      RETURN_IF_ERROR(ApplyProjectionsSymmetricOptimized(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans), absl::MakeConstSpan(shared_projections),
           absl::MakeSpan(projected)));
       // per node: node_config.{depthwise_projection_defs,depthwise_monotonic,
       //                        precomputed_projected_values} → NodeTrain
-    } else if (dt_config.has_sparse_oblique_split()) {
+    } else if (dt_config.has_sparse_oblique_split() &&
+               current_depth > SymmetricMaxDepth()) {
       // Symmetric → DFS handoff (deeper than SYMMETRIC_MAX_DEPTH): finish each
       // frontier node's subtree with GrowTreeLocal (pushes nothing back to node_queue).
       for (auto& nae : depth_batch) RETURN_IF_ERROR(GrowTreeLocal(…, std::move(nae.…)));
@@ -257,7 +261,8 @@ absl::Status GrowTreeLocalBFS(/* same signature */) {
 #endif
     {
       // Per-node fallback: BFS scheduling without fused Apply / shared sampling.
-      // This is what --config=bfs_only measures (scheduler-only ablation vs DFS).
+      // This is what --config=bfs_only measures (scheduler-only ablation vs DFS),
+      // and where the root (depth 1 < kMinDepthwiseDepth) lands under DW1/symmetric.
 #ifdef BFS_ONLY
       CHRONO_SCOPE_COARSE(…kBfsNodeLoop);
 #endif

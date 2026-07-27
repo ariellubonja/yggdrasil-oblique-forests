@@ -17,20 +17,25 @@
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_CONFIG_H_
 
 #if defined(DEPTHWISE_1_PASS) && \
-    (defined(SYMMETRIC_DEPTHWISE_AP) || defined(BFS_ONLY))
+    (defined(SYMMETRIC_OPTIMIZED) || defined(BFS_ONLY))
 #error "Depthwise oblique mode and symmetric/BFS oblique modes are mutually exclusive"
 #endif
 // Treatment vs control of the symmetric-trees ablation, so never both:
-// SYMMETRIC_DEPTHWISE_AP is shared projections + fused bag-wide Apply, BFS_ONLY
+// SYMMETRIC_OPTIMIZED is shared projections + fused bag-wide Apply, BFS_ONLY
 // keeps per-node sampling and isolates the BFS scheduler alone.
-#if (defined(SYMMETRIC_DEPTHWISE_AP) + defined(BFS_ONLY)) > 1
-#error "SYMMETRIC_DEPTHWISE_AP and BFS_ONLY are mutually exclusive"
+#if (defined(SYMMETRIC_OPTIMIZED) + defined(BFS_ONLY)) > 1
+#error "SYMMETRIC_OPTIMIZED and BFS_ONLY are mutually exclusive"
 #endif
 // DW1_COLWALK_CONTROL only *subtracts* from the depthwise kernel (it drops the
 // shared-rows colwalk + hot gates and leaves the col-sharing sweep), so it is
 // meaningless without the depthwise scheduler itself.
 #if defined(DW1_COLWALK_CONTROL) && !defined(DEPTHWISE_1_PASS)
 #error "DW1_COLWALK_CONTROL requires DEPTHWISE_1_PASS (use --config=dw1_colwalk_control)"
+#endif
+// SYMMETRIC_DW1 only swaps the depthwise driver's per-node sampling for the
+// symmetric per-depth draw, so it needs the depthwise scheduler and kernel.
+#if defined(SYMMETRIC_DW1) && !defined(DEPTHWISE_1_PASS)
+#error "SYMMETRIC_DW1 requires DEPTHWISE_1_PASS (use --config=symmetric_dw1)"
 #endif
 #if defined(DEPTHWISE_1_PASS)
 #define OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS 1

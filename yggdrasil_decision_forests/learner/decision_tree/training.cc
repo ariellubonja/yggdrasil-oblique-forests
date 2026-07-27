@@ -117,7 +117,7 @@ Dw1LineCountAccum g_dw1_linecount;
 #include "yggdrasil_decision_forests/learner/decision_tree/label.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_1pass.h"
-#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_symmetric_depthwise_ap.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_symmetric_optimized.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_accumulator.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/splitter_scanner.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/uplift.h"
@@ -5237,7 +5237,7 @@ absl::Status DecisionTreeCoreTrain(
   switch (dt_config.growing_strategy_case()) {
     case proto::DecisionTreeTrainingConfig::kGrowingStrategyLocal: {
       const auto constraints = NodeConstraints::CreateNodeConstraints();
-#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_DEPTHWISE_AP) || \
+#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_OPTIMIZED) || \
     defined(BFS_ONLY)
       return GrowTreeLocalBFS(train_dataset, config, config_link, dt_config,
                               deployment, weights, 1, internal_config,
@@ -5532,10 +5532,17 @@ absl::Status GrowTreeLocal(
   return absl::OkStatus();
 }
 
+#if defined(DEPTHWISE_1_PASS) || defined(SYMMETRIC_OPTIMIZED)
+// First depth any fused-per-level kernel runs at. The root is one node, so a
+// depthwise pass there is just the per-node path with a different RNG order.
+// Kept here so the kernels stay agnostic of the depth they run at.
+constexpr int32_t kMinDepthwiseDepth = 2;
+#endif
+
 #if defined(DEPTHWISE_1_PASS)
-// Depth at which the fused-per-level Apply switches on: shallower levels run
-// the per-node BFS fallback, levels at or deeper run the fused kernel. From
-// DW1_MIN_DEPTH (default 0 = fused everywhere). For a depth line-search.
+// Extra floor on top of kMinDepthwiseDepth: levels below it run the per-node
+// BFS fallback, levels at or deeper run the fused kernel. From DW1_MIN_DEPTH
+// (default 0 = fused from kMinDepthwiseDepth on). For a depth line-search.
 int32_t Depthwise1PassMinDepth() {
   static const int32_t value = [] {
     const char* e = std::getenv("DW1_MIN_DEPTH");
@@ -5579,10 +5586,10 @@ bool Dw1HotOverlapStats() {
 }
 #endif
 
-#if defined(SYMMETRIC_DEPTHWISE_AP)
+#if defined(SYMMETRIC_OPTIMIZED)
 // Deepest level (inclusive) running the symmetric bagwide path; deeper frontier
 // nodes hand their subtree to GrowTreeLocal. From SYMMETRIC_MAX_DEPTH (default
-// INT32_MAX; root is depth 1, so 5 keeps 1..5 symmetric and DFS from 6).
+// INT32_MAX; the root is never symmetric, so 5 keeps 2..5 and DFS from 6).
 int32_t SymmetricMaxDepth() {
   static const int32_t value = [] {
     const char* e = std::getenv("SYMMETRIC_MAX_DEPTH");
@@ -5616,7 +5623,7 @@ absl::Status GrowTreeLocalBFS(
   node_queue.back().node_id = (depth == 1) ? 1 : 0;
 #endif
 
-#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(DEPTHWISE_1_PASS)
+#if defined(SYMMETRIC_OPTIMIZED) || defined(DEPTHWISE_1_PASS)
   // Incremental sorted-bag state of the symmetric and DW1 shared-rows kernels.
   // thread_local so capacity amortizes across trees; validity is per-tree.
   // The colwalk control never populates or reads it, so it pays nothing.
@@ -5694,11 +5701,12 @@ absl::Status GrowTreeLocalBFS(
     }
 
 #if defined(DEPTHWISE_1_PASS)
-    if (dt_config.has_sparse_oblique_split() && depth_batch.size() > 1 &&
+    if (dt_config.has_sparse_oblique_split() &&
+        current_depth >= kMinDepthwiseDepth &&
         current_depth >= Depthwise1PassMinDepth()) {
       // Fused-per-level CPU Apply. Sample projections per node, preserving
-      // ordinary Sparse Oblique RF semantics, then precompute each node's
-      // projected-value slab before per-node split search.
+      // ordinary Sparse Oblique RF semantics (SYMMETRIC_DW1: one shared draw
+      // per depth), then precompute each node's slab before the split search.
       const int num_proj = GetNumProjections(
           dt_config, config_link.numerical_features_size());
       const float projection_density = std::clamp(
@@ -5727,6 +5735,20 @@ absl::Status GrowTreeLocalBFS(
         // TreeTrain = NodeTrain + ApplyProjection + SampleProjection sum.
         CHRONO_SCOPE_COARSE(
             ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
+#ifdef SYMMETRIC_DW1
+        // Symmetric semantics on the DW1 kernel: draw K projections ONCE per
+        // depth, then hand every node the same set. Rest of Kernel untouched from DW1
+        for (int p = 0; p < num_proj; ++p) {
+          internal::SampleProjection(
+              config_link.numerical_features(), dt_config,
+              train_dataset.data_spec(), config_link, projection_density,
+              &all_node_projs[0][p], &all_node_mono[0][p], random);
+        }
+        for (int n = 1; n < num_nodes; ++n) {
+          all_node_projs[n] = all_node_projs[0];
+          all_node_mono[n] = all_node_mono[0];
+        }
+#else
         for (int n = 0; n < num_nodes; ++n) {
           for (int p = 0; p < num_proj; ++p) {
             internal::SampleProjection(
@@ -5735,6 +5757,7 @@ absl::Status GrowTreeLocalBFS(
                 &all_node_projs[n][p], &all_node_mono[n][p], random);
           }
         }
+#endif
       }
 
       std::vector<absl::Span<const UnsignedExampleIdx>> sel_spans(num_nodes);
@@ -5997,8 +6020,9 @@ absl::Status GrowTreeLocalBFS(
       }
 #endif  // !DW1_COLWALK_CONTROL
     } else
-#elif defined(SYMMETRIC_DEPTHWISE_AP)
-    if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1 &&
+#elif defined(SYMMETRIC_OPTIMIZED)
+    if (dt_config.has_sparse_oblique_split() &&
+        current_depth >= kMinDepthwiseDepth &&
         current_depth <= SymmetricMaxDepth()) {
       // CatBoost-style symmetric trees: sample K projections ONCE per depth,
       // shared across nodes. The depth's selected examples aggregate to the bag,
@@ -6012,7 +6036,7 @@ absl::Status GrowTreeLocalBFS(
 
       std::vector<internal::Projection> shared_projections(num_proj);
       std::vector<int8_t> shared_monotonic(num_proj, 0);
-#if defined(CHRONO_PROFILE) && defined(SYMMETRIC_DEPTHWISE_AP)
+#if defined(CHRONO_PROFILE) && defined(SYMMETRIC_OPTIMIZED)
       // This depth-level work runs BEFORE the depth's NodeTrains, so cur_depth
       // still holds the previous depth. Pin it so kSampleProjection, the Sym*
       // scopes and kProjectionEvaluate land in the right (tree, depth) cell.
@@ -6028,7 +6052,7 @@ absl::Status GrowTreeLocalBFS(
             train_dataset.data_spec(), config_link, projection_density,
             &shared_projections[p], &shared_monotonic[p], random);
       }
-#if defined(CHRONO_PROFILE) && defined(SYMMETRIC_DEPTHWISE_AP)
+#if defined(CHRONO_PROFILE) && defined(SYMMETRIC_OPTIMIZED)
       CHRONO_END_COARSE(sample_projection,
                  ::yggdrasil_decision_forests::chrono_prof::kSampleProjection);
 #endif
@@ -6046,7 +6070,7 @@ absl::Status GrowTreeLocalBFS(
       std::vector<std::vector<float>> projected(num_nodes);
       // tls_ctx.cur_depth already pinned to current_depth above (before the
       // shared SampleProjection loop), so Sym* scopes accrue correctly.
-      RETURN_IF_ERROR(ApplyProjectionsSymmetricDepthwiseAP(
+      RETURN_IF_ERROR(ApplyProjectionsSymmetricOptimized(
           train_dataset, config_link.numerical_features(),
           absl::MakeConstSpan(sel_spans),
           absl::MakeConstSpan(shared_projections),
@@ -6076,7 +6100,8 @@ absl::Status GrowTreeLocalBFS(
                                   node_queue));
         std::vector<float>().swap(projected[n]);  // free early
       }
-    } else if (dt_config.has_sparse_oblique_split()) {
+    } else if (dt_config.has_sparse_oblique_split() &&
+               current_depth > SymmetricMaxDepth()) {
       // Symmetric -> DFS handoff past SymmetricMaxDepth(): GrowTreeLocal finishes
       // each frontier node's subtree and pushes nothing back, so the BFS loop
       // drains. No fused kernel ran => invalidate the unadvanced depth bag.
@@ -6097,7 +6122,7 @@ absl::Status GrowTreeLocalBFS(
 #ifdef BFS_ONLY
       CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kBfsNodeLoop);
 #endif
-#if defined(SYMMETRIC_DEPTHWISE_AP) || \
+#if defined(SYMMETRIC_OPTIMIZED) || \
     (defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL))
       // No fused kernel ran here (oblique off, or the DW1 guards excluded this
       // depth), so the bag was not advanced: invalidate it so a later fused depth

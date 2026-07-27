@@ -27,10 +27,10 @@
 // must therefore build the consuming span from out_projected[n].data() with
 // explicit length K * rows_n, not from the vector's size. The consumer is
 // FindBestConditionSparseObliqueTemplate in oblique.cc (gated by
-// SYMMETRIC_DEPTHWISE_AP).
+// SYMMETRIC_OPTIMIZED).
 
-#ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_DEPTHWISE_AP_H_
-#define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_DEPTHWISE_AP_H_
+#ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_OPTIMIZED_H_
+#define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_OPTIMIZED_H_
 
 #include <cstdint>
 #include <vector>
@@ -65,7 +65,7 @@ using SymmetricBagState = DepthBagState;
 // failed); the kernel then rebuilds the bag with the concat+sort fallback.
 // `bag_state` must be non-null; the kernel reads the previous depth's bag
 // from it and leaves this depth's bag in it.
-absl::Status ApplyProjectionsSymmetricDepthwiseAP(
+absl::Status ApplyProjectionsSymmetricOptimized(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
@@ -77,4 +77,4 @@ absl::Status ApplyProjectionsSymmetricDepthwiseAP(
 
 }  // namespace yggdrasil_decision_forests::model::decision_tree
 
-#endif  // YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_DEPTHWISE_AP_H_
+#endif  // YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_SYMMETRIC_OPTIMIZED_H_

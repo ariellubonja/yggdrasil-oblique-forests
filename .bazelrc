@@ -16,7 +16,11 @@ build:row_major_dataset_layout --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 
 # CatBoost-style symmetric/oblivious trees for Sparse Oblique RF: K candidate
 # projections shared across all nodes at depth d, one bag-wide sweep per candidate
-build:symmetric_depthwise_ap --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
+build:symmetric_optimized --cxxopt="-DSYMMETRIC_OPTIMIZED=1"
+
+# Same symmetric maths, but evaluated by the DW1 kernel
+build:symmetric_dw1 --config=depthwise_1_pass
+build:symmetric_dw1 --cxxopt="-DSYMMETRIC_DW1=1"
 
 build:bfs_only --cxxopt="-DBFS_ONLY=1"
 

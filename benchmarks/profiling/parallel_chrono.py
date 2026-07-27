@@ -217,16 +217,16 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
     for tid, g in df.groupby("thread", sort=True):
         g = g.sort_values(["tree", "depth"]).reset_index(drop=True)
 
-        # Symmetric depthwise AP is special: its shared SampleProjection and
+        # Symmetric optimized is special: its shared SampleProjection and
         # bag-wide ApplyProjection run in GrowTreeLocalBFS before NodeTrain, so
         # detect it from the Sym* scopes and render them as TreeTrain children.
-        symmetric_depthwise = any(
+        symmetric_optimized = any(
             c in g.columns and (g[c] != 0.0).any()
             for c in ("SymBuildBag", "SymSortBag", "SymSweep"))
 
         # A column's dash prefix = its depth in the CHRONO hierarchy. GPU stages
         # stay flat: they replace ApplyProjection rather than nest under it.
-        # symmetric_depthwise lifts SampleProjection/AP to 1 and Sym* to 2.
+        # symmetric_optimized lifts SampleProjection/AP to 1 and Sym* to 2.
         #   0  TreeTrain
         #   1  ├─ DepthTrain (BFS builds: the whole depth, ⊇ everything below)
         #   1  ├─ NodeTrain (and the BFS-only BfsNodeLoop scheduler scope)
@@ -258,35 +258,35 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # depth 4 — under ObliqueSplitSearch (per-node setup + per-K loop).
             "FindObliqueSetup":             "----FindObliqueSetup",
             "SampleProjection": (
-                "-SampleProjection" if symmetric_depthwise
+                "-SampleProjection" if symmetric_optimized
                 else "----SampleProjection"),
             "ProjectionEvaluate": (
-                "-ApplyProjection" if symmetric_depthwise
+                "-ApplyProjection" if symmetric_optimized
                 else "----ApplyProjection"),
             "EvaluateProj":                 "----EvaluateProj",
             # Axis-aligned candidate-selection/search tail under FindBestCondition.
             "GetCandidateAttributes": (
-                "---GetCandidateAttributes" if symmetric_depthwise
+                "---GetCandidateAttributes" if symmetric_optimized
                 else "----GetCandidateAttributes"),
             "GetCandidateAttributesAssign": (
-                "----GetCandidateAttributesAssign" if symmetric_depthwise
+                "----GetCandidateAttributesAssign" if symmetric_optimized
                 else "-----GetCandidateAttributesAssign"),
             "GetCandidateAttributesShuffle": (
-                "----GetCandidateAttributesShuffle" if symmetric_depthwise
+                "----GetCandidateAttributesShuffle" if symmetric_optimized
                 else "-----GetCandidateAttributesShuffle"),
             "GetCandidateAttributesNumToTest": (
-                "----GetCandidateAttributesNumToTest" if symmetric_depthwise
+                "----GetCandidateAttributesNumToTest" if symmetric_optimized
                 else "-----GetCandidateAttributesNumToTest"),
             "ColumnWithCast":               "----ColumnWithCast",
             # ApplyProjection sub-phases. In symmetric depthwise AP they are
             # under the TreeTrain-level ApplyProjection; otherwise they are
             # displayed under the node-local ApplyProjection scope.
             "SymBuildBag": (
-                "--SymBuildBag" if symmetric_depthwise else "-----SymBuildBag"),
+                "--SymBuildBag" if symmetric_optimized else "-----SymBuildBag"),
             "SymSortBag": (
-                "--SymSortBag" if symmetric_depthwise else "-----SymSortBag"),
+                "--SymSortBag" if symmetric_optimized else "-----SymSortBag"),
             "SymSweep": (
-                "--SymSweep" if symmetric_depthwise else "-----SymSweep"),
+                "--SymSweep" if symmetric_optimized else "-----SymSweep"),
             "Dw1PreSize":                   "-----Dw1PreSize",
             "Dw1Sweep":                     "-----Dw1Sweep",
             # depth 5 — EvaluateProj's two split-finder paths.

@@ -46,7 +46,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
   // … [dynamic downgrade — see split_search.md "Per-node DYNAMIC downgrade"] …
 
-#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS)
+#if defined(SYMMETRIC_OPTIMIZED) || defined(OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS)
   // Slab present ⇒ skip SampleProjection + Evaluate, split-search over its slices.
   const bool has_precomputed_projected =
       !internal_config.precomputed_projected_values.empty() &&
@@ -135,7 +135,8 @@ ideas in a measurement.** Controls stay pure. On this branch:
 | DW1 depthwise 1-pass (shared-rows colwalk + hot gates) | `--config=depthwise_1_pass` + `DW1_HOT_MIN_ROWS` / `DW1_HOT_MIN_SHARE` | `oblique_cpu_depthwise_1pass.cc`; gates in `GrowTreeLocalBFS`; cold branch in `oblique.cc`; `AdvanceDepthBagHot` | colwalk for the depth's big column-sharing nodes, stock `Evaluate` for the rest. Non-monotone overlap gate ⇒ that depth's bag falls back to concat+VQSort. Bit-identical at every threshold pair; **unmeasured (2026-07-25)** |
 | └ ungated shared-rows (`DW1_HOT_MIN_ROWS=0 DW1_HOT_MIN_SHARE=0`) | runtime, no rebuild | same file | ⛔ 1.3–3.8× slower; postmortem in core §13 |
 | DW1 col-sharing control | `--config=dw1_colwalk_control` | same file, `#ifdef DW1_COLWALK_CONTROL` | ≤15 % slower than BFS; "col sharing via cache residency doesn't work at scale" |
-| Symmetric depthwise AP | `--config=symmetric_depthwise_ap` | `oblique_cpu_symmetric_depthwise_ap.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
+| Symmetric optimized (bag-wide kernel) | `--config=symmetric_optimized` | `oblique_cpu_symmetric_optimized.cc` | ✚ changes model semantics; wins wide-trunk, ties BFS on HIGGS |
+| Symmetric on the DW1 kernel | `--config=symmetric_dw1` | DW1 files; sampling swap in `GrowTreeLocalBFS` | same model as symmetric_optimized (verified bit-identical) ⇒ the DW1 cross-check; section below |
 | Subtree gather cache | *(removed 2026-07-16)* | recover via commit `9f32e817` | ⛔ +43 % (≈2 % feature overlap ⇒ never amortizes) |
 | Row-major store | `--config=row_major_dataset_layout` + `--dataset_layout=row` | `RowMajorFeatureMatrix` via `AttributeValue` | layout experiment |
 
@@ -338,14 +339,14 @@ equal to the then-separate `dw1_shared_rows` build (`cfa6ab94…` / `00dd44bc…
 `--cxxopt=-UNDEBUG`, zero DCHECK failures. Both bag paths live on one run (`bag=rebuild` at
 depths 2-6 and 14+, `bag=relabel` at 7-13).
 
-### Symmetric: `ApplyProjectionsSymmetricDepthwiseAP` (oblique_cpu_symmetric_depthwise_ap.cc)
+### Symmetric: `ApplyProjectionsSymmetricOptimized` (oblique_cpu_symmetric_optimized.cc)
 
 K projections **shared by every node of the depth** ⇒ the whole depth's rows (= the bag) can be
 swept per projection with stride-1 column reads. **Changes model semantics** (shared
 projections constrain splits) — compare accuracy/throughput, not bit-identity.
 
 ```cpp
-absl::Status ApplyProjectionsSymmetricDepthwiseAP(
+absl::Status ApplyProjectionsSymmetricOptimized(
     const dataset::VerticalDataset& train_dataset,
     const google::protobuf::RepeatedField<int32_t>& numerical_features,
     absl::Span<const absl::Span<const UnsignedExampleIdx>> selected_examples_per_node,
@@ -387,6 +388,50 @@ per-node cursor streams RFO-thrash once N×64 B exceeds per-thread L2 share (≈
 Hence: ties BFS on HIGGS (386 vs 387 s), wins 23–36 % on wide trunks. Under the current
 architecture (col-major reads + node-major slabs) symmetric **upper-bounds** shared-rows: if
 symmetric can't beat control on a shape, no shared-rows fix will.
+
+### Symmetric on the DW1 kernel: `--config=symmetric_dw1` (added 2026-07-27)
+
+Same *model* as `symmetric_optimized`, computed by the *DW1* kernel — the cross-check that DW1
+evaluates projections correctly, and DW1's perf floor on the one workload symmetric was built
+for. It is `depthwise_1_pass` with exactly one line of behaviour changed, in the
+`DEPTHWISE_1_PASS` branch of `GrowTreeLocalBFS`:
+
+```cpp
+#ifdef SYMMETRIC_DW1
+  for (int p = 0; p < num_proj; ++p)          // ONE draw per depth (symmetric's RNG stream)
+    internal::SampleProjection(…, &all_node_projs[0][p], &all_node_mono[0][p], random);
+  for (int n = 1; n < num_nodes; ++n) {       // every node gets the same K projections
+    all_node_projs[n] = all_node_projs[0]; all_node_mono[n] = all_node_mono[0];
+  }
+#else  /* stock: num_nodes × num_proj draws, node-major */
+#endif
+```
+
+Everything downstream — hot gates, depth bag, colwalk, cold branch, slab handoff — is the
+stock DW1 path, and that `#ifdef` is the only one. Both variants gate on depth alone
+(`current_depth >= kMinDepthwiseDepth`, = 2, training.cc), never on batch size: the two must
+enter and leave the fused path at exactly the same depths, or a depth taking the per-node loop
+would interleave `SampleProjection`/`EvaluateProjection` and draw a different RNG stream.
+
+**Why this is the only bit-exact check DW1 has.** Stock DW1 is *not* comparable to
+`--config=bfs_only`: pre-sampling a whole depth moves the K draws ahead of every node's
+`GetCandidateAttributes` `std::shuffle` (training.cc:4674, one per node, same engine), so the
+RNG streams diverge from depth 2 on — measured, and unaffected by `EXACT` vs random
+histograms. Symmetric fixes that: `symmetric_optimized` and `symmetric_dw1` share one sampling
+schedule, so any difference is the kernel's.
+
+**Why the models must agree bit-for-bit.** Both accumulate a projected value in ascending
+attribute order into an fp32 zero — symmetric as `value += ws[m]*col[ex]` over the projection's
+items, DW1 as `slab[…] += w*v` over the touched columns ascending, and projections are sampled
+in ascending attribute order. Same ops, same order. `DW1_MIN_DEPTH` must stay 0 and
+`SYMMETRIC_MAX_DEPTH` unset (either one moves one side's fused depth range and breaks the RNG
+stream).
+
+**Verified 2026-07-27** (macOS, correctness only; re-verified after the depth-2 floor landed):
+`nodes-*` hash equal to `--config=symmetric_optimized` on trunk 20k×32, 50k×29 and 8192×4096
+(4 trees, 4 threads, seed 1) across `DW1_HOT_MIN_ROWS ∈ {0,1000} × DW1_HOT_MIN_SHARE ∈ {0,50}`,
+and also under `--cxxopt=-UNDEBUG` (no DCHECK trips) and with `--config=dw1_colwalk_control`.
+`header.pb` differs run-to-run for one binary — nondeterministic metadata, not the model.
 
 ### Dead end: `SubtreeGatherCache` (removed 2026-07-16; was oblique.cc `#ifdef SUBTREE_GATHER_CACHE`, added in `9f32e817`)
 

@@ -8,7 +8,8 @@ set -euo pipefail
 #   --mode=dw1        (default) Sweep DW1_MIN_DEPTH across tree depth in
 #                     increments of --step (default 4). Levels shallower than the
 #                     threshold run plain per-node BFS; levels at/below it run the
-#                     fused depthwise_1pass Apply. d=0 is depthwise everywhere;
+#                     fused depthwise_1pass Apply. d<=2 is depthwise everywhere
+#                     below the root (depth 1 is never depthwise);
 #                     d >= the tree's deepest level is BFS everywhere. Finds the
 #                     crossover depth where depthwise_1pass starts paying off.
 #                     Built once with --config=depthwise_1_pass.
@@ -16,13 +17,13 @@ set -euo pipefail
 #   --mode=symmetric  Sweep SYMMETRIC_MAX_DEPTH across tree depth in
 #                     increments of --step (default 5): symmetric to depth 5, 10,
 #                     15, ... then DFS (GrowTreeLocal) for deeper levels. The tree
-#                     root is depth 1, so SYMMETRIC_MAX_DEPTH=5 keeps depths
-#                     1..5 symmetric and switches to DFS from depth 6. The
+#                     root is depth 1 (never symmetric), so SYMMETRIC_MAX_DEPTH=5
+#                     keeps depths 2..5 symmetric and switches to DFS from 6. The
 #                     all-symmetric endpoint (threshold >= maxdepth) is skipped --
 #                     it is already measured by a plain --config=symmetric_*
 #                     runtime.sh run. (SYMMETRIC_MAX_DEPTH=0 would be the
 #                     all-DFS endpoint; not swept by default.) Built once with
-#                     --config=symmetric_depthwise_ap.
+#                     --config=symmetric_optimized.
 #
 #   --mode=layout     Sweep --dataset_layout over --layouts (default "column row")
 #                     to compare row- vs column-major numerical storage. NOT a
@@ -110,7 +111,7 @@ case "$MODE" in
     OUT_PREFIX="dw1_depth_linesearch"
     ;;
   symmetric)
-    MODE_CONFIG="--config=symmetric_depthwise_ap"
+    MODE_CONFIG="--config=symmetric_optimized"
     SWEEP_ENV="SYMMETRIC_MAX_DEPTH"
     SWEEP_COL="symmetric_max_depth"
     DEPTH_STEP="${STEP_OVERRIDE:-5}"

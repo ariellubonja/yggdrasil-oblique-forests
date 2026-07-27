@@ -271,7 +271,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   /* #endregion */
 
   /* #region Symmetric & other AP methods */
-#if defined(SYMMETRIC_DEPTHWISE_AP) || defined(OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS)
+#if defined(SYMMETRIC_OPTIMIZED) || defined(OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS)
   // Fused CPU Apply: when GrowTreeLocalBFS pre-computed this node's slab, skip
   // SampleProjection + Evaluate and split-search directly over its slices (one
   // per projection, length rows_n).

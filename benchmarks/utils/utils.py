@@ -40,11 +40,16 @@ def get_base_parser():
                              "CPU ApplyProjection (shared-rows colwalk on the "
                              "depth's hot nodes, stock Evaluate on the rest). "
                              "Control: --bazel_config=dw1_colwalk_control.")
-    parser.add_argument("--symmetric_depthwise_ap", action="store_true",
-                        help="Build with -DSYMMETRIC_DEPTHWISE_AP=1: "
+    parser.add_argument("--symmetric_optimized", action="store_true",
+                        help="Build with -DSYMMETRIC_OPTIMIZED=1: "
                              "CatBoost-style symmetric-trees bag-wide "
                              "ApplyProjection (K stride-1 sweeps over the "
                              "sorted bag, shared projections per depth).")
+    parser.add_argument("--symmetric_dw1", action="store_true",
+                        help="Build with -DSYMMETRIC_DW1=1 (implies "
+                             "depthwise_1_pass): symmetric semantics evaluated "
+                             "by the DW1 kernel. Model must be bit-identical "
+                             "to --symmetric_optimized.")
     parser.add_argument("--dataset_layout",
                         choices=["column", "row", "dynamic_row_col_major",
                                  "dynamic_row_col_major_bf16", "dual_bf16", "dual_fp32"],
@@ -193,8 +198,10 @@ def build_binary(args, chrono_mode):
     _ap_variants = [
         ('--depthwise_1_pass',
          getattr(args, 'depthwise_1_pass', False)),
-        ('--symmetric_depthwise_ap',
-         getattr(args, 'symmetric_depthwise_ap', False)),
+        ('--symmetric_optimized',
+         getattr(args, 'symmetric_optimized', False)),
+        ('--symmetric_dw1',
+         getattr(args, 'symmetric_dw1', False)),
     ]
     _on = [name for name, v in _ap_variants if v]
     if len(_on) > 1:
@@ -203,8 +210,10 @@ def build_binary(args, chrono_mode):
             "(matches the C++ #error in label.h).")
     if getattr(args, 'depthwise_1_pass', False):
         finished_cmd.append('--config=depthwise_1_pass')
-    if getattr(args, 'symmetric_depthwise_ap', False):
-        finished_cmd.append('--config=symmetric_depthwise_ap')
+    if getattr(args, 'symmetric_optimized', False):
+        finished_cmd.append('--config=symmetric_optimized')
+    if getattr(args, 'symmetric_dw1', False):
+        finished_cmd.append('--config=symmetric_dw1')
     if getattr(args, 'dataset_layout', 'column') in ('row', 'dynamic_row_col_major', 'dynamic_row_col_major_bf16', 'dual_bf16', 'dual_fp32'):
         finished_cmd.append('--config=row_major_dataset_layout')
     if getattr(args, 'gpu_mode', None) == 'per_node':

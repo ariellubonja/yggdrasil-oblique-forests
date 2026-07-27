@@ -1,5 +1,5 @@
 // Depthwise fused-per-level CPU ApplyProjection: buckets the level's refs by
-// column, sweeps each touched column once. Excludes SYMMETRIC_DEPTHWISE_AP.
+// column, sweeps each touched column once. Excludes SYMMETRIC_OPTIMIZED.
 // Output (as symmetric): slab[p*rows_n + i] = <proj[n][p], features[sel[i]]>.
 
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_CPU_DEPTHWISE_1PASS_H_

@@ -74,8 +74,8 @@ enum FuncId {
   kGpuExactSplit,               // ExactSplit (Exact gain/argmax stage)
   kGpuOther,                    // Residual = bridge total − Σ tracked stages
 
-  // Sub-phases of ApplyProjectionsSymmetricDepthwiseAP. Only emitted when
-  // compiled with -DSYMMETRIC_DEPTHWISE_AP; left at zero otherwise so the
+  // Sub-phases of ApplyProjectionsSymmetricOptimized. Only emitted when
+  // compiled with -DSYMMETRIC_OPTIMIZED; left at zero otherwise so the
   // enum values stay stable across builds.
   kSymBuildBag,   // Pre-size slabs (+ fallback concat / root-span copy)
   kSymSortBag,    // O(bag) incremental relabel of the previous depth's sorted
