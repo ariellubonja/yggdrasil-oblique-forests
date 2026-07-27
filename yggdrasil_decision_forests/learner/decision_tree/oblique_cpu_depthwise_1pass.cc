@@ -106,19 +106,18 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     // Begin/end (not RAII) because the buffers below outlive the setup phase.
     CHRONO_BEGIN_AP(dw1_sweep_setup);
     std::vector<ColEntry> entries;
-    std::vector<ColEntry> sorted;
     std::vector<int32_t> touched_cols;    // touched column ids, sorted ascending
     std::vector<int32_t> col_count(static_cast<size_t>(max_attr) + 1, 0);
 
     // Fill in entries quadruple: (node, proj, col_id, weight). <= 2% of AP time
-    for (size_t node = 0; node < N; ++node) {      
+    for (size_t node = 0; node < N; ++node) {
       for (size_t p = 0; p < projections_per_node[node].size(); ++p) {
         for (const auto& feat : projections_per_node[node][p]) {
           // feat.weight can just be sampled here. No need to be stored. But probably memory size is low
           // Also will need to be sampled in regular ApplyProjection for nodes that disqualify from DW1
           entries.push_back({static_cast<int32_t>(node), static_cast<int32_t>(p),
                              feat.attribute_idx, feat.weight});
-          
+
           // Why?
           if (col_count[feat.attribute_idx]++ == 0) {
             touched_cols.push_back(feat.attribute_idx);
@@ -128,18 +127,22 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     }
     hwy::VQSort(touched_cols.data(), touched_cols.size(), hwy::SortAscending());
 
-    // Sort entries by column: nodes that share columns get "scheduled" together.
-    // By itself it gives column cache locality
+    // Per-column end offsets: entries[col_count[c-1] .. col_count[c]) is c's slice.
     size_t offset = 0;
     for (const int32_t col_id : touched_cols) {
-      const int32_t cnt = col_count[col_id];
+      offset += col_count[col_id];
       col_count[col_id] = static_cast<int32_t>(offset);
-      offset += cnt;
     }
-    sorted.resize(entries.size());
-    for (const auto& e : entries) {
-      sorted[col_count[e.col]++] = e;
-    }
+
+    // Sort entries by column: nodes that share columns get "scheduled" together.
+    // By itself it gives column cache locality. (node, proj) tie-break keeps each
+    // slice node-major with one contiguous run per node — the colwalk needs that.
+    std::sort(entries.begin(), entries.end(),
+              [](const ColEntry& a, const ColEntry& b) {
+                if (a.col != b.col) return a.col < b.col;
+                if (a.node != b.node) return a.node < b.node;
+                return a.proj < b.proj;
+              });
 
     // Print stats about row occupancy and column hit count
     if constexpr (kDw1DebugStats) {
@@ -232,12 +235,12 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           int32_t nodes = 0, prev_node = -1;
           for (size_t k = slice_begin; k < slice_end; ++k) {
             const size_t rows_k =
-                selected_examples_per_node[sorted[k].node].size();
+                selected_examples_per_node[entries[k].node].size();
             nodewise += rows_k;  // every ref: the stock path re-gathers
-            if (sorted[k].node != prev_node) {  // slice is node-major
+            if (entries[k].node != prev_node) {  // slice is node-major
               ++nodes;
               examples += rows_k;
-              prev_node = sorted[k].node;
+              prev_node = entries[k].node;
             }
           }
           pairs += static_cast<size_t>(nodes);
@@ -349,19 +352,21 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         int32_t prev_node = -1;
         
         for (size_t k = slice_begin; k < slice_end; ++k) {
-          const ColEntry& e = sorted[k];
-          const size_t kk = k - slice_begin;
-          ref_proj[kk] = e.proj;
-          ref_w[kk] = e.weight;
-          const int32_t n = e.node;
-          if (n != prev_node) {
-            node_ref_off[n] = static_cast<int32_t>(kk);
-            node_ref_cnt[n] = 0;
-            node_local[n] = 0;  // restart this node's row counter for col c
-            cols_nodes.push_back(n);
-            prev_node = n;
+          const ColEntry& task_quadruple = entries[k];
+          const size_t off = k - slice_begin;
+          ref_proj[off] = task_quadruple.proj;
+          ref_w[off] = task_quadruple.weight;
+          
+          const int32_t output_node = task_quadruple.node;
+          
+          if (output_node != prev_node) {
+            node_ref_off[output_node] = static_cast<int32_t>(off);
+            node_ref_cnt[output_node] = 0;
+            node_local[output_node] = 0;  // restart this node's row counter for col c
+            cols_nodes.push_back(output_node);
+            prev_node = output_node;
           }
-          ++node_ref_cnt[n];
+          ++node_ref_cnt[output_node];
         }
         CHRONO_END_AP(dw1_colwalk_group_by_node,
                    ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkGroupByNode);
@@ -409,15 +414,15 @@ absl::Status ApplyProjectionsDepthwise1Pass(
 // Takeaway: column sharing via cache residency doesn't work at scale.
     CHRONO_BEGIN_AP(dw1_sweep_colwalk); // ~93% of the ApplyProjection time in non-Shared-Rows. In Shared-rows, ~66%
     size_t pos = 0;
-    for (const int32_t c : touched) {
+    for (const int32_t c : touched_cols) {
       const float* col = evaluator.AttributeData(c);
       const size_t end = static_cast<size_t>(col_count[c]);
       for (; pos < end; ++pos) {
-        // TODO sorted carries the weight. But we can simply sample the weight when we need it
+        // TODO entries carries the weight. But we can simply sample the weight when we need it
         //  TODO would dropping the weight make it more cache friendly?
 
         // Sorted : sorted by selected column, regardless of node/projection
-        const ColEntry& e = sorted[pos];
+        const ColEntry& e = entries[pos];
         const auto sel = selected_examples_per_node[e.node];
         // I think this node's bag size
         const size_t rows_n = sel.size();
