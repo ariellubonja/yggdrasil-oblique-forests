@@ -108,7 +108,11 @@ configs. Details in `build_measure.md`.
   NodeTrain, SampleProjection, EvaluateProj, ProjectionEvaluate (=ApplyProjection),
   FindObliqueSetup, ObliqueSplitSearch, FindBestCondition, GetCandidateAttributes(+Assign/
   Shuffle/NumToTest), SetLeafValue, SplitExamplesInPlace, SplitManager*/SplitWorker*,
-  ColumnWithCast, BfsNodeLoop`, plus all `Gbt*` scopes.
+  ColumnWithCast, BfsNodeLoop, DepthTrain`, plus all `Gbt*` scopes. **`DepthTrain`** wraps a
+  whole `GrowTreeLocalBFS` depth iteration (pinned to that depth): under DW1/symmetric the
+  fused Apply runs *outside* `NodeTrain`, so `ΣNodeTrain` is only a subset of the depth and
+  `DepthTrain` is the honest per-depth total. Zero on DFS builds (where `ΣNodeTrain` already
+  is the depth).
 - Fine AP: `Dw1PreSize, Dw1Sweep, Dw1SweepBig, Dw1SweepGeneric, Dw1SweepColWalk,
   Dw1SharedBag, Dw1ColWalkGroupByNode, Dw1ColWalkBagScatter, SymBuildBag, SymSortBag,
   SymSweep`.
@@ -124,6 +128,7 @@ configs. Details in `build_measure.md`.
 
 Invariant used by the tooling: **TreeTrain = ΣNodeTrain + ΣApplyProjection + ΣSampleProjection**
 (the BFS drivers pin `tls_ctx.cur_depth` before depth-level work so per-depth cells line up).
+On BFS builds the same identity reads **TreeTrain ≈ Σ DepthTrain**, one term per depth.
 
 ---
 

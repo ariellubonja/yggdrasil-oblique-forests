@@ -1971,6 +1971,10 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
                     // BFS-only scheduler scope. BfsNodeLoop only fires under
                     // -DBFS_ONLY; zero for DFS builds.
                     << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
+                    // Whole wall-time of one BFS depth iteration (GrowTreeLocalBFS).
+                    // Non-zero only on BFS builds; under DW1/symmetric it, not
+                    // NodeTrain, is the depth total: Sigma DepthTrain ~ TreeTrain.
+                    << " DepthTrain " << arr[kDepthTrain] * 1e-9 << "s"
                     // Top-level per-tree scope (kTreeTrain) wraps the entire
                     // tree training. Non-zero only at depth=0 of each tree;
                     // works as the DFS-build analogue of BfsNodeLoop
@@ -2097,6 +2101,10 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
                     // BFS-only scheduler scope. BfsNodeLoop only fires under
                     // -DBFS_ONLY; zero for DFS builds.
                     << " BfsNodeLoop " << arr[kBfsNodeLoop] * 1e-9 << "s"
+                    // Whole wall-time of one BFS depth iteration (GrowTreeLocalBFS).
+                    // Non-zero only on BFS builds; under DW1/symmetric it, not
+                    // NodeTrain, is the depth total: Sigma DepthTrain ~ TreeTrain.
+                    << " DepthTrain " << arr[kDepthTrain] * 1e-9 << "s"
                     // Top-level per-tree scope (kTreeTrain) wraps the entire
                     // tree training. Non-zero only at depth=0 of each tree;
                     // works as the DFS-build analogue of BfsNodeLoop

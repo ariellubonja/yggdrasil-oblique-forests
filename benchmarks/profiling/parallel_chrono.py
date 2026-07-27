@@ -138,7 +138,8 @@ _TIMING_COLS = (
     "NodeTrain", "FindBestCondition", "ObliqueSplitSearch",
     "FindObliqueSetup", "EvaluateProj", "EntropyTableSetup", "CartPath",
     "CartSetup", "HistoPath", "AxisAlignedSplitSearch", "SampleProjection",
-    "SplitExamplesInPlace", "SetLeafValue", "BfsNodeLoop", "TreeTrain",
+    "SplitExamplesInPlace", "SetLeafValue", "BfsNodeLoop", "DepthTrain",
+    "TreeTrain",
     # GBT session-level scopes (overlaid from the "GBT chrono (ms):" line onto
     # one placeholder row; see parse_parallel_chrono). Absent -> stay 0.0 ->
     # zero-dropped, so Bagging/RF runs are unaffected.
@@ -227,6 +228,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         # stay flat: they replace ApplyProjection rather than nest under it.
         # symmetric_depthwise lifts SampleProjection/AP to 1 and Sym* to 2.
         #   0  TreeTrain
+        #   1  ├─ DepthTrain (BFS builds: the whole depth, ⊇ everything below)
         #   1  ├─ NodeTrain (and the BFS-only BfsNodeLoop scheduler scope)
         #   2  │  ├─ SetLeafValue / FindBestCondition / SplitExamplesInPlace
         #   3  │  │  ├─ ObliqueSplitSearch / AxisAlignedSplitSearch
@@ -240,7 +242,10 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             # depth 0 — top-level per-tree scope (non-zero only at depth=0 of
             # each tree). The DFS analogue of the BFS top-level scope.
             "TreeTrain":                    "TreeTrain",
-            # depth 1 — under TreeTrain.
+            # depth 1 — under TreeTrain. DepthTrain wraps a whole BFS depth
+            # (fused Apply included), so it is a parent of the two below;
+            # rendered as their sibling, same as BfsNodeLoop already is.
+            "DepthTrain":                   "-DepthTrain",
             "BfsNodeLoop":                  "-BfsNodeLoop",
             "NodeTrain":                    "-NodeTrain",
             # depth 2 — under NodeTrain.
@@ -348,6 +353,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "--SymSortBag",
             "--SymSweep",
             # depth 1 — under TreeTrain.
+            "-DepthTrain",           # BFS builds: the depth's full wall-time
             "-BfsNodeLoop",          # BFS-only scheduler scope
             "-NodeTrain",
             # depth 2 — under NodeTrain.
@@ -681,6 +687,13 @@ if __name__ == "__main__":
                   f"{train_block:.3f} × min({n_trees},{n_threads})): "
                   f"{cpu_budget:>10.4f} s")
             tree_train = _sum_scope("TreeTrain")
+            # BFS builds only: covers the fused Apply that runs outside
+            # NodeTrain, so it is the honest per-depth total under DW1.
+            depth_total = _sum_scope("DepthTrain")
+            if depth_total > 0:
+                pct = (depth_total / cpu_budget * 100.0) if cpu_budget > 0 else 0.0
+                print(f"  Σ DepthTrain (BFS depth loop):{depth_total:>10.4f} s  "
+                      f"({pct:5.1f}% of CPU budget)")
             if bfs_total > 0:
                 pct = (bfs_total / cpu_budget * 100.0) if cpu_budget > 0 else 0.0
                 print(f"  Σ BfsNodeLoop:               {bfs_total:>10.4f} s  "

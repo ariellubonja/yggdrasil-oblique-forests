@@ -153,6 +153,11 @@ enum FuncId {
   // pop-loop is not chrono'd (<0.1 s for 3M rows).
   kBfsNodeLoop,
 
+  // Whole wall-time of one GrowTreeLocalBFS depth iteration, pinned to that
+  // depth. Under DW1/symmetric the fused Apply runs outside NodeTrain, so
+  // ΣNodeTrain is only a subset of the depth; kDepthTrain is the full cell.
+  kDepthTrain,
+
   kNumFuncs
 };
 
@@ -360,6 +365,30 @@ class ScopedTopTimer {
   std::chrono::steady_clock::time_point start_;
 };
 
+// ScopedTimer that pins (tree, depth) at construction instead of reading
+// tls_ctx on exit — for scopes whose body moves cur_depth (the BFS depth loop,
+// whose NodeTrain dispatch and DFS handoff both rewrite it).
+class ScopedPinnedTimer {
+ public:
+  ScopedPinnedTimer(FuncId id, int depth)
+      : id_(id),
+        tree_(tls_ctx.cur_tree),
+        depth_(depth),
+        start_(std::chrono::steady_clock::now()) {}
+  ~ScopedPinnedTimer() {
+    const uint64_t dt_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start_).count();
+    add_time(tree_, depth_, id_, dt_ns);
+  }
+
+ private:
+  FuncId id_;
+  int tree_;
+  int depth_;
+  std::chrono::steady_clock::time_point start_;
+};
+
 // ---------- NODEWISE_CHRONO scopes --------------------------------
 #ifdef NODEWISE_CHRONO
 
@@ -533,6 +562,9 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #define CHRONO_SCOPE_COARSE_TOP(ID) \
   yggdrasil_decision_forests::chrono_prof::ScopedTopTimer \
       YDF_PP_CAT(_chrono_ctop_timer_, __LINE__)(ID)
+#define CHRONO_SCOPE_COARSE_AT(ID, DEPTH) \
+  yggdrasil_decision_forests::chrono_prof::ScopedPinnedTimer \
+      YDF_PP_CAT(_chrono_cpin_timer_, __LINE__)((ID), (DEPTH))
 #define CHRONO_BEGIN_COARSE(name)                                       \
   const auto YDF_PP_CAT(_chrono_cbegin_, name) =                        \
       std::chrono::steady_clock::now()
@@ -662,6 +694,7 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #define CHRONO_END(name, id)
 #define CHRONO_SCOPE_COARSE(ID)
 #define CHRONO_SCOPE_COARSE_TOP(ID)
+#define CHRONO_SCOPE_COARSE_AT(ID, DEPTH)
 #define CHRONO_BEGIN_COARSE(name)
 #define CHRONO_END_COARSE(name, id)
 #define CHRONO_SCOPE_AP(ID)

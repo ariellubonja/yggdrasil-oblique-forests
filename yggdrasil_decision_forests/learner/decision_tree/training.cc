@@ -5680,6 +5680,11 @@ absl::Status GrowTreeLocalBFS(
 
   while (!node_queue.empty()) {
     const int32_t current_depth = node_queue.front().depth;
+    // Whole depth iteration, pinned to current_depth (the body rewrites
+    // cur_depth). Under DW1/symmetric the fused Apply runs outside NodeTrain,
+    // so ΣNodeTrain covers only part of the depth; this covers all of it.
+    CHRONO_SCOPE_COARSE_AT(
+        ::yggdrasil_decision_forests::chrono_prof::kDepthTrain, current_depth);
     std::vector<internal::NodeAndExamples> depth_batch;
     // Not chrono'd: measured at <0.1 s for 3M rows — completely trivial.
     while (!node_queue.empty() &&

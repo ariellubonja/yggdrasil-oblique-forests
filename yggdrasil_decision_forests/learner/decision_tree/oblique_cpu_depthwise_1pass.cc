@@ -110,7 +110,7 @@ absl::Status ApplyProjectionsDepthwise1Pass(
     // Column-centric sweep: bucket references by column, then walk the
     // touched columns ascending.
     // Begin/end (not RAII) because the buffers below outlive the setup phase.
-    CHRONO_BEGIN_AP(dw1_sweep_setup);
+    CHRONO_BEGIN_AP(dw1_sweep_setup); // Costs 0%
     std::vector<ColEntry> entries;
     std::vector<int32_t> touched_cols;    // touched column ids, sorted ascending
     std::vector<int32_t> col_count(static_cast<size_t>(max_attr) + 1, 0);
@@ -395,6 +395,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           float* slab = out_projected[node].data();
 
           const float value = col_data[bag[ex_id]];
+
+          // Write in projection-major:  node1: proj1-proj2-proj3...
+          // But we swap target nodes almost every row
           for (int32_t t = 0; t < cnt; ++t) {
             const ColRef& ref = refs[off + t];
             // write to projection ref.proj of node, at offset local
