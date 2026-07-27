@@ -20,11 +20,9 @@
     (defined(SYMMETRIC_DEPTHWISE_AP) || defined(BFS_ONLY))
 #error "Depthwise oblique mode and symmetric/BFS oblique modes are mutually exclusive"
 #endif
-// The two depthwise scheduler modes are mutually exclusive: each one is a
-// distinct control / treatment in the symmetric-trees ablation series.
-// SYMMETRIC_DEPTHWISE_AP is the full treatment (shared projections + fused
-// bag-wide Apply); BFS_ONLY drops it and isolates the BFS scheduler alone
-// (per-node projection sampling, no symmetric behavior).
+// Treatment vs control of the symmetric-trees ablation, so never both:
+// SYMMETRIC_DEPTHWISE_AP is shared projections + fused bag-wide Apply, BFS_ONLY
+// keeps per-node sampling and isolates the BFS scheduler alone.
 #if (defined(SYMMETRIC_DEPTHWISE_AP) + defined(BFS_ONLY)) > 1
 #error "SYMMETRIC_DEPTHWISE_AP and BFS_ONLY are mutually exclusive"
 #endif

@@ -1,10 +1,8 @@
 build --disk_cache=~/.cache/bazel-disk
 
-# Depthwise fused ApplyProjection (DW1): BFS depth-batch driver, per-node
-# sampling, shared-rows colwalk on the depth's big column-sharing nodes (gates
-# DW1_HOT_MIN_ROWS=1000 / DW1_HOT_MIN_SHARE=50), stock Evaluate on the rest.
-# Both gates 0 = ungated shared-rows; MIN_ROWS huge = BFS-only.
-#  Trees are bit-identical at every setting.
+# Depthwise fused ApplyProjection (DW1): BFS depth batches, shared-rows colwalk
+# on the depth's big column-sharing nodes (DW1_HOT_MIN_ROWS=1000 /
+# DW1_HOT_MIN_SHARE=50; both 0 = ungated), stock Evaluate on the rest.
 build:depthwise_1_pass --cxxopt="-DDEPTHWISE_1_PASS=1"
 
 # Control: col-sharing sweep only (per-(node,projection) gather ordered by
@@ -29,10 +27,8 @@ build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 
 
 #   coarse_chrono_profile          : coarse only
-#   fine_chrono_applyprojection    : coarse + inner scopes of ProjectionEvaluator
-#                                    ::Evaluate (symmetric / depthwise_1pass)
-#   fine_chrono_evaluateprojection : coarse + inner scopes of EvaluateProjection
-#                                    (histogram / Cart split search)
+#   fine_chrono_applyprojection    : coarse + inside Evaluate / the fused kernels
+#   fine_chrono_evaluateprojection : coarse + inside the histogram/Cart search
 build:coarse_chrono_profile --cxxopt="-DCHRONO_PROFILE=1"
 build:fine_chrono_applyprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_AP"
 build:fine_chrono_evaluateprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_EP"
@@ -62,13 +58,9 @@ build --copt=-march=native --cxxopt="-O3"
 # compiler pins below take effect without an explicit --config.
 build --enable_platform_specific_config
 
-# Pin Intel oneAPI ICX (clang-based) on Linux. Without this, Bazel auto-detection
-# silently falls back to /usr/bin/gcc, which compiles the Oblique Exact hot path
-# ~30-40% slower than ICX. Requires oneAPI sourced in the shell
-# (`source /opt/intel/oneapi/setvars.sh`) so icx/icpx are on PATH for Bazel's
-# cc_configure. Pinned under build:linux (not global) so a missing icx is a hard
-# error rather than a silent gcc fallback that invalidates perf numbers. 
-# macOS uses the native Apple clang toolchain.
+# Pin Intel oneAPI ICX on Linux: gcc compiles the Oblique Exact hot path ~30-40%
+# slower, so a missing icx must fail hard, not fall back silently. Needs
+# `source /opt/intel/oneapi/setvars.sh`. macOS uses Apple clang.
 build:linux --repo_env=CC=icx
 build:linux --repo_env=CXX=icpx
 

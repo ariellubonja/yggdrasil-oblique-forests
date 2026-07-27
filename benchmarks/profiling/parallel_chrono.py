@@ -50,11 +50,9 @@ def get_args():
     p.add_argument("--shrinkage", type=float, default=0.1,
                    help="Learning rate for boosting (only used when --ensemble_method=Boosting).")
 
-    # Bazel config passthrough: any unknown bare `--<name>` flag (no `=value`)
-    # is forwarded as `--config=<name>` to the bazel build. Lets new .bazelrc
-    # configs be exercised without touching this script — e.g. `--bfs_only`
-    # → `--config=bfs_only`. Anything else (typos with values, positional
-    # garbage, valid flags spelled wrong) still errors as usual.
+    # Bazel config passthrough: an unknown bare `--<name>` (no `=value`) becomes
+    # `--config=<name>`, so new .bazelrc configs need no change here. Anything
+    # else still errors as usual.
     args, unknown = p.parse_known_args()
     for tok in unknown:
         if tok.startswith("--") and "=" not in tok and len(tok) > 2:
@@ -76,11 +74,9 @@ def chrono_level_name(chrono_level: str) -> str:
     raise ValueError(f"Unsupported chrono_level: {chrono_level}")
 
 
-# Log token (as printed by random_forest.cc's per-depth LOG line) -> internal
-# column name. Only tokens whose printed spelling differs from the internal
-# name need an entry; every other token passes through unchanged, so a CHRONO
-# scope newly added on the C++ side is captured automatically instead of being
-# silently dropped.
+# Log token (per-depth LOG line) -> internal column name. Only tokens spelled
+# differently need an entry; the rest pass through, so a new C++ CHRONO scope is
+# captured automatically rather than silently dropped.
 _LOG_TOKEN_TO_COL = {
     "ProjEval":                      "ProjectionEvaluate",
     "kGetCandidateAttributes":       "GetCandidateAttributes",
@@ -102,12 +98,9 @@ _LOG_TOKEN_TO_COL = {
     "kScanPresorted":                "ScanPresorted",
 }
 
-# GBT session-level scopes. gradient_boosted_trees.cc dumps these once, on a
-# single aggregate line ("GBT chrono (ms): startup=.. train_tree=.. ..") in
-# MILLISECONDS and in `name=value` form -- neither the per-depth line shape nor
-# the "<Token> <seconds>s" pair shape the per-depth parser understands. So they
-# are captured separately (see parse_parallel_chrono) and mapped to these
-# columns; values are converted ms->s to match every other timing column.
+# GBT session-level scopes, dumped once as "GBT chrono (ms): startup=.. .." in
+# `name=value` ms form, which the per-depth parser cannot read. Captured
+# separately in parse_parallel_chrono and converted ms->s.
 _GBT_TOKEN_TO_COL = {
     "startup":            "GbtStartup",
     "preprocess":         "GbtPreprocess",
@@ -122,11 +115,9 @@ _GBT_TOKEN_TO_COL = {
 # One "<name>=<milliseconds>" pair on the "GBT chrono (ms):" line.
 _GBT_PAIR_RX = re.compile(r"(\w+)=([0-9.eE+-]+)")
 
-# Every timing column the downstream pipeline knows about, seeded to 0.0 on
-# each row so a thread/depth that never emitted a given token still carries the
-# column (the old fixed-schema behaviour). Tokens captured but absent here
-# (e.g. a brand-new scope) are still added per row and surface as trailing
-# "unordered" CSV columns -- never dropped.
+# Every timing column the pipeline knows about, seeded to 0.0 per row so a
+# thread/depth that never emitted a token still carries it. Captured tokens
+# missing here are still added, surfacing as trailing CSV columns.
 _TIMING_COLS = (
     "ProjectionEvaluate", "GetCandidateAttributes",
     "GetCandidateAttributesAssign", "GetCandidateAttributesShuffle", "GetCandidateAttributesNumToTest",
@@ -157,20 +148,14 @@ _TIMING_COLS = (
 # One "<Token> <seconds>s" timing pair on a per-depth LOG line.
 _TIMING_PAIR_RX = re.compile(r"([A-Za-z_]\w*)\s+(-?[0-9.eE+-]+)s")
 
-# Thread identifier printed by random_forest.cc is `std::this_thread::get_id()`
-# streamed via operator<<. That representation is implementation-defined:
-# libstdc++ (Linux benchmark box) prints a decimal number, libc++ (macOS)
-# prints a hex pointer like `0x16da57000`. Accept either so the parser works
-# on both — the value is only used as a per-thread grouping key.
+# std::this_thread::get_id() streams implementation-defined: decimal under
+# libstdc++ (Linux), a hex pointer under libc++ (macOS). Accept either — it is
+# only a grouping key.
 _THREAD_ID_RX = r"(0x[0-9a-fA-F]+|\d+)"
 
-# Per-depth LOG line emitted by random_forest.cc (one per thread x tree x
-# depth). Capture the fixed prefix; the trailing timing pairs are scanned
-# separately with _TIMING_PAIR_RX. This is order-independent and forward
-# compatible -- a new CHRONO scope no longer truncates the line. (The old
-# positional regex stopped at the first unrecognized token, so the
-# shared-rows `Dw1SharedBag` token hid SampleProjection and the whole
-# NodeTrain tail emitted after it.)
+# Per-depth LOG line (one per thread x tree x depth): capture the fixed prefix
+# only, scanning the trailing pairs with _TIMING_PAIR_RX. Order-independent, so
+# an unknown scope no longer truncates the line as the old positional regex did.
 _PER_DEPTH_RX = re.compile(
     r"thread\s+" + _THREAD_ID_RX +
     r"\s+tree\s+(\d+)\s+depth\s+(\d+)\s+nodes\s+(\d+)\s+samples\s+(\d+)"
@@ -183,9 +168,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
     for m in _PER_DEPTH_RX.finditer(raw_log):
         tid, tree, depth, nodes, samples, rest = m.groups()
 
-        # Seed every known column to 0.0, then overlay whatever timing pairs
-        # this line actually carries. Unknown tokens map to themselves, so
-        # nothing is ever dropped -- order and presence are both irrelevant.
+        # Seed every known column to 0.0, then overlay this line's pairs. Unknown
+        # tokens map to themselves, so nothing is dropped.
         row = dict.fromkeys(_TIMING_COLS, 0.0)
         row["thread"]  = int(tid, 0)   # 0x.. (libc++) or decimal (libstdc++)
         row["tree"]    = int(tree)
@@ -201,21 +185,16 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
 
     df = pd.DataFrame(rows)
 
-    # Session-level GpuInit is emitted once by random_forest.cc after the
-    # per-tree loop. It's not per-depth (fires before any TreeScope), so
-    # we park its value in the otherwise-unused tree=0, depth=0
-    # placeholder row — the one with nodes=0 and all timings zero.
+    # Session-level GpuInit is emitted once after the per-tree loop and is not
+    # per-depth, so park it in the unused tree=0/depth=0 placeholder row.
     m_session = re.search(r"session\s+GpuInit\s+([0-9.eE+-]+)s", raw_log)
     if m_session:
         placeholder = (df["tree"] == 0) & (df["depth"] == 0)
         df.loc[placeholder, "GpuInit"] = float(m_session.group(1))
 
-    # GBT session-level scopes come on a single "GBT chrono (ms): ..." line
-    # (gradient_boosted_trees.cc; now coarse, dumped under #ifdef CHRONO_PROFILE
-    # so they print in every chrono build). They are global, not
-    # per-thread/depth, so -- like GpuInit -- park them in a single placeholder
-    # row (the first tree=0/depth=0 slot). Only one row gets them so a
-    # cross-thread column sum is not double-counted. ms -> s to match the rest.
+    # GBT session scopes arrive on one "GBT chrono (ms): ..." line and are global,
+    # so — like GpuInit — park them in the first tree=0/depth=0 slot; one row only,
+    # so a cross-thread sum can't double-count. ms -> s to match the rest.
     m_gbt = re.search(r"GBT chrono \(ms\):(.*)", raw_log)
     if m_gbt:
         ph_idx = df.index[(df["tree"] == 0) & (df["depth"] == 0)]
@@ -236,20 +215,16 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
     for tid, g in df.groupby("thread", sort=True):
         g = g.sort_values(["tree", "depth"]).reset_index(drop=True)
 
-        # Friendlier column names + dashes to show scope nesting. GPU
-        # columns are flat (one column per helper stage) — no dashes. CPU
-        # split-finder columns retain their nested dashes.
-        #
-        # Symmetric depthwise AP is special: shared SampleProjection and
-        # bag-wide ApplyProjection run in GrowTreeLocalBFS before NodeTrain,
-        # not inside FindBestConditionSparseObliqueTemplate. Detect it from
-        # its Sym* sub-scopes and render those scopes as TreeTrain children.
+        # Symmetric depthwise AP is special: its shared SampleProjection and
+        # bag-wide ApplyProjection run in GrowTreeLocalBFS before NodeTrain, so
+        # detect it from the Sym* scopes and render them as TreeTrain children.
         symmetric_depthwise = any(
             c in g.columns and (g[c] != 0.0).any()
             for c in ("SymBuildBag", "SymSortBag", "SymSweep"))
 
-        # The dash prefix on each renamed column equals the scope's displayed
-        # depth in the CHRONO hierarchy, with TreeTrain at depth 0:
+        # A column's dash prefix = its depth in the CHRONO hierarchy. GPU stages
+        # stay flat: they replace ApplyProjection rather than nest under it.
+        # symmetric_depthwise lifts SampleProjection/AP to 1 and Sym* to 2.
         #   0  TreeTrain
         #   1  ├─ NodeTrain (and the BFS-only BfsNodeLoop scheduler scope)
         #   2  │  ├─ SetLeafValue / FindBestCondition / SplitExamplesInPlace
@@ -259,10 +234,6 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
         #   5  │  │  │  │  ├─ (ApplyProjection) Sym*/Dw1* ; (EvaluateProj) Cart/Histo
         #   6  │  │  │  │  │  └─ Dw1Sweep* ; Cart/Histo split-finder leaves
         #   7  │  │  │  │  │     └─ MinMaxNumerical (under HistogramSetup)
-        # In symmetric_depthwise, SampleProjection / ApplyProjection move to
-        # depth 1 and Sym* moves to depth 2 because they run before NodeTrain.
-        # GPU helper-stage columns stay flat (no dashes): they are alternative
-        # implementations of ApplyProjection, not nested scopes.
         g = g.rename(columns={
             "samples": "Active Samples",
             # depth 0 — top-level per-tree scope (non-zero only at depth=0 of
@@ -346,24 +317,15 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
 
         g = g.drop(columns=["thread"])
 
-        # Reorder columns as a strict pre-order (DFS) traversal of the
-        # CHRONO scope hierarchy, so reading left-to-right walks the call
-        # tree parent→child. Each scope is listed immediately before its
-        # own children; the dash prefixes already encode nesting depth.
-        # GPU kernels and the Sym*/Dw1* fused-Apply phases are placed under
-        # ApplyProjection because they are alternative implementations of
-        # that scope (selected at build/runtime). Columns missing for the
-        # current mode are filtered out below; all-zero columns are
-        # zero-dropped further down.
+        # Columns in pre-order over the CHRONO hierarchy, so left-to-right walks
+        # the call tree. GPU kernels and the Sym*/Dw1* phases sit under
+        # ApplyProjection, being alternative implementations of it.
         desired_order = [
             "tree", "depth", "nodes", "Active Samples",
 
-            # GBT session-level scopes (flat, no dashes — they wrap the whole
-            # boosting run, above any per-tree TreeTrain, and are non-zero only
-            # in the single placeholder row). GbtTrainTree is the GBT-side
-            # wrapper around all decision_tree::Train calls (⊇ Σ TreeTrain);
-            # the rest are the per-iteration / one-shot GBT loop phases. Absent
-            # for Bagging/RF runs, where they zero-drop.
+            # GBT session scopes: flat, wrapping the whole boosting run above any
+            # TreeTrain, non-zero only in the placeholder row. GbtTrainTree wraps
+            # every decision_tree::Train call (⊇ Σ TreeTrain); RF zero-drops all.
             "GbtStartup",
             "GbtPreprocess",
             "GbtUpdateGradients",
@@ -592,10 +554,9 @@ if __name__ == "__main__":
         device_name = utils.get_gpu_name() or "Unknown_GPU"
     else:
         device_name = utils.get_cpu_model_proc()
-    # Raw timing CSVs (and their sibling .log) go under a `raw/` subfolder of
-    # the <dataset_name> dir; avg_per_depth.py writes the per-depth averages up
-    # in the <dataset_name> dir itself (the raw/ vs. parent split is what now
-    # distinguishes the two — the averages no longer carry a suffix).
+    # Raw timing CSVs (and their .log) go in <dataset_name>/raw/; avg_per_depth.py
+    # writes the averages in <dataset_name>/ itself — that split, not a filename
+    # suffix, is what distinguishes the two.
     out_dir = (
         Path("benchmarks/results/per_function_timing")
         / chrono_level_name(a.chrono_level)
@@ -648,12 +609,9 @@ if __name__ == "__main__":
         dt = time.perf_counter() - t0
         log_plain = re.sub(r'\x1B\[[0-?]*[ -/]*[@-~]', '', log)
 
-        # Prefer the training-only wall time logged by random_forest.cc
-        # ("Training block took: X s"). The subprocess wall time also
-        # includes dataset generation, learner config, GPU init, etc., so
-        # it overstates the training cost. Fall back to subprocess wall
-        # time if the marker is missing (e.g. binary crashed before the
-        # log line, or chrono build dropped the marker).
+        # Prefer the learner's "Training block took: X s": subprocess wall time
+        # also covers dataset generation, config and GPU init, overstating the
+        # training cost. Fall back to it only when the marker is missing.
         m_train = re.search(
             r"(?:random_forest|gradient_boosted_trees)\.cc Training block took:\s*([0-9.eE+-]+)\s*s",
             log_plain)
@@ -673,14 +631,9 @@ if __name__ == "__main__":
                   f"   (Training-block marker not found in log)\n")
 
         # ── Phase decomposition: Loading/Init | Training | Post-processing ──
-        # Loading/Init = harness pre-train wall (flag parsing, dataspec
-        # inference, synthetic generation, tfrecord load) + the dataset load
-        # that happens inside TrainWithStatus ("Dataset load took" markers:
-        # abstract_learner.cc for csv/column, the harness for csv/row).
-        # Post-processing = harness Training+Post-Processing wall − dataset
-        # load − learner training block (OOB, validation, model finalize).
-        # A manual exit() after the learner's training-block log (used to
-        # skip RF post-processing) drops the harness end marker → "(skipped)".
+        # Loading/Init = harness pre-train wall + the "Dataset load took" markers
+        # from inside TrainWithStatus. Post-processing = harness end wall − that
+        # load − the training block. A manual exit() drops the end marker.
         dataset_load = sum(float(x) for x in re.findall(
             r"Dataset load took:\s*([0-9.eE+-]+)\s*s", log_plain))
         m_init = re.search(
@@ -702,16 +655,9 @@ if __name__ == "__main__":
               f"   (subprocess wall {dt:.4f} s)\n")
 
         # ── CHRONO coverage vs Training-block wall ────────────────────
-        # Sum top-level per-tree-train chrono scopes across all
-        # (tree, depth, thread) entries in the log. With BFS_ONLY,
-        # BfsNodeLoop covers the entire GrowTreeLocalBFS body
-        # (≈ all of one tree's training; the frontier pop-loop is
-        # un-chrono'd, <0.1 s for 3M rows).
-        #
-        # When N trees train concurrently on T threads, each tree's
-        # internal time is single-thread, so:
-        #     Σ scope ≈ train_block × min(N_trees, T) for load-balanced
-        # case. For num_threads=1, Σ scope ≈ train_block exactly.
+        # Sums the top-level scopes over every (tree, depth, thread) entry. Each
+        # tree's time is single-threaded, so Σ scope ≈ train_block ×
+        # min(N_trees, T) when load-balanced, and exactly train_block at T=1.
         def _sum_scope(name: str) -> float:
             return sum(float(v) for v in re.findall(
                 rf"\s{name}\s+([0-9.eE+-]+)s", log_plain))

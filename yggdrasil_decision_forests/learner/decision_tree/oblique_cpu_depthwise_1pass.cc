@@ -1,13 +1,6 @@
-// Motivation: At mid depths the frontier holds thousands of small nodes, and the union of
-// their sampled columns covers the feature space many times over: total
-// column references N*K*d >> F. The previous kernel visited columns in
-// (node, projection) order — K*d random column hops per node, the same DRAM
-// pattern as the nodewise baseline. This kernel inverts the loop: bucket
-// every (node, projection, weight) reference of the whole depth by column,
-// then walk the touched columns once in ascending order. Each column's
-// gathers become one ordered pass over the depth's row bands
-// (page/TLB/DRAM-row friendly) instead of being scattered across the whole
-// depth.
+// Motivation: at mid depths the frontier's column references N*K*d >> F, yet
+// the nodewise kernel hops columns in (node, projection) order. This one buckets
+// the depth's refs by column and walks each touched column once, ascending.
 
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_cpu_depthwise_1pass.h"
 
@@ -141,11 +134,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       sorted[col_count[e.col]++] = e;
     }
 
-    // Depth increases monotonically within a tree, so a counter bumped
-    // whenever the depth stops increasing labels the tree — without depending
-    // on the chrono build (tls_ctx only exists under -DCHRONO_PROFILE).
-    // Shared by the two debug blocks below. Like the rest of this region it
-    // assumes a single training thread (run with one tree at a time).
+    // Depth increases monotonically within a tree, so a counter bumped whenever
+    // it stops increasing labels the tree, with no dependency on the chrono
+    // build. This whole region assumes a single training thread.
     if constexpr (kDw1DebugStats) {
     static int stats_tree = 0;
     {
@@ -154,11 +145,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       prev_depth = current_depth;
     }
 
-    // ── Per-node example counts at one depth, dumped to a file ─────────
-    // At every depth (default) append one line per node of that depth with its
-    // example count, to DW1_NODE_SIZES_FILE (default dw1_node_sizes.txt).
-    // Restrict to a single depth with DW1_NODE_SIZES_DEPTH=<d>; off with
-    // DW1_NODE_SIZES_DEPTH=-1.
+    // ── Per-node example counts, appended to DW1_NODE_SIZES_FILE (default
+    // dw1_node_sizes.txt), one line per node per depth. DW1_NODE_SIZES_DEPTH
+    // picks a single depth; -1 turns it off.
     {
       // -2 = every depth (the default), -1 = off, >=0 = that depth only.
       static const int32_t kNodeSizesDepth = [] {
@@ -184,15 +173,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
       }
     }
 
-    // ── Per-depth column reference stats (debug print) ─────────────────
-    // For every column: in how many nodes of this depth it appears, and how
-    // many elements are read from it — Σ over the distinct nodes referencing
-    // the column of that node's row count (a node referencing the column from
-    // several projections re-reads the same examples, so it counts once).
-    // One column per line, under a ----DEPTH X---- header.
-    // Silence with DW1_COL_STATS=0; add untouched columns (c17: 0) with
-    // DW1_COL_STATS_ALL=1; keep only the one-line summary below with
-    // DW1_COL_STATS=summary.
+    // ── Per-depth column reference stats: per column, #nodes of this depth
+    // referencing it and Σ of those nodes' row counts (a node counts once).
+    // DW1_COL_STATS=0|summary, DW1_COL_STATS_ALL=1 adds untouched columns.
     {
       static const std::string kColStatsMode = [] {
         const char* e = std::getenv("DW1_COL_STATS");
@@ -374,11 +357,6 @@ absl::Status ApplyProjectionsDepthwise1Pass(
         CHRONO_END_AP(dw1_colwalk_group_by_node,
                    ::yggdrasil_decision_forests::chrono_prof::kDw1ColWalkGroupByNode);
 
-        // std::cout << "node_ref_off node_ref_cnt" << std::endl;
-        // for (int i = 0 ; i < 25; i++) {
-        //     std::cout << node_ref_off[i] << " " << node_ref_cnt[i] << std::endl;
-        // }
-
         // One ascending pass over the depth bag: dense read of col, scatter
         // write of each contribution to its node's projections referencing c.
         CHRONO_BEGIN_AP(dw1_colwalk_bag_scatter);
@@ -390,10 +368,9 @@ absl::Status ApplyProjectionsDepthwise1Pass(
           const float v = col[bag[s]];
 
           const int32_t cnt = node_ref_cnt[n];
-          // The bag is ex-sorted and each node's selected_examples is sorted
-          // ascending, so its rows are visited in slab order: the running
-          // counter is the row's local slot. Advances once per node row
-          // (every entry that reaches here), so it stays in lockstep.
+          // Bag and each node's selected_examples are sorted ascending, so rows
+          // arrive in slab order and this running counter is the local slot.
+          // It advances once per node row, so it stays in lockstep.
           const int32_t local = node_local[n]++;
           float* slab = out_projected[n].data();
           const size_t rows_n = selected_examples_per_node[n].size();

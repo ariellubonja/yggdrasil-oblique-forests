@@ -66,13 +66,10 @@ using LDACache = internal::LDACache;
 
 namespace internal {
 
-// Per-thread reusable ProjectionEvaluator. The evaluator only depends on
-// (dataset, numerical_features); under GLOBAL_IMPUTATION both are constant
-// across every node of every tree, so rebuilding its per-attribute pointer
-// tables per node is pure kFindObliqueSetup waste. RANDOM_LOCAL_IMPUTATION
-// trains each node on a fresh per-node dataset whose address could alias a
-// freed one -> never cache there (reusable_dataset=false always rebuilds and
-// clears the identity keys).
+// Per-thread reusable ProjectionEvaluator: it depends only on (dataset,
+// numerical_features), constant across nodes under GLOBAL_IMPUTATION, so the
+// per-node rebuild is pure kFindObliqueSetup waste. Never cached under
+// RANDOM_LOCAL_IMPUTATION, whose per-node datasets can alias a freed address.
 class ProjectionEvaluatorCache {
  public:
   ProjectionEvaluator& Get(
@@ -253,13 +250,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
              ::yggdrasil_decision_forests::chrono_prof::kFindObliqueSetup);
 
   /* #region Dynamic histogram downgrade */
-  // Per-node downgrade for the DYNAMIC_* histogram split types: if the node
-  // has fewer than dynamic_split_threshold examples, switch back to EXACT
-  // (sorting). Histogramming is faster on larger nodes; EXACT wins on small
-  // ones. Empirical threshold default is 250 (see decision_tree.proto).
-  //
-  // Ariel: threshold tuned on the trunk_3000000_x_4096 benchmark; revisit
-  // if the histogram path gets faster (e.g. SIMD upper_bound or 1-pass).
+  // Per-node downgrade for the DYNAMIC_* split types: below
+  // dynamic_split_threshold examples, sorting beats histogramming, so go EXACT.
+  // Ariel: default 250, tuned on trunk_3000000_x_4096; retune if histo speeds up.
   proto::DecisionTreeTrainingConfig dynamic_dt_config = dt_config;
   const auto split_type = dt_config.numerical_split().type();
   const bool is_dynamic_histogram =
@@ -279,10 +272,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
 
   /* #region Symmetric & other AP methods */
 #if defined(SYMMETRIC_DEPTHWISE_AP) || defined(OBLIQUE_CPU_PRECOMPUTED_PROJECTIONS)
-  // Fused CPU Apply: GrowTreeLocalBFS pre-computed a per-node projected-values
-  // slab. When the slab is present, skip SampleProjection +
-  // ProjectionEvaluator::Evaluate and run split-finding directly over slices
-  // of the slab (one slice per projection, length rows_n).
+  // Fused CPU Apply: when GrowTreeLocalBFS pre-computed this node's slab, skip
+  // SampleProjection + Evaluate and split-search directly over its slices (one
+  // per projection, length rows_n).
   const bool has_precomputed_projected =
       !internal_config.precomputed_projected_values.empty() &&
       internal_config.depthwise_projection_defs != nullptr &&
@@ -313,17 +305,9 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
     }
   }
 #if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
-  // Cold node under the DW1 hot-nodes gate: the depth-level driver sampled this
-  // node's projections (same RNG order as every other node) but left it out of
-  // the fused kernel, so there is no slab. Evaluate the handed-down projections
-  // here with the stock per-node kernel. Re-entering the main loop below instead
-  // would re-sample and consume the RNG a second time.
-  //
-  // Same values as the fused path: both accumulate a projection in ascending
-  // attribute order into a fp32 zero, so the tree is bit-identical whatever the
-  // gate decides. Evaluate() carries its own kProjectionEvaluate scope, so this
-  // node's AP still bills to the ApplyProjection cell (nested inside NodeTrain,
-  // unlike the hot nodes' depth-level slab time).
+  // Cold node under the DW1 hot gate: sampled by the driver but left out of the
+  // fused kernel, so use the stock kernel here (the main loop would re-sample
+  // and consume the RNG twice). Same fp32 order as fused => bit-identical.
   else if (internal_config.depthwise_projection_defs != nullptr &&
            internal_config.depthwise_monotonic != nullptr) {
     const auto& depth_projs = *internal_config.depthwise_projection_defs;
@@ -496,10 +480,9 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
   // Find a good split in the current_projection.
   SplitSearchResult result;
   if constexpr (is_same<LabelStats, ClassificationLabelStats>::value) {
-    // For oblique splits, route classification through the histogram finder
-    // when the user picked a histogram-based type, otherwise use the default
-    // sort-based Cart path. `random` must be non-null on the histogram path;
-    // callers using EXACT (e.g. vector_sequence.cc) can leave it as nullptr.
+    // Histogram-based split types go to the histogram finder, EXACT to the
+    // sort-based Cart path. Only the histogram path needs a non-null `random`
+    // (EXACT callers such as vector_sequence.cc pass nullptr).
     if (dt_config.numerical_split().type() ==
         proto::NumericalSplit::EXACT) {
       ASSIGN_OR_RETURN(
@@ -525,10 +508,8 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
     }
   } else if constexpr (is_same<LabelStats,
                                RegressionHessianLabelStats>::value) {
-    // No histogram variant exists for hessian splits
-    // (FindSplitLabelHessianRegressionFeatureNumericalHistogram is not
-    // implemented), so hessian gain always uses the sort-based Cart path,
-    // regardless of the numerical split type.
+    // No histogram variant exists for hessian splits, so hessian gain always
+    // takes the sort-based Cart path whatever the numerical split type is.
     if (!selected_weights.empty()) {
       ASSIGN_OR_RETURN(
           result,
@@ -554,11 +535,9 @@ absl::StatusOr<SplitSearchResult> EvaluateProjection(
               monotonic_direction, condition, cache));
     }
   } else if constexpr (is_same<LabelStats, RegressionLabelStats>::value) {
-    // Same routing as classification: histogram-based split types go through
-    // the histogram finder, EXACT through the sort-based Cart path. GBT
-    // (Boosting) trains regression trees on gradients, so this is the branch
-    // Boosting takes; before this routing existed, a histogram split type
-    // silently ran EXACT on every node.
+    // Same routing as classification. This is the branch GBT takes (it trains
+    // regression trees on gradients); before the routing existed, a histogram
+    // split type silently ran EXACT on every node.
     if (dt_config.numerical_split().type() != proto::NumericalSplit::EXACT) {
       DCHECK(random != nullptr)
           << "EvaluateProjection: histogram split type "

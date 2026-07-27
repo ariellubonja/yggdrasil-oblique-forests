@@ -18,21 +18,9 @@ namespace yggdrasil_decision_forests::model::decision_tree {
 
 namespace {
 
-// Derives the new depth's sorted (example, node) bag from the previous
-// depth's, in one streaming pass and zero comparisons-for-order (see the
-// header): each surviving entry keeps its position in example-sorted order
-// (a stable partition of a sorted list is sorted, so a depth's bag is the
-// previous depth's bag minus leafed-out rows); only the owning-node label
-// advances parent -> child. The child is identified by one equality test
-// against the negative child's next-unconsumed span element: a row id lives
-// in exactly one child span (all bootstrap copies of a row take the same
-// side of the split), and each child span is the sorted subsequence of the
-// parent's entries, so it is consumed strictly in order.
-//
-// Self-validating: every entry's claimed child span element is checked, and
-// any mismatch (as well as count mismatches) returns false, in which case
-// the caller falls back to the full concat+sort rebuild. Writes the result
-// into the scratch buffers and swaps them in on success.
+// Derives the new depth's sorted (example, node) bag from the previous one in
+// one pass, no order comparisons: entries keep their position, the node label
+// hops parent -> child. Self-validating; false => caller rebuilds from spans.
 bool RelabelBagForNewDepth(
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
@@ -80,12 +68,9 @@ bool RelabelBagForNewDepth(
 }
 
 #if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
-// Hot-nodes variant of RelabelBagForNewDepth (see the header's
-// AdvanceDepthBagHot): identical streaming pass, except that the bag's labels
-// live in the hot index space while the parent -> child hop and the
-// span-consumption cursors live in the full node domain. Two extra index
-// lookups per entry (prev hot -> prev full on the way in, full -> hot on the
-// way out) and one extra drop condition (the new owner is cold).
+// Hot-nodes variant of RelabelBagForNewDepth: same pass, but the bag's labels
+// are hot indices while the parent -> child hop and cursors stay in the full
+// node domain. Two extra index lookups, plus a drop when the owner is cold.
 bool RelabelBagForNewDepthHot(
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
@@ -144,16 +129,9 @@ bool RelabelBagForNewDepthHot(
 }
 #endif
 
-// Full rebuild of the bag from the node spans, used whenever the incremental
-// relabel is unavailable or fails its self-validation. N == 1 is a straight
-// copy of the (already sorted) single span. N > 1 concats the spans + node ids
-// (build_id), packs each (example_idx, node_id) pair into hwy::K32V32 (key=ex,
-// value=node) and VQSorts by key ascending (sort_id). VQSort is unstable, but
-// tie-breaking is invariant here: by the BFS depth-cohort property every copy
-// of one example_idx lives in the same node, so all ties carry the same value
-// field -- reordering within a tie group is a no-op. Node labels are the
-// positions in `selected_examples_per_node`, so passing the hot subsequence
-// yields hot labels.
+// Full rebuild when the relabel is unavailable or fails: N == 1 copies the
+// sorted span, N > 1 concats then VQSorts (example, node) as hwy::K32V32 —
+// unstable but tie-invariant. Labels = positions, so hot spans give hot labels.
 void RebuildBagFromSpans(
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,

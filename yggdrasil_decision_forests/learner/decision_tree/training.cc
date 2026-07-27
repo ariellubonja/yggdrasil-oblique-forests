@@ -49,15 +49,9 @@
 #endif
 
 #ifdef LINECOUNT_A
-// Method A: exact distinct-64B-cache-line counter for the DW1 oblique gather
-// (col[sel_ptr[i]]). Per depth, over every node processed by the depthwise
-// kernel, accumulate rows (= sum of node sizes) and distinct cache lines
-// (= count of distinct sel[i]>>4; sel is sorted ascending so a single pass
-// counting line-index transitions is exact). useful/line = rows/lines. This is
-// the *geometric* per-node metric the cachegrind/callgrind methods (B/C)
-// estimate via D1 misses; here it is computed exactly, natively, multithreaded,
-// so it scales to deep trees (HIGGS ~depth 60). Output dumped at process exit
-// to $LINECOUNT_OUT (CSV) and stderr. No-op unless LINECOUNT_A defined.
+// Method A: exact distinct-64B-line counter for the DW1 gather col[sel_ptr[i]].
+// Per depth, sums rows and distinct lines (sel is sorted, so counting sel[i]>>4
+// transitions is exact) => useful/line. Dumped to $LINECOUNT_OUT + stderr.
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -1315,11 +1309,9 @@ absl::StatusOr<SplitterWorkResponse> FindBestConditionFromSplitterWorkRequest(
   response.condition->set_split_score(request.best_score);
 
   if (request.num_oblique_projections_to_run != -1) {
-    // Worker-side CPU time of an oblique job. Accumulates in global_stats (the
-    // worker threads are outside any TreeScope), so it is CPU-time summed over
-    // workers, not wall-time. Encloses the oblique scopes (FindObliqueSetup,
-    // SampleProjection, ProjectionEvaluate, EvaluateProj) so their coverage
-    // inside a job is checkable.
+    // Worker-side CPU time of an oblique job: workers are outside any TreeScope,
+    // so this lands in global_stats, summed over workers rather than wall-time.
+    // Encloses the oblique scopes, so their coverage in a job is checkable.
     CHRONO_SCOPE_COARSE(
         ::yggdrasil_decision_forests::chrono_prof::kSplitWorkerOblique);
     DCHECK_EQ(request.attribute_idx, -1);
@@ -1349,10 +1341,9 @@ absl::StatusOr<SplitterWorkResponse> FindBestConditionFromSplitterWorkRequest(
         request.common->train_dataset.data_spec().columns_size(), "."));
   }
 
-  // Worker-side CPU time of an axis-aligned job. In an oblique GBT run these
-  // jobs are still scheduled (one full numerical splitter per candidate
-  // attribute), so they compete with the oblique jobs for the same workers and
-  // are worth measuring separately. Same global_stats caveat as above.
+  // Worker-side CPU time of an axis-aligned job. Oblique GBT runs still schedule
+  // these (one splitter per candidate attribute) and they compete for the same
+  // workers, so they are measured separately. Same global_stats caveat as above.
   CHRONO_SCOPE_COARSE(
       ::yggdrasil_decision_forests::chrono_prof::kSplitWorkerAxisAligned);
 
@@ -1501,14 +1492,9 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
   {
     CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kGetCandidateAttributes);
 
-    // "candidate_attributes" persists across nodes (PerThreadCache, one per
-    // tree) as a permutation of the feature list; only rebuild it when the
-    // cache is fresh. The random ordering comes from a prefix Fisher-Yates
-    // step applied lazily as each position is read in the loop below, so a
-    // node consumes O(attributes actually tested) RNG draws instead of the
-    // O(F) assign + std::shuffle of GetCandidateAttributes. The tested prefix
-    // is distributed identically to the head of a full shuffle, but the RNG
-    // stream differs from stock => accuracy-equivalent, not bit-identical.
+    // "candidate_attributes" persists across nodes (per-tree cache), so rebuild
+    // only when fresh: the loop below shuffles each position lazily as it reads
+    // it, costing O(tested) RNG draws, not O(F). Accuracy-, not bit-equivalent.
     if (candidate_attributes.size() !=
         static_cast<size_t>(config_link.features_size())) {
       candidate_attributes.assign(config_link.features().begin(),
@@ -1669,9 +1655,8 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   }
 
   // Manager-side setup: request struct, job accounting, cache resizes and
-  // GetCandidateAttributes. Manual begin/end because the locals declared here
-  // (common, candidate_attributes, ...) must outlive the scope. Ends just
-  // before the first Submit.
+  // GetCandidateAttributes, ending just before the first Submit. Manual
+  // begin/end because the locals declared here must outlive the scope.
   CHRONO_BEGIN_COARSE(split_mgr_setup);
 
   // Constant and static part of the requests.
@@ -2195,25 +2180,9 @@ static inline int EqualWidthThresholdIndex(const float attribute,
 }
 
 /* #region Histogram binning: attribute value -> candidate-split bin index */
-// Self-contained "attribute value -> bin index" mapper shared by BOTH numerical
-// *histogram* split finders (classification + regression). It owns the entire
-// binning decision so each finder's per-example loop is just:
-//   const int idx = binner.Index(attribute); if (idx < 0) continue;
-//
-// Three strategies, selected in Init() from the histogram type / bin count:
-//   * equal-width histograms      -> EqualWidthThresholdIndex (closed form)
-//   * non-equal-width, 64 bins    -> AVX2 8x8 SIMD upper_bound
-//   * non-equal-width, 256 bins   -> AVX-512 16x16 SIMD upper_bound
-//   * otherwise                   -> scalar std::upper_bound
-// On x86-64 BOTH SIMD kernels are always compiled (per-function
-// __attribute__((target)), no TU-wide -mavx2/-mavx512f required) and Init()
-// picks one at runtime from cpuid + the bin count; a CPU without the ISA falls
-// back to the scalar path. --config=disable_std_upper_bound_vectorization
-// compiles the SIMD paths out entirely (scalar-only).
-//
-// Ariel: 256-bin AVX-512 was ~3-4x faster than std::upper_bound on
-// trunk_3000000_x_4096 (i9-185h). TODO Ariel: try 128-bin AVX-512 variant to
-// handle the case where someone sets num_candidates to 128.
+// "Attribute value -> bin index" mapper for both numerical histogram finders:
+// Init() picks equal-width closed form / AVX2 8x8 / AVX-512 16x16 / scalar from
+// cpuid + bins. Ariel: 256-bin AVX-512 ~3-4x over std::upper_bound. TODO: 128.
 #ifdef SIMD_UPPER_BOUND
 inline bool CpuSupportsAvx2() {
   static const bool supported = __builtin_cpu_supports("avx2");
@@ -2225,11 +2194,9 @@ inline bool CpuSupportsAvx512f() {
   return supported;
 }
 
-// Two-level SIMD upper_bound over 64 sorted thresholds: an 8-wide coarse
-// compare picks the 8-threshold group, an 8-wide fine compare picks the slot.
-// `coarse8` holds the last threshold of each group. Only called when
-// CpuSupportsAvx2(); the target attribute lets it use AVX2 intrinsics in a TU
-// that may be compiled without -mavx2.
+// Two-level SIMD upper_bound over 64 sorted thresholds: an 8-wide coarse compare
+// picks the group (`coarse8` = each group's last threshold), a second picks the
+// slot. AVX2-gated; the target attribute allows intrinsics in a non-mavx2 TU.
 __attribute__((target("avx2,popcnt"))) inline int Avx2UpperBoundIndex64(
     const float x, const float* thr64, const float* coarse8) {
   const __m256 vx = _mm256_set1_ps(x);
@@ -2305,11 +2272,9 @@ struct HistogramBinner {
 #endif
   }
 
-  // Reference bin index: index of the last threshold <= x, or -1 if all
-  // thresholds are > x. This is std::upper_bound over the real (unpadded)
-  // thresholds. It serves BOTH as the production scalar fallback and as the
-  // debug cross-check that the equal-width closed form and the SIMD fast paths
-  // agree with it.
+  // Reference bin index (last threshold <= x, else -1): std::upper_bound over
+  // the real, unpadded thresholds. Both the production scalar fallback and the
+  // debug cross-check for the closed-form and SIMD paths.
   int ScalarIndex(const float x) const {
     auto it = std::upper_bound(scalar_thr.begin(), scalar_thr.end(), x);
     if (it == scalar_thr.begin()) return -1;
@@ -2459,10 +2424,9 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
   }
   }
 
-  // Inline entropy computation: skips the BinaryToIntegerConfusionMatrix
-  // Set/Sub round-trip by reading neg counts as (label_distribution - pos)
-  // on the fly. Mathematically equivalent to confusion.FinalEntropy(); the
-  // win is amortizing the per-candidate-split confusion-matrix setup.
+  // Inline entropy: skips the BinaryToIntegerConfusionMatrix Set/Sub round-trip
+  // by reading neg counts as (label_distribution - pos). Equivalent to
+  // confusion.FinalEntropy(), minus the per-candidate-split matrix setup.
   const double initial_entropy = label_distribution.Entropy();
   const int num_classes = label_distribution.NumClasses();
   const double total_sum = label_distribution.NumObservations();
@@ -5331,10 +5295,9 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE static absl::Status NodeTrain(
     sample_cnt()[t][d] += selected_examples.size();
   }
 
-  // NODEWISE_CHRONO only: arms this node's ApplyProjection recorder if
-  // (t, depth) is gated in, and emits its one record on scope exit. Declared
-  // after the kNodeTrain timer so it unwinds first — the single push_back stays
-  // inside the NodeTrain interval it belongs to. Inert in every other build.
+  // NODEWISE_CHRONO only: arms this node's AP recorder if (t, depth) is gated in
+  // and emits its record on exit. Declared after the kNodeTrain timer so it
+  // unwinds first, keeping the push_back inside that interval. Else inert.
   CHRONO_NODEWISE_NODE(t, d, node_and_examples.node_id,
                        selected_examples.size());
 #endif
@@ -5551,10 +5514,9 @@ absl::Status GrowTreeLocal(
                         std::move(leaf_examples), depth, constraints,
                         set_leaf_already_set});
 #ifdef NODEWISE_CHRONO
-  // The tree root enters at depth 1 and is heap index 1. Any other entry depth
-  // means this is a detached subtree (the fused kernels' BFS->DFS handoff),
-  // whose position in the tree is not known here: leave the id 0 = unknown, and
-  // NodewiseChildId keeps propagating 0 to the whole subtree.
+  // The root enters at depth 1 and is heap index 1. Any other entry depth is a
+  // detached subtree (the BFS->DFS handoff) whose position is unknown here, so
+  // id 0 = unknown, which NodewiseChildId propagates to the whole subtree.
   node_stack.back().node_id = (depth == 1) ? 1 : 0;
 #endif
 
@@ -5571,12 +5533,9 @@ absl::Status GrowTreeLocal(
 }
 
 #if defined(DEPTHWISE_1_PASS)
-// Depth at which the fused-per-level Apply (depthwise_1pass) switches on.
-// Levels shallower than this run the
-// plain per-node BFS fallback; levels at or below (deeper than) it run the
-// fused kernel. Read once from DW1_MIN_DEPTH (default 0 = fused everywhere,
-// the pre-existing behavior). Intended for a depth line-search: BFS above the
-// cut, depthwise_1pass after.
+// Depth at which the fused-per-level Apply switches on: shallower levels run
+// the per-node BFS fallback, levels at or deeper run the fused kernel. From
+// DW1_MIN_DEPTH (default 0 = fused everywhere). For a depth line-search.
 int32_t Depthwise1PassMinDepth() {
   static const int32_t value = [] {
     const char* e = std::getenv("DW1_MIN_DEPTH");
@@ -5587,20 +5546,9 @@ int32_t Depthwise1PassMinDepth() {
 #endif
 
 #if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
-// Row count above which a node (of this depth) is a CANDIDATE for the fused
-// shared-rows kernel (it still has to pass the column-overlap gate below);
-// smaller nodes fall back to the stock per-node
-// ProjectionEvaluator::Evaluate. Read once from
-// DW1_HOT_MIN_ROWS (default 1000 ~ the mean-n_gathers cut measured on HIGGS
-// in nodewise_ap.csv, P=6 x nnz~1.5 => ~9 gathers/row).
-//
-// The gate is on ROWS rather than on n_gathers so that it is monotone down the
-// tree (a child never has more rows than its parent) -- which is exactly what
-// lets the shared-rows depth bag keep telescoping: a hot node's parent is
-// necessarily a candidate, so its rows are always present in the previous
-// depth's hot bag (the overlap gate below is what can break that). 0 = every
-// node a candidate; with DW1_HOT_MIN_SHARE=0 too that is the ungated
-// dw1_shared_rows behavior.
+// Rows above which a node is a CANDIDATE for the fused kernel (the overlap gate
+// then thins them). DW1_HOT_MIN_ROWS, default 1000; rows not n_gathers, so the
+// gate stays monotone. See kernel_variants.md "Part 1 — the row gate".
 size_t Dw1HotMinRows() {
   static const size_t value = [] {
     const char* e = std::getenv("DW1_HOT_MIN_ROWS");
@@ -5610,21 +5558,9 @@ size_t Dw1HotMinRows() {
   return value;
 }
 
-// TODO Ariel linesearch this
-// Percentage of a node's distinct columns that must also be read by
-// another for the node to stay in the fused kernel.
-// 
-// Read once from DW1_HOT_MIN_SHARE. Default 50.
-//
-// Rationale: the colwalk's unit of work is one ascending pass over the whole
-// depth bag per TOUCHED column. A node whose columns no other fused node reads
-// therefore buys a full-bag pass per such column while consuming only its own
-// rows of it -- and simultaneously lengthens every other column's pass. Below
-// the threshold the node is cheaper to evaluate with the stock per-node
-// Evaluate. 0 keeps every candidate == the row gate alone (purity control).
-//
-// Unlike the row gate this is NOT monotone down the tree, so the depth bag can
-// no longer telescope unconditionally; see the gate site in GrowTreeLocalBFS.
+// Percent of a node's distinct columns another candidate must also read for it
+// to stay fused. DW1_HOT_MIN_SHARE, default 50; 0 = row gate alone. NOT
+// monotone. TODO Ariel linesearch. See kernel_variants.md "Part 2".
 size_t Dw1HotMinSharePct() {
   static const size_t value = [] {
     const char* e = std::getenv("DW1_HOT_MIN_SHARE");
@@ -5644,14 +5580,9 @@ bool Dw1HotOverlapStats() {
 #endif
 
 #if defined(SYMMETRIC_DEPTHWISE_AP)
-// Deepest level (inclusive) that runs the symmetric bagwide path; levels deeper
-// than this hand each frontier node off to the stack-based DFS grower
-// (GrowTreeLocal) to finish its subtree. Read once from SYMMETRIC_MAX_DEPTH
-// (default INT32_MAX = symmetric everywhere, the pre-existing behavior). The
-// tree root is depth 1, so SYMMETRIC_MAX_DEPTH=5 keeps depths 1..5 symmetric
-// and switches to DFS from depth 6. Intended for a symmetric<->DFS depth
-// line-search: large frontiers up top stay symmetric (dense bag, stride-1 column
-// reads) while small scattered deep nodes get DFS subtree cache locality.
+// Deepest level (inclusive) running the symmetric bagwide path; deeper frontier
+// nodes hand their subtree to GrowTreeLocal. From SYMMETRIC_MAX_DEPTH (default
+// INT32_MAX; root is depth 1, so 5 keeps 1..5 symmetric and DFS from 6).
 int32_t SymmetricMaxDepth() {
   static const int32_t value = [] {
     const char* e = std::getenv("SYMMETRIC_MAX_DEPTH");
@@ -5662,11 +5593,9 @@ int32_t SymmetricMaxDepth() {
 }
 #endif
 
-// BFS (level-order) variant of GrowTreeLocal. Uses a FIFO deque, collects all
-// nodes at the current depth into a `depth_batch`, then dispatches each node
-// through NodeTrain. The depth-batch collection is the seam where the
-// symmetric-trees fused-per-level Apply will hook in (see
-// `SYMMETRIC_DEPTHWISE_AP`).
+// BFS (level-order) variant of GrowTreeLocal: a FIFO deque collects the current
+// depth's nodes into a `depth_batch`, then dispatches each through NodeTrain.
+// That collection is the seam where the fused-per-level Apply hooks in.
 absl::Status GrowTreeLocalBFS(
     const dataset::VerticalDataset& train_dataset,
     const model::proto::TrainingConfig& config,
@@ -5693,23 +5622,19 @@ absl::Status GrowTreeLocalBFS(
   // The colwalk control never populates or reads it, so it pays nothing.
   static thread_local DepthBagState depth_bag_state;
   depth_bag_state.valid = false;
-  // Node pointers of the previous fused depth batch, captured before the
-  // NodeTrains consume the batch; after those NodeTrains ran, IsLeaf() tells
-  // which parents split, which yields the parent->child batch-index mapping
-  // the kernel's relabel pass needs. This is a BFS-scheduler fact, identical
-  // for both fused kernels.
+  // Previous fused depth's node pointers, captured before the NodeTrains consume
+  // the batch; afterwards IsLeaf() says which parents split, giving the
+  // parent->child batch-index mapping the relabel needs. Same for both kernels.
   std::vector<NodeWithChildren*> prev_nodes;
   std::vector<int32_t> first_child;
 #if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
-  // Previous fused depth's hot index -> its index in prev_nodes / first_child.
-  // The depth bag's labels are hot indices, so the relabel needs this to look
-  // an entry's parent up in first_child. Empty => no previous hot set (first
-  // fused depth, or the previous depth had no hot node) => bag rebuild.
+  // Previous fused depth's hot index -> its index in prev_nodes / first_child;
+  // the bag's labels are hot indices, so the relabel needs it to find an entry's
+  // parent. Empty => no previous hot set => bag rebuild.
   std::vector<uint32_t> prev_hot_to_full;
-  // Memory space for the column overlap gate. Hoisted out of the kernel so the
-  // O(max_attr) counter array is allocated once per tree rather than 1/depth
-  // ov_col_nodes is reset only over the columns actually touched, so the
-  // per-depth cost stays O(refs).
+  // Column-overlap gate scratch, hoisted out of the kernel so the O(max_attr)
+  // counters are allocated once per tree, not per depth. ov_col_nodes is reset
+  // only over the touched columns, keeping the per-depth cost O(refs).
   std::vector<int32_t> ov_col_nodes;   // per column: n. nodes reading it
   std::vector<int32_t> ov_touched;     // columns to reset after each gate pass
   std::vector<int32_t> ov_cand_cols;   // flat CSR of candidate -> distinct columns
@@ -5724,11 +5649,9 @@ absl::Status GrowTreeLocalBFS(
   }
 #endif
 
-  // Rebuild first_child from the previous batch's node pointers: NodeTrain
-  // pushes (neg, pos) per split parent in parent order, so children occupy
-  // consecutive index pairs in this depth's batch. Left empty (=> the kernel
-  // falls back to concat+VQSort) on the first fused depth or if the
-  // reconstruction doesn't tile the batch.
+  // Rebuild first_child from the previous batch's node pointers: NodeTrain pushes
+  // (neg, pos) per split parent in order, so children are consecutive pairs in
+  // this batch. Left empty (=> concat+VQSort) if it doesn't tile the batch.
   [[maybe_unused]] const auto rebuild_first_child = [&](int num_nodes) {
     first_child.clear();
     if (prev_nodes.empty()) return;
@@ -5779,22 +5702,17 @@ absl::Status GrowTreeLocalBFS(
           0.f, 1.f);
 
       const int num_nodes = depth_batch.size();
-      // Both dimensions are known on entry to the depth level: num_nodes is the
-      // frontier size and num_proj is static. Size the full 2D structure once
-      // here (outside the CHRONO_SCOPE below) so the allocation is not billed to
-      // kSampleProjection and the per-node resize/assign vanishes from the hot
-      // loop. SampleProjection self-clears each Projection (sparse list) and
-      // unconditionally writes monotonic_direction, so no pre-zeroing is needed.
+      // Both dimensions are known on entry, so size the 2D structure once here,
+      // outside the scope below: the allocation is not billed to
+      // kSampleProjection, and SampleProjection self-clears (no pre-zeroing).
       std::vector<std::vector<internal::Projection>> all_node_projs(
           num_nodes, std::vector<internal::Projection>(num_proj));
       std::vector<std::vector<int8_t>> all_node_mono(
           num_nodes, std::vector<int8_t>(num_proj));
 #ifdef CHRONO_PROFILE
-      // BFS does this depth-level work *before* the per-node NodeTrain at
-      // this depth, so tls_ctx.cur_depth is still the *previous* depth's
-      // value (set by the last NodeTrain). Pin it to current_depth so
-      // kSampleProjection, Dw1PreSize / Dw1Sweep (and the outer
-      // kProjectionEvaluate) all accrue to the correct (tree, depth) cell.
+      // This depth-level work runs BEFORE the depth's NodeTrains, so cur_depth
+      // still holds the previous depth. Pin it so kSampleProjection, Dw1PreSize
+      // / Dw1Sweep and kProjectionEvaluate land in the right (tree, depth) cell.
       ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
           current_depth;
 #endif
@@ -5827,33 +5745,9 @@ absl::Status GrowTreeLocalBFS(
 
 #ifndef DW1_COLWALK_CONTROL
       // ── Hot gate, part 1: rows ────────────────────────────────────────
-      // Split the frontier by size: only the big nodes are CANDIDATES for the
-      // fused kernel (the column-overlap gate below then thins them further);
-      // the rest are evaluated node-by-node by the stock
-      // ProjectionEvaluator::Evaluate (oblique.cc's cold branch). Sampling
-      // above is untouched -- every node still drew its own projections in the
-      // same RNG order -- so the gates only pick WHICH kernel evaluates a node
-      // and the trained tree is invariant to both thresholds.
-      //
-      // Why size: the shared-rows colwalk's cost is one interleaved slab write
-      // stream per node-with-a-reference on every column pass, and it collapses
-      // once those streams stop fitting in the per-thread cache share. That
-      // count scales with the NUMBER of nodes at the depth, while the AP work
-      // is concentrated in the few big ones (HIGGS: ~7.5% of nodes ~ 92% of AP
-      // time), so gating on rows keeps nearly all the fused work at a small
-      // fraction of the write streams.
-      //
-      // Billed to kProjectionEvaluate (opened here, closed after the hot
-      // compaction below): the gates are AP work -- they only decide which
-      // kernel evaluates which node -- and without a scope their cost is
-      // invisible to every per-scope table, surfacing only as TreeTrain
-      // residual. That would make an A/B of --config=dw1_sr_hot_overlap vs
-      // --config=dw1_shared_rows (or a DW1_HOT_MIN_SHARE sweep) read the gates
-      // as free while e2e says
-      // otherwise. This region is DISJOINT from (not nested in) the other two
-      // kProjectionEvaluate scopes at this depth -- AdvanceDepthBagHot's and
-      // the kernel's own -- so the three sum to the depth's true AP time
-      // (add_time accumulates; only the call count goes 2 -> 3).
+      // Only big nodes are CANDIDATES for the fused kernel; the rest take
+      // oblique.cc's cold branch. Sampling is untouched, so the tree is
+      // invariant to both gates. Billed to kProjectionEvaluate (disjoint).
       CHRONO_BEGIN_COARSE(dw1_hot_gate);
       const size_t hot_min_rows = Dw1HotMinRows();
       std::vector<uint32_t> hot_nodes;                  // hot idx -> node
@@ -5865,16 +5759,9 @@ absl::Status GrowTreeLocalBFS(
       }
 
       // ── Hot gate, part 2: column overlap ──────────────────────────────
-      // The colwalk's unit of work is one ascending
-      // pass over the whole depth's bag per touched column. A candidate
-      // whose columns no other candidate reads is cheaper under the stock per-node Evaluate.
-      //
-      // Criterion: of the node's DISTINCT columns, the fraction also read by another
-      // candidate must be >= DW1_HOT_MIN_SHARE %.
-      //
-      // ONE pass over the row gate's candidates: dropping a node only ever
-      // lowers other columns' reader counts, so iterating would drop strictly
-      // more nodes, with no fixpoint worth the cost or the instability.
+      // Keep a candidate iff ≥ DW1_HOT_MIN_SHARE % of its DISTINCT columns are
+      // read by another. ONE pass: dropping a node only lowers other columns'
+      // reader counts, so iterating would drop strictly more, with no fixpoint.
       size_t ov_stats_candidates = 0, ov_stats_cand_cols = 0;
       {
         const size_t min_share_pct = Dw1HotMinSharePct();
@@ -5918,14 +5805,9 @@ absl::Status GrowTreeLocalBFS(
         ov_touched.clear();
       }
 
-      // The overlap gate is NOT monotone down the tree: whether a node's
-      // columns are shared depends on what its siblings happened to sample,
-      // so this depth's hot set need not be a subset of the children of the
-      // previous depth's hot set. 
-      // The relabel would fall back on its own, but only after
-      // a wasted full bag pass: instead detect the break up front
-      // (O(num_nodes)) and send the depth straight to the concat+VQSort
-      // rebuild.
+      // The overlap gate is NOT monotone: this hot set need not be a subset of
+      // the previous one's children. The relabel would detect that itself, but
+      // only after a wasted bag pass — so break up front and go rebuild.
       if (depth_bag_state.valid && !first_child.empty() &&
           !prev_hot_to_full.empty()) {
         ov_parent_hot.assign(num_nodes, 0);
@@ -5950,13 +5832,9 @@ absl::Status GrowTreeLocalBFS(
       }
 
       if (Dw1HotOverlapStats()) {
-        // Like the kernel's debug dumps, this assumes a single training thread
-        // (run one tree at a time); no locking. It also sits inside the gate's
-        // kProjectionEvaluate region, so the fprintf bills to AP -- do not read
-        // timings from a run with this on (it is a structural dump, not a
-        // measurement). `bag` is what the gate cost the
-        // depth bag: `relabel` = the O(bag) telescoping pass still applies,
-        // `rebuild` = monotonicity broke and this depth pays a concat+VQSort.
+        // Single training thread assumed, no locking; the fprintf bills to AP,
+        // so this is a structural dump, never a measurement. `bag` = what the
+        // gate cost it: `relabel` = still telescoping, `rebuild` = VQSort.
         std::fprintf(stdout,
                      "[DW1 hotoverlap] depth=%d nodes=%d candidates=%zu "
                      "kept=%zu dropped=%zu cand_cols=%zu min_share=%zu%% "
@@ -5975,11 +5853,9 @@ absl::Status GrowTreeLocalBFS(
       }
       const int num_hot = static_cast<int>(hot_nodes.size());
 
-      // Compact the hot nodes' spans and projections into dense hot-indexed
-      // arrays: the kernel's slabs, bag labels and per-node scratch are all
-      // sized/indexed by the frontier it is given. The projections are MOVED,
-      // so a hot node's defs pointer below points into hot_projs and a cold
-      // node's into all_node_projs -- no copy either way.
+      // Compact the hot spans and projections into dense hot-indexed arrays: the
+      // kernel sizes its slabs and scratch by the frontier it is given. The
+      // projections are MOVED, so neither hot nor cold nodes pay a copy.
       std::vector<absl::Span<const UnsignedExampleIdx>> hot_sel_spans(num_hot);
       std::vector<std::vector<internal::Projection>> hot_projs(num_hot);
       size_t hot_rows = 0;
@@ -5989,10 +5865,9 @@ absl::Status GrowTreeLocalBFS(
         hot_projs[k] = std::move(all_node_projs[n]);
         hot_rows += sel_spans[n].size();
       }
-      // Closes the gate region opened before the row gate. Ends here so the
-      // slab-vector construction below stays unbilled, exactly as the non-hot
-      // build leaves its `projected(num_nodes)` unbilled -- the control and
-      // this branch differ only by the gates themselves.
+      // Closes the gate region opened before the row gate, here so the slab
+      // construction below stays unbilled just as the control leaves its
+      // `projected(num_nodes)` unbilled: the two differ only by the gates.
       CHRONO_END_COARSE(dw1_hot_gate,
                  ::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
 
@@ -6002,10 +5877,9 @@ absl::Status GrowTreeLocalBFS(
 #endif  // !DW1_COLWALK_CONTROL
 #ifdef LINECOUNT_A
       {
-        // Exact per-node distinct-cache-line tally for this depth level. sel is
-        // sorted ascending (DCHECK in SplitExamplesInPlace), so distinct lines =
-        // 1 + number of (id>>4) transitions. Computed lock-free per node; one
-        // locked accumulate per depth-batch keeps contention negligible.
+        // Exact per-node distinct-line tally for this depth. sel is sorted, so
+        // distinct lines = 1 + (id>>4) transitions. Lock-free per node, one
+        // locked accumulate per depth-batch => negligible contention.
         double r_sum = 0.0, l_sum = 0.0;
         for (int n = 0; n < num_nodes; ++n) {
           const auto sp = sel_spans[n];
@@ -6028,22 +5902,18 @@ absl::Status GrowTreeLocalBFS(
       }
 #endif
 #ifdef CALLGRIND_DEPTH
-      // Instrument ONLY the kernel: run callgrind with --instr-atstart=no so the
-      // ~8 GB CSV load and all non-kernel training run at light JIT overhead (not
-      // 50-100x cache-sim). Start instrumentation + zero counters here, dump and
-      // stop right after, so each per-depth dump isolates the gather's D1 misses.
+      // Instrument ONLY the kernel: with callgrind --instr-atstart=no, the CSV
+      // load and non-kernel training skip the 50-100x cache-sim. Zero here, dump
+      // right after, so each per-depth dump isolates the gather's D1 misses.
       CALLGRIND_START_INSTRUMENTATION;
       CALLGRIND_ZERO_STATS;
 #endif
 #ifndef DW1_COLWALK_CONTROL
       if (num_hot > 0) {
         {
-          // The hot bag spans only the hot nodes' rows and is labelled by hot
-          // index, but its parent->child hop runs in the full node domain, so
-          // it is advanced here (the kernel sees only the hot arrays) rather
-          // than inside the kernel. Wrapped in the kernel's own coarse scope --
-          // sequentially, not nested -- so bag time keeps landing in the
-          // ApplyProjection cell of this (tree, depth).
+          // The hot bag is labelled by hot index but its parent->child hop runs
+          // in the full node domain, so it is advanced here, not in the kernel.
+          // The scope is the kernel's own, sequential, so bag time bills to AP.
           CHRONO_SCOPE_COARSE(
               ::yggdrasil_decision_forests::chrono_prof::kProjectionEvaluate);
           AdvanceDepthBagHot(absl::MakeConstSpan(sel_spans),
@@ -6091,11 +5961,9 @@ absl::Status GrowTreeLocalBFS(
       for (int n = 0; n < num_nodes; ++n) {
         auto node_config = internal_config;
         const int32_t k = hot_of_node[n];
-        // Hot: hand down the slab (oblique.cc reads projected values straight
-        // out of it). Cold: hand down the pre-sampled projections WITHOUT a
-        // slab -- oblique.cc's cold branch evaluates them with the stock
-        // per-node Evaluate. Handing them down is mandatory: falling through to
-        // the driver's main loop would re-sample and consume the RNG twice.
+        // Hot: hand down the slab, which oblique.cc reads directly. Cold: hand
+        // down the pre-sampled projections with no slab, for its cold branch.
+        // Mandatory — the driver's main loop would re-consume the RNG.
         node_config.depthwise_projection_defs =
             (k >= 0) ? &hot_projs[k] : &all_node_projs[n];
         node_config.depthwise_monotonic = &all_node_mono[n];
@@ -6127,10 +5995,9 @@ absl::Status GrowTreeLocalBFS(
 #elif defined(SYMMETRIC_DEPTHWISE_AP)
     if (dt_config.has_sparse_oblique_split() && depth_batch.size() >= 1 &&
         current_depth <= SymmetricMaxDepth()) {
-      // CatBoost-style symmetric trees: sample K projections ONCE for this
-      // depth, shared across all nodes. The aggregate of nodes' selected
-      // examples at depth d == the bag, so the projection sweep becomes
-      // stride-1 in column space (vs. per-node scattered gather).
+      // CatBoost-style symmetric trees: sample K projections ONCE per depth,
+      // shared across nodes. The depth's selected examples aggregate to the bag,
+      // so the sweep becomes stride-1 instead of a per-node scattered gather.
       const int num_proj = GetNumProjections(
           dt_config, config_link.numerical_features_size());
       const float projection_density = std::clamp(
@@ -6141,12 +6008,9 @@ absl::Status GrowTreeLocalBFS(
       std::vector<internal::Projection> shared_projections(num_proj);
       std::vector<int8_t> shared_monotonic(num_proj, 0);
 #if defined(CHRONO_PROFILE) && defined(SYMMETRIC_DEPTHWISE_AP)
-      // BFS does this depth-level work *before* the per-node NodeTrain at
-      // this depth, so tls_ctx.cur_depth is still the *previous* depth's
-      // value (set by the last NodeTrain). Pin it to current_depth so
-      // kSampleProjection, SymBuildBag / SymSortBag / SymSweep (and the
-      // outer kProjectionEvaluate) all accrue to the correct (tree, depth)
-      // cell.
+      // This depth-level work runs BEFORE the depth's NodeTrains, so cur_depth
+      // still holds the previous depth. Pin it so kSampleProjection, the Sym*
+      // scopes and kProjectionEvaluate land in the right (tree, depth) cell.
       ::yggdrasil_decision_forests::chrono_prof::tls_ctx.cur_depth =
           current_depth;
       // K shared samples per depth — tiny, but scoped so the depth-level
@@ -6188,22 +6052,16 @@ absl::Status GrowTreeLocalBFS(
       // batch entries; consumed at the next depth to build first_child.
       capture_prev_nodes(depth_batch);
 
-      // FindBestConditionSparseObliqueTemplate consumes:
-      //   internal_config.depthwise_projection_defs  (K shared projections)
-      //   internal_config.depthwise_monotonic        (K shared monotonic dirs)
-      //   internal_config.precomputed_projected_values (this node's slab)
-      // Shared fields are the same for every node; slab is per-node.
-      // (Projection is a typedef for std::vector<AttributeAndWeight>, so the
-      // pointer types line up without a cast.)
+      // FindBestConditionSparseObliqueTemplate consumes depthwise_projection_defs
+      // and depthwise_monotonic (the K shared values, same for every node) plus
+      // precomputed_projected_values (this node's slab).
       for (int n = 0; n < num_nodes; ++n) {
         auto node_config = internal_config;
         node_config.depthwise_projection_defs = &shared_projections;
         node_config.depthwise_monotonic = &shared_monotonic;
-        // The symmetric kernel reserves K*rows_n floats of capacity in
-        // projected[n] and writes them through raw pointers, skipping the
-        // redundant zero-fill; projected[n].size() therefore stays 0. Build
-        // the consuming span from .data() with the explicit slab length
-        // rather than from the (zero) vector size.
+        // The symmetric kernel only reserves K*rows_n floats in projected[n] and
+        // writes through raw pointers to skip the zero-fill, so .size() stays 0:
+        // build the span from .data() with the explicit slab length.
         node_config.precomputed_projected_values = absl::MakeConstSpan(
             projected[n].data(),
             shared_projections.size() * sel_spans[n].size());
@@ -6214,17 +6072,9 @@ absl::Status GrowTreeLocalBFS(
         std::vector<float>().swap(projected[n]);  // free early
       }
     } else if (dt_config.has_sparse_oblique_split()) {
-      // Symmetric -> DFS handoff. Reached only when current_depth >
-      // SymmetricMaxDepth(): finish each frontier node's subtree with the
-      // stack-based DFS grower (GrowTreeLocal) instead of continuing the bagwide
-      // symmetric sweep. The handed-off subtree pushes nothing back onto
-      // node_queue, so once every frontier node is forwarded the BFS loop drains
-      // and the tree is complete. Shallow levels (at/above the cut) stay
-      // symmetric; deep levels get DFS subtree cache locality.
-      // This depth was not processed by the fused kernel, so the depth bag was
-      // not advanced: invalidate it so a later fused depth can't relabel from a
-      // stale chain (moot here since the DFS handoff drains the queue, but keeps
-      // engaged->skipped->engaged airtight rather than coincidentally safe).
+      // Symmetric -> DFS handoff past SymmetricMaxDepth(): GrowTreeLocal finishes
+      // each frontier node's subtree and pushes nothing back, so the BFS loop
+      // drains. No fused kernel ran => invalidate the unadvanced depth bag.
       depth_bag_state.valid = false;
       for (auto& nae : depth_batch) {
         RETURN_IF_ERROR(GrowTreeLocal(
@@ -6236,26 +6086,17 @@ absl::Status GrowTreeLocalBFS(
     } else
 #endif
     {
-      // Per-node fallback: BFS scheduling without any fused-per-level Apply,
-      // shared-projection sampling, or precomputed slabs. Each node runs the
-      // standard per-node projection sampling + ProjectionEvaluator::Evaluate
-      // path. This is the path that --config=bfs_only exercises in isolation,
-      // to measure how much of the symmetric-trees speedup comes from the BFS
-      // traversal order alone (vs. the AP-merging and shared-projection
-      // optimizations layered on top).
-      //
-      // kBfsNodeLoop is only meaningful in the BFS_ONLY build — the other
-      // BFS-routed configs (depthwise_1pass, symmetric_*) consume the
-      // depth_batch in their own branches above and never reach here.
+      // Per-node fallback: BFS order, but stock per-node sampling + Evaluate — no
+      // fused Apply, shared projections or slabs. --config=bfs_only isolates it,
+      // to attribute the symmetric speedup to traversal order vs the rest.
 #ifdef BFS_ONLY
       CHRONO_SCOPE_COARSE(::yggdrasil_decision_forests::chrono_prof::kBfsNodeLoop);
 #endif
 #if defined(SYMMETRIC_DEPTHWISE_AP) || \
     (defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL))
-      // This depth was not processed by a fused kernel (oblique off, or the DW1
-      // depth/size guards excluded it), so the depth bag was not advanced.
-      // Invalidate it so a later fused depth takes the concat+VQSort fallback
-      // instead of relabelling from a stale chain.
+      // No fused kernel ran here (oblique off, or the DW1 guards excluded this
+      // depth), so the bag was not advanced: invalidate it so a later fused depth
+      // takes the concat+VQSort fallback instead of a stale chain.
       depth_bag_state.valid = false;
 #endif
 #if defined(DEPTHWISE_1_PASS) && !defined(DW1_COLWALK_CONTROL)
