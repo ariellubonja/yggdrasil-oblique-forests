@@ -1,32 +1,7 @@
 #pragma once
-// Chrono profiling has one always-on coarse base plus three INDEPENDENT axes,
-// selected by bazel build flags (see .bazelrc):
-//   --config=coarse_chrono_profile         : -DCHRONO_PROFILE=1
-//   --config=fine_chrono_applyprojection   : -DCHRONO_PROFILE=1 -DFINE_CHRONO_AP
-//   --config=fine_chrono_evaluateprojection: -DCHRONO_PROFILE=1 -DFINE_CHRONO_EP
-//   --config=nodewise_chrono               : -DCHRONO_PROFILE=1 -DNODEWISE_CHRONO
-//
-//   CHRONO_PROFILE undefined : no profiling — every macro compiles to nothing.
-//   CHRONO_PROFILE defined   : the coarse base is active. The top-level scopes
-//               (TreeTrain, NodeTrain, SampleProjection, EvaluateProj,
-//               ProjectionEvaluate, BfsNodeLoop) plus all node-bookkeeping /
-//               split-manager / GBT scopes fire via the CHRONO_*_COARSE family.
-//   FINE_CHRONO_AP : also fire the inner scopes of ProjectionEvaluator::Evaluate
-//               and its fused-apply variants (symmetric / depthwise_1pass), via
-//               the CHRONO_*_AP family.
-//   FINE_CHRONO_EP : also fire the inner scopes of EvaluateProjection (the
-//               histogram / Cart split search), via the CHRONO_*_EP family.
-//   NODEWISE_CHRONO : keeps the coarse (tree, depth) aggregation exactly as is,
-//               and ADDITIONALLY records one row per (node, projection) call to
-//               ProjectionEvaluator::Evaluate at a small set of gated depths.
-//               Answers "does a small subset of nodes carry most of the
-//               ApplyProjection cost?", which the depth-aggregated tables
-//               cannot. See the NODEWISE_CHRONO section below.
-// The three axes are independent — each includes coarse but not the others;
-// FINE-everywhere = pass both fine configs together. The legacy numeric
-// `CHRONO_PROFILE >= 2` gate and the plain CHRONO_SCOPE / CHRONO_BEGIN family
-// are kept defined purely so the untouched GPU code still compiles; no config
-// sets level 2, so those GPU scopes stay dormant.
+// Chrono profiling: an always-on coarse base (CHRONO_PROFILE) plus three axes
+// that each include coarse but not each other — FINE_CHRONO_AP (inside Apply),
+// FINE_CHRONO_EP (inside the split search), NODEWISE_CHRONO. See .bazelrc.
 #ifdef CHRONO_PROFILE
 
 #include <array>
@@ -107,24 +82,19 @@ enum FuncId {
                   // bag (fallback: K32V32 VQSort rebuild)
   kSymSweep,      // K bag-wide stride-1 projection sweeps (the hot loop)
 
-  // Sub-phases of ApplyProjectionsDepthwise1Pass. Only emitted when compiled
-  // with -DDEPTHWISE_1_PASS; zero otherwise. The Sweep scope wraps the
-  // ConcurrentForLoop synchronization point in the caller thread, so
-  // wall-clock attribution is preserved even when num_threads > 1.
+  // Sub-phases of ApplyProjectionsDepthwise1Pass. Only emitted under
+  // -DDEPTHWISE_1_PASS; zero otherwise.
   kDw1PreSize,    // proj_prefix sum + per-node out_projected[n].assign(...)
   kDw1Sweep,      // ProjectionEvaluator ctor + kernel dispatch (Q tasks)
 
-  // Sub-phases of the Dw1 Sweep, nested inside kDw1Sweep so the children sum
-  // back to it (same convention as kEvaluateProj ≈ kCartPath + kHistoPath).
-  // All fire once per task (≈ tasks.size() times), never per-row, so the
-  // ScopedTimer clock-read overhead stays negligible. Splits the column-centric
-  // block into bucketing vs. the gather/FMA hot loop to locate the 93%.
+  // Sub-phases of the Dw1 Sweep, nested inside kDw1Sweep so children sum back to
+  // it. All fire per task, never per row, so clock-read overhead is negligible.
   kDw1SweepColWalk,  // gather/FMA hot loop: o[i] += w * col[sel_ptr[i]]
   kDw1ColWalkGroupByNode,  // inner loop 1: group sorted entries by node into ref_proj/ref_w
   kDw1ColWalkBagScatter,   // inner loop 2: bag pass scatter-accumulate into out_projected
   kDw1SweepBig,      // EvaluateNodeProjMajor path (oversized single node)
   kDw1SweepGeneric,  // !direct fallback (EvaluateProjectionRowsGeneric)
-  kDw1SharedBag,     // -DDW1_SHARED_ROWS: per-block merged-bag build + sort
+  kDw1SharedBag,     // DW1 shared-rows: per-block merged-bag build + sort
                      // (the stride-1-read colwalk variant; the sweep itself
                      //  still accrues to kDw1SweepColWalk for A/B comparison)
 
@@ -138,98 +108,47 @@ enum FuncId {
   kSplitExamplesInPlace,
   kSetLeafValue,
 
-  // Partition of FindBestConditionConcurrentManager (training.cc), the manager
-  // used by GBT whenever deployment.num_threads > 1. These four fire on the
-  // *manager* thread (i.e. inside a TreeScope), so they land in the per-tree /
-  // per-depth tables and satisfy
-  //     kFindBestCondition ≈ Setup + Submit + Wait + Process
-  // up to the manager's own residual (request struct init, RNG discard).
-  //
-  // kSplitManagerSetup   : label-stats casts, SplitterWorkRequestCommon, cache
-  //                        resizes, GetCandidateAttributes (kGetCandidateAttributes
-  //                        nests inside it).
-  // kSplitManagerSubmit  : build_request + processor.Submit for both the
-  //                        oblique and the axis-aligned scheduling loops.
-  // kSplitManagerWait    : processor.GetResult() — the dominant term; it is the
-  //                        wall-time the manager spends blocked on the workers.
-  // kSplitManagerProcess : recording a response + the in-order processing loop.
-  kSplitManagerSetup,
-  kSplitManagerSubmit,
-  kSplitManagerWait,
-  kSplitManagerProcess,
+  // Partition of FindBestConditionConcurrentManager (GBT, num_threads > 1). All
+  // four fire on the manager thread (inside a TreeScope), so they land in the
+  // per-depth tables: kFindBestCondition ≈ Setup + Submit + Wait + Process.
+  kSplitManagerSetup,    // stats casts, cache resizes, GetCandidateAttributes
+  kSplitManagerSubmit,   // build_request + Submit, oblique and axis-aligned
+  kSplitManagerWait,     // GetResult() — dominant; blocked on the workers
+  kSplitManagerProcess,  // record a response + the in-order processing loop
 
-  // Worker-side CPU time, measured inside FindBestConditionFromSplitterWorkRequest
-  // on the split-finder threads. Those threads have tls_ctx.cur_tree == -1, so
-  // add_time routes them to global_stats (atomic) — they are CPU-time summed
-  // over workers, NOT wall-time, and are deliberately kept out of the per-tree /
-  // per-depth tables (multiple workers serve one node concurrently, and the
-  // by_depth writes are non-atomic — see add_time). These two account for what
-  // fills kSplitManagerWait:
-  //     ΣSplitWorkerOblique ≈ FindObliqueSetup + SampleProjection +
-  //                           ProjectionEvaluate + EvaluateProj (+ dispatch)
-  //     kSplitManagerWait   ≲ (SplitWorkerOblique + SplitWorkerAxisAligned)
-  //                           / effective_parallelism
+  // Worker-side time in FindBestConditionFromSplitterWorkRequest. Workers have
+  // cur_tree == -1, so add_time routes them to global_stats: CPU time summed
+  // over workers, NOT wall-time, deliberately outside the per-depth tables.
   kSplitWorkerOblique,
   kSplitWorkerAxisAligned,
 
-  // Sub-scopes of kObliqueSplitSearch, closing the residual gap between
-  // kObliqueSplitSearch and Σ(SampleProjection + ProjectionEvaluate +
-  // histogram/sort scopes) observed at ~20% on trunk 3M×4096.
-  //
-  // kFindObliqueSetup: per-node setup inside FindBestConditionSparseObliqueTemplate
-  //   — ProjectionEvaluator ctor, ExtractLabels copy, dense_example_idxs alloc +
-  //   iota — fires once per NodeTrain call (not K times).
-  // kEvaluateProj: per-K-projection call to EvaluateProjection (the wrapper that
-  //   dispatches to FindSplitLabel*FeatureNumericalHistogram / Cart). Captures
-  //   the scaffolding around the existing kHistogramSetup / kSortScanSplits /
-  //   kSelectBestThresholdHistogram sub-scopes (effective_internal_config copy,
-  //   template dispatch, DCHECK loop in debug builds).
-  kFindObliqueSetup,
-  kEvaluateProj,
+  // Sub-scopes of kObliqueSplitSearch, closing its ~20% residual gap.
+  kFindObliqueSetup,  // per-node setup: evaluator ctor, ExtractLabels, iota
+  kEvaluateProj,      // per-projection EvaluateProjection + its dispatch
 
-  // Sub-scope of kEvaluateProj, isolating BuildCountLogCountTable(total_sum) at
-  // training.cc:2324. The lookup-table is rebuilt from scratch per (projection,
-  // node) call — std::vector<double>(N_node + 1) allocation + N_node std::log
-  // evaluations — sitting in the uncovered gap between kAssignSamplesToHistogram
-  // and kSelectBestThresholdHistogram. Identified as the prime suspect for the
-  // ~16s residual inside kEvaluateProj on trunk 3M×4096.
+  // Sub-scope of kEvaluateProj isolating BuildCountLogCountTable(total_sum):
+  // a vector<double>(N_node+1) alloc + N_node std::log per (projection, node),
+  // in the gap between kAssignSamplesToHistogram and kSelectBestThreshold*.
   kEntropyTableSetup,
 
   // Sub-scope of kEvaluateProj wrapping FindSplitLabelClassificationFeature-
-  // NumericalCart at training.cc:2398. Used by the dynamic-fallback EXACT path
-  // for nodes below dt_config.dynamic_split_threshold examples. The outer
-  // dispatch (feature_filler lambda, EffectiveStrategy, sorting_strategy
-  // branching, Filler/Initializer construction) plus the FindBestSplitFlat-
-  // Highway buffer-resize and bucket InitializeAndZero are uncovered today; the
-  // inner kSortFillBuckets / kSortFeatures / kSortScanSplits scopes nest inside
-  // and are still per-phase measured.
+  // NumericalCart (the dynamic-fallback EXACT path). The kSort* scopes nest
+  // inside it; its own dispatch + buffer setup are otherwise uncovered.
   kCartPath,
 
-  // Sub-scope of kCartPath wrapping the feature_filler immediate lambda at the
-  // top of FindSplitLabelClassificationFeatureNumericalCart — LOCAL_IMPUTATION
-  // check, EffectiveStrategy (config-proto reads), FeatureNumericalBucket::
-  // Filler construction. Isolates the pre-dispatch setup from the unnamed
-  // remainder of CartPath (leaf scopes' own clock-read overhead + StatusOr
-  // return machinery).
+  // Sub-scope of kCartPath: the feature_filler lambda (imputation check,
+  // EffectiveStrategy, Filler construction), separating pre-dispatch setup
+  // from CartPath's unnamed remainder.
   kCartSetup,
 
-  // Sub-scope of kEvaluateProj wrapping the whole body of FindSplitLabel-
-  // ClassificationFeatureNumericalHistogram at training.cc:2172, symmetric to
-  // kCartPath. Captures what the inner kHistogramSetup / kAssignSamplesToHist /
-  // kEntropyTableSetup / kSelectBestThresholdHistogram scopes miss: the reverse
-  // cumulative sweep over candidate_splits, the scalar entropy setup, and the
-  // destructors of candidate_splits + count_log_count (the latter is a
-  // vector<double>(N_node+1) free per call). With it, EvaluateProj ≈ CartPath +
-  // HistoPath up to dispatch overhead.
+  // kCartPath's twin for ...NumericalHistogram: catches what the inner scopes
+  // miss (reverse cumulative sweep, scalar entropy setup, candidate_splits and
+  // count_log_count dtors) ⇒ EvaluateProj ≈ CartPath + HistoPath.
   kHistoPath,
 
-  // BFS-only scheduler scope. Emitted by GrowTreeLocalBFS to characterize
-  // the BFS scheduling overhead in isolation from any fused-Apply work.
-  // kBfsNodeLoop fires only on -DBFS_ONLY and wraps the per-node NodeTrain
-  // dispatch in the fallback path (i.e. without shared projections or fused
-  // Apply), so it isolates the cost of running K projections per node under
-  // BFS order vs. DFS. (The frontier pop-loop that drains node_queue into
-  // depth_batch is not chrono'd — measured at <0.1 s for 3M rows.)
+  // Fires only on -DBFS_ONLY, around GrowTreeLocalBFS's per-node NodeTrain
+  // dispatch: isolates K projections/node under BFS order vs DFS. The frontier
+  // pop-loop is not chrono'd (<0.1 s for 3M rows).
   kBfsNodeLoop,
 
   kNumFuncs
@@ -268,31 +187,9 @@ inline std::vector<std::thread::id>& tree_thread_id() {
 }
 
 // ================== NODEWISE_CHRONO: per-node AP records ==================
-// The coarse tables above aggregate ApplyProjection over all nodes at a depth,
-// so they cannot say whether the cost is spread evenly across a depth's nodes
-// or carried by a handful of them. This axis adds a second sink on the SAME
-// clock read: every ProjectionEvaluator::Evaluate call at a gated depth also
-// deposits one record. No extra steady_clock::now() calls are introduced, so
-// the measured ApplyProjection interval is bit-for-bit the one the coarse
-// tables see (checked at dump time — see DumpNodewiseApCsv's self-check).
-//
-// One record per NODE: the node's Evaluate calls are accumulated in thread-
-// local state and emitted once, when the node's NodeTrain scope closes. `nnz`
-// and `ap_ns` are therefore sums over the node's projections, and the identity
-// n_gathers = n_rows * nnz survives the summation (the row set is fixed within
-// a node). Nothing is pushed from inside the projection loop.
-//
-// Volume is controlled by the gate (default: tree 0, depths 5/10/15/20 — 55k
-// records ≈ 1.8 MB on HIGGS). Gating a whole tree at every depth is ~2.6M
-// records ≈ 80 MB, which is why the gate defaults to a depth ladder.
-//
-// Runtime knobs (read once, before the thread pool starts):
-//   YDF_NODEWISE_TREE    tree index to record; -1 = every tree. Default 0.
-//   YDF_NODEWISE_DEPTHS  comma-separated depth list, or "*"/"all" for every
-//                        depth. Default "5,10,15,20".
-//   YDF_NODEWISE_OUT     output CSV path. Default "nodewise_ap.csv".
-//   YDF_NODEWISE_RESERVE records reserved per recording tree. Default 1<<20
-//                        for a single tree, 1<<16 when recording all trees.
+// Second sink on the SAME clock read as the coarse tables (no extra clock
+// calls; self-checked in DumpNodewiseApCsv), one record per NODE emitted when
+// its NodeTrain closes. Knobs NODEWISE_*: oblique_context/build_measure.md.
 #ifdef NODEWISE_CHRONO
 
 // One row of the output CSV. 24 B; n_rows fits uint32 because it is bounded by
@@ -306,14 +203,9 @@ struct NodeApRec {
   uint32_t num_proj;   // Evaluate calls for this node (0 ⇒ AP never ran)
 };
 
-// Node identity: the heap index of the node in the binary tree. The root (which
-// the growers enter at depth 1) is 1, and the children of i are 2i (negative)
-// and 2i+1 (positive) — so depth d holds ids [2^(d-1), 2^d), and the id's binary
-// digits after the leading 1 spell the root→node branch path.
-//
-// 0 means "unknown" and propagates down: a subtree grown without a rooted
-// parent id (only the fused kernels' BFS→DFS handoff, which this axis does not
-// support anyway), or a depth past 63, where the index no longer fits.
+// Node identity = heap index: root (entered at depth 1) is 1, children of i are
+// 2i (negative) and 2i+1 (positive), so depth d holds ids [2^(d-1), 2^d).
+// 0 = unknown and propagates down (unrooted subtree, or depth past 63).
 inline uint64_t NodewiseChildId(uint64_t parent_id, bool positive,
                                 int32_t child_depth) {
   if (parent_id == 0 || child_depth > 63) return 0;
@@ -341,10 +233,10 @@ struct NodewiseGate {
 inline const NodewiseGate& NodewiseGateConfig() {
   static const NodewiseGate* g = [] {
     auto* p = new NodewiseGate();
-    const char* tree_env = std::getenv("YDF_NODEWISE_TREE");
+    const char* tree_env = std::getenv("NODEWISE_TREE");
     p->tree = (tree_env != nullptr) ? std::atoi(tree_env) : 0;
 
-    const char* depths_env = std::getenv("YDF_NODEWISE_DEPTHS");
+    const char* depths_env = std::getenv("NODEWISE_DEPTHS");
     p->depths_spec = (depths_env != nullptr) ? depths_env : "5,10,15,20";
     if (p->depths_spec == "*" || p->depths_spec == "all") {
       p->any_depth = true;
@@ -361,10 +253,10 @@ inline const NodewiseGate& NodewiseGateConfig() {
       }
     }
 
-    const char* out_env = std::getenv("YDF_NODEWISE_OUT");
+    const char* out_env = std::getenv("NODEWISE_OUT");
     p->out_path = (out_env != nullptr) ? out_env : "nodewise_ap.csv";
 
-    const char* reserve_env = std::getenv("YDF_NODEWISE_RESERVE");
+    const char* reserve_env = std::getenv("NODEWISE_RESERVE");
     p->reserve = (reserve_env != nullptr)
                      ? static_cast<size_t>(std::atoll(reserve_env))
                      : (p->tree >= 0 ? (size_t{1} << 20) : (size_t{1} << 16));
@@ -469,11 +361,9 @@ class ScopedTopTimer {
 // ---------- NODEWISE_CHRONO scopes --------------------------------
 #ifdef NODEWISE_CHRONO
 
-// Drop-in replacement for ScopedTimer around ProjectionEvaluator::Evaluate.
-// Deposits into the coarse (tree, depth) table exactly as ScopedTimer does, and
-// — only at gated depths — also accumulates into the current node's record.
-// The accumulation happens AFTER the closing clock read, so it is outside the
-// interval it describes; it is three adds and no allocation.
+// Drop-in ScopedTimer for ProjectionEvaluator::Evaluate: same coarse deposit,
+// plus — at gated depths — an accumulate into the current node's record. That
+// happens after the closing clock read, so it sits outside the interval.
 class ScopedNodewiseApTimer {
  public:
   ScopedNodewiseApTimer(FuncId id, uint32_t n_rows, uint32_t nnz)
@@ -504,12 +394,9 @@ class ScopedNodewiseApTimer {
   std::chrono::steady_clock::time_point start_;
 };
 
-// Opened once per NodeTrain call: arms/disarms recording for the node, holds
-// the accumulators its Evaluate calls add into, and emits the node's single
-// record on exit. Nodes that never reached ApplyProjection (leaves, empty
-// nodes, early returns) still emit a row, with num_proj = nnz = ap_ns = 0 —
-// dropping them would silently shrink the denominator and inflate every
-// concentration statistic.
+// Opened once per NodeTrain call: arms recording, holds the accumulators its
+// Evaluate calls add into, emits the node's one record on exit. Nodes that never
+// reached AP still emit a zero row — dropping them would inflate concentration.
 class NodewiseNodeScope {
  public:
   NodewiseNodeScope(int tree, int depth, uint64_t node_id, uint32_t n_rows)
@@ -546,12 +433,9 @@ struct NodewiseDumpStats {
   std::string path;
 };
 
-// Writes the records as CSV and cross-checks them against the coarse table.
-// Both sinks are fed the same dt_ns by the same timer, so for every recorded
-// (tree, depth) the sums must match EXACTLY; a mismatch means AP time reached
-// the coarse table from a path that bypasses ScopedNodewiseApTimer (the fused
-// symmetric / depthwise-1pass kernels do exactly that, so expect mismatches if
-// this axis is combined with them).
+// Writes the CSV and cross-checks it against the coarse table: both sinks get
+// the same dt_ns, so per (tree, depth) the sums must match EXACTLY. A mismatch
+// means AP bypassed ScopedNodewiseApTimer — as the fused kernels do.
 inline NodewiseDumpStats DumpNodewiseApCsv() {
   const auto& g = NodewiseGateConfig();
   NodewiseDumpStats stats;
@@ -639,10 +523,8 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #define YDF_PP_CAT(a,b)       YDF_PP_CAT_INNER(a,b)
 
 // ===== Coarse tier ================================================
-// Active whenever CHRONO_PROFILE is defined (levels 1 and 2). Only the
-// top-level scopes listed in the file header use these, so the coarse build
-// keeps just enough instrumentation to attribute time per (tree, depth)
-// without the per-sub-scope clock-read overhead.
+// Active whenever CHRONO_PROFILE is defined. Only top-level scopes use these:
+// enough to attribute time per (tree, depth) without sub-scope clock reads.
 #define CHRONO_SCOPE_COARSE(ID) \
   yggdrasil_decision_forests::chrono_prof::ScopedTimer \
       YDF_PP_CAT(_chrono_ctimer_, __LINE__)(ID)
@@ -664,8 +546,7 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 
 // ===== Axis: nodewise ApplyProjection records =====================
 // CHRONO_SCOPE_NODEWISE_AP degrades to the plain coarse scope when the axis is
-// off, so the single call site in ProjectionEvaluator::Evaluate stays correct
-// (and free) in every other build. N_ROWS / NNZ are then never evaluated.
+// off, so Evaluate's single call site stays correct (and free) elsewhere.
 #ifdef NODEWISE_CHRONO
 #define CHRONO_SCOPE_NODEWISE_AP(ID, N_ROWS, NNZ)                       \
   ::yggdrasil_decision_forests::chrono_prof::ScopedNodewiseApTimer      \
@@ -681,10 +562,8 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #endif  // NODEWISE_CHRONO
 
 // ===== Fine axis: ApplyProjection =================================
-// Active only under -DFINE_CHRONO_AP. Wraps the inner scopes of
-// ProjectionEvaluator::Evaluate and its fused-apply variants (symmetric /
-// depthwise_1pass). Inert otherwise, so a plain coarse or EP-fine build pays
-// zero overhead for these.
+// Active only under -DFINE_CHRONO_AP: the inner scopes of Evaluate and its
+// fused-apply variants. Inert (zero overhead) in coarse or EP-fine builds.
 #ifdef FINE_CHRONO_AP
 #define CHRONO_SCOPE_AP(ID) \
   yggdrasil_decision_forests::chrono_prof::ScopedTimer \
@@ -741,9 +620,8 @@ struct DepthScope   { DepthScope()  { ++tls_ctx.cur_depth; }
 #endif  // FINE_CHRONO_EP
 
 // ===== Legacy fine tier (GPU only) ================================
-// Active only at level >= 2. No config sets level 2 anymore; kept solely so the
-// untouched GPU code (oblique_gpu.cc) still compiles. Dormant under all current
-// configs.
+// Active only at level >= 2, which no config sets anymore: kept solely so the
+// untouched GPU code (oblique_gpu.cc) still compiles.
 #if CHRONO_PROFILE >= 2
 #define CHRONO_SCOPE(ID) \
   yggdrasil_decision_forests::chrono_prof::ScopedTimer \

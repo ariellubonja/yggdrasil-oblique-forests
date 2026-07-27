@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the DW1 oblique trainer with Method C (callgrind per-depth) instrumentation.
 #
-# The hooks live in learner/decision_tree/training.cc behind #ifdef YDF_CALLGRIND_DEPTH
+# The hooks live in learner/decision_tree/training.cc behind #ifdef CALLGRIND_DEPTH
 # (no-op unless this define is set), so we enable them on training.cc ONLY via
 # --per_file_copt. -march=skylake caps the ISA at AVX2: Valgrind 3.22 cannot decode
 # the AVX-512 that -march=native emits. The gather access pattern is SIMD-width
@@ -19,7 +19,7 @@ bazel build -c opt --config=profiler --config=depthwise_1_pass \
   --copt=-march=skylake \
   --repo_env=CC="$ONEAPI/icx" \
   --repo_env=CXX="$ONEAPI/icpx" \
-  --per_file_copt='decision_tree/training\.cc@-DYDF_CALLGRIND_DEPTH' \
+  --per_file_copt='decision_tree/training\.cc@-DCALLGRIND_DEPTH' \
   //examples:train_oblique_forest
 
 echo "Built (instrumented): $REPO/bazel-bin/examples/train_oblique_forest"

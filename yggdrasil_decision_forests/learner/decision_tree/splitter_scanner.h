@@ -42,7 +42,7 @@
 //   - Iterate over the buckets and fill update the score accumulator. At each
 //     step, evaluate the score of the split.
 //
-// If the preprocessor "YDF_DEBUG_PRINT_SPLIT" is set, detailed logs of the
+// If the preprocessor "DEBUG_PRINT_SPLIT" is set, detailed logs of the
 // splitting algorithm are printed with LOG(INFO).
 //
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_SPLITTER_SCANNER_H_
@@ -1008,7 +1008,7 @@ SplitSearchResult ScanSplits(
   // last new best split were empty).
   bool no_new_examples_since_last_new_best_split = false;
 
-#ifdef YDF_DEBUG_PRINT_SPLIT
+#ifdef DEBUG_PRINT_SPLIT
   LOG(INFO) << "Start scanning split with ScanSplits with: num_buckets:"
             << example_bucket_set.items.size() << " best_score:" << best_score
             << " num_examples:" << num_examples
@@ -1018,7 +1018,7 @@ SplitSearchResult ScanSplits(
   for (int bucket_idx = 0; bucket_idx < end_bucket_idx; bucket_idx++) {
     const auto& item = example_bucket_set.items[bucket_idx];
 
-#ifdef YDF_DEBUG_PRINT_SPLIT
+#ifdef DEBUG_PRINT_SPLIT
     LOG(INFO) << "Scan item\n\tfeature: " << item.feature
               << "\n\tlabel: " << item.label;
 #endif
@@ -1040,7 +1040,7 @@ SplitSearchResult ScanSplits(
 
     if (!FeatureBucketType::IsValidSplit(
             item.feature, example_bucket_set.items[bucket_idx + 1].feature)) {
-#ifdef YDF_DEBUG_PRINT_SPLIT
+#ifdef DEBUG_PRINT_SPLIT
       LOG(INFO) << "\tinvalid split (feature)";
 #endif
       continue;
@@ -1048,21 +1048,21 @@ SplitSearchResult ScanSplits(
 
     // Enough examples?
     if (num_pos_examples < min_num_obs) {
-#ifdef YDF_DEBUG_PRINT_SPLIT
+#ifdef DEBUG_PRINT_SPLIT
       LOG(INFO) << "\tnot enough examples on positive side";
 #endif
       break;
     }
 
     if (num_neg_examples < min_num_obs) {
-#ifdef YDF_DEBUG_PRINT_SPLIT
+#ifdef DEBUG_PRINT_SPLIT
       LOG(INFO) << "\tnot enough examples on negative side";
 #endif
       continue;
     }
 
     if (!initializer.IsValidSplit(neg, pos)) {
-#ifdef YDF_DEBUG_PRINT_SPLIT
+#ifdef DEBUG_PRINT_SPLIT
       LOG(INFO) << "\tinvalid split (accumulator)";
 #endif
       continue;
@@ -1071,12 +1071,12 @@ SplitSearchResult ScanSplits(
     const auto score = Score<>(initializer, weighted_num_examples, pos, neg);
     tried_one_split = true;
 
-#ifdef YDF_DEBUG_PRINT_SPLIT
+#ifdef DEBUG_PRINT_SPLIT
     LOG(INFO) << "\tscore: " << score;
 #endif
 
     if (score > best_score) {
-#ifdef YDF_DEBUG_PRINT_SPLIT
+#ifdef DEBUG_PRINT_SPLIT
       LOG(INFO) << "Score:" << std::setprecision(16) << score
                 << " Best_score: " << best_score;
       LOG(INFO) << "\tnew best split";
@@ -1095,7 +1095,7 @@ SplitSearchResult ScanSplits(
     }
   }
 
-#ifdef YDF_DEBUG_PRINT_SPLIT
+#ifdef DEBUG_PRINT_SPLIT
   LOG(INFO) << "Last bucket:\n\tfeature: "
             << example_bucket_set.items.back().feature
             << "\n\tlabel: " << example_bucket_set.items.back().label;

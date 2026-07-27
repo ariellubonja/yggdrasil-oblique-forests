@@ -7,18 +7,18 @@ machine. Method C profiles the hot DW1 oblique gather `col[sel_ptr[i]]`
 "useful floats per 64B cache line."
 
 It complements Method A (the exact native distinct-cache-line counter,
-`#ifdef YDF_LINECOUNT_A` in `training.cc`). A gives the line *geometry* fast and
+`#ifdef LINECOUNT_A` in `training.cc`). A gives the line *geometry* fast and
 multithreaded; C gives real miss *costs* (the `DLmr`/DRAM column) but is slow and
 single-threaded. Use C when you want to know whether the gather misses reach DRAM.
 
 ## What's already committed (no code edits needed)
-- `learner/decision_tree/training.cc` — hooks behind `#ifdef YDF_CALLGRIND_DEPTH`:
+- `learner/decision_tree/training.cc` — hooks behind `#ifdef CALLGRIND_DEPTH`:
   - include block: `#include <valgrind/callgrind.h>`
   - **before** the kernel call (`ApplyProjectionsDepthwise1Pass`):
     `CALLGRIND_START_INSTRUMENTATION; CALLGRIND_ZERO_STATS;`
   - **after** it:
     `CALLGRIND_DUMP_STATS_AT("dw1_depth_<N>"); CALLGRIND_STOP_INSTRUMENTATION;`
-  These are no-ops unless built with `-DYDF_CALLGRIND_DEPTH`. The START/STOP pair is
+  These are no-ops unless built with `-DCALLGRIND_DEPTH`. The START/STOP pair is
   what keeps the CSV load OUT of the cache simulation (see speed note below).
 - `benchmarks/cachegrind/build_methodC.sh` — build with the define on `training.cc` only.
 - `benchmarks/cachegrind/run_methodC.sh` — run under callgrind to a persistent dir.

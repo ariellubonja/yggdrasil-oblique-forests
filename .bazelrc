@@ -1,48 +1,23 @@
 build --disk_cache=~/.cache/bazel-disk
 
-# APPLYPROJECTION EXPERIMENTS
-
-# Depthwise fused ApplyProjection: one depth-batch scheduler over all
-# node/projection tasks, keeping per-node Sparse Oblique RF projection sampling.
+# Depthwise fused ApplyProjection (DW1): BFS depth batches, shared-rows colwalk
+# on the depth's big column-sharing nodes (DW1_HOT_MIN_ROWS=1000 /
+# DW1_HOT_MIN_SHARE=50; both 0 = ungated), stock Evaluate on the rest.
 build:depthwise_1_pass --cxxopt="-DDEPTHWISE_1_PASS=1"
 
-# DW1 shared-rows colwalk: variant of depthwise_1_pass. Read each touched
-# column ONCE over the depth's example-sorted bag (AdvanceDepthBag's
-# bag/node_of_bag) and scatter values to each owning node's projections,
-# instead of re-gathering the column per (node, projection). Trades the
-# per-node sparse gather for a stride-1 read plus sparse slab writes.
-# A/B vs plain depthwise_1_pass: compare the Dw1SweepColWalk chrono line
-# (depth-bag prep shows as Dw1SharedBag via DepthBagChrono).
-#
-# The local slab slot is NOT stored -- selected_examples are sorted ascending,
-# so the example-sorted bag visits each node's rows in slab order and `local`
-# is recovered as a per-node counter during the colwalk.
-build:dw1_shared_rows --config=depthwise_1_pass
-build:dw1_shared_rows --cxxopt="-DDW1_SHARED_ROWS=1"
+# Control: col-sharing sweep only (per-(node,projection) gather ordered by
+# column). No depth bag, no shared-rows scatter, DW1_HOT_* inert.
+build:dw1_colwalk_control --config=depthwise_1_pass
+build:dw1_colwalk_control --cxxopt="-DDW1_COLWALK_CONTROL=1"
 
-# Synthetic-layout experiments for ProjectionEvaluator: change numerical-feature
-# storage for trunk synthetic datasets only. Scheduler-independent; combinable
-# with default Nodewise or Depthwise.
+
 build:row_major_dataset_layout --cxxopt="-DROW_MAJOR_DATASET_LAYOUT=1"
 
 
-## SYMMETRIC TREES
 # CatBoost-style symmetric/oblivious trees for Sparse Oblique RF: K candidate
-# projections shared across all nodes at depth d, one bag-wide sweep per
-# candidate. Hooks into GrowTreeLocalBFS's depth-batch loop. Implies BFS.
-# NOTE: does not include CatBoost's shared-entropy logic (1 entropy calc/depth).
-# Runtime knob YDF_SYMMETRIC_MAX_DEPTH (default INT32_MAX = symmetric everywhere)
-# caps the symmetric depth: levels deeper than it hand each frontier node off to
-# the DFS grower (GrowTreeLocal). =0 is all-DFS. See SymmetricMaxDepth() in
-# learner/decision_tree/training.cc; swept by benchmarks' dw1_depth_linesearch.sh
-# --mode=symmetric.
+# projections shared across all nodes at depth d, one bag-wide sweep per candidate
 build:symmetric_depthwise_ap --cxxopt="-DSYMMETRIC_DEPTHWISE_AP=1"
-# BFS_Only: isolates the cost/benefit of the BFS (level-order) scheduler vs DFS.
-# Triggers GrowTreeLocalBFS but does NOT sample shared projections or call any
-# fused bag-wide Apply -- each node runs the normal per-node sampling + Evaluate,
-# algorithmically identical to the Nodewise baseline, only traversal order
-# differs. Lives by the symmetric_* configs as their BFS-only control but
-# involves no symmetric behavior. Mutually exclusive with symmetric_depthwise_ap.
+
 build:bfs_only --cxxopt="-DBFS_ONLY=1"
 
 ##### GPU Support
@@ -51,53 +26,18 @@ build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 # INSTRUMENTATION & DEFAULTS
 
 
-# Chrono profiling: one always-on coarse base + two INDEPENDENT fine axes.
-# Coarse fires the top-level scopes (TreeTrain, NodeTrain, SampleProjection,
-# EvaluateProj, ProjectionEvaluate, BfsNodeLoop) plus node-bookkeeping /
-# split-manager / GBT scopes. The two fine axes each add coarse but not each
-# other; for FINE-everywhere pass both fine configs together.
 #   coarse_chrono_profile          : coarse only
-#   fine_chrono_applyprojection    : coarse + inner scopes of ProjectionEvaluator
-#                                    ::Evaluate (symmetric / depthwise_1pass)
-#   fine_chrono_evaluateprojection : coarse + inner scopes of EvaluateProjection
-#                                    (histogram / Cart split search)
+#   fine_chrono_applyprojection    : coarse + inside Evaluate / the fused kernels
+#   fine_chrono_evaluateprojection : coarse + inside the histogram/Cart search
 build:coarse_chrono_profile --cxxopt="-DCHRONO_PROFILE=1"
 build:fine_chrono_applyprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_AP"
 build:fine_chrono_evaluateprojection --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DFINE_CHRONO_EP"
 
-# Nodewise ApplyProjection cost: a third axis on the coarse base. The coarse
-# per-(tree, depth) tables aggregate AP over every node at a depth, so they
-# cannot say whether that cost is spread evenly or carried by a few nodes. This
-# axis keeps the coarse tables byte-identical and adds a SECOND sink on the same
-# clock read -- no extra steady_clock::now() calls -- emitting one CSV row per
-# NODE at a gated set of depths, holding that node's total ApplyProjection cost.
-# Nodes that never reach AP (leaves) get an ap_ns=0 row, so the CSV carries the
-# full node population at those depths.
-#
-# Columns: tree,depth,node_id,n_rows,nnz,n_gathers,ap_ns,num_proj
-#   node_id   heap index of the node: root = 1 (the growers enter at depth 1),
-#             children of i are 2i (neg) and 2i+1 (pos). So depth d holds ids
-#             [2^(d-1), 2^d) -- depth 5 has at most 2^4 = 16 nodes -- and the
-#             id's bits after the leading 1 spell the root->node branch path.
-#   nnz       SUM of projection.size() over the node's projections
-#   n_gathers n_rows * nnz; ns/gather = ap_ns / n_gathers is the rate metric
-#   num_proj  Evaluate calls for the node (0 => AP never ran)
-# Rows are sorted by (depth, node_id) at dump time.
-#
-# Runtime knobs (see utils/parallel_chrono.h):
-#   YDF_NODEWISE_TREE=0            tree to record; -1 = all trees
-#   YDF_NODEWISE_DEPTHS=5,10,15,20 depth list, or "*" for every depth
-#   YDF_NODEWISE_OUT=nodewise_ap.csv
-#   YDF_NODEWISE_RESERVE=<n>       records reserved per recording tree
-# Defaults are ~55k records / ~1.8 MB on HIGGS. One full tree at every depth is
-# ~2.6M records / ~80 MB, so widen the depth list deliberately.
-#
-# Combine only with the stock nodewise kernel: the fused symmetric / dw1 Apply
-# paths never call ProjectionEvaluator::Evaluate, so they produce no records and
-# trip the dump-time selfcheck against the coarse ProjEval totals.
+# Time the ApplyProjection cost of each node at a certain depth. 
+# Insight: AP cost per depth is skewed twd. a few nodes
 build:nodewise_chrono --cxxopt="-DCHRONO_PROFILE=1" --cxxopt="-DNODEWISE_CHRONO=1"
 # Don't inline ApplyProjection, for more accurate profiling. Very small cost: <2% e2e.
-build:inline_projection_evaluate --cxxopt="-DYDF_INLINE_PROJECTION_EVALUATE"
+build:inline_projection_evaluate --cxxopt="-DINLINE_PROJECTION_EVALUATE"
 # Skip the std::isnan branch in Evaluate. Small cost but possible cache misbehavior.
 build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 
@@ -105,19 +45,9 @@ build:enable_isnan --cxxopt="-DENABLE_ISNAN=1"
 # entropy in RF/SPORF Exact (~9% e2e win, ~39% local on SortScanSplits).
 build:disable_binary_entropy_lookup --cxxopt="-DDISABLE_BINARY_ENTROPY_LOOKUP"
 
-# STD::UPPER_BOUND VECTORIZATION
-# ON by default: the SIMD histogram binners (HistogramBinner in
-# learner/decision_tree/training.cc — AVX2 8x8 for 64 bins, AVX-512 16x16 for
-# 256 bins) are always compiled on x86-64 via per-function
-# __attribute__((target)) (no TU-wide -mavx2/-mavx512f needed) and selected at
-# RUNTIME from cpuid + the bin count; non-matching CPUs / bin counts fall back
-# to scalar std::upper_bound. This config removes the SIMD paths entirely
-# (scalar-only), e.g. for A/B measurement.
+# STD::UPPER_BOUND VECTORIZATION in Random Histograms ON by default
 build:disable_std_upper_bound_vectorization --cxxopt="-DDISABLE_STD_UPPER_BOUND_VECTORIZATION=1"
 
-# Default ON: tune for the host CPU.
-# NOTE: -march=native is host-specific and breaks cross-compiles (e.g. wasm);
-# scope under build:linux/build:macos if you ever cross-compile.
 build --copt=-march=native --cxxopt="-O3"
 
 
@@ -128,14 +58,9 @@ build --copt=-march=native --cxxopt="-O3"
 # compiler pins below take effect without an explicit --config.
 build --enable_platform_specific_config
 
-# Pin Intel oneAPI ICX (clang-based) on Linux. Without this, Bazel auto-detection
-# silently falls back to /usr/bin/gcc, which compiles the Oblique Exact hot path
-# ~30-40% slower than ICX. Requires oneAPI sourced in the shell
-# (`source /opt/intel/oneapi/setvars.sh`) so icx/icpx are on PATH for Bazel's
-# cc_configure. Pinned under build:linux (not global) so a missing icx is a hard
-# error rather than a silent gcc fallback that invalidates perf numbers. macOS
-# has no pin (Intel never shipped icx/icpx for macOS/Apple Silicon) and uses the
-# native Apple clang toolchain.
+# Pin Intel oneAPI ICX on Linux: gcc compiles the Oblique Exact hot path ~30-40%
+# slower, so a missing icx must fail hard, not fall back silently. Needs
+# `source /opt/intel/oneapi/setvars.sh`. macOS uses Apple clang.
 build:linux --repo_env=CC=icx
 build:linux --repo_env=CXX=icpx
 

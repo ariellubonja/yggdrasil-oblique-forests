@@ -36,10 +36,10 @@ def get_base_parser():
     parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast") # TODO deprecate
     parser.add_argument("--fixed_1000_projections", action="store_true")
     parser.add_argument("--depthwise_1_pass", action="store_true",
-                        help="Build with -DDEPTHWISE_1_PASS=1: Depthwise fused "
-                             "per-level CPU ApplyProjection (single-pass "
-                             "kernel across all (row, projection) tasks at "
-                             "the level; thread-parallel, contention-free).")
+                        help="Build with -DDEPTHWISE_1_PASS=1: fused per-level "
+                             "CPU ApplyProjection (shared-rows colwalk on the "
+                             "depth's hot nodes, stock Evaluate on the rest). "
+                             "Control: --bazel_config=dw1_colwalk_control.")
     parser.add_argument("--symmetric_depthwise_ap", action="store_true",
                         help="Build with -DSYMMETRIC_DEPTHWISE_AP=1: "
                              "CatBoost-style symmetric-trees bag-wide "
@@ -162,21 +162,17 @@ def build_binary(args, chrono_mode):
         base_cmd.append('--config=fixed_1000_projections')
     finished_cmd = base_cmd[:] # ← work on a copy
 
-    # SIMD histogram binning is default-ON with runtime dispatch: the split-finder
-    # picks AVX2 / AVX-512 / scalar from cpuid + the bin count at RUNTIME, so
-    # --vectorized needs no build config. It still steers histogram_num_bins
-    # (64 -> AVX2, 256 -> AVX-512) and run labeling elsewhere.
+    # SIMD histogram binning is default-ON and dispatched at runtime from cpuid +
+    # bin count, so --vectorized needs no build config; it only steers
+    # histogram_num_bins (64 -> AVX2, 256 -> AVX-512) and run labeling.
 
     if args.sample_projection_mode == "Slow":
         finished_cmd.append('--config=slow_sample_projections')
     
     if chrono_mode:
-        # Coarse base + two independent fine axes (see .bazelrc /
-        # parallel_chrono.h). chrono_level selects which:
-        #   "coarse" -> coarse only
-        #   "ap"     -> coarse + inner scopes of ProjectionEvaluator::Evaluate
-        #   "ep"     -> coarse + inner scopes of EvaluateProjection
-        #   "both"   -> both fine axes (FINE everywhere)
+        # chrono_level picks the axes (see .bazelrc / parallel_chrono.h):
+        # "coarse", "ap" (+ inside Evaluate), "ep" (+ inside EvaluateProjection),
+        # "both" (FINE everywhere).
         _chrono_level = getattr(args, 'chrono_level', 'coarse')
         _chrono_configs = {
             'coarse': ['--config=coarse_chrono_profile'],
@@ -222,11 +218,9 @@ def build_binary(args, chrono_mode):
 
     finished_cmd.append("--ui_event_filters=-warning")
 
-    # Pin Intel oneAPI ICX (clang-based) regardless of branch/.bazelrc state.
-    # Why: main's .bazelrc does not pin a compiler (auto-detects gcc);
-    # rebased-main's pins icx but fails when oneAPI is not sourced. Injecting
-    # an absolute path here makes both branches build with icx without any
-    # shell prep.
+    # Pin Intel oneAPI ICX regardless of branch: main's .bazelrc auto-detects gcc
+    # and rebased-main's needs oneAPI sourced. An absolute path here makes both
+    # build with icx without shell prep.
     _icx = "/opt/intel/oneapi/compiler/latest/bin/icx"
     _icpx = "/opt/intel/oneapi/compiler/latest/bin/icpx"
     if os.path.isfile(_icx) and os.path.isfile(_icpx):

@@ -1277,10 +1277,10 @@ RandomForestLearner::TrainWithStatusImpl(
   // Benchmark shortcut: for pure-runtime experiments the trained model is never
   // used, so skip all post-training finalization (and the model return) by
   // exiting right after the training block. Disabled by setting
-  // YDF_NO_EARLY_EXIT=1 — required whenever the caller needs the returned model,
+  // NO_EARLY_EXIT=1 — required whenever the caller needs the returned model,
   // e.g. held-out test-set evaluation (--test_csv) or model saving
   // (--model_out_dir) in examples/train_oblique_forest.cc.
-  if (std::getenv("YDF_NO_EARLY_EXIT") == nullptr) {
+  if (std::getenv("NO_EARLY_EXIT") == nullptr) {
     LOG(WARNING) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
     exit(0);
   }
