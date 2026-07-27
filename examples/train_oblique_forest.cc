@@ -50,7 +50,7 @@
 ABSL_FLAG(std::string, input_mode, "",
           "Data input mode: csv, Trunk Synthetic, or tfrecord.");
 // CSV mode flags
-ABSL_FLAG(std::string, train_csv, "./benchmarks/data/processed_wise1_data.csv",
+ABSL_FLAG(std::string, train_csv, "./benchmarks/data/HIGGS_with_header.csv",
           "Path to training CSV file (for csv mode). Must include --label_col.");
 ABSL_FLAG(std::string, test_csv, "",
           "Optional held-out test CSV (csv mode only). If set, the trained model "
@@ -61,7 +61,7 @@ ABSL_FLAG(std::string, test_csv, "",
 ABSL_FLAG(std::string, ds_path, "",
           "Path (without extension) to TF-Record file (for tfrecord mode).");
 // Common flags
-ABSL_FLAG(std::string, label_col, "Cancer Status",
+ABSL_FLAG(std::string, label_col, "class",
           "Name of label column (used in all modes).");
 ABSL_FLAG(std::string, model_out_dir, "",
           "Path to output trained model directory (optional)."
