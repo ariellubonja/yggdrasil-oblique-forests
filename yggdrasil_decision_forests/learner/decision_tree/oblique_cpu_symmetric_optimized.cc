@@ -44,8 +44,6 @@ absl::Status ApplyProjectionsSymmetricOptimized(
 
   // ── Phase 1: BuildBag 
   // Per-node row counts + slab storage. Not 0-init bcs. whole vector is overwritten
-  const bool single_node = (N == 1);
-
   std::vector<size_t> rows_n(N);
   std::vector<float*> out_ptr(N, nullptr);
   size_t bag_size = 0;
@@ -64,42 +62,25 @@ absl::Status ApplyProjectionsSymmetricOptimized(
   }
 
   // ── Phase 2: obtain the sorted bag 
-  // Delegated to the shared depth-bag module: incremental O(bag) relabel of
-  // the previous depth's sorted bag in the steady state, concat + VQSort
-  // fallback otherwise (see oblique_cpu_depthwise_bag.{h,cc}). Billed to
-  // kSymBuildBag / kSymSortBag exactly as before via the kSymmetric tag. On
-  // return bag_state->{bag,node_of_bag} describe this depth and .valid is set.
   AdvanceDepthBag(selected_examples_per_node, prev_first_child, bag_size,
                   DepthBagChrono::kSymmetric, bag_state);
   const UnsignedExampleIdx* bag_data = bag_state->bag.data();
 
-  // ── Phase 3: Sweep ────────────────────────────────────────────────
-  // K bag-wide sweeps. For each projection k:
-  //  - Hoist per-item col pointers + weights + NA values out of the i-loop.
-  //  - Walk the (sorted) bag in stride-1 order. Per example: compute value,
-  //    route to its owning node's slab (written through the reserved-only
-  //    raw pointer out_ptr[n], never operator[] — the slab .size() is 0).
-  // The N == 1 case writes sequentially (bag order == node 0's slab order)
-  // with no node_of_bag / write_cursor indirection; the N > 1 case routes
-  // each result via the per-node write cursor. The single_node test is
-  // hoisted out of the hot i-loop.
+  // ── Phase 3: Sweep 
   {
     CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kSymSweep);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
 
-    // AdvanceDepthBag always sizes node_of_bag to the bag (all zeros for a
-    // single-node depth); the single-node sweep below skips node routing
-    // purely as a performance fast path.
+    // AdvanceDepthBag always sizes node_of_bag to the bag, so the routed sweep
+    // below handles any N (a 1-node depth routes everything to node 0).
     const uint32_t* node_of_bag = bag_state->node_of_bag.data();
 
-    std::vector<uint32_t> write_cursor;
-    if (!single_node) write_cursor.assign(N, 0u);
+    std::vector<uint32_t> write_cursor(N, 0u);
 
     for (size_t k = 0; k < K; ++k) {
       const auto& proj = shared_projections[k];
       const size_t M = proj.size();
-      // SampleProjection guarantees nnz >= 1; an empty projection here would
-      // leave this k's slab region uninitialized, but the finder skips empty
+      // SampleProjection guarantees nnz >= 1; but the finder skips empty
       // projections (oblique.cc), so it is never read. Defensive.
       if (M == 0) continue;
 
@@ -110,34 +91,19 @@ absl::Status ApplyProjectionsSymmetricOptimized(
         ws[m] = proj[m].weight;
       }
 
-      if (single_node) {
-        float* out = out_ptr[0] + k * rows_n[0];
-        for (size_t i = 0; i < bag_size; ++i) {
-          const UnsignedExampleIdx ex = bag_data[i];
-          float value = 0.f;
-          for (size_t m = 0; m < M; ++m) {
-            float v = col_ptrs[m] != nullptr
-                          ? col_ptrs[m][ex]
-                          : evaluator.AttributeValue(proj[m].attribute_idx, ex);
-            value += ws[m] * v;
-          }
-          out[i] = value;
+      std::fill(write_cursor.begin(), write_cursor.end(), 0u);
+      for (size_t i = 0; i < bag_size; ++i) {
+        const UnsignedExampleIdx ex = bag_data[i];
+        float value = 0.f;
+        for (size_t m = 0; m < M; ++m) {
+          float v = col_ptrs[m] != nullptr
+                        ? col_ptrs[m][ex]
+                        : evaluator.AttributeValue(proj[m].attribute_idx, ex);
+          value += ws[m] * v;
         }
-      } else {
-        std::fill(write_cursor.begin(), write_cursor.end(), 0u);
-        for (size_t i = 0; i < bag_size; ++i) {
-          const UnsignedExampleIdx ex = bag_data[i];
-          float value = 0.f;
-          for (size_t m = 0; m < M; ++m) {
-            float v = col_ptrs[m] != nullptr
-                          ? col_ptrs[m][ex]
-                          : evaluator.AttributeValue(proj[m].attribute_idx, ex);
-            value += ws[m] * v;
-          }
-          const uint32_t n = node_of_bag[i];
-          const uint32_t pos = write_cursor[n]++;
-          out_ptr[n][k * rows_n[n] + pos] = value;
-        }
+        const uint32_t n = node_of_bag[i];
+        const uint32_t pos = write_cursor[n]++;
+        out_ptr[n][k * rows_n[n] + pos] = value;
       }
     }
   }
@@ -145,6 +111,6 @@ absl::Status ApplyProjectionsSymmetricOptimized(
   return absl::OkStatus();
 }
 
-}  // namespace yggdrasil_decision_forests::model::decision_tree
+}
 
-#endif  // SYMMETRIC_OPTIMIZED
+#endif

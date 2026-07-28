@@ -129,9 +129,9 @@ bool RelabelBagForNewDepthHot(
 }
 #endif
 
-// Full rebuild when the relabel is unavailable or fails: N == 1 copies the
-// sorted span, N > 1 concats then VQSorts (example, node) as hwy::K32V32 —
-// unstable but tie-invariant. Labels = positions, so hot spans give hot labels.
+// Full rebuild when the relabel is unavailable or fails: concat the spans, then
+// VQSort (example, node) as hwy::K32V32 — unstable but tie-invariant. Labels =
+// positions, so hot spans give hot labels.
 void RebuildBagFromSpans(
     absl::Span<const absl::Span<const UnsignedExampleIdx>>
         selected_examples_per_node,
@@ -147,16 +147,6 @@ void RebuildBagFromSpans(
                     : ::yggdrasil_decision_forests::chrono_prof::kDw1SharedBag;
 #endif
   const size_t N = selected_examples_per_node.size();
-  if (N == 1) {
-    // Copy the span into the state: the rolling buffer is repartitioned in
-    // place by this depth's SplitExamplesInPlace, so the span's contents
-    // will not survive to seed the next depth's relabel.
-    CHRONO_SCOPE_AP(build_id);
-    state->bag.assign(selected_examples_per_node[0].begin(),
-                      selected_examples_per_node[0].end());
-    state->node_of_bag.assign(state->bag.size(), 0u);
-    return;
-  }
   auto& bag = state->bag;
   auto& node_of_bag = state->node_of_bag;
   {
