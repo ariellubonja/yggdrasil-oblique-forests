@@ -88,6 +88,7 @@ absl::Status ApplyProjectionsSymmetricOptimized(
     std::vector<uint32_t> write_cursor(N, 0u);
 
     for (size_t k = 0; k < K; ++k) {
+      CHRONO_BEGIN_AP(sym_col_setup);
       const auto& proj = shared_projections[k];
       const size_t M = proj.size();
       // SampleProjection guarantees nnz >= 1; but the finder skips empty
@@ -102,6 +103,10 @@ absl::Status ApplyProjectionsSymmetricOptimized(
       }
 
       std::fill(write_cursor.begin(), write_cursor.end(), 0u);
+      CHRONO_END_AP(sym_col_setup,
+                    ::yggdrasil_decision_forests::chrono_prof::kSymSweepColSetup);
+
+      CHRONO_BEGIN_AP(sym_main_loop);
       for (size_t i = 0; i < bag_size; ++i) {
         const UnsignedExampleIdx ex = bag_data[i];
         float value = 0.f;
@@ -112,6 +117,8 @@ absl::Status ApplyProjectionsSymmetricOptimized(
         const uint32_t pos = write_cursor[n]++;
         out_ptr[n][k * rows_n[n] + pos] = value;
       }
+      CHRONO_END_AP(sym_main_loop,
+                    ::yggdrasil_decision_forests::chrono_prof::kSymSweepMainLoop);
     }
   }
 

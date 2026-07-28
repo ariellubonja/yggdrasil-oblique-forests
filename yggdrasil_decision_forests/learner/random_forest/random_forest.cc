@@ -1071,6 +1071,11 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " SymBuildBag " << arr[kSymBuildBag] * 1e-9 << "s"
                   << " SymSortBag " << arr[kSymSortBag] * 1e-9 << "s"
                   << " SymSweep " << arr[kSymSweep] * 1e-9 << "s"
+                  // Sub-phases of SymSweep (per projection k).
+                  << " SymSweepColSetup "
+                  << arr[kSymSweepColSetup] * 1e-9 << "s"
+                  << " SymSweepMainLoop "
+                  << arr[kSymSweepMainLoop] * 1e-9 << "s"
 #endif
 #ifdef DEPTHWISE_1_PASS
                   // Sub-phases of ApplyProjectionsDepthwise1Pass. Sum to
@@ -1185,6 +1190,11 @@ RandomForestLearner::TrainWithStatusImpl(
                   << " SymBuildBag " << arr[kSymBuildBag] * 1e-9 << "s"
                   << " SymSortBag " << arr[kSymSortBag] * 1e-9 << "s"
                   << " SymSweep " << arr[kSymSweep] * 1e-9 << "s"
+                  // Sub-phases of SymSweep (per projection k).
+                  << " SymSweepColSetup "
+                  << arr[kSymSweepColSetup] * 1e-9 << "s"
+                  << " SymSweepMainLoop "
+                  << arr[kSymSweepMainLoop] * 1e-9 << "s"
 #endif
 #ifdef DEPTHWISE_1_PASS
                   // Sub-phases of ApplyProjectionsDepthwise1Pass. Sum to

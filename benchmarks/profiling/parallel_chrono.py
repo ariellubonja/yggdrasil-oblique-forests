@@ -131,6 +131,7 @@ _TIMING_COLS = (
     "ApplyColumnADD", "ApplyColumnADDMultiNode", "RandomHistogram",
     "SplitHistogram", "SortIndices", "ExactSplit", "GpuOther",
     "SymBuildBag", "SymSortBag", "SymSweep",
+    "SymSweepColSetup", "SymSweepMainLoop",
     "Dw1PreSize", "Dw1Sweep",
     "Dw1SweepSetup",
     "Dw1SweepColWalk", "Dw1ColWalkGroupByNode", "Dw1ColWalkBagScatter",
@@ -287,6 +288,13 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
                 "--SymSortBag" if symmetric_optimized else "-----SymSortBag"),
             "SymSweep": (
                 "--SymSweep" if symmetric_optimized else "-----SymSweep"),
+            # One level under SymSweep: per-k column setup + the bag pass.
+            "SymSweepColSetup": (
+                "---SymSweepColSetup" if symmetric_optimized
+                else "------SymSweepColSetup"),
+            "SymSweepMainLoop": (
+                "---SymSweepMainLoop" if symmetric_optimized
+                else "------SymSweepMainLoop"),
             "Dw1PreSize":                   "-----Dw1PreSize",
             "Dw1Sweep":                     "-----Dw1Sweep",
             # depth 5 — EvaluateProj's two split-finder paths.
@@ -352,6 +360,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "--SymBuildBag",
             "--SymSortBag",
             "--SymSweep",
+            "---SymSweepColSetup",
+            "---SymSweepMainLoop",
             # depth 1 — under TreeTrain.
             "-DepthTrain",           # BFS builds: the depth's full wall-time
             "-BfsNodeLoop",          # BFS-only scheduler scope
@@ -383,6 +393,8 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "-----SymBuildBag",
             "-----SymSortBag",
             "-----SymSweep",
+            "------SymSweepColSetup",
+            "------SymSweepMainLoop",
             "-----Dw1PreSize",
             "-----Dw1Sweep",
             "------Dw1SharedBag",

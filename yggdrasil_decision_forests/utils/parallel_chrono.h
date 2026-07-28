@@ -82,6 +82,11 @@ enum FuncId {
                   // bag (fallback: K32V32 VQSort rebuild)
   kSymSweep,      // K bag-wide stride-1 projection sweeps (the hot loop)
 
+  // Sub-phases of kSymSweep, one pair per projection k. Sum back to kSymSweep
+  // modulo the per-k loop glue.
+  kSymSweepColSetup,   // col_ptrs/ws fill + write_cursor reset
+  kSymSweepMainLoop,   // the bag pass: gather/FMA + routed slab write
+
   // Sub-phases of ApplyProjectionsDepthwise1Pass. Only emitted under
   // -DDEPTHWISE_1_PASS; zero otherwise.
   kDw1PreSize,    // proj_prefix sum + per-node out_projected[n].assign(...)
