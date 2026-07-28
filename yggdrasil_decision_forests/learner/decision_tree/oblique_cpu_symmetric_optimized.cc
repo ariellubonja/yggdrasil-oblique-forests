@@ -70,6 +70,16 @@ absl::Status ApplyProjectionsSymmetricOptimized(
   {
     CHRONO_SCOPE_AP(::yggdrasil_decision_forests::chrono_prof::kSymSweep);
     internal::ProjectionEvaluator evaluator(train_dataset, numerical_features);
+    // The sweep below walks raw column pointers, which exist only for the
+    // default column-major VerticalDataset layout. Alternate layouts
+    // (row-major mirror) are not supported yet.
+    if (!evaluator.IsColumnMajor()) {
+      return absl::UnimplementedError(
+          "The symmetric-optimized oblique kernel requires the column-major "
+          "VerticalDataset layout. Alternate dataset layouts (e.g. "
+          "--config=row_major_dataset_layout with --dataset_layout=row) are "
+          "not supported with --config=symmetric_optimized yet.");
+    }
 
     // AdvanceDepthBag always sizes node_of_bag to the bag, so the routed sweep
     // below handles any N (a 1-node depth routes everything to node 0).
@@ -96,10 +106,7 @@ absl::Status ApplyProjectionsSymmetricOptimized(
         const UnsignedExampleIdx ex = bag_data[i];
         float value = 0.f;
         for (size_t m = 0; m < M; ++m) {
-          float v = col_ptrs[m] != nullptr
-                        ? col_ptrs[m][ex]
-                        : evaluator.AttributeValue(proj[m].attribute_idx, ex);
-          value += ws[m] * v;
+          value += ws[m] * col_ptrs[m][ex];
         }
         const uint32_t n = node_of_bag[i];
         const uint32_t pos = write_cursor[n]++;
