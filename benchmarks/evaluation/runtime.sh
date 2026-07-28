@@ -12,7 +12,7 @@ set -euo pipefail
 #
 # Usage:  $0 [--runs=N] <suffix>     (default --runs=3)
 #   <suffix> becomes part of the result filename, e.g. 'AWS_m7i' ->
-#   runtime_3runs_aws_m7i.csv.
+#   aws_m7i.csv (the run count lives in the provenance header).
 
 NUM_RUNS=3
 SUFFIX=""
@@ -42,7 +42,7 @@ while [[ $# -gt 0 ]]; do
 done
 if [[ -z "$SUFFIX" ]]; then
   echo "Usage: $0 [--runs=N] <suffix>" >&2
-  echo "  e.g. '$0 AWS_m7i' -> runtime_3runs_aws_m7i.csv" >&2
+  echo "  e.g. '$0 AWS_m7i' -> aws_m7i.csv" >&2
   exit 2
 fi
 
@@ -210,8 +210,8 @@ bazel_build() {
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
-logfile="${logdir}/${NUM_RUNS}runs_${SUFFIX}.log"
-csvfile="${logdir}/${NUM_RUNS}runs_${SUFFIX}.csv"
+logfile="${logdir}/${SUFFIX}.log"
+csvfile="${logdir}/${SUFFIX}.csv"
 # Set to 1 by run_cmd when any dataset OOM'd or errored; finalize_log then keeps
 # the log (instead of deleting it on success) so the failure can be inspected.
 DEGRADED=0

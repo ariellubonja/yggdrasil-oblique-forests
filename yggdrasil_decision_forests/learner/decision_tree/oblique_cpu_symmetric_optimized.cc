@@ -90,16 +90,13 @@ absl::Status ApplyProjectionsSymmetricOptimized(
     for (size_t k = 0; k < K; ++k) {
       CHRONO_BEGIN_AP(sym_col_setup);
       const auto& proj = shared_projections[k];
-      const size_t M = proj.size();
-      // SampleProjection guarantees nnz >= 1; but the finder skips empty
-      // projections (oblique.cc), so it is never read. Defensive.
-      if (M == 0) continue;
 
-      std::vector<const float*> col_ptrs(M);
-      std::vector<float> ws(M);
-      for (size_t m = 0; m < M; ++m) {
-        col_ptrs[m] = evaluator.AttributeData(proj[m].attribute_idx);
-        ws[m] = proj[m].weight;
+      // Fill up (ColID, Weight) pairs
+      std::vector<const float*> col_ptrs(proj.size());
+      std::vector<float> weights(proj.size());
+      for (size_t col = 0; col < proj.size(); ++col) {
+        col_ptrs[col] = evaluator.AttributeData(proj[col].attribute_idx);
+        weights[col] = proj[col].weight;
       }
 
       std::fill(write_cursor.begin(), write_cursor.end(), 0u);
@@ -110,12 +107,12 @@ absl::Status ApplyProjectionsSymmetricOptimized(
       for (size_t i = 0; i < bag_size; ++i) {
         const UnsignedExampleIdx ex = bag_data[i];
         float value = 0.f;
-        for (size_t m = 0; m < M; ++m) {
-          value += ws[m] * col_ptrs[m][ex];
+        for (size_t m = 0; m < proj.size(); ++m) {
+          value += weights[m] * col_ptrs[m][ex];
         }
-        const uint32_t n = node_of_bag[i];
-        const uint32_t pos = write_cursor[n]++;
-        out_ptr[n][k * rows_n[n] + pos] = value;
+        const uint32_t node = node_of_bag[i];
+        const uint32_t pos = write_cursor[node]++;
+        out_ptr[node][k * rows_n[node] + pos] = value;
       }
       CHRONO_END_AP(sym_main_loop,
                     ::yggdrasil_decision_forests::chrono_prof::kSymSweepMainLoop);
@@ -124,7 +121,5 @@ absl::Status ApplyProjectionsSymmetricOptimized(
 
   return absl::OkStatus();
 }
-
 }
-
 #endif
