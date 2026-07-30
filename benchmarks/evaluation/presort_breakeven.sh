@@ -22,6 +22,13 @@ set -euo pipefail
 # Usage:  $0 [--smoke|--full] <suffix>
 #   --smoke           : 3 N x 1 D x 2 strategies x 1 run -- confirms direction.
 #   --full (default)  : 2D power-of-2 grid x NUM_RUNS reps, median reported.
+#
+# The script owns only the sweep axis (--aa_sorting_strategy), the AA+Exact
+# splitter it requires, --num_trees and the (N, D) grid. Everything else comes
+# from the environment:
+#   EXTRA_BAZEL_CONFIGS  build configs, e.g. "--config=symmetric_optimized"
+#   EXTRA_TRAIN_ARGS     binary flags, appended to every command
+# Both are recorded in the CSV provenance header.
 
 MODE="full"
 SUFFIX=""
@@ -46,8 +53,6 @@ done
 ###### Parameters
 
 STRATEGIES=("in_node" "force_presorted")
-NUM_THREADS=-1
-COMPUTE_OOB_PERFORMANCES=false
 
 # Memory cap: dataset (float N*D*4B) must fit in MEM_FRAC of MemTotal so the
 # equal-sized PRESORT index buffer can fit in the rest. User instruction:
@@ -106,21 +111,23 @@ bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
 BINARY="./bazel-bin/examples/train_oblique_forest"
 
 # After --disable, nproc reflects P-cores only.
-NUM_TREES=$(( $(bench_nproc) * 5 ))
-BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_performances=$COMPUTE_OOB_PERFORMANCES"
+# 5x cores to prevent skewness, or a fixed count under Boosting.
+NUM_TREES="$(bench_num_trees)"
+BASE_ARGS="--num_trees=$NUM_TREES"
 
 # Provenance + header, both before the first appended row.
 bench_provenance_to_csv "$csvfile" \
   "rows,cols,strategy,num_trees,median_s,stddev_s,n_samples,all_samples_s" \
-  "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  MODE: $MODE" \
+  "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  MODE: $MODE" \
   "STRATEGIES: ${STRATEGIES[*]}" \
   "MEM_FRAC: $MEM_FRAC  grid_cells: ${#GRID[@]}"
 
 run_one() {
   local rows=$1 cols=$2 strategy=$3
+  # AA + Exact is intrinsic to this sweep (see header), so it stays hardcoded.
   local cmd="$BINARY --input_mode trunk --rows $rows --cols $cols \
     --feature_split_type \"Axis Aligned\" --numerical_split_type \"Exact\" \
-    --aa_sorting_strategy=$strategy $BASE_ARGS"
+    --aa_sorting_strategy=$strategy $BASE_ARGS $EXTRA_TRAIN_ARGS"
   bench_log "=== rows=$rows cols=$cols strategy=$strategy ==="
   bench_log "$cmd"
 

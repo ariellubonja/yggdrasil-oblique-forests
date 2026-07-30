@@ -130,8 +130,6 @@ case "$MODE" in
     ;;
 esac
 
-NUM_THREADS=-1                     # train_oblique_forest.cc default is 1, so passed
-
 # Datasets: the uncommented entries in runtime.sh, each tagged with its
 # approximate deepest tree level (the depth-sweep upper bound; ignored by
 # --mode=layout).
@@ -157,10 +155,6 @@ fi
 # =========================
 BUILD_TARGET="//examples:train_oblique_forest"
 BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --repo_env=CXX=icpx)
-# SIMD histogram binning is default-ON with runtime dispatch (AVX2 at 64 bins),
-# so vectorized split-finding needs no build config. Empty by design; kept as a
-# seam for an explicit scalar A/B (--config=disable_std_upper_bound_vectorization).
-VEC_CONFIG=""
 
 # Shared plumbing: ensure_icx, bazel_build (+EXTRA_BAZEL_CONFIGS), e-core
 # toggling, EXTRA_TRAIN_ARGS, provenance, confirm_overwrite, timing helpers.
@@ -188,7 +182,7 @@ write_provenance() {
     "dataset,${SWEEP_COL},median_s,stddev_s,n_ok,samples" \
     "mode: $MODE  sweep_var: ${SWEEP_ENV:-$SWEEP_COL}" \
     "build_config: $build_desc" \
-    "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  DEPTH_STEP: ${DEPTH_STEP:-n/a}"
+    "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  DEPTH_STEP: ${DEPTH_STEP:-n/a}"
 }
 
 # Run one sweep point: NUM_RUNS reps, median + sample stddev, append a CSV row.
@@ -232,14 +226,14 @@ build_cmd_base() {
 # DEPTH-SWEEP DRIVER (dw1, symmetric): build once, sweep the env knob.
 # =========================
 if [[ "$MODE" == "dw1" || "$MODE" == "symmetric" ]]; then
-  # shellcheck disable=SC2086  # $VEC_CONFIG intentionally word-split (empty by default)
-  bazel_build "${BAZEL_FLAGS[@]}" "$MODE_CONFIG" $VEC_CONFIG "$BUILD_TARGET"
+  bazel_build "${BAZEL_FLAGS[@]}" "$MODE_CONFIG" "$BUILD_TARGET"
   BINARY="./bazel-bin/examples/train_oblique_forest"
 
-  # E-cores now disabled; compute NUM_TREES from runtime nproc (P-cores only).
-  NUM_TREES=$(( $(bench_nproc) * 5 ))   # 5x cores to reduce scheduling skew
-  BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS"
-  write_provenance "$MODE_CONFIG $VEC_CONFIG"
+  # E-cores now disabled, so nproc reflects the P-core count.
+  # 5x cores to prevent skewness, or a fixed count under Boosting.
+  NUM_TREES="$(bench_num_trees)"
+  BASE_ARGS="--num_trees=$NUM_TREES"
+  write_provenance "$MODE_CONFIG"
 
   for entry in "${DATASETS[@]}"; do
     IFS='|' read -r kind a b maxdepth <<<"$entry"
@@ -309,15 +303,15 @@ done
 # in the loop disables them; do an explicit disable here so NUM_TREES (computed
 # before any build for the provenance header) reflects P-core topology.
 bench_ecores --disable
-NUM_TREES=$(( $(bench_nproc) * 5 ))
-BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS"
-write_provenance "layout sweep [${LAYOUTS[*]}] configs: ${ALL_CFGS:-<plain>} $VEC_CONFIG"
+NUM_TREES="$(bench_num_trees)"
+BASE_ARGS="--num_trees=$NUM_TREES"
+write_provenance "layout sweep [${LAYOUTS[*]}] configs: ${ALL_CFGS:-<plain>}"
 
 BINARY="./bazel-bin/examples/train_oblique_forest"
 for key in "${ORDERED_KEYS[@]}"; do
   cfg="${KEY_CFG[$key]}"
-  # shellcheck disable=SC2086
-  bazel_build "${BAZEL_FLAGS[@]}" $cfg $VEC_CONFIG "$BUILD_TARGET"
+  # shellcheck disable=SC2086  # $cfg intentionally word-split (empty for column)
+  bazel_build "${BAZEL_FLAGS[@]}" $cfg "$BUILD_TARGET"
 
   for layout in ${KEY_LAYOUTS[$key]}; do
     banner "LAYOUT $layout (config: ${cfg:-<plain>})"
