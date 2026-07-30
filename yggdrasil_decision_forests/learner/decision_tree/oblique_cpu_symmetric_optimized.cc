@@ -88,6 +88,7 @@ absl::Status ApplyProjectionsSymmetricOptimized(
     std::vector<uint32_t> write_cursor(N, 0u);
 
     for (size_t k = 0; k < K; ++k) {
+      // Sym_col_setup takes 0% time
       CHRONO_BEGIN_AP(sym_col_setup);
       const auto& proj = shared_projections[k];
 
