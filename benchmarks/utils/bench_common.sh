@@ -280,3 +280,15 @@ bench_repeat_cmd() {
 is_dynamic_method() {
   [[ "$1" == Dynamic* ]]
 }
+
+# Trees to train, echoed on stdout. Boosting (GBT/MART) builds trees
+# sequentially, so the "5x cores to prevent skewness" heuristic doesn't apply;
+# use a fixed count instead. Matches every spelling absl accepts:
+# "--ensemble_method Boosting", "=Boosting", and a quoted value.
+bench_num_trees() {
+  if [[ "$EXTRA_TRAIN_ARGS" =~ --ensemble_method[[:space:]=]+\"?Boosting ]]; then
+    echo 300
+  else
+    echo $(( $(bench_nproc) * 5 ))
+  fi
+}

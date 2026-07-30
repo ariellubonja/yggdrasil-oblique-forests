@@ -127,13 +127,8 @@ bazel_build "${BAZEL_FLAGS[@]}" "$BUILD_TARGET"
 BINARY="./bazel-bin/examples/train_oblique_forest"
 
 # E-cores are now disabled, so nproc reflects the P-core count.
-# Boosting (GBT/MART) builds trees sequentially, so the "5x cores to prevent
-# skewness" heuristic doesn't apply; use a fixed 300 trees instead.
-if [[ "$EXTRA_TRAIN_ARGS" == *"ensemble_method=Boosting"* ]]; then
-  NUM_TREES=300
-else
-  NUM_TREES=$(( $(bench_nproc) * 5 )) # 5x cores to prevent skewness
-fi
+# 5x cores to prevent skewness, or a fixed count under Boosting.
+NUM_TREES="$(bench_num_trees)"
 BASE_ARGS="--num_trees=$NUM_TREES"
 
 # Provenance: written to the log AND a temp file; the temp file is prepended to
