@@ -49,22 +49,26 @@ fi
 
 ###### Parameters
 
-NUM_RUNS=3
+NUM_RUNS=1
 
 DYNAMIC_SPLIT_THRESHOLDS=(
-  # 100
-  350
+  100
+  # 350
   600
-  850
+  # 850
   1100
-  1350
+  # 1350
   1600
-  1850
+  # 1850
   2100
-  2350
+  # 2350
   2600
-  2850
+  # 2850
   3100
+  3600
+  4100
+  4600
+  5100
 )
 
 # Optional CSV datasets as "path|label_col" entries.
@@ -76,9 +80,9 @@ CSV_DATASETS=(
 
 # Synthetic trunk datasets as "rows|cols" pairs.
 TRUNK_DATASETS=(
-  "50000000|4"
-  "3000000|4096"
-  "3000|4000000"
+  # "50000000|4"
+  "1500000|4096"
+  # "3000|4000000"
 )
 
 # =========================
