@@ -151,13 +151,11 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
   const int num_classes = label_distribution.NumClasses();
   const double total_sum = label_distribution.NumObservations();
   const double inv_total = (total_sum > 0) ? 1.0 / total_sum : 0.0;
-#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
   const bool use_unweighted_binary_entropy = weights.empty() && num_label_classes == 3;
   std::vector<double> count_log_count;
   if (use_unweighted_binary_entropy) {   // kEntropyTableSetup
     count_log_count = internal::BuildCountLogCountTable(static_cast<int64_t>(total_sum));
   }
-#endif
 
   bool found_split = false;
   {  // kSelectBestThresholdHistogram — O(num_bins)
@@ -171,8 +169,8 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       const double neg_sum = total_sum - pos_sum;
       double final_entropy;
       if (use_unweighted_binary_entropy) {
-        // integer-count entropy via the count*log(count) lookup table (default ON;
-        // ~9% e2e win — see .bazelrc disable_binary_entropy_lookup to A/B)
+        // integer-count entropy via the count*log(count) lookup table (always on;
+        // ~9% e2e win, ~39% local on SortScanSplits)
         final_entropy = (…BinaryEntropyNumeratorFromIntegerCounts(pos…)
                        + …BinaryEntropyNumeratorFromIntegerCounts(neg…)) * inv_total;
       } else {

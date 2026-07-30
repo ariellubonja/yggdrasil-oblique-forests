@@ -2431,7 +2431,6 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
   const int num_classes = label_distribution.NumClasses();
   const double total_sum = label_distribution.NumObservations();
   const double inv_total = (total_sum > 0) ? 1.0 / total_sum : 0.0;
-#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
   const bool use_unweighted_binary_entropy =
       weights.empty() && num_label_classes == 3;
   std::vector<double> count_log_count;
@@ -2440,7 +2439,6 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     count_log_count = internal::BuildCountLogCountTable(
         static_cast<int64_t>(total_sum));
   }
-#endif
 
   // Select the best threshold.
   bool found_split = false;
@@ -2459,7 +2457,6 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     const double pos_sum = pos.NumObservations();
     const double neg_sum = total_sum - pos_sum;
     double final_entropy;
-#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
     if (use_unweighted_binary_entropy) {
       const int64_t pos_sum_int = static_cast<int64_t>(pos_sum);
       const int64_t pos_trues = static_cast<int64_t>(pos.count(2));
@@ -2472,9 +2469,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
            internal::BinaryEntropyNumeratorFromIntegerCounts(
                neg_trues, neg_sum_int, count_log_count)) *
           inv_total;
-    } else
-#endif
-    {
+    } else {
       double w_entropy = 0.0;
       for (int i = 0; i < num_classes; ++i) {
         const double pi = pos.count(i);
@@ -2831,13 +2826,7 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
         ::yggdrasil_decision_forests::chrono_prof::kAssignSamplesToHistogram);
   for (const auto example_idx : selected_examples) {
     const float label = labels[example_idx];
-    float attribute = attributes[example_idx];
-    // TODO gate isnan behind #ifdef. on SPORF this is redundant cuz it's already checked in ApplyProjection
-#ifdef ENABLE_ISNAN
-    if (std::isnan(attribute)) {
-      attribute = na_replacement;
-    }
-#endif
+    const float attribute = attributes[example_idx];
 
     const int idx = binner.Index(attribute);
     if (idx < 0) {

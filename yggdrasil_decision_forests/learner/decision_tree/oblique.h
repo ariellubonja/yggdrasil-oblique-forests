@@ -40,16 +40,10 @@
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DECISION_TREE_OBLIQUE_H_
 
-// Default: `ProjectionEvaluator::Evaluate` is NOT inlined, so Intel Advisor
-// (Roofline / Survey) attributes time and FLOPs to the function itself
-// instead of its callers. Measured cost is within noise (~1%) on Oblique
-// Exact. Opt back into inlining with:
-//   bazel build --config=inline_projection_evaluate ...
-#ifdef INLINE_PROJECTION_EVALUATE
-#define PROJECTION_EVALUATE_NOINLINE
-#else
+// `ProjectionEvaluator::Evaluate` is NOT inlined, so Intel Advisor (Roofline /
+// Survey) attributes time and FLOPs to the function itself instead of its
+// callers. Measured cost is within noise (~1%) on Oblique Exact.
 #define PROJECTION_EVALUATE_NOINLINE __attribute__((noinline))
-#endif
 
 #include <cstddef>
 #include <cstdint>

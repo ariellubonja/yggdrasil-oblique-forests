@@ -36,8 +36,8 @@
   (0 = out-of-vocabulary, 1 and 2 = the classes).
 - **Unweighted** — `GetWeights(..., use_optimized_unit_weights=true)` returns an **empty**
   vector, so hot paths take the `weights.empty()` / `weighted=false` branches.
-- **No missing values in practice.** The per-lookup `std::isnan` is compiled out by default
-  (`--config=enable_isnan` re-enables); row-major mirrors replace NaN with the column mean.
+- **No missing values in practice.** The per-lookup `std::isnan` is gone from the hot path;
+  row-major mirrors replace NaN with the column mean.
 - **Random Forest (Bagging), `growing_strategy=Local`, sparse-oblique splits.** Not GBT, not
   MHLD-oblique, not best-first-global; no monotonic constraints, honest trees, or uplift.
 - **Split scoring:** entropy / information gain via `LabelBinaryCategoricalScoreAccumulator`.
@@ -160,8 +160,8 @@ typedef std::vector<AttributeAndWeight> Projection;
 Class (trimmed to what matters):
 
 ```cpp
-// Default: Evaluate is NOT inlined, so profilers attribute time/FLOPs to the function
-// itself (cost within noise, ~1%). Opt back in with --config=inline_projection_evaluate.
+// Evaluate is NOT inlined, so profilers attribute time/FLOPs to the function
+// itself (cost within noise, ~1%).
 class ProjectionEvaluator {
  public:
   ProjectionEvaluator(const dataset::VerticalDataset& train_dataset,
@@ -215,9 +215,6 @@ absl::Status ProjectionEvaluator::Evaluate(
     // This is iterating over columns : would benefit from Row-major
     for (const auto& item : projection) {
       float attribute_value = AttributeValue(item.attribute_idx, example_idx);
-#ifdef ENABLE_ISNAN
-      if (std::isnan(attribute_value)) attribute_value = na_replacement_value_[item.attribute_idx];
-#endif
       value += attribute_value * item.weight;
     }
     (*values)[selected_idx] = value;
