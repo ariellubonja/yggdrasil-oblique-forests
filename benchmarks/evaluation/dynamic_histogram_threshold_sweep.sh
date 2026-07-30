@@ -10,6 +10,9 @@ set -euo pipefail
 #   --random-avx2   AVX2 Random Histogram, 64 bins
 #   --random-avx512 AVX512 Random Histogram, 256 bins
 #   --all           run all three Random implementations
+#
+# Honors EXTRA_BAZEL_CONFIGS / EXTRA_TRAIN_ARGS like runtime.sh, and writes the
+# same PROVENANCE header (to the log and the top of the CSV).
 
 RANDOM_IMPLS=()
 SUFFIX=""
@@ -84,96 +87,25 @@ BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --
 # path is chosen at RUNTIME from the bin count, so the avx2/avx512 impls below
 # use the same default build and differ only by histogram_num_bins.
 
+# Shared plumbing: ensure_icx, bazel_build (+EXTRA_BAZEL_CONFIGS), e-core
+# toggling, EXTRA_TRAIN_ARGS, provenance, banner/csv_escape, timing helpers.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
-trap 'sudo "$SET_CPU_E_FEATURES" --enable' EXIT
-
-ensure_icx() {
-  # .bazelrc only pins CC=icx under build:linux; macOS has no such pin
-  # (Intel never shipped icx/icpx for macOS/Apple Silicon) and just uses
-  # the default toolchain, so there's nothing to ensure there.
-  if [[ "$(uname -s)" != "Linux" ]]; then
-    return 0
-  fi
-  if ! command -v icx >/dev/null 2>&1; then
-    local setvars="${ONEAPI_SETVARS:-/opt/intel/oneapi/setvars.sh}"
-    if [[ -r "$setvars" ]]; then
-      set +u +e
-      # shellcheck disable=SC1090
-      source "$setvars" >/dev/null 2>&1
-      set -u -e
-    fi
-  fi
-  if ! command -v icx >/dev/null 2>&1 || ! command -v icpx >/dev/null 2>&1; then
-    echo "ERROR: icx/icpx not on PATH and could not source oneAPI." >&2
-    echo "       Run 'source /opt/intel/oneapi/setvars.sh' or set ONEAPI_SETVARS." >&2
-    exit 1
-  fi
-  echo "Compiler: $(command -v icx)"
-}
-
-bazel_build() {
-  ensure_icx
-  sudo "$SET_CPU_E_FEATURES" --enable
-  bazel build "$@"
-  sudo "$SET_CPU_E_FEATURES" --disable
-}
+source "$SCRIPT_DIR/../utils/bench_common.sh"
+bench_restore_ecores_on_exit
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
 logfile="${logdir}/dynamic_threshold_sweep_${SUFFIX}.log"
 csvfile="${logdir}/dynamic_threshold_sweep_${SUFFIX}.csv"
+BENCH_LOGFILE="$logfile"
 
-if [[ -e "$logfile" ]]; then
-  echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2
-  exit 1
-fi
-if [[ -e "$csvfile" ]]; then
-  echo "ERROR: $csvfile already exists. Use a different suffix or remove it." >&2
-  exit 1
-fi
-
-banner() {
-  echo -e "\n\n======== $* ========\n" | tee -a "$logfile"
-}
+bench_require_absent "$logfile" "$csvfile"
 
 dataset_name_for_csv() {
   local path="$1"
   local base
   base="$(basename "$path")"
   echo "${base%.csv}"
-}
-
-median_and_stddev() {
-  local -n samples_ref=$1
-  local -n median_ref=$2
-  local -n stddev_ref=$3
-  local n=${#samples_ref[@]}
-  median_ref="N/A"
-  stddev_ref="N/A"
-  if (( n == 0 )); then
-    return
-  fi
-  local sorted
-  mapfile -t sorted < <(printf '%s\n' "${samples_ref[@]}" | sort -g)
-  local mid=$(( n / 2 ))
-  if (( n % 2 == 1 )); then
-    median_ref="${sorted[$mid]}"
-  else
-    median_ref=$(awk -v a="${sorted[$((mid-1))]}" -v b="${sorted[$mid]}" 'BEGIN{printf "%.6f", (a+b)/2.0}')
-  fi
-  if (( n >= 2 )); then
-    stddev_ref=$(printf '%s\n' "${samples_ref[@]}" | awk '
-      {x[NR]=$1; s+=$1}
-      END{m=s/NR; ss=0; for(i=1;i<=NR;i++){d=x[i]-m; ss+=d*d}
-          printf "%.6f", sqrt(ss/(NR-1))}')
-  fi
-}
-
-csv_escape() {
-  local value="$1"
-  value="${value//\"/\"\"}"
-  printf '"%s"' "$value"
 }
 
 run_cmd() {
@@ -183,30 +115,14 @@ run_cmd() {
   local threshold="$4"
   local cmd="$5"
 
-  echo "$cmd" | tee -a "$logfile"
+  bench_log "$cmd"
   local times=()
-  local i out t rc
-  for ((i=1; i<=NUM_RUNS; i++)); do
-    echo "----- Run $i/$NUM_RUNS -----" | tee -a "$logfile"
-    rc=0
-    out=$(bash -c "$cmd" 2>&1) || rc=$?
-    echo "$out" | tee -a "$logfile"
-    if (( rc != 0 )); then
-      echo "WARNING: command exited with status $rc on run $i (continuing)" | tee -a "$logfile"
-    fi
-    t=$(echo "$out" | grep -oE 'Training block took:[[:space:]]*[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' \
-        | grep -oE '[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' | tail -1)
-    if [[ -n "$t" ]]; then
-      times+=("$t")
-    else
-      echo "WARNING: Could not parse 'Training block took' from run $i" | tee -a "$logfile"
-    fi
-  done
+  bench_repeat_cmd "$cmd" times
 
   local median stddev samples
-  median_and_stddev times median stddev
+  bench_median_stddev times median stddev
   samples=$(IFS=';'; echo "${times[*]}")
-  echo "RESULT dataset=$dataset random_impl=$random_impl bins=$bins threshold=$threshold median=${median}s stddev=${stddev}s n=${#times[@]}" | tee -a "$logfile"
+  bench_log "RESULT dataset=$dataset random_impl=$random_impl bins=$bins threshold=$threshold median=${median}s stddev=${stddev}s n=${#times[@]}"
   {
     csv_escape "$dataset"
     printf ','
@@ -217,7 +133,24 @@ run_cmd() {
   } >> "$csvfile"
 }
 
-echo "dataset,random_impl,histogram_num_bins,dynamic_split_threshold,num_trees,median_s,stddev_s,n_samples,all_samples_s" > "$csvfile"
+# E-cores off before nproc so NUM_TREES reflects the runtime (P-core) topology;
+# bazel_build re-enables them for the build itself only.
+bench_ecores --disable
+if [[ "$EXTRA_TRAIN_ARGS" == *"ensemble_method=Boosting"* ]]; then
+  NUM_TREES=300   # boosting is sequential; the 5x-cores heuristic doesn't apply
+else
+  NUM_TREES=$(( $(bench_nproc) * 5 ))
+fi
+BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_performances=$COMPUTE_OOB_PERFORMANCES"
+
+# Provenance, then the header. Rows are appended as the sweep runs, so both must
+# land before the first run_cmd; the leading lines are intentionally not CSV.
+bench_provenance_block \
+  "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS" \
+  "RANDOM_IMPLS: ${RANDOM_IMPLS[*]}" \
+  "DYNAMIC_SPLIT_THRESHOLDS: ${DYNAMIC_SPLIT_THRESHOLDS[*]}" \
+  | tee -a "$logfile" > "$csvfile"
+echo "dataset,random_impl,histogram_num_bins,dynamic_split_threshold,num_trees,median_s,stddev_s,n_samples,all_samples_s" >> "$csvfile"
 
 for random_impl in "${RANDOM_IMPLS[@]}"; do
   case "$random_impl" in
@@ -245,10 +178,6 @@ for random_impl in "${RANDOM_IMPLS[@]}"; do
   bazel_build "${build_args[@]}" "$BUILD_TARGET"
   BINARY="./bazel-bin/examples/train_oblique_forest"
 
-  # E-cores are now disabled, so nproc reflects the runtime CPU topology.
-  NUM_TREES=$(( $(nproc) * 5 ))
-  BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_performances=$COMPUTE_OOB_PERFORMANCES"
-
   banner "DYNAMIC THRESHOLD SWEEP [Exact below threshold, ${impl_label} above] histogram_num_bins=${histogram_num_bins}"
 
   for threshold in "${DYNAMIC_SPLIT_THRESHOLDS[@]}"; do
@@ -260,14 +189,14 @@ for random_impl in "${RANDOM_IMPLS[@]}"; do
     for entry in "${CSV_DATASETS[@]}"; do
       IFS='|' read -r path label <<<"$entry"
       dataset="$(dataset_name_for_csv "$path")"
-      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"Dynamic Random Histogram\" $BASE_ARGS $extra $threshold_arg"
+      cmd="$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" --feature_split_type \"Oblique\" --numerical_split_type \"Dynamic Random Histogram\" $BASE_ARGS $extra $threshold_arg $EXTRA_TRAIN_ARGS"
       run_cmd "$dataset" "$random_impl" "$histogram_num_bins" "$threshold" "$cmd"
     done
 
     for entry in "${TRUNK_DATASETS[@]}"; do
       IFS='|' read -r rows cols <<<"$entry"
       dataset="trunk_${rows}_x_${cols}"
-      cmd="$BINARY --input_mode trunk --rows $rows --cols $cols --feature_split_type \"Oblique\" --numerical_split_type \"Dynamic Random Histogram\" $BASE_ARGS $extra $threshold_arg"
+      cmd="$BINARY --input_mode trunk --rows $rows --cols $cols --feature_split_type \"Oblique\" --numerical_split_type \"Dynamic Random Histogram\" $BASE_ARGS $extra $threshold_arg $EXTRA_TRAIN_ARGS"
       run_cmd "$dataset" "$random_impl" "$histogram_num_bins" "$threshold" "$cmd"
     done
   done

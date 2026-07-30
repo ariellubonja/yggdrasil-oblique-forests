@@ -145,13 +145,7 @@ METHOD_EXTRA_ARGS["Dynamic Random Histogram"]="--histogram_num_bins=$histogram_n
 # Build target and base flags
 BUILD_TARGET="//examples:train_oblique_forest"
 BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --repo_env=CXX=icpx)
-# Optional space-separated extra build configs/flags injected into every
-# bazel_build (e.g. EXTRA_BAZEL_CONFIGS="--config=symmetric_optimized").
-# shellcheck disable=SC2206
-EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
-# Optional extra train_oblique_forest flags injected into every binary command
-# (e.g. EXTRA_TRAIN_ARGS="--dataset_layout=flat_column").
-EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
+# EXTRA_BAZEL_CONFIGS / EXTRA_TRAIN_ARGS are read by bench_common.sh below.
 # SIMD histogram binning is default-ON with runtime dispatch: the split-finder
 # picks AVX2 (64 bins) / AVX-512 (256 bins) / scalar from cpuid + the bin count
 # at RUNTIME, so no build config is needed to vectorize. The "vectorized"
@@ -165,81 +159,21 @@ EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
 
 # Always: enable -> build -> disable -> run -> re-enable at end.
-# All bazel builds are wrapped by bazel_build() so CPU E features are only
-# enabled during the build itself, and disabled for every experiment run.
+# All bazel builds are wrapped by bench_common's bazel_build() so CPU E features
+# are only enabled during the build itself, and disabled for every run.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
-trap 'sudo "$SET_CPU_E_FEATURES" --enable' EXIT
-
-# .bazelrc pins --repo_env=CC=icx. If icx is not on PATH the build either
-# hard-fails or (worse, across bazel/cc_configure cache states) silently
-# falls back to gcc -- a gcc-built binary quietly corrupts every timing
-# number. Source oneAPI here and abort loudly if icx still can't be found.
-ensure_icx() {
-  # .bazelrc only pins CC=icx under build:linux; macOS has no such pin
-  # (Intel never shipped icx/icpx for macOS/Apple Silicon) and just uses
-  # the default toolchain, so there's nothing to ensure there.
-  if [[ "$(uname -s)" != "Linux" ]]; then
-    return 0
-  fi
-  if ! command -v icx >/dev/null 2>&1; then
-    local setvars="${ONEAPI_SETVARS:-/opt/intel/oneapi/setvars.sh}"
-    if [[ -r "$setvars" ]]; then
-      set +u +e                       # setvars.sh is not -e/-u clean
-      # shellcheck disable=SC1090
-      source "$setvars" >/dev/null 2>&1
-      set -u -e
-    fi
-  fi
-  if ! command -v icx >/dev/null 2>&1 || ! command -v icpx >/dev/null 2>&1; then
-    echo "ERROR: icx/icpx not on PATH and could not source oneAPI." >&2
-    echo "       .bazelrc pins CC=icx; building with gcc would silently" >&2
-    echo "       corrupt timings. Run 'source /opt/intel/oneapi/setvars.sh'" >&2
-    echo "       (or set ONEAPI_SETVARS=/path/to/setvars.sh) and retry." >&2
-    exit 1
-  fi
-  echo "Compiler: $(command -v icx)"
-}
-
-bazel_build() {
-  ensure_icx
-  sudo "$SET_CPU_E_FEATURES" --enable
-  bazel build "$@" "${EXTRA_BAZEL_CONFIGS_ARR[@]}"
-  sudo "$SET_CPU_E_FEATURES" --disable
-}
+source "$SCRIPT_DIR/../utils/bench_common.sh"
+bench_restore_ecores_on_exit
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
 logfile="${logdir}/${SUFFIX}.log"
 csvfile="${logdir}/${SUFFIX}.csv"
+BENCH_LOGFILE="$logfile"
 # Set to 1 by run_cmd when any dataset OOM'd or errored; finalize_log then keeps
 # the log (instead of deleting it on success) so the failure can be inspected.
 DEGRADED=0
 
-# If an output file already exists, ask before clobbering it instead of
-# aborting outright. Reads from the terminal (/dev/tty) so the prompt works
-# even when stdin is piped; a non-interactive run (no tty) keeps the old
-# fail-safe behavior rather than silently overwriting.
-confirm_overwrite() {
-  local f="$1"
-  [[ -e "$f" ]] || return 0
-  if [[ "$f" != *.csv ]]; then
-    rm -f "$f"
-    return 0
-  fi
-  if [[ ! -t 0 && ! -e /dev/tty ]]; then
-    echo "ERROR: $f already exists (no terminal to confirm overwrite). Use a different suffix or remove it." >&2
-    exit 1
-  fi
-  local reply
-  read -r -p "$f already exists. Overwrite? [y/N] " reply </dev/tty
-  if [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-    rm -f "$f"
-  else
-    echo "Aborting; not overwriting $f. Use a different suffix or remove it." >&2
-    exit 1
-  fi
-}
 confirm_overwrite "$logfile"
 confirm_overwrite "$csvfile"
 
@@ -251,11 +185,7 @@ finalize_log() {
   if python3 benchmarks/utils/parse_log_to_csv.py "$logfile" "$csvfile" runtime; then
     # Prepend the provenance to the top of the CSV. This makes the result
     # self-describing; the leading lines are intentionally not well-formed CSV.
-    if [[ -f "$metafile" ]]; then
-      tmp=$(mktemp)
-      cat "$metafile" "$csvfile" >"$tmp" && mv "$tmp" "$csvfile"
-      rm -f "$metafile"
-    fi
+    bench_prepend_provenance "$csvfile" "$metafile"
     if (( DEGRADED == 1 )); then
       echo "WARNING: one or more datasets reported OOM/ERROR -- KEEPING log for inspection." >&2
       echo "CSV: $csvfile  (log kept at $logfile due to OOM/ERROR rows)"
@@ -276,7 +206,7 @@ if [[ "$RUN_SCALAR" == "true" ]]; then
   bazel_build "${BAZEL_FLAGS[@]}" "${SCALAR_CONFIG[@]}" "$BUILD_TARGET"
 else
   # Ensure features are disabled for experiments even when no initial build runs.
-  sudo "$SET_CPU_E_FEATURES" --disable
+  bench_ecores --disable
 fi
 BINARY="./bazel-bin/examples/train_oblique_forest"
 
@@ -287,112 +217,34 @@ BINARY="./bazel-bin/examples/train_oblique_forest"
 if [[ "$EXTRA_TRAIN_ARGS" == *"ensemble_method=Boosting"* ]]; then
   NUM_TREES=300
 else
-  NUM_TREES=$(( $(nproc) * 5 )) # 5x cores to prevent skewness
+  NUM_TREES=$(( $(bench_nproc) * 5 )) # 5x cores to prevent skewness
 fi
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS"
 
-# Provenance: without this, a result CSV cannot be traced back to the build
-# that produced it (bazel configs are invisible in the binary command line).
-# Written to the log AND a temp file; the temp file is prepended to the top of
-# the CSV on a successful parse (see finalize_log) and then removed.
+# Provenance: written to the log AND a temp file; the temp file is prepended to
+# the top of the CSV on a successful parse (see finalize_log) and then removed.
 metafile="$(mktemp)"
-# Hardware serial for traceability. dmidecode needs root and is Linux-only; if
-# it fails (no sudo, not installed, non-Linux), keep the error text in the field
-# rather than aborting -- provenance is best-effort.
-machine_serial=$(sudo dmidecode -s system-serial-number 2>&1) \
-  || machine_serial="dmidecode failed: $machine_serial"
-{
-  echo "==== PROVENANCE ===="
-  echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "git_sha: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)$(git diff --quiet 2>/dev/null || echo '-dirty')"
-  echo "git_branch: $(git branch --show-current 2>/dev/null || echo unknown)"
-  echo "machine: $(lscpu | grep 'Model name' | sed 's/Model name:[[:space:]]*//') (nproc=$(nproc))"
-  echo "machine_serial: $machine_serial"
-  echo "EXTRA_BAZEL_CONFIGS: ${EXTRA_BAZEL_CONFIGS:-<none>}"
-  echo "EXTRA_TRAIN_ARGS: ${EXTRA_TRAIN_ARGS:-<none>}"
-  echo "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  bins: $histogram_num_bins"
-  echo "===================="
-} | tee -a "$logfile" "$metafile"
+bench_provenance_block \
+  "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  bins: $histogram_num_bins" \
+  | tee -a "$logfile" "$metafile"
 
 run_cmd() {
-  echo "$*" | tee -a "$logfile"
+  bench_log "$*"
   local times=()
-  local i out t rc
-  local oom=0 err=0
-  for ((i=1; i<=NUM_RUNS; i++)); do
-    echo "----- Run $i/$NUM_RUNS -----" | tee -a "$logfile"
-    rc=0
-    out=$(bash -c "$*" 2>&1) || rc=$?
-    echo "$out" | tee -a "$logfile"
-    if (( rc != 0 )); then
-      echo "WARNING: command exited with status $rc on run $i (continuing)" | tee -a "$logfile"
-      # 137 = 128 + SIGKILL(9): the OOM-killer reaped the process. An OOM is
-      # deterministic for a given (dataset, config, memory) -- it will recur on
-      # every run -- so stop after the first one instead of wasting NUM_RUNS-1
-      # more OOMs. Record it as OOM (below) and let the caller move to the next
-      # dataset/experiment.
-      if (( rc == 137 )); then
-        oom=1
-        echo "WARNING: OOM-killed (137) on run $i; skipping remaining runs of this dataset" | tee -a "$logfile"
-        break
-      else
-        err=1
-      fi
-    fi
-    # Parse "random_forest.cc Training block took: <X> s". A missing line means
-    # the binary crashed (OOM or otherwise) before training. The grep pipeline
-    # then fails; the trailing `|| true` keeps `set -euo pipefail` from aborting
-    # the whole script, so the remaining datasets still run and the failing one
-    # is recorded as OOM/ERROR below instead of silently killing everything.
-    t=$(echo "$out" | grep -oE 'Training block took:[[:space:]]*[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' \
-        | grep -oE '[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' | tail -1) || true
-    if [[ -n "$t" ]]; then
-      times+=("$t")
-    else
-      echo "WARNING: Could not parse 'Training block took' from run $i" | tee -a "$logfile"
-      if (( rc == 0 )); then err=1; fi  # clean exit but no timing => a real error
-    fi
-  done
+  bench_repeat_cmd "$*" times
   if [[ "${#times[@]}" -gt 0 ]]; then
-    local sorted
-    mapfile -t sorted < <(printf '%s\n' "${times[@]}" | sort -g)
-    local n=${#sorted[@]}
-    local mid=$(( n / 2 ))
-    local median
-    if (( n % 2 == 1 )); then
-      median="${sorted[$mid]}"
-    else
-      median=$(awk -v a="${sorted[$((mid-1))]}" -v b="${sorted[$mid]}" 'BEGIN{printf "%.6f", (a+b)/2.0}')
-    fi
-    # Sample stddev (n-1). Undefined for n<2; report N/A so eyeballing the log
-    # still shows that only one run survived.
-    local stddev
-    if (( n >= 2 )); then
-      stddev=$(printf '%s\n' "${times[@]}" | awk '
-        {x[NR]=$1; s+=$1}
-        END{m=s/NR; ss=0; for(i=1;i<=NR;i++){d=x[i]-m; ss+=d*d}
-            printf "%.6f", sqrt(ss/(NR-1))}')
-    else
-      stddev="N/A"
-    fi
-    echo "MEDIAN of ${#times[@]}/${NUM_RUNS} runs: ${median} s  STDDEV: ${stddev} s  (samples: ${times[*]})" | tee -a "$logfile"
+    local median stddev
+    bench_median_stddev times median stddev
+    bench_log "MEDIAN of ${#times[@]}/${NUM_RUNS} runs: ${median} s  STDDEV: ${stddev} s  (samples: ${times[*]})"
   else
     # No run produced a timing. Record OOM (process was OOM-killed) or ERROR
     # (any other failure) so this dataset surfaces as a labelled cell in the CSV
     # instead of crashing the run. DEGRADED tells finalize_log to keep the log.
     local status="ERROR"
-    (( oom == 1 )) && status="OOM"
-    echo "MEDIAN of 0/${NUM_RUNS} runs: ${status}" | tee -a "$logfile"
+    (( BENCH_OOM == 1 )) && status="OOM"
+    bench_log "MEDIAN of 0/${NUM_RUNS} runs: ${status}"
     DEGRADED=1
   fi
-}
-
-banner() {
-  echo -e "\n\n======== $* ========\n" | tee -a "$logfile"
-}
-
-is_dynamic_method() {
-  [[ "$1" == Dynamic* ]]
 }
 
 # -------------------------

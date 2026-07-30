@@ -69,7 +69,7 @@ ensemble_num_trees() {
   if [[ "$1" == "Boosting" ]]; then
     echo 300
   else
-    echo $(( $(nproc) * 5 ))
+    echo $(( $(bench_nproc) * 5 ))
   fi
 }
 
@@ -178,14 +178,9 @@ METHOD_EXTRA_ARGS["Dynamic Random Histogram"]="--histogram_num_bins=$histogram_n
 # Build target and base flags
 BUILD_TARGET="//examples:train_oblique_forest"
 BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native")
-# Optional space-separated extra build configs/flags injected into every
-# bazel_build (e.g. EXTRA_BAZEL_CONFIGS="--config=symmetric_optimized").
-# shellcheck disable=SC2206
-EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
-# Optional extra train_oblique_forest flags injected into every binary command
-# (e.g. EXTRA_TRAIN_ARGS="--shrinkage=0.05"). Do NOT set --ensemble_method or
-# --num_trees here: the script now owns both (see ENSEMBLES / ensemble_num_trees).
-EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
+# EXTRA_BAZEL_CONFIGS / EXTRA_TRAIN_ARGS are read by bench_common.sh below. Do
+# NOT put --ensemble_method or --num_trees in EXTRA_TRAIN_ARGS: the script owns
+# both (see ENSEMBLES / ensemble_num_trees).
 # SIMD histogram binning is default-ON with runtime dispatch: the split-finder
 # picks AVX2 (64 bins) / AVX-512 (256 bins) / scalar from cpuid + the bin count
 # at RUNTIME, so no build config is needed to vectorize. The "vectorized"
@@ -196,59 +191,21 @@ EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
 # Vectorization applies only to these methods (Oblique only)
 VECTORIZE_METHODS=("Random" "Dynamic Random Histogram")
 
-# CPU E features must stay enabled the whole time (build + run) so accuracy
-# numbers are taken under a consistent CPU configuration. No
-# enable/disable dance like runtime.sh.
+# Shared plumbing (ensure_icx, bazel_build + EXTRA_BAZEL_CONFIGS,
+# EXTRA_TRAIN_ARGS, provenance, banner). CPU E features must stay enabled the
+# whole time (build + run), so bench_common's e-core toggling is switched off.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
-"$SET_CPU_E_FEATURES" --enable
-
-# .bazelrc pins --repo_env=CC=icx. If icx is not on PATH the build either
-# hard-fails or (worse, across bazel/cc_configure cache states) silently
-# falls back to gcc. Source oneAPI here and abort loudly if icx is missing.
-ensure_icx() {
-  # .bazelrc only pins CC=icx under build:linux; macOS has no such pin
-  # (Intel never shipped icx/icpx for macOS/Apple Silicon) and just uses
-  # the default toolchain, so there's nothing to ensure there.
-  if [[ "$(uname -s)" != "Linux" ]]; then
-    return 0
-  fi
-  if ! command -v icx >/dev/null 2>&1; then
-    local setvars="${ONEAPI_SETVARS:-/opt/intel/oneapi/setvars.sh}"
-    if [[ -r "$setvars" ]]; then
-      set +u +e                       # setvars.sh is not -e/-u clean
-      # shellcheck disable=SC1090
-      source "$setvars" >/dev/null 2>&1
-      set -u -e
-    fi
-  fi
-  if ! command -v icx >/dev/null 2>&1 || ! command -v icpx >/dev/null 2>&1; then
-    echo "ERROR: icx/icpx not on PATH and could not source oneAPI." >&2
-    echo "       .bazelrc pins CC=icx. Run 'source /opt/intel/oneapi/setvars.sh'" >&2
-    echo "       (or set ONEAPI_SETVARS=/path/to/setvars.sh) and retry." >&2
-    exit 1
-  fi
-  echo "Compiler: $(command -v icx)"
-}
-
-bazel_build() {
-  ensure_icx
-  bazel build "$@" "${EXTRA_BAZEL_CONFIGS_ARR[@]}"
-}
+BENCH_ECORE_TOGGLE=false
+source "$SCRIPT_DIR/../utils/bench_common.sh"
+bench_ecores --enable force
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
 logfile="${logdir}/accuracy_${SUFFIX}.log"
 csvfile="${logdir}/accuracy_${SUFFIX}.csv"
+BENCH_LOGFILE="$logfile"
 
-if [[ -e "$logfile" ]]; then
-  echo "ERROR: $logfile already exists. Use a different suffix or remove it." >&2
-  exit 1
-fi
-if [[ -e "$csvfile" ]]; then
-  echo "ERROR: $csvfile already exists. Use a different suffix or remove it." >&2
-  exit 1
-fi
+bench_require_absent "$logfile" "$csvfile"
 
 # Parse log -> CSV. On parser success the log is deleted; if the parser fails
 # the log is kept for debugging. The log is also kept implicitly when the
@@ -256,6 +213,7 @@ fi
 finalize_log() {
   echo "Parsing log -> CSV..."
   if python3 benchmarks/utils/parse_log_to_csv.py "$logfile" "$csvfile"; then
+    bench_prepend_provenance "$csvfile" "$metafile"
     rm -f "$logfile"
     echo "CSV: $csvfile  (log deleted on success)"
   else
@@ -263,6 +221,12 @@ finalize_log() {
     return 1
   fi
 }
+
+# Provenance: the temp file is prepended to the CSV on a successful parse.
+metafile="$(mktemp)"
+bench_provenance_block \
+  "NUM_FOLDS: $NUM_FOLDS  ENSEMBLES: ${ENSEMBLES[*]}  bins: $histogram_num_bins" \
+  | tee -a "$logfile" "$metafile"
 
 # Scalar-section build (SIMD binner compiled out). Only needed when the scalar
 # experiments run; the vectorized and GPU sections do their own builds.
@@ -301,14 +265,6 @@ run_cv() {
       echo "WARNING: command exited with status $rc on fold $fold (continuing)" | tee -a "$logfile"
     fi
   done
-}
-
-banner() {
-  echo -e "\n\n======== $* ========\n" | tee -a "$logfile"
-}
-
-is_dynamic_method() {
-  [[ "$1" == Dynamic* ]]
 }
 
 # -------------------------
