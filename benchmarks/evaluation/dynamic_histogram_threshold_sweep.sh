@@ -99,7 +99,7 @@ logfile="${logdir}/dynamic_threshold_sweep_${SUFFIX}.log"
 csvfile="${logdir}/dynamic_threshold_sweep_${SUFFIX}.csv"
 BENCH_LOGFILE="$logfile"
 
-bench_require_absent "$logfile" "$csvfile"
+confirm_overwrite "$logfile" "$csvfile"
 
 dataset_name_for_csv() {
   local path="$1"
@@ -145,12 +145,11 @@ BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS --compute_oob_perfo
 
 # Provenance, then the header. Rows are appended as the sweep runs, so both must
 # land before the first run_cmd; the leading lines are intentionally not CSV.
-bench_provenance_block \
+bench_provenance_to_csv "$csvfile" \
+  "dataset,random_impl,histogram_num_bins,dynamic_split_threshold,num_trees,median_s,stddev_s,n_samples,all_samples_s" \
   "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS" \
   "RANDOM_IMPLS: ${RANDOM_IMPLS[*]}" \
-  "DYNAMIC_SPLIT_THRESHOLDS: ${DYNAMIC_SPLIT_THRESHOLDS[*]}" \
-  | tee -a "$logfile" > "$csvfile"
-echo "dataset,random_impl,histogram_num_bins,dynamic_split_threshold,num_trees,median_s,stddev_s,n_samples,all_samples_s" >> "$csvfile"
+  "DYNAMIC_SPLIT_THRESHOLDS: ${DYNAMIC_SPLIT_THRESHOLDS[*]}"
 
 for random_impl in "${RANDOM_IMPLS[@]}"; do
   case "$random_impl" in

@@ -205,7 +205,7 @@ logfile="${logdir}/accuracy_${SUFFIX}.log"
 csvfile="${logdir}/accuracy_${SUFFIX}.csv"
 BENCH_LOGFILE="$logfile"
 
-bench_require_absent "$logfile" "$csvfile"
+confirm_overwrite "$logfile" "$csvfile"
 
 # Parse log -> CSV. On parser success the log is deleted; if the parser fails
 # the log is kept for debugging. The log is also kept implicitly when the

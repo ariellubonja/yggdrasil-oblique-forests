@@ -113,39 +113,32 @@ bazel_build() {
 
 # ---------- output files ----------
 
-# Refuse to clobber an existing result file.
-bench_require_absent() {
-  local f
+# Ask before clobbering an existing .csv result (logs are always recreated).
+# Reads /dev/tty so the prompt survives a piped stdin; with no tty it refuses
+# rather than clobbering. Every result-producing benchmark script uses this
+# (compare_models.sh writes no results, so it is exempt).
+confirm_overwrite() {
+  local f reply
   for f in "$@"; do
-    if [[ -e "$f" ]]; then
-      echo "ERROR: $f already exists. Use a different suffix or remove it." >&2
+    [[ -e "$f" ]] || continue
+    if [[ "$f" != *.csv ]]; then
+      rm -f "$f"
+      continue
+    fi
+    # /dev/tty can exist but be unusable (detached session), so the read itself
+    # is the real test; an empty reply then means "no", never "overwrite".
+    reply=""
+    if ! read -r -p "$f already exists. Overwrite? [y/N] " reply </dev/tty; then
+      echo "ERROR: $f already exists (no terminal to confirm overwrite). Use a different suffix or remove it." >&2
+      exit 1
+    fi
+    if [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+      rm -f "$f"
+    else
+      echo "Aborting; not overwriting $f. Use a different suffix or remove it." >&2
       exit 1
     fi
   done
-}
-
-# Like bench_require_absent, but asks before clobbering a .csv (logs are always
-# recreated). Reads /dev/tty so the prompt survives a piped stdin; with no tty
-# it keeps the fail-safe behavior.
-confirm_overwrite() {
-  local f="$1"
-  [[ -e "$f" ]] || return 0
-  if [[ "$f" != *.csv ]]; then
-    rm -f "$f"
-    return 0
-  fi
-  if [[ ! -t 0 && ! -e /dev/tty ]]; then
-    echo "ERROR: $f already exists (no terminal to confirm overwrite). Use a different suffix or remove it." >&2
-    exit 1
-  fi
-  local reply
-  read -r -p "$f already exists. Overwrite? [y/N] " reply </dev/tty
-  if [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-    rm -f "$f"
-  else
-    echo "Aborting; not overwriting $f. Use a different suffix or remove it." >&2
-    exit 1
-  fi
 }
 
 csv_escape() {
@@ -187,6 +180,21 @@ bench_provenance_block() {
     echo "$line"
   done
   echo "===================="
+}
+
+# For scripts that append CSV rows as they run (no parser pass): write the
+# provenance block to the log AND the top of the CSV, then its column header.
+# Both must land before the first data row.
+#   bench_provenance_to_csv "$csvfile" "dataset,median_s" "NUM_RUNS: $NUM_RUNS"
+bench_provenance_to_csv() {
+  local csvfile="$1" header="$2"
+  shift 2
+  if [[ -n "$BENCH_LOGFILE" ]]; then
+    bench_provenance_block "$@" | tee -a "$BENCH_LOGFILE" > "$csvfile"
+  else
+    bench_provenance_block "$@" > "$csvfile"
+  fi
+  echo "$header" >> "$csvfile"
 }
 
 # Prepend $2 (a provenance file) to the CSV $1, then delete it.

@@ -97,7 +97,6 @@ BENCH_LOGFILE="$logfile"
 # the log (instead of deleting it on success) so the failure can be inspected.
 DEGRADED=0
 
-# TODO I want this in all .sh scripts except compare_models.sh
 confirm_overwrite "$logfile"
 confirm_overwrite "$csvfile"
 
@@ -137,7 +136,6 @@ else
 fi
 BASE_ARGS="--num_trees=$NUM_TREES"
 
-# TODO Provenance should be shared across all scripts for reproducibility
 # Provenance: written to the log AND a temp file; the temp file is prepended to
 # the top of the CSV on a successful parse (see finalize_log) and then removed.
 metafile="$(mktemp)"

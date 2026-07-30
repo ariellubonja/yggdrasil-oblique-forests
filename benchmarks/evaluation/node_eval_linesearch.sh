@@ -161,178 +161,59 @@ BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --
 # so vectorized split-finding needs no build config. Empty by design; kept as a
 # seam for an explicit scalar A/B (--config=disable_std_upper_bound_vectorization).
 VEC_CONFIG=""
-# Optional extra build configs/flags injected into every bazel_build (QoL from
-# runtime.sh), e.g. EXTRA_BAZEL_CONFIGS="--config=cache_projection_evaluator".
-# shellcheck disable=SC2206
-EXTRA_BAZEL_CONFIGS_ARR=(${EXTRA_BAZEL_CONFIGS:-})
-# Optional extra train_oblique_forest flags injected into every binary command,
-# e.g. EXTRA_TRAIN_ARGS="--num_trees=120". Do NOT put --dataset_layout here in
-# layout mode (the sweep sets it).
-EXTRA_TRAIN_ARGS=${EXTRA_TRAIN_ARGS:-}
 
+# Shared plumbing: ensure_icx, bazel_build (+EXTRA_BAZEL_CONFIGS), e-core
+# toggling, EXTRA_TRAIN_ARGS, provenance, confirm_overwrite, timing helpers.
+# EXTRA_TRAIN_ARGS is injected into every binary command; do NOT put
+# --dataset_layout there in layout mode (the sweep sets it).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SET_CPU_E_FEATURES="$(cd "$SCRIPT_DIR/../.." && pwd)/benchmarks/utils/set_cpu_e_features.sh"
-trap 'sudo "$SET_CPU_E_FEATURES" --enable' EXIT
-
-# .bazelrc pins CC=icx; a silent gcc fallback corrupts every timing number.
-# Source oneAPI here and abort loudly if icx still can't be found.
-ensure_icx() {
-  # .bazelrc only pins CC=icx under build:linux; macOS has no such pin
-  # (Intel never shipped icx/icpx for macOS/Apple Silicon) and just uses
-  # the default toolchain, so there's nothing to ensure there.
-  if [[ "$(uname -s)" != "Linux" ]]; then
-    return 0
-  fi
-  if ! command -v icx >/dev/null 2>&1; then
-    local setvars="${ONEAPI_SETVARS:-/opt/intel/oneapi/setvars.sh}"
-    if [[ -r "$setvars" ]]; then
-      set +u +e
-      # shellcheck disable=SC1090
-      source "$setvars" >/dev/null 2>&1
-      set -u -e
-    fi
-  fi
-  if ! command -v icx >/dev/null 2>&1 || ! command -v icpx >/dev/null 2>&1; then
-    echo "ERROR: icx/icpx not on PATH and could not source oneAPI." >&2
-    echo "       Run 'source /opt/intel/oneapi/setvars.sh' and retry." >&2
-    exit 1
-  fi
-  echo "Compiler: $(command -v icx)"
-}
-
-bazel_build() {
-  ensure_icx
-  sudo "$SET_CPU_E_FEATURES" --enable
-  bazel build "$@" "${EXTRA_BAZEL_CONFIGS_ARR[@]}"
-  sudo "$SET_CPU_E_FEATURES" --disable
-}
+source "$SCRIPT_DIR/../utils/bench_common.sh"
+bench_restore_ecores_on_exit
 
 logdir="benchmarks/results"
 mkdir -p "$logdir"
 logfile="${logdir}/${OUT_PREFIX}_${NUM_RUNS}runs_${SUFFIX}.log"
 csvfile="${logdir}/${OUT_PREFIX}_${NUM_RUNS}runs_${SUFFIX}.csv"
+BENCH_LOGFILE="$logfile"
 # Set to 1 by run_point when any point OOM'd or errored; surfaces a warning at the
 # end and keeps the log for inspection (QoL from runtime.sh).
 DEGRADED=0
 
-# If an output file already exists, ask before clobbering it (CSV only; the log is
-# silently replaced). Reads from /dev/tty so the prompt works under a pipe; a
-# non-interactive run with no tty keeps the fail-safe.
-confirm_overwrite() {
-  local f="$1"
-  [[ -e "$f" ]] || return 0
-  if [[ "$f" != *.csv ]]; then
-    rm -f "$f"
-    return 0
-  fi
-  if [[ ! -t 0 && ! -e /dev/tty ]]; then
-    echo "ERROR: $f already exists (no terminal to confirm overwrite). Use a different suffix or remove it." >&2
-    exit 1
-  fi
-  local reply
-  read -r -p "$f already exists. Overwrite? [y/N] " reply </dev/tty
-  if [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-    rm -f "$f"
-  else
-    echo "Aborting; not overwriting $f. Use a different suffix or remove it." >&2
-    exit 1
-  fi
-}
-for f in "$logfile" "$csvfile"; do
-  confirm_overwrite "$f"
-done
+confirm_overwrite "$logfile" "$csvfile"
 
-# Provenance: prepended to the top of the CSV so the result is self-describing.
-# The leading lines are intentionally not well-formed CSV. Also tee'd to the log.
-# Hardware serial for traceability. dmidecode needs root and is Linux-only; if it
-# fails, keep the error text in the field rather than aborting.
+# Provenance + CSV header, both prepended before the first appended row.
 write_provenance() {
   local build_desc="$1"
-  machine_serial=$(sudo dmidecode -s system-serial-number 2>&1) \
-    || machine_serial="dmidecode failed: $machine_serial"
-  {
-    echo "==== PROVENANCE ===="
-    echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "git_sha: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)$(git diff --quiet 2>/dev/null || echo '-dirty')"
-    echo "git_branch: $(git branch --show-current 2>/dev/null || echo unknown)"
-    echo "machine: $(lscpu | grep 'Model name' | sed 's/Model name:[[:space:]]*//') (nproc=$(nproc))"
-    echo "machine_serial: $machine_serial"
-    echo "mode: $MODE  sweep_var: ${SWEEP_ENV:-$SWEEP_COL}"
-    echo "build_config: $build_desc"
-    echo "EXTRA_BAZEL_CONFIGS: ${EXTRA_BAZEL_CONFIGS:-<none>}"
-    echo "EXTRA_TRAIN_ARGS: ${EXTRA_TRAIN_ARGS:-<none>}"
-    echo "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  DEPTH_STEP: ${DEPTH_STEP:-n/a}"
-    echo "===================="
-  } | tee -a "$logfile" > "$csvfile"
-  echo "dataset,${SWEEP_COL},median_s,stddev_s,n_ok,samples" >> "$csvfile"
+  bench_provenance_to_csv "$csvfile" \
+    "dataset,${SWEEP_COL},median_s,stddev_s,n_ok,samples" \
+    "mode: $MODE  sweep_var: ${SWEEP_ENV:-$SWEEP_COL}" \
+    "build_config: $build_desc" \
+    "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS  NUM_THREADS: $NUM_THREADS  DEPTH_STEP: ${DEPTH_STEP:-n/a}"
 }
 
 # Run one sweep point: NUM_RUNS reps, median + sample stddev, append a CSV row.
-# Mirrors runtime.sh's run_cmd timing/median math + OOM/ERROR tolerance.
 #   run_point <dataset_label> <point_value> <env_prefix> <cmd>
 # env_prefix is e.g. "SYMMETRIC_MAX_DEPTH=5" (depth modes) or "" (layout).
 run_point() {
   local dataset_label="$1" point="$2" env_prefix="$3" cmd="$4"
-  echo "${env_prefix:+$env_prefix }$cmd" | tee -a "$logfile"
-  local times=() i out t rc oom=0 err=0
-  for ((i=1; i<=NUM_RUNS; i++)); do
-    echo "----- Run $i/$NUM_RUNS (${SWEEP_COL}=$point) -----" | tee -a "$logfile"
-    rc=0
-    out=$(bash -c "${env_prefix:+export $env_prefix; }$cmd" 2>&1) || rc=$?
-    echo "$out" | tee -a "$logfile"
-    if (( rc != 0 )); then
-      echo "WARNING: command exited with status $rc on run $i (continuing)" | tee -a "$logfile"
-      # 137 = 128 + SIGKILL(9): OOM-killed. Deterministic for a given
-      # (dataset, config, memory), so stop after the first instead of wasting
-      # NUM_RUNS-1 more OOMs; record OOM below and move on.
-      if (( rc == 137 )); then
-        oom=1
-        echo "WARNING: OOM-killed (137) on run $i; skipping remaining runs of this point" | tee -a "$logfile"
-        break
-      else
-        err=1
-      fi
-    fi
-    t=$(echo "$out" | grep -oE 'Training block took:[[:space:]]*[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' \
-        | grep -oE '[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?' | tail -1) || true
-    if [[ -n "$t" ]]; then
-      times+=("$t")
-    else
-      echo "WARNING: Could not parse 'Training block took' from run $i" | tee -a "$logfile"
-      if (( rc == 0 )); then err=1; fi  # clean exit but no timing => a real error
-    fi
-  done
-
+  bench_log "===== ${SWEEP_COL}=$point ${dataset_label} ====="
+  bench_log "${env_prefix:+$env_prefix }$cmd"
+  local times=()
+  bench_repeat_cmd "${env_prefix:+export $env_prefix; }$cmd" times
   local median stddev n_ok="${#times[@]}"
   if (( n_ok > 0 )); then
-    local sorted; mapfile -t sorted < <(printf '%s\n' "${times[@]}" | sort -g)
-    local n=${#sorted[@]} mid=$(( n_ok / 2 ))
-    if (( n % 2 == 1 )); then
-      median="${sorted[$mid]}"
-    else
-      median=$(awk -v a="${sorted[$((mid-1))]}" -v b="${sorted[$mid]}" 'BEGIN{printf "%.6f", (a+b)/2.0}')
-    fi
-    if (( n >= 2 )); then
-      stddev=$(printf '%s\n' "${times[@]}" | awk '
-        {x[NR]=$1; s+=$1}
-        END{m=s/NR; ss=0; for(i=1;i<=NR;i++){d=x[i]-m; ss+=d*d}
-            printf "%.6f", sqrt(ss/(NR-1))}')
-    else
-      stddev="N/A"
-    fi
-    echo "MEDIAN of ${n_ok}/${NUM_RUNS} runs: ${median} s  STDDEV: ${stddev} s  (samples: ${times[*]})" | tee -a "$logfile"
+    bench_median_stddev times median stddev
+    bench_log "MEDIAN of ${n_ok}/${NUM_RUNS} runs: ${median} s  STDDEV: ${stddev} s  (samples: ${times[*]})"
   else
     # No run produced a timing. Label OOM (process killed) or ERROR (anything
     # else) so the point surfaces as a cell instead of crashing the sweep.
-    median="ERROR"; (( oom == 1 )) && median="OOM"
+    median="ERROR"; (( BENCH_OOM == 1 )) && median="OOM"
     stddev="N/A"
-    echo "MEDIAN of 0/${NUM_RUNS} runs: ${median}" | tee -a "$logfile"
+    bench_log "MEDIAN of 0/${NUM_RUNS} runs: ${median}"
     DEGRADED=1
   fi
   echo "${dataset_label},${point},${median},${stddev},${n_ok},\"${times[*]:-}\"" >> "$csvfile"
 }
-
-banner() { echo -e "\n\n======== $* ========\n" | tee -a "$logfile"; }
 
 # Build the base argument list for a dataset entry. Sets `dataset_label` and
 # `cmd_base` (binary + input flags + BASE_ARGS, no sweep-specific flag).
@@ -356,7 +237,7 @@ if [[ "$MODE" == "dw1" || "$MODE" == "symmetric" ]]; then
   BINARY="./bazel-bin/examples/train_oblique_forest"
 
   # E-cores now disabled; compute NUM_TREES from runtime nproc (P-cores only).
-  NUM_TREES=$(( $(nproc) * 5 ))   # 5x cores to reduce scheduling skew
+  NUM_TREES=$(( $(bench_nproc) * 5 ))   # 5x cores to reduce scheduling skew
   BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS"
   write_provenance "$MODE_CONFIG $VEC_CONFIG"
 
@@ -427,8 +308,8 @@ done
 # Provenance needs NUM_TREES, which needs e-cores disabled. The first bazel_build
 # in the loop disables them; do an explicit disable here so NUM_TREES (computed
 # before any build for the provenance header) reflects P-core topology.
-sudo "$SET_CPU_E_FEATURES" --disable
-NUM_TREES=$(( $(nproc) * 5 ))
+bench_ecores --disable
+NUM_TREES=$(( $(bench_nproc) * 5 ))
 BASE_ARGS="--num_trees=$NUM_TREES --num_threads=$NUM_THREADS"
 write_provenance "layout sweep [${LAYOUTS[*]}] configs: ${ALL_CFGS:-<plain>} $VEC_CONFIG"
 
