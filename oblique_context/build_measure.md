@@ -22,9 +22,6 @@ build:fine_chrono_applyprojection    + -DFINE_CHRONO_AP                    # + i
 build:fine_chrono_evaluateprojection + -DFINE_CHRONO_EP                    # + inside EvaluateProjection (histogram / Cart)
 build:nodewise_chrono                + -DNODEWISE_CHRONO=1                 # + one CSV row per node's AP, depth-gated
   # Three INDEPENDENT axes: each includes coarse but not the others. FINE-everywhere = both fine configs.
-build:inline_projection_evaluate  -DINLINE_PROJECTION_EVALUATE
-build:enable_isnan                -DENABLE_ISNAN=1
-build:disable_binary_entropy_lookup          -DDISABLE_BINARY_ENTROPY_LOOKUP
 build:disable_std_upper_bound_vectorization  -DDISABLE_STD_UPPER_BOUND_VECTORIZATION=1
   # SIMD upper_bound is default-ON, ISA picked at runtime from cpuid + bin count; this turns it off.
 build --copt=-march=native --cxxopt="-O3"          # global

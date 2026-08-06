@@ -932,7 +932,6 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE double Score(const Initializer& initializer,
                                           const LabelScoreAccumulator& pos,
                                           const LabelScoreAccumulator& neg) {
   if constexpr (LabelScoreAccumulator::kNormalizeByWeight) {
-#ifndef DISABLE_BINARY_ENTROPY_LOOKUP
     if constexpr (std::is_same_v<LabelScoreAccumulator,
                                  LabelBinaryCategoricalScoreAccumulator>) {
       if (pos.count_log_count != nullptr) {
@@ -941,7 +940,6 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE double Score(const Initializer& initializer,
             weighted_num_examples);
       }
     }
-#endif
     const double score_neg = neg.Score();
     const double score_pos = pos.Score();
     const double ratio_pos = pos.WeightedNumExamples() / weighted_num_examples;

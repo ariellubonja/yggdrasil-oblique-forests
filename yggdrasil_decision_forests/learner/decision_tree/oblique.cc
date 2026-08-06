@@ -1326,18 +1326,9 @@ absl::Status ProjectionEvaluator::Evaluate(
     for (const auto& item : projection) {
       float attribute_value = AttributeValue(item.attribute_idx, example_idx);
 
-/* #region debug checks */
       DCHECK_LT(item.attribute_idx, numerical_attributes_.size());
       DCHECK_GE(item.attribute_idx, 0);
 
-      
-#ifdef ENABLE_ISNAN
-      if (std::isnan(attribute_value)) {
-        attribute_value = na_replacement_value_[item.attribute_idx];
-      }
-#endif
-/* #endregion */
-      
       value += attribute_value * item.weight;
     }
     (*values)[selected_idx] = value;
