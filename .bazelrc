@@ -87,6 +87,11 @@ build:profiler --cxxopt=-O2 --linkopt=-O2
 # Make sure split-DWARF is off – VTune hates .dwo/.dwp
 build:profiler --features=-fission
 build:profiler --cxxopt=-gno-split-dwarf
+# Bazel records DW_AT_comp_dir=/proc/self/cwd, so VTune/Advisor store source paths
+# that only resolve if the *viewer* process happens to sit in the execroot. Bake the
+# real execroot in instead. Path is derived from the workspace location, so it breaks
+# if this repo moves - regenerate with: bazel info execroot
+build:profiler --copt=-fdebug-compilation-dir=/home/ariel/.cache/bazel/_bazel_ariel/2d831789f768d462fd8cd6a33ccbd06e/execroot/_main
 
 
 # CUDA: use GCC-13 as nvcc host compiler (ICX not officially supported by NVIDIA)
