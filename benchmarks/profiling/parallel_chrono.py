@@ -23,7 +23,9 @@ def get_args():
     p = argparse.ArgumentParser(parents=[parent_parser])
     
     # Add script-specific arguments
-    p.add_argument("--histogram_num_bins", type=int, default=64)
+    p.add_argument("--histogram_num_bins", type=int, default=None,
+                   help="Histogram bin count. Default follows "
+                        "--vectorized (avx2 -> 64, avx512 -> 256).")
     p.add_argument("--rows", type=int, default=3000000)
     p.add_argument("--cols", type=int, default=4096)
     p.add_argument("--save_log", action="store_true")
@@ -59,6 +61,41 @@ def get_args():
             args.bazel_config.append(tok[2:])
         else:
             p.error(f"unrecognized argument: {tok}")
+    apply_vectorized(args)
+    return args
+
+
+# --vectorized -> the two things that actually select the SIMD histogram-binning
+# kernel in HistogramBinner::Init (training.cc): the bin count picks the kernel
+# shape (64 -> AVX2 8x8, 256 -> AVX-512 16x16; anything else falls through to
+# scalar std::upper_bound) and the build macro decides whether the SIMD code is
+# compiled in at all. Without this the flag was parsed and dropped.
+_VEC_BINS = {"avx2": 64, "avx512": 256, "None": 64}
+_VEC_LABEL = {"avx2": "", "avx512": " | AVX512", "None": " | Scalar"}
+_NO_SIMD_CONFIG = "disable_std_upper_bound_vectorization"
+
+
+def apply_vectorized(args):
+    """Resolve --vectorized into histogram_num_bins + the bazel config."""
+    iso = args.vectorized
+    want_bins = _VEC_BINS[iso]
+
+    if args.histogram_num_bins is None:
+        args.histogram_num_bins = want_bins
+    elif iso != "None" and args.histogram_num_bins != want_bins:
+        print(f"⚠️  --vectorized={iso} selects the {want_bins}-bin kernel, but "
+              f"--histogram_num_bins={args.histogram_num_bins} was given: "
+              "HistogramBinner will use scalar std::upper_bound.",
+              file=sys.stderr)
+
+    if iso == "None":
+        if _NO_SIMD_CONFIG not in args.bazel_config:
+            args.bazel_config.append(_NO_SIMD_CONFIG)
+        if args.skip_build:
+            print(f"⚠️  --vectorized=None needs a rebuild with "
+                  f"--config={_NO_SIMD_CONFIG}; --skip_build reuses whatever "
+                  "bazel-bin already has (likely still vectorized).",
+                  file=sys.stderr)
     return args
 
 
@@ -522,7 +559,10 @@ if __name__ == "__main__":
     ensemble_label = ""
     if a.ensemble_method == "Boosting":
         ensemble_label = "Boosting | "
-    exp = f"{gpu_mode_label}{ensemble_label}{a.feature_split_type} | {a.numerical_split_type}"
+    # Non-default vectorization gets its own results subtree so a scalar or
+    # AVX-512 run cannot clobber the avx2 default it is compared against.
+    exp = (f"{gpu_mode_label}{ensemble_label}{a.feature_split_type} | "
+           f"{a.numerical_split_type}{_VEC_LABEL[a.vectorized]}")
     
     cmd = ["./bazel-bin/examples/train_oblique_forest",
            f"--num_trees={a.num_trees}",
@@ -752,6 +792,8 @@ if __name__ == "__main__":
             ("Helper invocation", helper_invocation),
             ("Bazel build", utils.last_build_cmd if utils.last_build_cmd else "(build skipped)"),
             ("Binary command", binary_cmd_str),
+            ("Vectorization",
+             f"{a.vectorized} (histogram_num_bins={a.histogram_num_bins})"),
             ("Loading/init time (s)",
              f"{loading_init:.4f}" if loading_init is not None else "(marker not found)"),
             ("Training time (s)",

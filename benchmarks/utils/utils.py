@@ -19,15 +19,19 @@ def get_base_parser():
     
     # Common arguments
     parser.add_argument("--input_mode", choices=["uniform", "trunk", "csv"], default="trunk")
-    parser.add_argument("--train_csv")
-    parser.add_argument("--label_col")
+    parser.add_argument("--train_csv", default="./benchmarks/data/HIGGS_with_header.csv")
+    parser.add_argument("--label_col", default="class")
     parser.add_argument("--experiment_name", default="")
     parser.add_argument("--feature_split_type", default="Oblique",
                        choices=["Axis Aligned", "Oblique"])
     parser.add_argument("--numerical_split_type", default="Dynamic Random Histogram",
                        choices=["Exact", "Random", "Equal Width",
                                 "Dynamic Random Histogram", "Dynamic Equal Width Histogram"])
-    parser.add_argument("--vectorized", choices=["None", "avx2", "avx512"], default="avx2")
+    parser.add_argument("--vectorized", choices=["None", "avx2", "avx512"], default="avx2",
+                       help="SIMD histogram-binning kernel to exercise. The kernel is "
+                            "picked at runtime from cpuid + bin count, so this steers "
+                            "histogram_num_bins (avx2 -> 64, avx512 -> 256) and, for "
+                            "None, adds --config=disable_std_upper_bound_vectorization.")
     parser.add_argument("--tree_depth", type=int, default=-1)
     parser.add_argument("--num_threads", type=int, default=1)
     parser.add_argument("--num_trees", type=int, default=1)
