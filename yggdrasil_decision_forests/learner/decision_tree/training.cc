@@ -1603,6 +1603,35 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
   return found_good_condition;
 }
 
+#ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
+// True if an axis-aligned split search over "candidate_attributes" cannot
+// possibly return anything but kNoBetterSplitFound, i.e. the whole job is dead
+// work.
+//
+// All three per-attribute splitters (classification, regression, regression
+// with hessian gain) bail out with kNoBetterSplitFound at the top of their
+// NUMERICAL and DISCRETIZED_NUMERICAL cases when the "split_axis" oneof does
+// not hold an axis_aligned_split -- which is the case for every sparse-oblique
+// configuration. The other column types (categorical, boolean, ...) have no
+// such guard and do real work, so they disqualify the shortcut.
+bool AxisAlignedJobsAreNoop(
+    const dataset::VerticalDataset& train_dataset,
+    const proto::DecisionTreeTrainingConfig& dt_config,
+    const absl::Span<const int32_t> candidate_attributes) {
+  if (dt_config.has_axis_aligned_split()) {
+    return false;
+  }
+  for (const int32_t attribute_idx : candidate_attributes) {
+    const auto type = train_dataset.data_spec().columns(attribute_idx).type();
+    if (type != dataset::proto::ColumnType::NUMERICAL &&
+        type != dataset::proto::ColumnType::DISCRETIZED_NUMERICAL) {
+      return false;
+    }
+  }
+  return true;
+}
+#endif  // SKIP_DEAD_AXIS_ALIGNED_JOBS
+
 absl::StatusOr<bool> FindBestConditionConcurrentManager(
     const dataset::VerticalDataset& train_dataset,
     const absl::Span<const UnsignedExampleIdx> selected_examples,
@@ -1732,7 +1761,34 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   // splitter.
   min_num_jobs_to_test += num_oblique_jobs;
 
-  cache->durable_response_list.resize(num_jobs);
+  // Number of jobs actually dispatched to the workers. Normally all of them.
+  int num_jobs_to_schedule = num_jobs;
+#ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
+  // Under a sparse-oblique config over numerical features, every axis-aligned
+  // job returns kNoBetterSplitFound without reading a single feature value, yet
+  // each one still costs a channel round-trip (two mutex acquisitions plus a
+  // futex wake), a proto::NodeCondition allocation and -- most expensively -- a
+  // full mt19937 re-seed in FindBestConditionFromSplitterWorkRequest. At
+  // num_features = 400k that dead work dominates training. Skip dispatching
+  // them; the RNG stream is left untouched by the discard() below, and since a
+  // no-op job can never report kBetterSplitFound, "best_condition" is
+  // unchanged.
+  //
+  // The num_oblique_jobs > 0 guard covers the degenerate case (e.g.
+  // GetNumProjections() == 0) where dropping the axis-aligned jobs would leave
+  // nothing to dispatch and the manager would block forever on GetResult().
+  if (cache->axis_aligned_jobs_are_noop < 0) {
+    cache->axis_aligned_jobs_are_noop =
+        AxisAlignedJobsAreNoop(train_dataset, dt_config, candidate_attributes)
+            ? 1
+            : 0;
+  }
+  if (cache->axis_aligned_jobs_are_noop == 1 && num_oblique_jobs > 0) {
+    num_jobs_to_schedule = num_oblique_jobs;
+  }
+#endif  // SKIP_DEAD_AXIS_ALIGNED_JOBS
+
+  cache->durable_response_list.resize(num_jobs_to_schedule);
 
   // Marks all the caches "available".
   cache->available_cache_idxs.resize(cache->splitter_cache_list.size());
@@ -1811,7 +1867,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   }
 
   // Schedule some non-oblique jobs if threads are still available.
-  while (next_job_to_schedule < std::min(num_threads, num_jobs) &&
+  while (next_job_to_schedule < std::min(num_threads, num_jobs_to_schedule) &&
          !cache->available_cache_idxs.empty()) {
     DCHECK_GE(next_job_to_schedule, num_oblique_jobs);
     const int attribute_idx =
@@ -1901,7 +1957,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
       break;
     }
 
-    if (next_job_to_process >= num_jobs) {
+    if (next_job_to_process >= num_jobs_to_schedule) {
       // We have processed all the jobs.
       break;
     }
@@ -1911,7 +1967,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
       CHRONO_SCOPE_COARSE(
           ::yggdrasil_decision_forests::chrono_prof::kSplitManagerSubmit);
       while (!cache->available_cache_idxs.empty() &&
-             next_job_to_schedule < num_jobs) {
+             next_job_to_schedule < num_jobs_to_schedule) {
         processor.Submit(build_request(
             next_job_to_schedule,
             /*attribute_idx=*/

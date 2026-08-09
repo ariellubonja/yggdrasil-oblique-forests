@@ -24,6 +24,12 @@ build:symmetric_dw1 --cxxopt="-DSYMMETRIC_DW1=1"
 
 build:bfs_only --cxxopt="-DBFS_ONLY=1"
 
+# Do not dispatch axis-aligned split jobs that a sparse-oblique config over
+# numerical features guarantees will return kNoBetterSplitFound. Removes one
+# channel round-trip + mt19937 re-seed per candidate attribute per node in the
+# concurrent split manager (GBT). Bit-identical trees.
+build:skip_dead_axis_jobs --cxxopt="-DSKIP_DEAD_AXIS_ALIGNED_JOBS=1"
+
 ##### GPU Support
 build:oblique_gpu --cxxopt="-DOBLIQUE_GPU_ENABLED=1" --define=enable_cuda=1
 
