@@ -296,6 +296,16 @@ struct PerThreadCache {
 
   // Used to handle selected leaf example indices.
   std::vector<UnsignedExampleIdx> leaf_example_buffer;
+
+#ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
+  // Memo for "every candidate attribute's axis-aligned split search is a
+  // guaranteed no-op" (see FindBestConditionConcurrentManager). The predicate
+  // only depends on the data spec and the training config, neither of which
+  // changes during training, but evaluating it is O(num_features) -- which is
+  // exactly the per-node cost this optimization exists to remove. -1 = not yet
+  // computed, 0 = false, 1 = true.
+  int axis_aligned_jobs_are_noop = -1;
+#endif
 };
 
 // Signature of a function that sets the value (i.e. the prediction) of a leaf
