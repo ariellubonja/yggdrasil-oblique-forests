@@ -912,6 +912,7 @@ void FillExampleBucketSet(
   if constexpr (ExampleBucketSet::FeatureBucketType::kRequireSorting) {
     {
       CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortFeatures);
+      // TODO what code path does this belong to? Should we Highway?
       std::sort(example_bucket_set->items.begin(),
                 example_bucket_set->items.end(),
                 typename ExampleBucketSet::ExampleBucketType::SortFeature());
@@ -1796,8 +1797,15 @@ SplitSearchResult FindBestSplitFlatHighway(
 
   {
     CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kSortFeatures);
+#ifdef EXACT_STD_SORT
+    // Pre-7a12471d sorter ("[YDF] Highway sorting with Flat ExampleBuffers"
+    // swapped std::sort for VQSort here). hwy::K32V32/K64V64 define operator<
+    // on the key only, so the default comparator reproduces SortAscending.
+    std::sort(hwy_buffer, hwy_buffer + num_selected_examples);
+#else
     // Run VQSort.
     hwy::VQSort(hwy_buffer, num_selected_examples, hwy::SortAscending());
+#endif
   }
 
   // Call ScanSplitsFlat.
