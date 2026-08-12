@@ -6,7 +6,10 @@ inferred from the filename (substring 'runtime' or 'accuracy'):
   *runtime*.log  -> per-run timing samples (uses MEDIAN samples line)
   *accuracy*.log -> per-fold held-out accuracy (preferred 'test-accuracy:' line
                     from --test_csv; falls back to the last 'Train tree N/N ...
-                    accuracy:' = RF OOB / GBT train-accuracy when no test fold)
+                    accuracy:' = RF OOB / GBT train-accuracy when no test fold).
+                    When the log also carries 'test-auc:' / 'test-logloss:'
+                    (newer binaries), side CSVs '<out>_auc.csv' /
+                    '<out>_logloss.csv' are written with the same shape.
 
 Usage: parse_log_to_csv.py <log_file> <out_csv> [runtime|accuracy]
 
@@ -43,6 +46,10 @@ ACC_RE = re.compile(r'Train tree \d+/\d+.*?\baccuracy:([\d.]+)')
 # ("... test-accuracy:0.94"). Disjoint from ACC_RE (no "Train tree N/N" prefix).
 # When present for a sample it is PREFERRED over the OOB/train-accuracy value.
 TEST_ACC_RE = re.compile(r'\btest-accuracy:([\d.]+)')
+# Optional extra held-out metrics on the same line (newer binaries only).
+# AUC is logged as -1 when no ROC was computed; treat that as missing.
+TEST_AUC_RE = re.compile(r'\btest-auc:(-?[\d.eE+\-]+)')
+TEST_LOGLOSS_RE = re.compile(r'\btest-logloss:([\d.eE+\-]+)')
 # STDDEV segment is optional so logs predating it still parse.
 MEDIAN_RUN_RE = re.compile(
     r'^MEDIAN of \d+/\d+ runs: ([\d.eE+\-]+) s'
@@ -163,8 +170,10 @@ def parse_accuracy(log_path):
     rows = []
     # 'seeds' holds the OOB/train-accuracy per sample (seed or CV fold); 'test'
     # holds the held-out test-set accuracy per sample (preferred when present).
-    state = {'cmd': None, 'seeds': {}, 'test': {}, 'cur_seed': None,
-             'vectorized': False}
+    # 'auc'/'logloss' hold the optional extra held-out metrics (no fallback:
+    # they exist only for samples with a test fold and a new-enough binary).
+    state = {'cmd': None, 'seeds': {}, 'test': {}, 'auc': {}, 'logloss': {},
+             'cur_seed': None, 'vectorized': False}
 
     def finish_cmd():
         cmd = state['cmd']
@@ -175,13 +184,21 @@ def parse_accuracy(log_path):
         if seeds:
             dataset, algo = parse_cmd(cmd, state['vectorized'])
             samples = []
+            auc_samples = []
+            logloss_samples = []
             for s in sorted(seeds.keys()):
                 val = test[s] if s in test else seeds[s]
                 samples.append('' if val is None else f"{val}")
-            rows.append((dataset, algo, samples))
+                auc = state['auc'].get(s)
+                auc_samples.append('' if auc is None else f"{auc}")
+                ll = state['logloss'].get(s)
+                logloss_samples.append('' if ll is None else f"{ll}")
+            rows.append((dataset, algo, samples, auc_samples, logloss_samples))
         state['cmd'] = None
         state['seeds'] = {}
         state['test'] = {}
+        state['auc'] = {}
+        state['logloss'] = {}
         state['cur_seed'] = None
 
     with open(log_path) as f:
@@ -210,6 +227,12 @@ def parse_accuracy(log_path):
             m_test = TEST_ACC_RE.search(line)
             if m_test and state['cur_seed'] is not None:
                 state['test'][state['cur_seed']] = float(m_test.group(1))
+                m_auc = TEST_AUC_RE.search(line)
+                if m_auc and float(m_auc.group(1)) >= 0:
+                    state['auc'][state['cur_seed']] = float(m_auc.group(1))
+                m_ll = TEST_LOGLOSS_RE.search(line)
+                if m_ll:
+                    state['logloss'][state['cur_seed']] = float(m_ll.group(1))
                 continue
             m_acc = ACC_RE.search(line)
             if m_acc and state['cur_seed'] is not None:
@@ -258,23 +281,41 @@ def main():
         # Runtime CSV reports median + sample stddev (n-1); raw samples stay
         # in the log (which is itself deleted on success unless something fails).
         header = ['dataset', 'algorithm', 'median_s', 'stddev_s']
-    else:
-        max_samples = max(len(r[2]) for r in rows)
-        header = (['dataset', 'algorithm']
-                  + [f'{col_prefix}_{i}' for i in range(1, max_samples + 1)]
-                  + ['avg', 'std'])
-    with open(out_path, 'w', newline='') as f:
-        w = csv.writer(f)
-        w.writerow(header)
-        if is_runtime:
+        with open(out_path, 'w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(header)
             for dataset, algo, median, samples in rows:
                 w.writerow([dataset, algo, median, sample_stddev(samples)])
-        else:
-            for dataset, algo, samples in rows:
+        print(f"Wrote {len(rows)} rows to {out_path}")
+        return 0
+
+    # Accuracy mode: the main CSV keeps its historical shape (held-out
+    # accuracy per fold). The optional test-auc / test-logloss metrics go to
+    # side CSVs '<out>_auc.csv' / '<out>_logloss.csv' with the identical
+    # shape, written only when the log carried at least one such value.
+    max_samples = max(len(r[2]) for r in rows)
+    header = (['dataset', 'algorithm']
+              + [f'{col_prefix}_{i}' for i in range(1, max_samples + 1)]
+              + ['avg', 'std'])
+
+    def write_metric_csv(path, sample_idx):
+        with open(path, 'w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(header)
+            for r in rows:
+                dataset, algo, samples = r[0], r[1], r[sample_idx]
                 padded = samples + [''] * (max_samples - len(samples))
                 w.writerow([dataset, algo] + padded
                            + [sample_mean(samples), sample_stddev(samples)])
+
+    write_metric_csv(out_path, 2)
     print(f"Wrote {len(rows)} rows to {out_path}")
+    base, ext = os.path.splitext(out_path)
+    for name, sample_idx in (('auc', 3), ('logloss', 4)):
+        if any(v != '' for r in rows for v in r[sample_idx]):
+            side_path = f"{base}_{name}{ext}"
+            write_metric_csv(side_path, sample_idx)
+            print(f"Wrote {len(rows)} rows to {side_path}")
     return 0
 
 

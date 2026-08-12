@@ -1,0 +1,1024 @@
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_train_10500k.csv" --test_csv "benchmarks/data/HIGGS_test_500k.csv" --label_col class --num_trees=240  --numerical_split_type "Exact" --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786488361.346624  939484 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/HIGGS_train_10500k.csv
+I0000 00:00:1786488361.350962  939484 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786488391.348163  939484 vertical_dataset_io.cc:82] 7123400 examples scanned.
+I0000 00:00:1786488406.365028  939484 vertical_dataset_io.cc:91] 10500000 examples read. Memory: usage:1218MB allocated:1218MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786488406.657557  939484 train_oblique_forest.cc:589] Single-pass CSV load complete: 10500000 rows, 29 columns.
+I0000 00:00:1786488406.657606  939484 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786488406.657615  939484 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786488406.657618  939484 train_oblique_forest.cc:844] Using exact splitting
+I0000 00:00:1786488406.657627  939484 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 45.311s
+I0000 00:00:1786488406.657684  939484 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786488406.657686  939484 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786488406.657699  939484 random_forest.cc:498] Training random forest on 10500000 example(s) and 28 feature(s).
+I0000 00:00:1786488406.657710  939484 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786488406.657914  939484 random_forest.cc:667] num_threads being used: 48
+I0000 00:00:1786488472.905613  939688 random_forest.cc:980] Train tree 1/240 [index:26 total:1m6.25s tree:1m6.25s]
+I0000 00:00:1786488538.747513  939699 random_forest.cc:980] Train tree 49/240 [index:49 total:2m12.09s tree:1m5.65s]
+I0000 00:00:1786488605.684472  939712 random_forest.cc:980] Train tree 97/240 [index:98 total:3m19.03s tree:1m6.15s]
+I0000 00:00:1786488672.879074  939712 random_forest.cc:980] Train tree 145/240 [index:144 total:4m26.22s tree:1m7.19s]
+I0000 00:00:1786488740.750320  939712 random_forest.cc:980] Train tree 193/240 [index:192 total:5m34.09s tree:1m7.87s]
+I0000 00:00:1786488748.215223  939484 random_forest.cc:987] random_forest.cc Training block took: 341.558 s
+I0000 00:00:1786489148.788449  939484 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 742.131s
+I0000 00:00:1786489148.789104  939484 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786489150.933853  939484 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:58MB allocated:58MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786489330.460861  939484 decision_forest.cc:817] Model loaded with 240 root(s), 576854010 node(s), and 28 input feature(s).
+I0000 00:00:1786489330.460888  939484 abstract_model.cc:1500] Engine "RandomForestGeneric" built
+I0000 00:00:1786489379.242501  939484 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786489394.346572  939484 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786489409.430454  939484 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/HIGGS_test_500k.csv (500000 rows): test-accuracy:0.761886 test-auc:0.847244 test-logloss:0.491449
+I0000 00:00:1786489409.430621  939484 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.761886  CI95[W][0.760893 0.762877]
+LogLoss: : 0.491449
+ErrorRate: : 0.238114
+
+Default Accuracy: : 0.529014
+Default LogLoss: : 0.691463
+Default ErrorRate: : 0.470986
+
+Confusion Table:
+truth\prediction
+            1       0
+    1  207885   56622
+    0   62435  173058
+Total: 500000
+
+  "1" vs. the others
+    auc: 0.847244  CI95[H][0.846176 0.848313] CI95[B][0.846178 0.848248]
+    p/r-auc: 0.857262  CI95[L][0.855923 0.85859] CI95[B][0.855956 0.858554]
+    ap: 0.858291   CI95[B][0.856993 0.859585]
+
+  "0" vs. the others
+    auc: 0.847244  CI95[H][0.846141 0.848348] CI95[B][0.846233 0.848269]
+    p/r-auc: 0.839165  CI95[L][0.837675 0.840643] CI95[B][0.837843 0.84049]
+    ap: 0.840344   CI95[B][0.839026 0.841665]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_train_10500k.csv" --test_csv "benchmarks/data/HIGGS_test_500k.csv" --label_col class --num_trees=240  --numerical_split_type "Random" --histogram_num_bins=64 --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786489521.592966  944149 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/HIGGS_train_10500k.csv
+I0000 00:00:1786489521.597188  944149 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786489551.594346  944149 vertical_dataset_io.cc:82] 7046800 examples scanned.
+I0000 00:00:1786489567.069260  944149 vertical_dataset_io.cc:91] 10500000 examples read. Memory: usage:1218MB allocated:1218MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786489567.326538  944149 train_oblique_forest.cc:589] Single-pass CSV load complete: 10500000 rows, 29 columns.
+I0000 00:00:1786489567.326595  944149 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786489567.326604  944149 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786489567.326607  944149 train_oblique_forest.cc:849] Using histogram splitting: Random with 64 bins
+I0000 00:00:1786489567.326616  944149 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 45.7337s
+I0000 00:00:1786489567.326677  944149 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786489567.326679  944149 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786489567.326692  944149 random_forest.cc:498] Training random forest on 10500000 example(s) and 28 feature(s).
+I0000 00:00:1786489567.326703  944149 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786489567.326903  944149 random_forest.cc:667] num_threads being used: 48
+I0000 00:00:1786489634.728509  944331 random_forest.cc:980] Train tree 1/240 [index:13 total:1m7.40s tree:1m7.40s]
+I0000 00:00:1786489702.848950  944331 random_forest.cc:980] Train tree 49/240 [index:48 total:2m15.52s tree:1m8.12s]
+I0000 00:00:1786489771.864061  944327 random_forest.cc:980] Train tree 97/240 [index:100 total:3m24.54s tree:1m8.00s]
+I0000 00:00:1786489840.424966  944352 random_forest.cc:980] Train tree 145/240 [index:150 total:4m33.10s tree:1m7.76s]
+I0000 00:00:1786489909.152926  944352 random_forest.cc:980] Train tree 193/240 [index:192 total:5m41.83s tree:1m8.73s]
+I0000 00:00:1786489914.794288  944149 random_forest.cc:987] random_forest.cc Training block took: 347.468 s
+I0000 00:00:1786490352.097005  944149 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 784.77s
+I0000 00:00:1786490352.097655  944149 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786490354.234502  944149 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:58MB allocated:58MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786490548.946550  944149 decision_forest.cc:817] Model loaded with 240 root(s), 620506698 node(s), and 28 input feature(s).
+I0000 00:00:1786490548.946578  944149 abstract_model.cc:1500] Engine "RandomForestGeneric" built
+I0000 00:00:1786490597.530512  944149 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786490612.106461  944149 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786490626.666738  944149 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/HIGGS_test_500k.csv (500000 rows): test-accuracy:0.761678 test-auc:0.847245 test-logloss:0.492546
+I0000 00:00:1786490626.666901  944149 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.761678  CI95[W][0.760685 0.762669]
+LogLoss: : 0.492546
+ErrorRate: : 0.238322
+
+Default Accuracy: : 0.529014
+Default LogLoss: : 0.691463
+Default ErrorRate: : 0.470986
+
+Confusion Table:
+truth\prediction
+            1       0
+    1  208163   56344
+    0   62817  172676
+Total: 500000
+
+  "1" vs. the others
+    auc: 0.847245  CI95[H][0.846176 0.848313] CI95[B][0.84618 0.848257]
+    p/r-auc: 0.857253  CI95[L][0.855915 0.858581] CI95[B][0.855899 0.858489]
+    ap: 0.858284   CI95[B][0.856937 0.859518]
+
+  "0" vs. the others
+    auc: 0.847245  CI95[H][0.846141 0.848348] CI95[B][0.846164 0.848218]
+    p/r-auc: 0.839272  CI95[L][0.837783 0.84075] CI95[B][0.837901 0.840546]
+    ap: 0.840462   CI95[B][0.839093 0.841732]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_train_10500k.csv" --test_csv "benchmarks/data/HIGGS_test_500k.csv" --label_col class --num_trees=240  --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins=64 --dynamic_split_threshold=250 --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786490752.832926  949078 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/HIGGS_train_10500k.csv
+I0000 00:00:1786490752.837153  949078 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786490782.834228  949078 vertical_dataset_io.cc:82] 7061800 examples scanned.
+I0000 00:00:1786490798.249185  949078 vertical_dataset_io.cc:91] 10500000 examples read. Memory: usage:1218MB allocated:1218MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786490798.507747  949078 train_oblique_forest.cc:589] Single-pass CSV load complete: 10500000 rows, 29 columns.
+I0000 00:00:1786490798.507807  949078 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786490798.507815  949078 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786490798.507818  949078 train_oblique_forest.cc:861] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1786490798.507828  949078 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 45.6749s
+I0000 00:00:1786490798.507889  949078 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786490798.509603  949078 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786490798.509629  949078 random_forest.cc:498] Training random forest on 10500000 example(s) and 28 feature(s).
+I0000 00:00:1786490798.509648  949078 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786490798.509848  949078 random_forest.cc:667] num_threads being used: 48
+I0000 00:00:1786490852.173782  949314 random_forest.cc:980] Train tree 1/240 [index:47 total:53.66s tree:53.66s]
+I0000 00:00:1786490905.905631  949293 random_forest.cc:980] Train tree 49/240 [index:52 total:1m47.40s tree:53.36s]
+I0000 00:00:1786490961.226337  949291 random_forest.cc:980] Train tree 97/240 [index:97 total:2m42.72s tree:55.02s]
+I0000 00:00:1786491015.539410  949307 random_forest.cc:980] Train tree 145/240 [index:151 total:3m37.03s tree:53.68s]
+I0000 00:00:1786491070.432339  949293 random_forest.cc:980] Train tree 193/240 [index:198 total:4m31.92s tree:54.30s]
+I0000 00:00:1786491074.322149  949078 random_forest.cc:987] random_forest.cc Training block took: 275.814 s
+I0000 00:00:1786491481.085009  949078 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 682.577s
+I0000 00:00:1786491481.085671  949078 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786491483.225676  949078 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:58MB allocated:58MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786491665.174634  949078 decision_forest.cc:817] Model loaded with 240 root(s), 589539766 node(s), and 28 input feature(s).
+I0000 00:00:1786491665.174662  949078 abstract_model.cc:1500] Engine "RandomForestGeneric" built
+I0000 00:00:1786491713.241305  949078 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786491728.157099  949078 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786491743.046034  949078 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/HIGGS_test_500k.csv (500000 rows): test-accuracy:0.761702 test-auc:0.847221 test-logloss:0.492502
+I0000 00:00:1786491743.046201  949078 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.761702  CI95[W][0.760709 0.762693]
+LogLoss: : 0.492502
+ErrorRate: : 0.238298
+
+Default Accuracy: : 0.529014
+Default LogLoss: : 0.691463
+Default ErrorRate: : 0.470986
+
+Confusion Table:
+truth\prediction
+            1       0
+    1  207912   56595
+    0   62554  172939
+Total: 500000
+
+  "1" vs. the others
+    auc: 0.847221  CI95[H][0.846153 0.84829] CI95[B][0.846143 0.848283]
+    p/r-auc: 0.857263  CI95[L][0.855925 0.858591] CI95[B][0.855911 0.8586]
+    ap: 0.8583   CI95[B][0.85695 0.85963]
+
+  "0" vs. the others
+    auc: 0.847221  CI95[H][0.846118 0.848325] CI95[B][0.846074 0.848263]
+    p/r-auc: 0.839294  CI95[L][0.837805 0.840772] CI95[B][0.837893 0.840642]
+    ap: 0.840487   CI95[B][0.839086 0.841833]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_train_10500k.csv" --test_csv "benchmarks/data/HIGGS_test_500k.csv" --label_col class --num_trees=300 --ensemble_method Boosting --numerical_split_type "Exact" --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786491857.862672  953534 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/HIGGS_train_10500k.csv
+I0000 00:00:1786491857.866892  953534 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786491887.863995  953534 vertical_dataset_io.cc:82] 7065000 examples scanned.
+I0000 00:00:1786491903.156292  953534 vertical_dataset_io.cc:91] 10500000 examples read. Memory: usage:1218MB allocated:1218MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786491903.416180  953534 train_oblique_forest.cc:589] Single-pass CSV load complete: 10500000 rows, 29 columns.
+I0000 00:00:1786491903.416228  953534 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786491903.416237  953534 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786491903.416240  953534 train_oblique_forest.cc:844] Using exact splitting
+I0000 00:00:1786491903.416251  953534 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 45.5536s
+I0000 00:00:1786491903.416306  953534 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786491903.416308  953534 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786491903.416316  953534 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1786491903.416501  953534 gradient_boosted_trees.cc:1204] Training gradient boosted tree on 10500000 example(s) and 28 feature(s).
+I0000 00:00:1786491903.416517  953534 gradient_boosted_trees.cc:1244] 10500000 examples used for training and 0 examples used for validation
+I0000 00:00:1786491903.473689  953534 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786491903.473710  953534 training.cc:5186] Create processor with 48 threads for split computation
+I0000 00:00:1786491903.474600  953534 gradient_boosted_trees.cc:1425] Create thread pool with 48 threads for loss computation
+I0000 00:00:1786491909.643437  953534 gradient_boosted_trees.cc:1744] Train tree 1/300 train-loss:1.366621 train-accuracy:0.548673 [total:6.17s iter:6.17s]
+I0000 00:00:1786491915.502055  953534 gradient_boosted_trees.cc:1744] Train tree 2/300 train-loss:1.352990 train-accuracy:0.596537 [total:12.03s iter:5.86s]
+I0000 00:00:1786491921.348775  953534 gradient_boosted_trees.cc:1746] Train tree 3/300 train-loss:1.339894 train-accuracy:0.612694 [total:17.87s iter:5.85s]
+I0000 00:00:1786491945.101659  953534 gradient_boosted_trees.cc:1746] Train tree 7/300 train-loss:1.302614 train-accuracy:0.650634 [total:41.63s iter:6.01s]
+I0000 00:00:1786491969.045158  953534 gradient_boosted_trees.cc:1746] Train tree 11/300 train-loss:1.266426 train-accuracy:0.670707 [total:1m5.57s iter:6.11s]
+I0000 00:00:1786491992.027530  953534 gradient_boosted_trees.cc:1746] Train tree 15/300 train-loss:1.240412 train-accuracy:0.679619 [total:1m28.55s iter:5.60s]
+I0000 00:00:1786492014.233332  953534 gradient_boosted_trees.cc:1746] Train tree 19/300 train-loss:1.221658 train-accuracy:0.684801 [total:1m50.76s iter:5.70s]
+I0000 00:00:1786492037.180309  953534 gradient_boosted_trees.cc:1746] Train tree 23/300 train-loss:1.203594 train-accuracy:0.692242 [total:2m13.70s iter:5.97s]
+I0000 00:00:1786492060.069529  953534 gradient_boosted_trees.cc:1746] Train tree 27/300 train-loss:1.190992 train-accuracy:0.695218 [total:2m36.59s iter:5.45s]
+I0000 00:00:1786492082.460813  953534 gradient_boosted_trees.cc:1746] Train tree 31/300 train-loss:1.182463 train-accuracy:0.697795 [total:2m58.99s iter:5.56s]
+I0000 00:00:1786492104.689052  953534 gradient_boosted_trees.cc:1746] Train tree 35/300 train-loss:1.173123 train-accuracy:0.699951 [total:3m21.21s iter:5.21s]
+I0000 00:00:1786492127.396678  953534 gradient_boosted_trees.cc:1746] Train tree 39/300 train-loss:1.163320 train-accuracy:0.703077 [total:3m43.92s iter:5.73s]
+I0000 00:00:1786492150.069101  953534 gradient_boosted_trees.cc:1746] Train tree 43/300 train-loss:1.155362 train-accuracy:0.704941 [total:4m6.59s iter:5.88s]
+I0000 00:00:1786492172.291972  953534 gradient_boosted_trees.cc:1746] Train tree 47/300 train-loss:1.148992 train-accuracy:0.706431 [total:4m28.82s iter:5.71s]
+I0000 00:00:1786492194.211991  953534 gradient_boosted_trees.cc:1746] Train tree 51/300 train-loss:1.142814 train-accuracy:0.708174 [total:4m50.74s iter:5.51s]
+I0000 00:00:1786492216.337058  953534 gradient_boosted_trees.cc:1746] Train tree 55/300 train-loss:1.135936 train-accuracy:0.709787 [total:5m12.86s iter:5.18s]
+I0000 00:00:1786492238.937794  953534 gradient_boosted_trees.cc:1746] Train tree 59/300 train-loss:1.129400 train-accuracy:0.711645 [total:5m35.46s iter:5.50s]
+I0000 00:00:1786492261.878383  953534 gradient_boosted_trees.cc:1746] Train tree 63/300 train-loss:1.125215 train-accuracy:0.712876 [total:5m58.40s iter:5.35s]
+I0000 00:00:1786492284.588902  953534 gradient_boosted_trees.cc:1746] Train tree 67/300 train-loss:1.119592 train-accuracy:0.714352 [total:6m21.11s iter:5.72s]
+I0000 00:00:1786492306.804822  953534 gradient_boosted_trees.cc:1746] Train tree 71/300 train-loss:1.114844 train-accuracy:0.715273 [total:6m43.33s iter:5.54s]
+I0000 00:00:1786492329.187520  953534 gradient_boosted_trees.cc:1746] Train tree 75/300 train-loss:1.111964 train-accuracy:0.716083 [total:7m5.71s iter:5.51s]
+I0000 00:00:1786492352.061997  953534 gradient_boosted_trees.cc:1746] Train tree 79/300 train-loss:1.107624 train-accuracy:0.717134 [total:7m28.59s iter:5.56s]
+I0000 00:00:1786492374.588556  953534 gradient_boosted_trees.cc:1746] Train tree 83/300 train-loss:1.104660 train-accuracy:0.717980 [total:7m51.11s iter:5.41s]
+I0000 00:00:1786492396.325949  953534 gradient_boosted_trees.cc:1746] Train tree 87/300 train-loss:1.102255 train-accuracy:0.718627 [total:8m12.85s iter:5.36s]
+I0000 00:00:1786492418.628744  953534 gradient_boosted_trees.cc:1746] Train tree 91/300 train-loss:1.099365 train-accuracy:0.719260 [total:8m35.15s iter:5.86s]
+I0000 00:00:1786492441.485670  953534 gradient_boosted_trees.cc:1746] Train tree 95/300 train-loss:1.097016 train-accuracy:0.719895 [total:8m58.01s iter:5.72s]
+I0000 00:00:1786492463.221070  953534 gradient_boosted_trees.cc:1746] Train tree 99/300 train-loss:1.095564 train-accuracy:0.720299 [total:9m19.75s iter:5.55s]
+I0000 00:00:1786492485.072680  953534 gradient_boosted_trees.cc:1746] Train tree 103/300 train-loss:1.093451 train-accuracy:0.720841 [total:9m41.60s iter:5.72s]
+I0000 00:00:1786492507.549312  953534 gradient_boosted_trees.cc:1746] Train tree 107/300 train-loss:1.091493 train-accuracy:0.721304 [total:10m4.07s iter:5.46s]
+I0000 00:00:1786492530.320023  953534 gradient_boosted_trees.cc:1746] Train tree 111/300 train-loss:1.089849 train-accuracy:0.721810 [total:10m26.84s iter:5.60s]
+I0000 00:00:1786492553.026390  953534 gradient_boosted_trees.cc:1746] Train tree 115/300 train-loss:1.087162 train-accuracy:0.722372 [total:10m49.55s iter:6.14s]
+I0000 00:00:1786492575.314364  953534 gradient_boosted_trees.cc:1746] Train tree 119/300 train-loss:1.085526 train-accuracy:0.722790 [total:11m11.84s iter:5.72s]
+I0000 00:00:1786492597.974402  953534 gradient_boosted_trees.cc:1746] Train tree 123/300 train-loss:1.084051 train-accuracy:0.723180 [total:11m34.50s iter:5.42s]
+I0000 00:00:1786492620.562383  953534 gradient_boosted_trees.cc:1746] Train tree 127/300 train-loss:1.082398 train-accuracy:0.723615 [total:11m57.09s iter:5.79s]
+I0000 00:00:1786492643.248726  953534 gradient_boosted_trees.cc:1746] Train tree 131/300 train-loss:1.081114 train-accuracy:0.723953 [total:12m19.77s iter:5.93s]
+I0000 00:00:1786492665.046726  953534 gradient_boosted_trees.cc:1746] Train tree 135/300 train-loss:1.079488 train-accuracy:0.724417 [total:12m41.57s iter:5.50s]
+I0000 00:00:1786492687.121111  953534 gradient_boosted_trees.cc:1746] Train tree 139/300 train-loss:1.078436 train-accuracy:0.724666 [total:13m3.65s iter:5.46s]
+I0000 00:00:1786492708.022352  953534 gradient_boosted_trees.cc:1746] Train tree 143/300 train-loss:1.077615 train-accuracy:0.724926 [total:13m24.55s iter:4.99s]
+I0000 00:00:1786492730.290226  953534 gradient_boosted_trees.cc:1746] Train tree 147/300 train-loss:1.076545 train-accuracy:0.725282 [total:13m46.81s iter:5.42s]
+I0000 00:00:1786492752.174175  953534 gradient_boosted_trees.cc:1746] Train tree 151/300 train-loss:1.075747 train-accuracy:0.725438 [total:14m8.70s iter:5.55s]
+I0000 00:00:1786492774.334525  953534 gradient_boosted_trees.cc:1746] Train tree 155/300 train-loss:1.074571 train-accuracy:0.725739 [total:14m30.86s iter:5.06s]
+I0000 00:00:1786492796.623265  953534 gradient_boosted_trees.cc:1746] Train tree 159/300 train-loss:1.073298 train-accuracy:0.726179 [total:14m53.15s iter:5.40s]
+I0000 00:00:1786492818.534660  953534 gradient_boosted_trees.cc:1746] Train tree 163/300 train-loss:1.071878 train-accuracy:0.726562 [total:15m15.06s iter:5.41s]
+I0000 00:00:1786492840.955343  953534 gradient_boosted_trees.cc:1746] Train tree 167/300 train-loss:1.070985 train-accuracy:0.726774 [total:15m37.48s iter:5.38s]
+I0000 00:00:1786492862.818489  953534 gradient_boosted_trees.cc:1746] Train tree 171/300 train-loss:1.069952 train-accuracy:0.727088 [total:15m59.34s iter:5.55s]
+I0000 00:00:1786492884.227351  953534 gradient_boosted_trees.cc:1746] Train tree 175/300 train-loss:1.069111 train-accuracy:0.727396 [total:16m20.75s iter:5.83s]
+I0000 00:00:1786492906.198220  953534 gradient_boosted_trees.cc:1746] Train tree 179/300 train-loss:1.068148 train-accuracy:0.727718 [total:16m42.72s iter:5.17s]
+I0000 00:00:1786492927.252858  953534 gradient_boosted_trees.cc:1746] Train tree 183/300 train-loss:1.067604 train-accuracy:0.727855 [total:17m3.78s iter:5.32s]
+I0000 00:00:1786492949.260732  953534 gradient_boosted_trees.cc:1746] Train tree 187/300 train-loss:1.066818 train-accuracy:0.728110 [total:17m25.79s iter:5.21s]
+I0000 00:00:1786492971.814521  953534 gradient_boosted_trees.cc:1746] Train tree 191/300 train-loss:1.065838 train-accuracy:0.728415 [total:17m48.34s iter:5.49s]
+I0000 00:00:1786492993.814042  953534 gradient_boosted_trees.cc:1746] Train tree 195/300 train-loss:1.065233 train-accuracy:0.728552 [total:18m10.34s iter:5.30s]
+I0000 00:00:1786493016.212775  953534 gradient_boosted_trees.cc:1746] Train tree 199/300 train-loss:1.064371 train-accuracy:0.728811 [total:18m32.74s iter:5.68s]
+I0000 00:00:1786493037.798720  953534 gradient_boosted_trees.cc:1746] Train tree 203/300 train-loss:1.063731 train-accuracy:0.729017 [total:18m54.32s iter:4.90s]
+I0000 00:00:1786493057.863749  953534 gradient_boosted_trees.cc:1746] Train tree 207/300 train-loss:1.063228 train-accuracy:0.729176 [total:19m14.39s iter:4.88s]
+I0000 00:00:1786493080.407692  953534 gradient_boosted_trees.cc:1746] Train tree 211/300 train-loss:1.062674 train-accuracy:0.729372 [total:19m36.93s iter:5.45s]
+I0000 00:00:1786493101.670383  953534 gradient_boosted_trees.cc:1746] Train tree 215/300 train-loss:1.062145 train-accuracy:0.729527 [total:19m58.19s iter:5.37s]
+I0000 00:00:1786493123.248552  953534 gradient_boosted_trees.cc:1746] Train tree 219/300 train-loss:1.061565 train-accuracy:0.729673 [total:20m19.77s iter:5.26s]
+I0000 00:00:1786493144.971758  953534 gradient_boosted_trees.cc:1746] Train tree 223/300 train-loss:1.060910 train-accuracy:0.729845 [total:20m41.50s iter:5.46s]
+I0000 00:00:1786493166.792836  953534 gradient_boosted_trees.cc:1746] Train tree 227/300 train-loss:1.060309 train-accuracy:0.729997 [total:21m3.32s iter:5.08s]
+I0000 00:00:1786493189.503430  953534 gradient_boosted_trees.cc:1746] Train tree 231/300 train-loss:1.059573 train-accuracy:0.730246 [total:21m26.03s iter:5.21s]
+I0000 00:00:1786493210.792662  953534 gradient_boosted_trees.cc:1746] Train tree 235/300 train-loss:1.059117 train-accuracy:0.730409 [total:21m47.32s iter:5.49s]
+I0000 00:00:1786493232.170771  953534 gradient_boosted_trees.cc:1746] Train tree 239/300 train-loss:1.058596 train-accuracy:0.730605 [total:22m8.70s iter:5.73s]
+I0000 00:00:1786493254.811572  953534 gradient_boosted_trees.cc:1746] Train tree 243/300 train-loss:1.058038 train-accuracy:0.730820 [total:22m31.34s iter:5.85s]
+I0000 00:00:1786493276.996938  953534 gradient_boosted_trees.cc:1746] Train tree 247/300 train-loss:1.057409 train-accuracy:0.731019 [total:22m53.52s iter:5.54s]
+I0000 00:00:1786493298.779929  953534 gradient_boosted_trees.cc:1746] Train tree 251/300 train-loss:1.056959 train-accuracy:0.731209 [total:23m15.30s iter:5.47s]
+I0000 00:00:1786493320.145814  953534 gradient_boosted_trees.cc:1746] Train tree 255/300 train-loss:1.056563 train-accuracy:0.731300 [total:23m36.67s iter:5.57s]
+I0000 00:00:1786493342.227822  953534 gradient_boosted_trees.cc:1746] Train tree 259/300 train-loss:1.055984 train-accuracy:0.731526 [total:23m58.75s iter:5.52s]
+I0000 00:00:1786493363.557440  953534 gradient_boosted_trees.cc:1746] Train tree 263/300 train-loss:1.055576 train-accuracy:0.731642 [total:24m20.08s iter:5.13s]
+I0000 00:00:1786493384.227205  953534 gradient_boosted_trees.cc:1746] Train tree 267/300 train-loss:1.055194 train-accuracy:0.731760 [total:24m40.75s iter:5.80s]
+I0000 00:00:1786493405.772698  953534 gradient_boosted_trees.cc:1746] Train tree 271/300 train-loss:1.054692 train-accuracy:0.731913 [total:25m2.30s iter:5.49s]
+I0000 00:00:1786493427.686607  953534 gradient_boosted_trees.cc:1746] Train tree 275/300 train-loss:1.054119 train-accuracy:0.732147 [total:25m24.21s iter:5.49s]
+I0000 00:00:1786493450.275276  953534 gradient_boosted_trees.cc:1746] Train tree 279/300 train-loss:1.053703 train-accuracy:0.732276 [total:25m46.80s iter:5.93s]
+I0000 00:00:1786493472.209119  953534 gradient_boosted_trees.cc:1746] Train tree 283/300 train-loss:1.053258 train-accuracy:0.732486 [total:26m8.73s iter:5.19s]
+I0000 00:00:1786493494.170541  953534 gradient_boosted_trees.cc:1746] Train tree 287/300 train-loss:1.052914 train-accuracy:0.732579 [total:26m30.70s iter:5.80s]
+I0000 00:00:1786493516.050029  953534 gradient_boosted_trees.cc:1746] Train tree 291/300 train-loss:1.052496 train-accuracy:0.732732 [total:26m52.57s iter:5.65s]
+I0000 00:00:1786493536.732523  953534 gradient_boosted_trees.cc:1746] Train tree 295/300 train-loss:1.052159 train-accuracy:0.732864 [total:27m13.26s iter:5.25s]
+I0000 00:00:1786493557.827213  953534 gradient_boosted_trees.cc:1746] Train tree 299/300 train-loss:1.051815 train-accuracy:0.732954 [total:27m34.35s iter:4.74s]
+I0000 00:00:1786493563.699345  953534 gradient_boosted_trees.cc:1744] Train tree 300/300 train-loss:1.051588 train-accuracy:0.733014 [total:27m40.22s iter:5.87s]
+I0000 00:00:1786493563.708013  953534 gradient_boosted_trees.cc:1825] gradient_boosted_trees.cc Training block took: 1660.29 s
+I0000 00:00:1786493563.721084  953534 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 1660.3s
+I0000 00:00:1786493563.721908  953534 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786493565.871099  953534 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:58MB allocated:58MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786493565.874723  953534 decision_forest.cc:817] Model loaded with 300 root(s), 18868 node(s), and 28 input feature(s).
+I0000 00:00:1786493565.874734  953534 abstract_model.cc:1500] Engine "GradientBoostedTreesGeneric" built
+I0000 00:00:1786493567.780333  953534 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786493592.270843  953534 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786493616.700122  953534 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/HIGGS_test_500k.csv (500000 rows): test-accuracy:0.732302 test-auc:0.812333 test-logloss:0.526346
+I0000 00:00:1786493616.700929  953534 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.732302  CI95[W][0.73127 0.733332]
+LogLoss: : 0.526346
+ErrorRate: : 0.267698
+
+Default Accuracy: : 0.529014
+Default LogLoss: : 0.691463
+Default ErrorRate: : 0.470986
+
+Confusion Table:
+truth\prediction
+            1       0
+    1  201023   63484
+    0   70365  165128
+Total: 500000
+
+  "1" vs. the others
+    auc: 0.812333  CI95[H][0.811156 0.81351] CI95[B][0.811179 0.81351]
+    p/r-auc: 0.827194  CI95[L][0.825749 0.82863] CI95[B][0.825722 0.828608]
+    ap: 0.827194   CI95[B][0.825721 0.828607]
+
+  "0" vs. the others
+    auc: 0.812333  CI95[H][0.811123 0.813543] CI95[B][0.811168 0.813466]
+    p/r-auc: 0.793941  CI95[L][0.792303 0.79557] CI95[B][0.792375 0.795546]
+    ap: 0.79394   CI95[B][0.792374 0.795545]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_train_10500k.csv" --test_csv "benchmarks/data/HIGGS_test_500k.csv" --label_col class --num_trees=300 --ensemble_method Boosting --numerical_split_type "Random" --histogram_num_bins=64 --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786493616.910809  960653 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/HIGGS_train_10500k.csv
+I0000 00:00:1786493616.915019  960653 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786493646.912004  960653 vertical_dataset_io.cc:82] 7044400 examples scanned.
+I0000 00:00:1786493662.138231  960653 vertical_dataset_io.cc:91] 10500000 examples read. Memory: usage:1218MB allocated:1218MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786493662.395827  960653 train_oblique_forest.cc:589] Single-pass CSV load complete: 10500000 rows, 29 columns.
+I0000 00:00:1786493662.395887  960653 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786493662.395897  960653 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786493662.395899  960653 train_oblique_forest.cc:849] Using histogram splitting: Random with 64 bins
+I0000 00:00:1786493662.395910  960653 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 45.4851s
+I0000 00:00:1786493662.395986  960653 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786493662.395989  960653 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786493662.395997  960653 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1786493662.396180  960653 gradient_boosted_trees.cc:1204] Training gradient boosted tree on 10500000 example(s) and 28 feature(s).
+I0000 00:00:1786493662.396195  960653 gradient_boosted_trees.cc:1244] 10500000 examples used for training and 0 examples used for validation
+I0000 00:00:1786493662.453021  960653 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786493662.453035  960653 training.cc:5186] Create processor with 48 threads for split computation
+I0000 00:00:1786493662.453914  960653 gradient_boosted_trees.cc:1425] Create thread pool with 48 threads for loss computation
+I0000 00:00:1786493666.575501  960653 gradient_boosted_trees.cc:1744] Train tree 1/300 train-loss:1.375268 train-accuracy:0.542100 [total:4.12s iter:4.12s]
+I0000 00:00:1786493671.297758  960653 gradient_boosted_trees.cc:1744] Train tree 2/300 train-loss:1.364782 train-accuracy:0.564476 [total:8.84s iter:4.72s]
+I0000 00:00:1786493675.608609  960653 gradient_boosted_trees.cc:1746] Train tree 3/300 train-loss:1.352257 train-accuracy:0.582385 [total:13.15s iter:4.31s]
+I0000 00:00:1786493697.001869  960653 gradient_boosted_trees.cc:1746] Train tree 8/300 train-loss:1.305311 train-accuracy:0.653048 [total:34.55s iter:4.19s]
+I0000 00:00:1786493719.068039  960653 gradient_boosted_trees.cc:1746] Train tree 13/300 train-loss:1.264262 train-accuracy:0.675063 [total:56.61s iter:4.66s]
+I0000 00:00:1786493741.867691  960653 gradient_boosted_trees.cc:1746] Train tree 18/300 train-loss:1.233529 train-accuracy:0.684806 [total:1m19.41s iter:4.53s]
+I0000 00:00:1786493764.518211  960653 gradient_boosted_trees.cc:1746] Train tree 23/300 train-loss:1.210942 train-accuracy:0.691518 [total:1m42.06s iter:4.61s]
+I0000 00:00:1786493787.740967  960653 gradient_boosted_trees.cc:1746] Train tree 28/300 train-loss:1.193144 train-accuracy:0.695683 [total:2m5.29s iter:4.86s]
+I0000 00:00:1786493811.018180  960653 gradient_boosted_trees.cc:1746] Train tree 33/300 train-loss:1.178914 train-accuracy:0.700148 [total:2m28.56s iter:4.68s]
+I0000 00:00:1786493834.172439  960653 gradient_boosted_trees.cc:1746] Train tree 38/300 train-loss:1.165214 train-accuracy:0.703330 [total:2m51.72s iter:4.58s]
+I0000 00:00:1786493857.108638  960653 gradient_boosted_trees.cc:1746] Train tree 43/300 train-loss:1.155364 train-accuracy:0.706008 [total:3m14.65s iter:4.33s]
+I0000 00:00:1786493879.966451  960653 gradient_boosted_trees.cc:1746] Train tree 48/300 train-loss:1.147221 train-accuracy:0.707920 [total:3m37.51s iter:4.88s]
+I0000 00:00:1786493902.038686  960653 gradient_boosted_trees.cc:1746] Train tree 53/300 train-loss:1.141323 train-accuracy:0.709209 [total:3m59.58s iter:4.88s]
+I0000 00:00:1786493923.644712  960653 gradient_boosted_trees.cc:1746] Train tree 58/300 train-loss:1.134216 train-accuracy:0.710752 [total:4m21.19s iter:4.46s]
+I0000 00:00:1786493945.204438  960653 gradient_boosted_trees.cc:1746] Train tree 63/300 train-loss:1.128621 train-accuracy:0.711742 [total:4m42.75s iter:4.21s]
+I0000 00:00:1786493967.436542  960653 gradient_boosted_trees.cc:1746] Train tree 68/300 train-loss:1.122851 train-accuracy:0.713303 [total:5m4.98s iter:4.78s]
+I0000 00:00:1786493989.564545  960653 gradient_boosted_trees.cc:1746] Train tree 73/300 train-loss:1.117661 train-accuracy:0.714383 [total:5m27.11s iter:4.46s]
+I0000 00:00:1786494010.556798  960653 gradient_boosted_trees.cc:1746] Train tree 78/300 train-loss:1.114092 train-accuracy:0.715051 [total:5m48.10s iter:3.77s]
+I0000 00:00:1786494032.620242  960653 gradient_boosted_trees.cc:1746] Train tree 83/300 train-loss:1.110169 train-accuracy:0.716174 [total:6m10.17s iter:4.34s]
+I0000 00:00:1786494054.535914  960653 gradient_boosted_trees.cc:1746] Train tree 88/300 train-loss:1.106700 train-accuracy:0.717010 [total:6m32.08s iter:4.06s]
+I0000 00:00:1786494076.259223  960653 gradient_boosted_trees.cc:1746] Train tree 93/300 train-loss:1.102425 train-accuracy:0.718010 [total:6m53.80s iter:4.26s]
+I0000 00:00:1786494097.337358  960653 gradient_boosted_trees.cc:1746] Train tree 98/300 train-loss:1.100099 train-accuracy:0.718466 [total:7m14.88s iter:4.09s]
+I0000 00:00:1786494119.107222  960653 gradient_boosted_trees.cc:1746] Train tree 103/300 train-loss:1.098262 train-accuracy:0.718877 [total:7m36.65s iter:4.55s]
+I0000 00:00:1786494140.708939  960653 gradient_boosted_trees.cc:1746] Train tree 108/300 train-loss:1.095675 train-accuracy:0.719624 [total:7m58.25s iter:4.14s]
+I0000 00:00:1786494161.414946  960653 gradient_boosted_trees.cc:1746] Train tree 113/300 train-loss:1.093804 train-accuracy:0.720155 [total:8m18.96s iter:3.94s]
+I0000 00:00:1786494182.969449  960653 gradient_boosted_trees.cc:1746] Train tree 118/300 train-loss:1.091870 train-accuracy:0.720663 [total:8m40.51s iter:4.50s]
+I0000 00:00:1786494204.436335  960653 gradient_boosted_trees.cc:1746] Train tree 123/300 train-loss:1.089615 train-accuracy:0.721133 [total:9m1.98s iter:4.37s]
+I0000 00:00:1786494226.303890  960653 gradient_boosted_trees.cc:1746] Train tree 128/300 train-loss:1.087672 train-accuracy:0.721594 [total:9m23.85s iter:4.51s]
+I0000 00:00:1786494248.699593  960653 gradient_boosted_trees.cc:1746] Train tree 133/300 train-loss:1.085716 train-accuracy:0.722146 [total:9m46.24s iter:4.39s]
+I0000 00:00:1786494270.413489  960653 gradient_boosted_trees.cc:1746] Train tree 138/300 train-loss:1.084334 train-accuracy:0.722703 [total:10m7.96s iter:4.37s]
+I0000 00:00:1786494291.925785  960653 gradient_boosted_trees.cc:1746] Train tree 143/300 train-loss:1.083122 train-accuracy:0.723059 [total:10m29.47s iter:4.51s]
+I0000 00:00:1786494312.412063  960653 gradient_boosted_trees.cc:1746] Train tree 148/300 train-loss:1.081804 train-accuracy:0.723513 [total:10m49.96s iter:4.01s]
+I0000 00:00:1786494333.612044  960653 gradient_boosted_trees.cc:1746] Train tree 153/300 train-loss:1.080551 train-accuracy:0.723882 [total:11m11.16s iter:3.83s]
+I0000 00:00:1786494355.221189  960653 gradient_boosted_trees.cc:1746] Train tree 158/300 train-loss:1.079477 train-accuracy:0.724196 [total:11m32.77s iter:3.79s]
+I0000 00:00:1786494376.327691  960653 gradient_boosted_trees.cc:1746] Train tree 163/300 train-loss:1.078266 train-accuracy:0.724560 [total:11m53.87s iter:4.11s]
+I0000 00:00:1786494398.016604  960653 gradient_boosted_trees.cc:1746] Train tree 168/300 train-loss:1.077345 train-accuracy:0.724873 [total:12m15.56s iter:4.46s]
+I0000 00:00:1786494419.577230  960653 gradient_boosted_trees.cc:1746] Train tree 173/300 train-loss:1.076319 train-accuracy:0.725160 [total:12m37.12s iter:4.40s]
+I0000 00:00:1786494440.212814  960653 gradient_boosted_trees.cc:1746] Train tree 178/300 train-loss:1.075229 train-accuracy:0.725465 [total:12m57.76s iter:3.96s]
+I0000 00:00:1786494461.818001  960653 gradient_boosted_trees.cc:1746] Train tree 183/300 train-loss:1.074157 train-accuracy:0.725759 [total:13m19.36s iter:4.05s]
+I0000 00:00:1786494482.907546  960653 gradient_boosted_trees.cc:1746] Train tree 188/300 train-loss:1.073321 train-accuracy:0.726008 [total:13m40.45s iter:3.84s]
+I0000 00:00:1786494503.287882  960653 gradient_boosted_trees.cc:1746] Train tree 193/300 train-loss:1.072446 train-accuracy:0.726338 [total:14m0.83s iter:4.15s]
+I0000 00:00:1786494523.443644  960653 gradient_boosted_trees.cc:1746] Train tree 198/300 train-loss:1.071469 train-accuracy:0.726602 [total:14m20.99s iter:4.00s]
+I0000 00:00:1786494547.247564  960653 gradient_boosted_trees.cc:1746] Train tree 204/300 train-loss:1.070641 train-accuracy:0.726869 [total:14m44.79s iter:3.98s]
+I0000 00:00:1786494568.269068  960653 gradient_boosted_trees.cc:1746] Train tree 209/300 train-loss:1.069913 train-accuracy:0.727088 [total:15m5.81s iter:4.31s]
+I0000 00:00:1786494588.778613  960653 gradient_boosted_trees.cc:1746] Train tree 214/300 train-loss:1.069174 train-accuracy:0.727284 [total:15m26.32s iter:3.91s]
+I0000 00:00:1786494610.022903  960653 gradient_boosted_trees.cc:1746] Train tree 219/300 train-loss:1.068368 train-accuracy:0.727640 [total:15m47.57s iter:4.35s]
+I0000 00:00:1786494630.912252  960653 gradient_boosted_trees.cc:1746] Train tree 224/300 train-loss:1.067593 train-accuracy:0.727800 [total:16m8.46s iter:3.97s]
+I0000 00:00:1786494651.359973  960653 gradient_boosted_trees.cc:1746] Train tree 229/300 train-loss:1.066960 train-accuracy:0.728021 [total:16m28.91s iter:4.02s]
+I0000 00:00:1786494672.301468  960653 gradient_boosted_trees.cc:1746] Train tree 234/300 train-loss:1.066278 train-accuracy:0.728241 [total:16m49.85s iter:4.41s]
+I0000 00:00:1786494693.795468  960653 gradient_boosted_trees.cc:1746] Train tree 239/300 train-loss:1.065575 train-accuracy:0.728478 [total:17m11.34s iter:4.03s]
+I0000 00:00:1786494714.412283  960653 gradient_boosted_trees.cc:1746] Train tree 244/300 train-loss:1.064496 train-accuracy:0.728789 [total:17m31.96s iter:4.28s]
+I0000 00:00:1786494735.370485  960653 gradient_boosted_trees.cc:1746] Train tree 249/300 train-loss:1.063895 train-accuracy:0.728999 [total:17m52.92s iter:4.32s]
+I0000 00:00:1786494755.587963  960653 gradient_boosted_trees.cc:1746] Train tree 254/300 train-loss:1.063344 train-accuracy:0.729191 [total:18m13.13s iter:4.26s]
+I0000 00:00:1786494775.710236  960653 gradient_boosted_trees.cc:1746] Train tree 259/300 train-loss:1.062850 train-accuracy:0.729365 [total:18m33.26s iter:4.40s]
+I0000 00:00:1786494795.968794  960653 gradient_boosted_trees.cc:1746] Train tree 264/300 train-loss:1.062279 train-accuracy:0.729569 [total:18m53.51s iter:3.93s]
+I0000 00:00:1786494817.022166  960653 gradient_boosted_trees.cc:1746] Train tree 269/300 train-loss:1.061694 train-accuracy:0.729771 [total:19m14.57s iter:4.41s]
+I0000 00:00:1786494838.829369  960653 gradient_boosted_trees.cc:1746] Train tree 274/300 train-loss:1.060810 train-accuracy:0.730036 [total:19m36.37s iter:4.20s]
+I0000 00:00:1786494862.962491  960653 gradient_boosted_trees.cc:1746] Train tree 280/300 train-loss:1.060233 train-accuracy:0.730174 [total:20m0.51s iter:4.17s]
+I0000 00:00:1786494884.789102  960653 gradient_boosted_trees.cc:1746] Train tree 285/300 train-loss:1.059760 train-accuracy:0.730326 [total:20m22.33s iter:4.31s]
+I0000 00:00:1786494905.502413  960653 gradient_boosted_trees.cc:1746] Train tree 290/300 train-loss:1.059215 train-accuracy:0.730516 [total:20m43.05s iter:4.07s]
+I0000 00:00:1786494926.405646  960653 gradient_boosted_trees.cc:1746] Train tree 295/300 train-loss:1.058560 train-accuracy:0.730733 [total:21m3.95s iter:4.55s]
+I0000 00:00:1786494946.765032  960653 gradient_boosted_trees.cc:1744] Train tree 300/300 train-loss:1.057984 train-accuracy:0.730933 [total:21m24.31s iter:4.20s]
+I0000 00:00:1786494946.773664  960653 gradient_boosted_trees.cc:1825] gradient_boosted_trees.cc Training block took: 1284.38 s
+I0000 00:00:1786494946.786239  960653 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 1284.39s
+I0000 00:00:1786494946.787061  960653 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786494948.946892  960653 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:58MB allocated:58MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786494948.950408  960653 decision_forest.cc:817] Model loaded with 300 root(s), 18876 node(s), and 28 input feature(s).
+I0000 00:00:1786494948.950419  960653 abstract_model.cc:1500] Engine "GradientBoostedTreesGeneric" built
+I0000 00:00:1786494950.822624  960653 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786494975.892147  960653 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786495000.915211  960653 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/HIGGS_test_500k.csv (500000 rows): test-accuracy:0.730574 test-auc:0.810389 test-logloss:0.52893
+I0000 00:00:1786495000.916030  960653 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.730574  CI95[W][0.72954 0.731606]
+LogLoss: : 0.52893
+ErrorRate: : 0.269426
+
+Default Accuracy: : 0.529014
+Default LogLoss: : 0.691463
+Default ErrorRate: : 0.470986
+
+Confusion Table:
+truth\prediction
+            1       0
+    1  200725   63782
+    0   70931  164562
+Total: 500000
+
+  "1" vs. the others
+    auc: 0.810389  CI95[H][0.809206 0.811571] CI95[B][0.809243 0.811524]
+    p/r-auc: 0.824764  CI95[L][0.82331 0.826208] CI95[B][0.823373 0.826161]
+    ap: 0.824763   CI95[B][0.823372 0.82616]
+
+  "0" vs. the others
+    auc: 0.810389  CI95[H][0.809173 0.811604] CI95[B][0.809156 0.811558]
+    p/r-auc: 0.791773  CI95[L][0.790128 0.793408] CI95[B][0.790099 0.79335]
+    ap: 0.791772   CI95[B][0.790097 0.793349]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_train_10500k.csv" --test_csv "benchmarks/data/HIGGS_test_500k.csv" --label_col class --num_trees=300 --ensemble_method Boosting --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins=64 --dynamic_split_threshold=250 --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786495001.128714  966275 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/HIGGS_train_10500k.csv
+I0000 00:00:1786495001.132942  966275 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786495031.130224  966275 vertical_dataset_io.cc:82] 7099500 examples scanned.
+I0000 00:00:1786495046.222917  966275 vertical_dataset_io.cc:91] 10500000 examples read. Memory: usage:1218MB allocated:1218MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786495046.481235  966275 train_oblique_forest.cc:589] Single-pass CSV load complete: 10500000 rows, 29 columns.
+I0000 00:00:1786495046.481295  966275 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786495046.481304  966275 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786495046.481306  966275 train_oblique_forest.cc:861] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1786495046.481316  966275 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 45.3526s
+I0000 00:00:1786495046.481378  966275 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786495046.481381  966275 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786495046.481389  966275 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1786495046.481577  966275 gradient_boosted_trees.cc:1204] Training gradient boosted tree on 10500000 example(s) and 28 feature(s).
+I0000 00:00:1786495046.481593  966275 gradient_boosted_trees.cc:1244] 10500000 examples used for training and 0 examples used for validation
+I0000 00:00:1786495046.538129  966275 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786495046.538144  966275 training.cc:5186] Create processor with 48 threads for split computation
+I0000 00:00:1786495046.539070  966275 gradient_boosted_trees.cc:1425] Create thread pool with 48 threads for loss computation
+I0000 00:00:1786495050.661942  966275 gradient_boosted_trees.cc:1744] Train tree 1/300 train-loss:1.375268 train-accuracy:0.542100 [total:4.12s iter:4.12s]
+I0000 00:00:1786495055.164517  966275 gradient_boosted_trees.cc:1744] Train tree 2/300 train-loss:1.364782 train-accuracy:0.564476 [total:8.62s iter:4.50s]
+I0000 00:00:1786495059.499691  966275 gradient_boosted_trees.cc:1746] Train tree 3/300 train-loss:1.352257 train-accuracy:0.582385 [total:12.96s iter:4.34s]
+I0000 00:00:1786495081.012697  966275 gradient_boosted_trees.cc:1746] Train tree 8/300 train-loss:1.305311 train-accuracy:0.653048 [total:34.47s iter:4.22s]
+I0000 00:00:1786495103.116337  966275 gradient_boosted_trees.cc:1746] Train tree 13/300 train-loss:1.264262 train-accuracy:0.675063 [total:56.58s iter:4.71s]
+I0000 00:00:1786495125.507307  966275 gradient_boosted_trees.cc:1746] Train tree 18/300 train-loss:1.233529 train-accuracy:0.684806 [total:1m18.97s iter:4.41s]
+I0000 00:00:1786495148.070553  966275 gradient_boosted_trees.cc:1746] Train tree 23/300 train-loss:1.210942 train-accuracy:0.691518 [total:1m41.53s iter:4.56s]
+I0000 00:00:1786495170.834669  966275 gradient_boosted_trees.cc:1746] Train tree 28/300 train-loss:1.193144 train-accuracy:0.695683 [total:2m4.29s iter:4.79s]
+I0000 00:00:1786495194.368185  966275 gradient_boosted_trees.cc:1746] Train tree 33/300 train-loss:1.178914 train-accuracy:0.700148 [total:2m27.83s iter:4.70s]
+I0000 00:00:1786495217.179940  966275 gradient_boosted_trees.cc:1746] Train tree 38/300 train-loss:1.165214 train-accuracy:0.703330 [total:2m50.64s iter:4.49s]
+I0000 00:00:1786495239.589430  966275 gradient_boosted_trees.cc:1746] Train tree 43/300 train-loss:1.155364 train-accuracy:0.706008 [total:3m13.05s iter:4.30s]
+I0000 00:00:1786495262.142982  966275 gradient_boosted_trees.cc:1746] Train tree 48/300 train-loss:1.147221 train-accuracy:0.707920 [total:3m35.60s iter:4.85s]
+I0000 00:00:1786495283.665180  966275 gradient_boosted_trees.cc:1746] Train tree 53/300 train-loss:1.141323 train-accuracy:0.709209 [total:3m57.13s iter:4.54s]
+I0000 00:00:1786495305.500290  966275 gradient_boosted_trees.cc:1746] Train tree 58/300 train-loss:1.134216 train-accuracy:0.710752 [total:4m18.96s iter:4.53s]
+I0000 00:00:1786495327.016590  966275 gradient_boosted_trees.cc:1746] Train tree 63/300 train-loss:1.128621 train-accuracy:0.711742 [total:4m40.48s iter:4.25s]
+I0000 00:00:1786495348.936489  966275 gradient_boosted_trees.cc:1746] Train tree 68/300 train-loss:1.122851 train-accuracy:0.713303 [total:5m2.40s iter:4.56s]
+I0000 00:00:1786495371.243555  966275 gradient_boosted_trees.cc:1746] Train tree 73/300 train-loss:1.117661 train-accuracy:0.714383 [total:5m24.70s iter:4.53s]
+I0000 00:00:1786495392.029124  966275 gradient_boosted_trees.cc:1746] Train tree 78/300 train-loss:1.114092 train-accuracy:0.715051 [total:5m45.49s iter:3.80s]
+I0000 00:00:1786495413.860906  966275 gradient_boosted_trees.cc:1746] Train tree 83/300 train-loss:1.110169 train-accuracy:0.716174 [total:6m7.32s iter:4.23s]
+I0000 00:00:1786495435.815549  966275 gradient_boosted_trees.cc:1746] Train tree 88/300 train-loss:1.106700 train-accuracy:0.717009 [total:6m29.28s iter:4.17s]
+I0000 00:00:1786495457.564886  966275 gradient_boosted_trees.cc:1746] Train tree 93/300 train-loss:1.102425 train-accuracy:0.718011 [total:6m51.02s iter:4.27s]
+I0000 00:00:1786495478.840124  966275 gradient_boosted_trees.cc:1746] Train tree 98/300 train-loss:1.100099 train-accuracy:0.718466 [total:7m12.30s iter:4.11s]
+I0000 00:00:1786495500.395274  966275 gradient_boosted_trees.cc:1746] Train tree 103/300 train-loss:1.098262 train-accuracy:0.718877 [total:7m33.86s iter:4.59s]
+I0000 00:00:1786495522.105921  966275 gradient_boosted_trees.cc:1746] Train tree 108/300 train-loss:1.095675 train-accuracy:0.719624 [total:7m55.57s iter:4.37s]
+I0000 00:00:1786495542.672995  966275 gradient_boosted_trees.cc:1746] Train tree 113/300 train-loss:1.093804 train-accuracy:0.720154 [total:8m16.13s iter:3.87s]
+I0000 00:00:1786495564.192703  966275 gradient_boosted_trees.cc:1746] Train tree 118/300 train-loss:1.091870 train-accuracy:0.720663 [total:8m37.65s iter:4.42s]
+I0000 00:00:1786495585.608574  966275 gradient_boosted_trees.cc:1746] Train tree 123/300 train-loss:1.089615 train-accuracy:0.721133 [total:8m59.07s iter:4.39s]
+I0000 00:00:1786495607.593098  966275 gradient_boosted_trees.cc:1746] Train tree 128/300 train-loss:1.087672 train-accuracy:0.721594 [total:9m21.05s iter:4.54s]
+I0000 00:00:1786495629.961798  966275 gradient_boosted_trees.cc:1746] Train tree 133/300 train-loss:1.085716 train-accuracy:0.722146 [total:9m43.42s iter:4.31s]
+I0000 00:00:1786495652.272263  966275 gradient_boosted_trees.cc:1746] Train tree 138/300 train-loss:1.084334 train-accuracy:0.722704 [total:10m5.73s iter:4.43s]
+I0000 00:00:1786495674.350928  966275 gradient_boosted_trees.cc:1746] Train tree 143/300 train-loss:1.083122 train-accuracy:0.723060 [total:10m27.81s iter:4.50s]
+I0000 00:00:1786495695.204015  966275 gradient_boosted_trees.cc:1746] Train tree 148/300 train-loss:1.081804 train-accuracy:0.723513 [total:10m48.66s iter:4.07s]
+I0000 00:00:1786495716.853822  966275 gradient_boosted_trees.cc:1746] Train tree 153/300 train-loss:1.080551 train-accuracy:0.723883 [total:11m10.31s iter:3.90s]
+I0000 00:00:1786495738.832918  966275 gradient_boosted_trees.cc:1746] Train tree 158/300 train-loss:1.079476 train-accuracy:0.724197 [total:11m32.29s iter:3.87s]
+I0000 00:00:1786495760.032680  966275 gradient_boosted_trees.cc:1746] Train tree 163/300 train-loss:1.078266 train-accuracy:0.724560 [total:11m53.49s iter:4.08s]
+I0000 00:00:1786495781.531330  966275 gradient_boosted_trees.cc:1746] Train tree 168/300 train-loss:1.077345 train-accuracy:0.724873 [total:12m14.99s iter:4.50s]
+I0000 00:00:1786495802.844598  966275 gradient_boosted_trees.cc:1746] Train tree 173/300 train-loss:1.076319 train-accuracy:0.725160 [total:12m36.30s iter:4.32s]
+I0000 00:00:1786495823.129487  966275 gradient_boosted_trees.cc:1746] Train tree 178/300 train-loss:1.075229 train-accuracy:0.725466 [total:12m56.59s iter:3.89s]
+I0000 00:00:1786495844.488472  966275 gradient_boosted_trees.cc:1746] Train tree 183/300 train-loss:1.074157 train-accuracy:0.725759 [total:13m17.95s iter:3.99s]
+I0000 00:00:1786495865.610043  966275 gradient_boosted_trees.cc:1746] Train tree 188/300 train-loss:1.073321 train-accuracy:0.726008 [total:13m39.07s iter:3.83s]
+I0000 00:00:1786495885.932651  966275 gradient_boosted_trees.cc:1746] Train tree 193/300 train-loss:1.072446 train-accuracy:0.726340 [total:13m59.39s iter:4.18s]
+I0000 00:00:1786495906.295847  966275 gradient_boosted_trees.cc:1746] Train tree 198/300 train-loss:1.071469 train-accuracy:0.726603 [total:14m19.76s iter:3.93s]
+I0000 00:00:1786495930.115465  966275 gradient_boosted_trees.cc:1746] Train tree 204/300 train-loss:1.070641 train-accuracy:0.726871 [total:14m43.58s iter:3.95s]
+I0000 00:00:1786495950.864050  966275 gradient_boosted_trees.cc:1746] Train tree 209/300 train-loss:1.069913 train-accuracy:0.727089 [total:15m4.32s iter:4.29s]
+I0000 00:00:1786495971.299712  966275 gradient_boosted_trees.cc:1746] Train tree 214/300 train-loss:1.069174 train-accuracy:0.727285 [total:15m24.76s iter:3.88s]
+I0000 00:00:1786495992.554293  966275 gradient_boosted_trees.cc:1746] Train tree 219/300 train-loss:1.068368 train-accuracy:0.727640 [total:15m46.01s iter:4.31s]
+I0000 00:00:1786496013.434358  966275 gradient_boosted_trees.cc:1746] Train tree 224/300 train-loss:1.067593 train-accuracy:0.727801 [total:16m6.89s iter:3.97s]
+I0000 00:00:1786496033.832557  966275 gradient_boosted_trees.cc:1746] Train tree 229/300 train-loss:1.066960 train-accuracy:0.728022 [total:16m27.29s iter:4.02s]
+I0000 00:00:1786496055.071645  966275 gradient_boosted_trees.cc:1746] Train tree 234/300 train-loss:1.066278 train-accuracy:0.728242 [total:16m48.53s iter:4.45s]
+I0000 00:00:1786496076.537573  966275 gradient_boosted_trees.cc:1746] Train tree 239/300 train-loss:1.065575 train-accuracy:0.728478 [total:17m10.00s iter:4.00s]
+I0000 00:00:1786496096.840050  966275 gradient_boosted_trees.cc:1746] Train tree 244/300 train-loss:1.064496 train-accuracy:0.728790 [total:17m30.30s iter:4.25s]
+I0000 00:00:1786496117.733638  966275 gradient_boosted_trees.cc:1746] Train tree 249/300 train-loss:1.063895 train-accuracy:0.729000 [total:17m51.19s iter:4.20s]
+I0000 00:00:1786496141.386507  966275 gradient_boosted_trees.cc:1746] Train tree 255/300 train-loss:1.063273 train-accuracy:0.729225 [total:18m14.85s iter:3.76s]
+I0000 00:00:1786496161.758219  966275 gradient_boosted_trees.cc:1746] Train tree 260/300 train-loss:1.062720 train-accuracy:0.729402 [total:18m35.22s iter:4.40s]
+I0000 00:00:1786496181.841523  966275 gradient_boosted_trees.cc:1746] Train tree 265/300 train-loss:1.062153 train-accuracy:0.729640 [total:18m55.30s iter:4.30s]
+I0000 00:00:1786496202.641797  966275 gradient_boosted_trees.cc:1746] Train tree 270/300 train-loss:1.061595 train-accuracy:0.729806 [total:19m16.10s iter:4.30s]
+I0000 00:00:1786496224.335183  966275 gradient_boosted_trees.cc:1746] Train tree 275/300 train-loss:1.060741 train-accuracy:0.730056 [total:19m37.80s iter:4.31s]
+I0000 00:00:1786496248.508748  966275 gradient_boosted_trees.cc:1746] Train tree 281/300 train-loss:1.060149 train-accuracy:0.730201 [total:20m1.97s iter:4.47s]
+I0000 00:00:1786496269.649555  966275 gradient_boosted_trees.cc:1746] Train tree 286/300 train-loss:1.059626 train-accuracy:0.730365 [total:20m23.11s iter:4.04s]
+I0000 00:00:1786496290.017379  966275 gradient_boosted_trees.cc:1746] Train tree 291/300 train-loss:1.059148 train-accuracy:0.730533 [total:20m43.48s iter:3.84s]
+I0000 00:00:1786496310.852698  966275 gradient_boosted_trees.cc:1746] Train tree 296/300 train-loss:1.058494 train-accuracy:0.730764 [total:21m4.31s iter:4.04s]
+I0000 00:00:1786496327.284455  966275 gradient_boosted_trees.cc:1744] Train tree 300/300 train-loss:1.057984 train-accuracy:0.730932 [total:21m20.74s iter:4.27s]
+I0000 00:00:1786496327.293018  966275 gradient_boosted_trees.cc:1825] gradient_boosted_trees.cc Training block took: 1280.81 s
+I0000 00:00:1786496327.307326  966275 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 1280.83s
+I0000 00:00:1786496327.308141  966275 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786496329.481609  966275 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:58MB allocated:58MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786496329.484908  966275 decision_forest.cc:817] Model loaded with 300 root(s), 18886 node(s), and 28 input feature(s).
+I0000 00:00:1786496329.484918  966275 abstract_model.cc:1500] Engine "GradientBoostedTreesGeneric" built
+I0000 00:00:1786496331.353209  966275 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786496356.183539  966275 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786496380.909111  966275 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/HIGGS_test_500k.csv (500000 rows): test-accuracy:0.73058 test-auc:0.810388 test-logloss:0.52893
+I0000 00:00:1786496380.909916  966275 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.73058  CI95[W][0.729546 0.731612]
+LogLoss: : 0.52893
+ErrorRate: : 0.26942
+
+Default Accuracy: : 0.529014
+Default LogLoss: : 0.691463
+Default ErrorRate: : 0.470986
+
+Confusion Table:
+truth\prediction
+            1       0
+    1  200730   63777
+    0   70933  164560
+Total: 500000
+
+  "1" vs. the others
+    auc: 0.810388  CI95[H][0.809206 0.811571] CI95[B][0.809144 0.811569]
+    p/r-auc: 0.824763  CI95[L][0.823309 0.826207] CI95[B][0.823212 0.826173]
+    ap: 0.824762   CI95[B][0.823211 0.826172]
+
+  "0" vs. the others
+    auc: 0.810388  CI95[H][0.809173 0.811604] CI95[B][0.809231 0.811543]
+    p/r-auc: 0.791775  CI95[L][0.79013 0.79341] CI95[B][0.790089 0.793322]
+    ap: 0.791774   CI95[B][0.790088 0.79332]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_train_4500k.csv" --test_csv "benchmarks/data/SUSY_test_500k.csv" --label_col class --num_trees=240  --numerical_split_type "Exact" --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786496381.121304  971859 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/SUSY_train_4500k.csv
+I0000 00:00:1786496381.125388  971859 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786496393.902384  971859 vertical_dataset_io.cc:91] 4500000 examples read. Memory: usage:342MB allocated:342MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786496394.037863  971859 train_oblique_forest.cc:589] Single-pass CSV load complete: 4500000 rows, 19 columns.
+I0000 00:00:1786496394.037917  971859 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786496394.037925  971859 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786496394.037928  971859 train_oblique_forest.cc:844] Using exact splitting
+I0000 00:00:1786496394.037937  971859 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 12.9167s
+I0000 00:00:1786496394.037995  971859 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786496394.037998  971859 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786496394.038009  971859 random_forest.cc:498] Training random forest on 4500000 example(s) and 18 feature(s).
+I0000 00:00:1786496394.038018  971859 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786496394.038226  971859 random_forest.cc:667] num_threads being used: 48
+I0000 00:00:1786496415.675352  971926 random_forest.cc:980] Train tree 1/240 [index:19 total:21.64s tree:21.64s]
+I0000 00:00:1786496437.044110  971953 random_forest.cc:980] Train tree 49/240 [index:50 total:43.01s tree:21.21s]
+I0000 00:00:1786496459.073435  971938 random_forest.cc:980] Train tree 97/240 [index:106 total:1m5.04s tree:21.38s]
+I0000 00:00:1786496480.819804  971922 random_forest.cc:980] Train tree 145/240 [index:149 total:1m26.78s tree:21.37s]
+I0000 00:00:1786496502.796201  971919 random_forest.cc:980] Train tree 193/240 [index:202 total:1m48.76s tree:21.29s]
+I0000 00:00:1786496505.594069  971859 random_forest.cc:987] random_forest.cc Training block took: 111.556 s
+I0000 00:00:1786496616.497470  971859 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 222.46s
+I0000 00:00:1786496616.497974  971859 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786496617.883763  971859 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:38MB allocated:38MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786496685.873644  971859 decision_forest.cc:817] Model loaded with 240 root(s), 217251828 node(s), and 18 input feature(s).
+I0000 00:00:1786496685.873671  971859 abstract_model.cc:1500] Engine "RandomForestGeneric" built
+I0000 00:00:1786496725.250113  971859 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786496739.631339  971859 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786496753.978100  971859 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/SUSY_test_500k.csv (500000 rows): test-accuracy:0.802138 test-auc:0.874635 test-logloss:0.429779
+I0000 00:00:1786496753.978276  971859 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.802138  CI95[W][0.801209 0.803064]
+LogLoss: : 0.429779
+ErrorRate: : 0.197862
+
+Default Accuracy: : 0.541142
+Default LogLoss: : 0.689758
+Default ErrorRate: : 0.458858
+
+Confusion Table:
+truth\prediction
+            0       1
+    0  236124   34447
+    1   64484  164945
+Total: 500000
+
+  "0" vs. the others
+    auc: 0.874635  CI95[H][0.873671 0.8756] CI95[B][0.873634 0.875627]
+    p/r-auc: 0.868025  CI95[L][0.866745 0.869295] CI95[B][0.866624 0.869446]
+    ap: 0.868846   CI95[B][0.867441 0.870274]
+
+  "1" vs. the others
+    auc: 0.874635  CI95[H][0.873621 0.87565] CI95[B][0.873653 0.875639]
+    p/r-auc: 0.879435  CI95[L][0.878096 0.880761] CI95[B][0.878332 0.880492]
+    ap: 0.880328   CI95[B][0.879231 0.88138]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_train_4500k.csv" --test_csv "benchmarks/data/SUSY_test_500k.csv" --label_col class --num_trees=240  --numerical_split_type "Random" --histogram_num_bins=64 --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786496796.613503  973573 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/SUSY_train_4500k.csv
+I0000 00:00:1786496796.617595  973573 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786496809.381888  973573 vertical_dataset_io.cc:91] 4500000 examples read. Memory: usage:342MB allocated:342MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786496809.517488  973573 train_oblique_forest.cc:589] Single-pass CSV load complete: 4500000 rows, 19 columns.
+I0000 00:00:1786496809.517544  973573 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786496809.517552  973573 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786496809.517554  973573 train_oblique_forest.cc:849] Using histogram splitting: Random with 64 bins
+I0000 00:00:1786496809.517564  973573 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 12.9041s
+I0000 00:00:1786496809.517626  973573 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786496809.517628  973573 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786496809.517638  973573 random_forest.cc:498] Training random forest on 4500000 example(s) and 18 feature(s).
+I0000 00:00:1786496809.517649  973573 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786496809.517859  973573 random_forest.cc:667] num_threads being used: 48
+I0000 00:00:1786496830.570282  973661 random_forest.cc:980] Train tree 1/240 [index:47 total:21.05s tree:21.05s]
+I0000 00:00:1786496851.620860  973661 random_forest.cc:980] Train tree 49/240 [index:48 total:42.10s tree:21.05s]
+I0000 00:00:1786496872.911045  973656 random_forest.cc:980] Train tree 97/240 [index:97 total:1m3.39s tree:21.14s]
+I0000 00:00:1786496894.088859  973668 random_forest.cc:980] Train tree 145/240 [index:145 total:1m24.57s tree:21.05s]
+I0000 00:00:1786496915.110178  973668 random_forest.cc:980] Train tree 193/240 [index:192 total:1m45.59s tree:21.02s]
+I0000 00:00:1786496917.657629  973573 random_forest.cc:987] random_forest.cc Training block took: 108.14 s
+I0000 00:00:1786497039.570266  973573 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 230.053s
+I0000 00:00:1786497039.570758  973573 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786497040.938328  973573 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:38MB allocated:38MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786497113.264689  973573 decision_forest.cc:817] Model loaded with 240 root(s), 234040978 node(s), and 18 input feature(s).
+I0000 00:00:1786497113.264717  973573 abstract_model.cc:1500] Engine "RandomForestGeneric" built
+I0000 00:00:1786497152.697479  973573 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786497167.085094  973573 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786497181.459871  973573 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/SUSY_test_500k.csv (500000 rows): test-accuracy:0.802176 test-auc:0.874587 test-logloss:0.429703
+I0000 00:00:1786497181.460051  973573 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.802176  CI95[W][0.801247 0.803102]
+LogLoss: : 0.429703
+ErrorRate: : 0.197824
+
+Default Accuracy: : 0.541142
+Default LogLoss: : 0.689758
+Default ErrorRate: : 0.458858
+
+Confusion Table:
+truth\prediction
+            0       1
+    0  236136   34435
+    1   64477  164952
+Total: 500000
+
+  "0" vs. the others
+    auc: 0.874587  CI95[H][0.873622 0.875552] CI95[B][0.873677 0.875538]
+    p/r-auc: 0.868017  CI95[L][0.866737 0.869287] CI95[B][0.866638 0.869411]
+    ap: 0.868844   CI95[B][0.867457 0.870237]
+
+  "1" vs. the others
+    auc: 0.874587  CI95[H][0.873572 0.875602] CI95[B][0.873577 0.875552]
+    p/r-auc: 0.879453  CI95[L][0.878114 0.880779] CI95[B][0.878343 0.880473]
+    ap: 0.880332   CI95[B][0.879224 0.88134]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_train_4500k.csv" --test_csv "benchmarks/data/SUSY_test_500k.csv" --label_col class --num_trees=240  --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins=64 --dynamic_split_threshold=250 --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786497229.117085  975360 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/SUSY_train_4500k.csv
+I0000 00:00:1786497229.121164  975360 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786497241.850501  975360 vertical_dataset_io.cc:91] 4500000 examples read. Memory: usage:342MB allocated:342MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786497241.986023  975360 train_oblique_forest.cc:589] Single-pass CSV load complete: 4500000 rows, 19 columns.
+I0000 00:00:1786497241.986079  975360 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786497241.986087  975360 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786497241.986090  975360 train_oblique_forest.cc:861] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1786497241.986100  975360 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 12.869s
+I0000 00:00:1786497241.986159  975360 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786497241.986161  975360 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786497241.986174  975360 random_forest.cc:498] Training random forest on 4500000 example(s) and 18 feature(s).
+I0000 00:00:1786497241.986185  975360 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786497241.986388  975360 random_forest.cc:667] num_threads being used: 48
+I0000 00:00:1786497258.309328  975448 random_forest.cc:980] Train tree 1/240 [index:46 total:16.32s tree:16.32s]
+I0000 00:00:1786497291.899981  975410 random_forest.cc:980] Train tree 97/240 [index:97 total:49.91s tree:16.63s]
+I0000 00:00:1786497325.070221  975440 random_forest.cc:980] Train tree 193/240 [index:192 total:1m23.08s tree:16.60s]
+I0000 00:00:1786497326.782495  975360 random_forest.cc:987] random_forest.cc Training block took: 84.7964 s
+I0000 00:00:1786497440.412853  975360 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 198.427s
+I0000 00:00:1786497440.413359  975360 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786497441.808670  975360 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:38MB allocated:38MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786497511.156413  975360 decision_forest.cc:817] Model loaded with 240 root(s), 222177846 node(s), and 18 input feature(s).
+I0000 00:00:1786497511.156440  975360 abstract_model.cc:1500] Engine "RandomForestGeneric" built
+I0000 00:00:1786497550.146838  975360 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786497564.961779  975360 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786497579.743690  975360 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/SUSY_test_500k.csv (500000 rows): test-accuracy:0.802128 test-auc:0.87446 test-logloss:0.430038
+I0000 00:00:1786497579.743868  975360 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.802128  CI95[W][0.801199 0.803054]
+LogLoss: : 0.430038
+ErrorRate: : 0.197872
+
+Default Accuracy: : 0.541142
+Default LogLoss: : 0.689758
+Default ErrorRate: : 0.458858
+
+Confusion Table:
+truth\prediction
+            0       1
+    0  236139   34432
+    1   64504  164925
+Total: 500000
+
+  "0" vs. the others
+    auc: 0.87446  CI95[H][0.873495 0.875426] CI95[B][0.873528 0.875424]
+    p/r-auc: 0.867703  CI95[L][0.866421 0.868975] CI95[B][0.866353 0.869034]
+    ap: 0.868539   CI95[B][0.867185 0.869865]
+
+  "1" vs. the others
+    auc: 0.87446  CI95[H][0.873445 0.875476] CI95[B][0.873427 0.875394]
+    p/r-auc: 0.87936  CI95[L][0.878021 0.880686] CI95[B][0.878262 0.880415]
+    ap: 0.880258   CI95[B][0.879166 0.881299]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_train_4500k.csv" --test_csv "benchmarks/data/SUSY_test_500k.csv" --label_col class --num_trees=300 --ensemble_method Boosting --numerical_split_type "Exact" --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786497623.389009  976993 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/SUSY_train_4500k.csv
+I0000 00:00:1786497623.393096  976993 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786497636.180564  976993 vertical_dataset_io.cc:91] 4500000 examples read. Memory: usage:342MB allocated:342MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786497636.317717  976993 train_oblique_forest.cc:589] Single-pass CSV load complete: 4500000 rows, 19 columns.
+I0000 00:00:1786497636.317763  976993 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786497636.317772  976993 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786497636.317775  976993 train_oblique_forest.cc:844] Using exact splitting
+I0000 00:00:1786497636.317785  976993 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 12.9288s
+I0000 00:00:1786497636.317839  976993 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786497636.317841  976993 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786497636.317849  976993 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1786497636.318053  976993 gradient_boosted_trees.cc:1204] Training gradient boosted tree on 4500000 example(s) and 18 feature(s).
+I0000 00:00:1786497636.318066  976993 gradient_boosted_trees.cc:1244] 4500000 examples used for training and 0 examples used for validation
+I0000 00:00:1786497636.341418  976993 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786497636.341429  976993 training.cc:5186] Create processor with 48 threads for split computation
+I0000 00:00:1786497636.342480  976993 gradient_boosted_trees.cc:1425] Create thread pool with 48 threads for loss computation
+I0000 00:00:1786497638.747987  976993 gradient_boosted_trees.cc:1744] Train tree 1/300 train-loss:1.316872 train-accuracy:0.689556 [total:2.40s iter:2.40s]
+I0000 00:00:1786497641.208768  976993 gradient_boosted_trees.cc:1744] Train tree 2/300 train-loss:1.266708 train-accuracy:0.734670 [total:4.87s iter:2.46s]
+I0000 00:00:1786497643.573040  976993 gradient_boosted_trees.cc:1746] Train tree 3/300 train-loss:1.221280 train-accuracy:0.759640 [total:7.23s iter:2.36s]
+I0000 00:00:1786497664.667507  976993 gradient_boosted_trees.cc:1746] Train tree 12/300 train-loss:1.022175 train-accuracy:0.784224 [total:28.32s iter:2.32s]
+I0000 00:00:1786497685.082415  976993 gradient_boosted_trees.cc:1746] Train tree 21/300 train-loss:0.945978 train-accuracy:0.790760 [total:48.74s iter:2.29s]
+I0000 00:00:1786497707.258799  976993 gradient_boosted_trees.cc:1746] Train tree 31/300 train-loss:0.909086 train-accuracy:0.795236 [total:1m10.92s iter:2.23s]
+I0000 00:00:1786497729.294715  976993 gradient_boosted_trees.cc:1746] Train tree 41/300 train-loss:0.889156 train-accuracy:0.797704 [total:1m32.95s iter:2.26s]
+I0000 00:00:1786497751.441200  976993 gradient_boosted_trees.cc:1746] Train tree 51/300 train-loss:0.878753 train-accuracy:0.799114 [total:1m55.10s iter:2.19s]
+I0000 00:00:1786497773.442371  976993 gradient_boosted_trees.cc:1746] Train tree 61/300 train-loss:0.871736 train-accuracy:0.800082 [total:2m17.10s iter:2.24s]
+I0000 00:00:1786497795.126604  976993 gradient_boosted_trees.cc:1746] Train tree 71/300 train-loss:0.867341 train-accuracy:0.800862 [total:2m38.78s iter:2.16s]
+I0000 00:00:1786497816.769684  976993 gradient_boosted_trees.cc:1746] Train tree 81/300 train-loss:0.864485 train-accuracy:0.801336 [total:3m0.43s iter:2.17s]
+I0000 00:00:1786497838.354354  976993 gradient_boosted_trees.cc:1746] Train tree 91/300 train-loss:0.862218 train-accuracy:0.801706 [total:3m22.01s iter:2.14s]
+I0000 00:00:1786497859.785524  976993 gradient_boosted_trees.cc:1746] Train tree 101/300 train-loss:0.860492 train-accuracy:0.801948 [total:3m43.44s iter:2.22s]
+I0000 00:00:1786497881.256191  976993 gradient_boosted_trees.cc:1746] Train tree 111/300 train-loss:0.859087 train-accuracy:0.802170 [total:4m4.91s iter:2.21s]
+I0000 00:00:1786497902.668215  976993 gradient_boosted_trees.cc:1746] Train tree 121/300 train-loss:0.858140 train-accuracy:0.802340 [total:4m26.32s iter:2.10s]
+I0000 00:00:1786497923.630897  976993 gradient_boosted_trees.cc:1746] Train tree 131/300 train-loss:0.857069 train-accuracy:0.802551 [total:4m47.29s iter:2.06s]
+I0000 00:00:1786497944.905842  976993 gradient_boosted_trees.cc:1746] Train tree 141/300 train-loss:0.856321 train-accuracy:0.802682 [total:5m8.56s iter:2.24s]
+I0000 00:00:1786497966.268963  976993 gradient_boosted_trees.cc:1746] Train tree 151/300 train-loss:0.855598 train-accuracy:0.802843 [total:5m29.93s iter:2.11s]
+I0000 00:00:1786497987.284587  976993 gradient_boosted_trees.cc:1746] Train tree 161/300 train-loss:0.854917 train-accuracy:0.802956 [total:5m50.94s iter:2.10s]
+I0000 00:00:1786498008.098211  976993 gradient_boosted_trees.cc:1746] Train tree 171/300 train-loss:0.854362 train-accuracy:0.803103 [total:6m11.75s iter:2.16s]
+I0000 00:00:1786498029.079471  976993 gradient_boosted_trees.cc:1746] Train tree 181/300 train-loss:0.853866 train-accuracy:0.803227 [total:6m32.74s iter:2.08s]
+I0000 00:00:1786498050.892502  976993 gradient_boosted_trees.cc:1746] Train tree 191/300 train-loss:0.853257 train-accuracy:0.803355 [total:6m54.55s iter:2.21s]
+I0000 00:00:1786498072.207797  976993 gradient_boosted_trees.cc:1746] Train tree 201/300 train-loss:0.852846 train-accuracy:0.803430 [total:7m15.86s iter:2.09s]
+I0000 00:00:1786498093.373609  976993 gradient_boosted_trees.cc:1746] Train tree 211/300 train-loss:0.852475 train-accuracy:0.803517 [total:7m37.03s iter:2.08s]
+I0000 00:00:1786498114.300362  976993 gradient_boosted_trees.cc:1746] Train tree 221/300 train-loss:0.852106 train-accuracy:0.803610 [total:7m57.96s iter:2.01s]
+I0000 00:00:1786498135.186529  976993 gradient_boosted_trees.cc:1746] Train tree 231/300 train-loss:0.851788 train-accuracy:0.803674 [total:8m18.84s iter:2.04s]
+I0000 00:00:1786498156.163268  976993 gradient_boosted_trees.cc:1746] Train tree 241/300 train-loss:0.851469 train-accuracy:0.803720 [total:8m39.82s iter:2.18s]
+I0000 00:00:1786498177.366373  976993 gradient_boosted_trees.cc:1746] Train tree 251/300 train-loss:0.851140 train-accuracy:0.803772 [total:9m1.02s iter:2.26s]
+I0000 00:00:1786498200.061783  976993 gradient_boosted_trees.cc:1746] Train tree 260/300 train-loss:0.850818 train-accuracy:0.803872 [total:9m23.72s iter:3.09s]
+I0000 00:00:1786498221.483843  976993 gradient_boosted_trees.cc:1746] Train tree 267/300 train-loss:0.850572 train-accuracy:0.803902 [total:9m45.14s iter:3.18s]
+I0000 00:00:1786498242.455235  976993 gradient_boosted_trees.cc:1746] Train tree 274/300 train-loss:0.850410 train-accuracy:0.803921 [total:10m6.11s iter:2.94s]
+I0000 00:00:1786498263.369650  976993 gradient_boosted_trees.cc:1746] Train tree 281/300 train-loss:0.850257 train-accuracy:0.803949 [total:10m27.03s iter:3.05s]
+I0000 00:00:1786498284.406691  976993 gradient_boosted_trees.cc:1746] Train tree 288/300 train-loss:0.850109 train-accuracy:0.803983 [total:10m48.06s iter:2.96s]
+I0000 00:00:1786498305.815028  976993 gradient_boosted_trees.cc:1746] Train tree 295/300 train-loss:0.849943 train-accuracy:0.804042 [total:11m9.47s iter:2.91s]
+I0000 00:00:1786498320.825328  976993 gradient_boosted_trees.cc:1744] Train tree 300/300 train-loss:0.849860 train-accuracy:0.804052 [total:11m24.48s iter:2.94s]
+I0000 00:00:1786498320.832640  976993 gradient_boosted_trees.cc:1825] gradient_boosted_trees.cc Training block took: 684.515 s
+I0000 00:00:1786498320.834685  976993 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 684.517s
+I0000 00:00:1786498320.835295  976993 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786498322.217440  976993 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:38MB allocated:38MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786498322.220478  976993 decision_forest.cc:817] Model loaded with 300 root(s), 18594 node(s), and 18 input feature(s).
+I0000 00:00:1786498322.220488  976993 abstract_model.cc:1500] Engine "GradientBoostedTreesGeneric" built
+I0000 00:00:1786498324.187213  976993 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786498348.089980  976993 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786498371.990102  976993 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/SUSY_test_500k.csv (500000 rows): test-accuracy:0.80309 test-auc:0.876895 test-logloss:0.425881
+I0000 00:00:1786498371.990894  976993 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.80309  CI95[W][0.802163 0.804015]
+LogLoss: : 0.425881
+ErrorRate: : 0.19691
+
+Default Accuracy: : 0.541142
+Default LogLoss: : 0.689758
+Default ErrorRate: : 0.458858
+
+Confusion Table:
+truth\prediction
+            0       1
+    0  236009   34562
+    1   63893  165536
+Total: 500000
+
+  "0" vs. the others
+    auc: 0.876895  CI95[H][0.875939 0.877851] CI95[B][0.875931 0.87787]
+    p/r-auc: 0.871977  CI95[L][0.870713 0.873231] CI95[B][0.870636 0.87333]
+    ap: 0.871974   CI95[B][0.870634 0.873329]
+
+  "1" vs. the others
+    auc: 0.876895  CI95[H][0.875889 0.877901] CI95[B][0.875898 0.877801]
+    p/r-auc: 0.881211  CI95[L][0.87988 0.882528] CI95[B][0.880123 0.882166]
+    ap: 0.88121   CI95[B][0.880123 0.882165]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_train_4500k.csv" --test_csv "benchmarks/data/SUSY_test_500k.csv" --label_col class --num_trees=300 --ensemble_method Boosting --numerical_split_type "Random" --histogram_num_bins=64 --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786498372.144524  980076 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/SUSY_train_4500k.csv
+I0000 00:00:1786498372.148609  980076 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786498384.895927  980076 vertical_dataset_io.cc:91] 4500000 examples read. Memory: usage:342MB allocated:342MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786498385.032692  980076 train_oblique_forest.cc:589] Single-pass CSV load complete: 4500000 rows, 19 columns.
+I0000 00:00:1786498385.032737  980076 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786498385.032745  980076 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786498385.032748  980076 train_oblique_forest.cc:849] Using histogram splitting: Random with 64 bins
+I0000 00:00:1786498385.032758  980076 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 12.8883s
+I0000 00:00:1786498385.032811  980076 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786498385.032814  980076 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786498385.032830  980076 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1786498385.033037  980076 gradient_boosted_trees.cc:1204] Training gradient boosted tree on 4500000 example(s) and 18 feature(s).
+I0000 00:00:1786498385.033051  980076 gradient_boosted_trees.cc:1244] 4500000 examples used for training and 0 examples used for validation
+I0000 00:00:1786498385.055858  980076 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786498385.055868  980076 training.cc:5186] Create processor with 48 threads for split computation
+I0000 00:00:1786498385.056763  980076 gradient_boosted_trees.cc:1425] Create thread pool with 48 threads for loss computation
+I0000 00:00:1786498386.807644  980076 gradient_boosted_trees.cc:1744] Train tree 1/300 train-loss:1.315911 train-accuracy:0.699791 [total:1.75s iter:1.75s]
+I0000 00:00:1786498388.543241  980076 gradient_boosted_trees.cc:1744] Train tree 2/300 train-loss:1.267729 train-accuracy:0.730183 [total:3.49s iter:1.74s]
+I0000 00:00:1786498390.094332  980076 gradient_boosted_trees.cc:1746] Train tree 3/300 train-loss:1.224289 train-accuracy:0.749240 [total:5.04s iter:1.55s]
+I0000 00:00:1786498411.477775  980076 gradient_boosted_trees.cc:1746] Train tree 16/300 train-loss:0.981730 train-accuracy:0.786517 [total:26.42s iter:1.66s]
+I0000 00:00:1786498431.646536  980076 gradient_boosted_trees.cc:1746] Train tree 28/300 train-loss:0.917977 train-accuracy:0.793419 [total:46.59s iter:1.76s]
+I0000 00:00:1786498452.733419  980076 gradient_boosted_trees.cc:1746] Train tree 41/300 train-loss:0.891348 train-accuracy:0.797093 [total:1m7.68s iter:1.56s]
+I0000 00:00:1786498473.688580  980076 gradient_boosted_trees.cc:1746] Train tree 54/300 train-loss:0.878118 train-accuracy:0.798953 [total:1m28.63s iter:1.60s]
+I0000 00:00:1786498494.640963  980076 gradient_boosted_trees.cc:1746] Train tree 67/300 train-loss:0.870913 train-accuracy:0.799996 [total:1m49.58s iter:1.57s]
+I0000 00:00:1786498515.250077  980076 gradient_boosted_trees.cc:1746] Train tree 80/300 train-loss:0.866789 train-accuracy:0.800603 [total:2m10.19s iter:1.54s]
+I0000 00:00:1786498535.743110  980076 gradient_boosted_trees.cc:1746] Train tree 93/300 train-loss:0.864242 train-accuracy:0.801037 [total:2m30.69s iter:1.53s]
+I0000 00:00:1786498556.138034  980076 gradient_boosted_trees.cc:1746] Train tree 106/300 train-loss:0.861986 train-accuracy:0.801445 [total:2m51.08s iter:1.51s]
+I0000 00:00:1786498577.591040  980076 gradient_boosted_trees.cc:1746] Train tree 120/300 train-loss:0.860331 train-accuracy:0.801793 [total:3m12.53s iter:1.54s]
+I0000 00:00:1786498597.833161  980076 gradient_boosted_trees.cc:1746] Train tree 133/300 train-loss:0.858976 train-accuracy:0.802015 [total:3m32.78s iter:1.49s]
+I0000 00:00:1786498618.002329  980076 gradient_boosted_trees.cc:1746] Train tree 146/300 train-loss:0.857936 train-accuracy:0.802202 [total:3m52.94s iter:1.43s]
+I0000 00:00:1786498638.256452  980076 gradient_boosted_trees.cc:1746] Train tree 159/300 train-loss:0.856757 train-accuracy:0.802400 [total:4m13.20s iter:1.55s]
+I0000 00:00:1786498659.288193  980076 gradient_boosted_trees.cc:1746] Train tree 173/300 train-loss:0.856083 train-accuracy:0.802521 [total:4m34.23s iter:1.55s]
+I0000 00:00:1786498679.627515  980076 gradient_boosted_trees.cc:1746] Train tree 187/300 train-loss:0.855458 train-accuracy:0.802650 [total:4m54.57s iter:1.38s]
+I0000 00:00:1786498700.376495  980076 gradient_boosted_trees.cc:1746] Train tree 201/300 train-loss:0.854861 train-accuracy:0.802808 [total:5m15.32s iter:1.50s]
+I0000 00:00:1786498721.418317  980076 gradient_boosted_trees.cc:1746] Train tree 215/300 train-loss:0.854410 train-accuracy:0.802914 [total:5m36.36s iter:1.45s]
+I0000 00:00:1786498742.430575  980076 gradient_boosted_trees.cc:1746] Train tree 229/300 train-loss:0.854018 train-accuracy:0.802998 [total:5m57.37s iter:1.38s]
+I0000 00:00:1786498763.308836  980076 gradient_boosted_trees.cc:1746] Train tree 243/300 train-loss:0.853641 train-accuracy:0.803083 [total:6m18.25s iter:1.45s]
+I0000 00:00:1786498783.905539  980076 gradient_boosted_trees.cc:1746] Train tree 257/300 train-loss:0.853235 train-accuracy:0.803201 [total:6m38.85s iter:1.39s]
+I0000 00:00:1786498804.450083  980076 gradient_boosted_trees.cc:1746] Train tree 271/300 train-loss:0.852882 train-accuracy:0.803266 [total:6m59.39s iter:1.40s]
+I0000 00:00:1786498825.567213  980076 gradient_boosted_trees.cc:1746] Train tree 285/300 train-loss:0.852534 train-accuracy:0.803324 [total:7m20.51s iter:1.63s]
+I0000 00:00:1786498845.701672  980076 gradient_boosted_trees.cc:1746] Train tree 298/300 train-loss:0.852206 train-accuracy:0.803406 [total:7m40.64s iter:1.46s]
+I0000 00:00:1786498848.572693  980076 gradient_boosted_trees.cc:1744] Train tree 300/300 train-loss:0.852159 train-accuracy:0.803407 [total:7m43.52s iter:1.32s]
+I0000 00:00:1786498848.580009  980076 gradient_boosted_trees.cc:1825] gradient_boosted_trees.cc Training block took: 463.547 s
+I0000 00:00:1786498848.581960  980076 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 463.549s
+I0000 00:00:1786498848.582540  980076 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786498849.959518  980076 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:38MB allocated:38MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786498849.962489  980076 decision_forest.cc:817] Model loaded with 300 root(s), 18718 node(s), and 18 input feature(s).
+I0000 00:00:1786498849.962499  980076 abstract_model.cc:1500] Engine "GradientBoostedTreesGeneric" built
+I0000 00:00:1786498851.900462  980076 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786498875.736244  980076 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786498899.538806  980076 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/SUSY_test_500k.csv (500000 rows): test-accuracy:0.802776 test-auc:0.876674 test-logloss:0.426212
+I0000 00:00:1786498899.539615  980076 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.802776  CI95[W][0.801848 0.803701]
+LogLoss: : 0.426212
+ErrorRate: : 0.197224
+
+Default Accuracy: : 0.541142
+Default LogLoss: : 0.689758
+Default ErrorRate: : 0.458858
+
+Confusion Table:
+truth\prediction
+            0       1
+    0  236096   34475
+    1   64137  165292
+Total: 500000
+
+  "0" vs. the others
+    auc: 0.876674  CI95[H][0.875717 0.877631] CI95[B][0.8757 0.877646]
+    p/r-auc: 0.871862  CI95[L][0.870597 0.873116] CI95[B][0.870522 0.873203]
+    ap: 0.871861   CI95[B][0.870518 0.8732]
+
+  "1" vs. the others
+    auc: 0.876674  CI95[H][0.875666 0.877681] CI95[B][0.875662 0.877611]
+    p/r-auc: 0.880977  CI95[L][0.879646 0.882296] CI95[B][0.879897 0.882002]
+    ap: 0.880977   CI95[B][0.879896 0.882001]
+
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_train_4500k.csv" --test_csv "benchmarks/data/SUSY_test_500k.csv" --label_col class --num_trees=300 --ensemble_method Boosting --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins=64 --dynamic_split_threshold=250 --seed=1
+----- Run 1/1 (fold=0) -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1786498899.688236  982291 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/SUSY_train_4500k.csv
+I0000 00:00:1786498899.692312  982291 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786498912.405612  982291 vertical_dataset_io.cc:91] 4500000 examples read. Memory: usage:342MB allocated:342MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786498912.540720  982291 train_oblique_forest.cc:589] Single-pass CSV load complete: 4500000 rows, 19 columns.
+I0000 00:00:1786498912.540776  982291 train_oblique_forest.cc:706] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1786498912.540784  982291 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1786498912.540797  982291 train_oblique_forest.cc:861] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1786498912.540808  982291 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 12.8526s
+I0000 00:00:1786498912.540866  982291 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1786498912.540868  982291 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1786498912.540876  982291 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1786498912.541080  982291 gradient_boosted_trees.cc:1204] Training gradient boosted tree on 4500000 example(s) and 18 feature(s).
+I0000 00:00:1786498912.541094  982291 gradient_boosted_trees.cc:1244] 4500000 examples used for training and 0 examples used for validation
+I0000 00:00:1786498912.564983  982291 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1786498912.564994  982291 training.cc:5186] Create processor with 48 threads for split computation
+I0000 00:00:1786498912.565877  982291 gradient_boosted_trees.cc:1425] Create thread pool with 48 threads for loss computation
+I0000 00:00:1786498914.328855  982291 gradient_boosted_trees.cc:1744] Train tree 1/300 train-loss:1.315911 train-accuracy:0.699791 [total:1.76s iter:1.76s]
+I0000 00:00:1786498916.016820  982291 gradient_boosted_trees.cc:1744] Train tree 2/300 train-loss:1.267729 train-accuracy:0.730183 [total:3.45s iter:1.69s]
+I0000 00:00:1786498917.593434  982291 gradient_boosted_trees.cc:1746] Train tree 3/300 train-loss:1.224289 train-accuracy:0.749240 [total:5.03s iter:1.58s]
+I0000 00:00:1786498939.017855  982291 gradient_boosted_trees.cc:1746] Train tree 16/300 train-loss:0.981730 train-accuracy:0.786517 [total:26.45s iter:1.72s]
+I0000 00:00:1786498960.627476  982291 gradient_boosted_trees.cc:1746] Train tree 29/300 train-loss:0.915489 train-accuracy:0.793732 [total:48.06s iter:1.64s]
+I0000 00:00:1786498981.379107  982291 gradient_boosted_trees.cc:1746] Train tree 42/300 train-loss:0.890174 train-accuracy:0.797270 [total:1m8.81s iter:1.56s]
+I0000 00:00:1786499002.134464  982291 gradient_boosted_trees.cc:1746] Train tree 55/300 train-loss:0.877595 train-accuracy:0.799032 [total:1m29.57s iter:1.59s]
+I0000 00:00:1786499022.787670  982291 gradient_boosted_trees.cc:1746] Train tree 68/300 train-loss:0.870373 train-accuracy:0.800102 [total:1m50.22s iter:1.54s]
+I0000 00:00:1786499043.080204  982291 gradient_boosted_trees.cc:1746] Train tree 81/300 train-loss:0.866567 train-accuracy:0.800628 [total:2m10.51s iter:1.54s]
+I0000 00:00:1786499063.492110  982291 gradient_boosted_trees.cc:1746] Train tree 94/300 train-loss:0.863948 train-accuracy:0.801113 [total:2m30.93s iter:1.57s]
+I0000 00:00:1786499083.819916  982291 gradient_boosted_trees.cc:1746] Train tree 107/300 train-loss:0.861910 train-accuracy:0.801461 [total:2m51.25s iter:1.54s]
+I0000 00:00:1786499105.242124  982291 gradient_boosted_trees.cc:1746] Train tree 121/300 train-loss:0.860161 train-accuracy:0.801784 [total:3m12.68s iter:1.52s]
+I0000 00:00:1786499125.363821  982291 gradient_boosted_trees.cc:1746] Train tree 134/300 train-loss:0.858791 train-accuracy:0.802022 [total:3m32.80s iter:1.56s]
+I0000 00:00:1786499145.508248  982291 gradient_boosted_trees.cc:1746] Train tree 147/300 train-loss:0.857813 train-accuracy:0.802179 [total:3m52.94s iter:1.31s]
+I0000 00:00:1786499165.734706  982291 gradient_boosted_trees.cc:1746] Train tree 160/300 train-loss:0.856716 train-accuracy:0.802375 [total:4m13.17s iter:1.56s]
+I0000 00:00:1786499186.363574  982291 gradient_boosted_trees.cc:1746] Train tree 174/300 train-loss:0.856041 train-accuracy:0.802503 [total:4m33.80s iter:1.28s]
+I0000 00:00:1786499207.235398  982291 gradient_boosted_trees.cc:1746] Train tree 188/300 train-loss:0.855363 train-accuracy:0.802663 [total:4m54.67s iter:1.55s]
+I0000 00:00:1786499228.205770  982291 gradient_boosted_trees.cc:1746] Train tree 202/300 train-loss:0.854763 train-accuracy:0.802802 [total:5m15.64s iter:1.65s]
+I0000 00:00:1786499249.367120  982291 gradient_boosted_trees.cc:1746] Train tree 216/300 train-loss:0.854262 train-accuracy:0.802943 [total:5m36.80s iter:1.42s]
+I0000 00:00:1786499270.272365  982291 gradient_boosted_trees.cc:1746] Train tree 230/300 train-loss:0.853842 train-accuracy:0.803018 [total:5m57.71s iter:1.58s]
+I0000 00:00:1786499291.260993  982291 gradient_boosted_trees.cc:1746] Train tree 244/300 train-loss:0.853444 train-accuracy:0.803099 [total:6m18.69s iter:1.61s]
+I0000 00:00:1786499312.450031  982291 gradient_boosted_trees.cc:1746] Train tree 258/300 train-loss:0.853028 train-accuracy:0.803172 [total:6m39.88s iter:1.56s]
+I0000 00:00:1786499333.825541  982291 gradient_boosted_trees.cc:1746] Train tree 272/300 train-loss:0.852658 train-accuracy:0.803264 [total:7m1.26s iter:1.62s]
+I0000 00:00:1786499354.669771  982291 gradient_boosted_trees.cc:1746] Train tree 286/300 train-loss:0.852283 train-accuracy:0.803360 [total:7m22.10s iter:1.58s]
+I0000 00:00:1786499375.737426  982291 gradient_boosted_trees.cc:1744] Train tree 300/300 train-loss:0.852033 train-accuracy:0.803443 [total:7m43.17s iter:1.52s]
+I0000 00:00:1786499375.744804  982291 gradient_boosted_trees.cc:1825] gradient_boosted_trees.cc Training block took: 463.204 s
+I0000 00:00:1786499375.746822  982291 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 463.206s
+I0000 00:00:1786499375.747427  982291 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1786499377.123864  982291 vertical_dataset_io.cc:91] 500000 examples read. Memory: usage:38MB allocated:38MB. 0 (0%) examples have been skipped.
+I0000 00:00:1786499377.126880  982291 decision_forest.cc:817] Model loaded with 300 root(s), 18716 node(s), and 18 input feature(s).
+I0000 00:00:1786499377.126891  982291 abstract_model.cc:1500] Engine "GradientBoostedTreesGeneric" built
+I0000 00:00:1786499379.054051  982291 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1786499403.743414  982291 metric.cc:1387] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1786499428.400688  982291 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/SUSY_test_500k.csv (500000 rows): test-accuracy:0.802736 test-auc:0.87669 test-logloss:0.426141
+I0000 00:00:1786499428.401527  982291 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 500000
+Number of predictions (with weights): 500000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0.802736  CI95[W][0.801808 0.803661]
+LogLoss: : 0.426141
+ErrorRate: : 0.197264
+
+Default Accuracy: : 0.541142
+Default LogLoss: : 0.689758
+Default ErrorRate: : 0.458858
+
+Confusion Table:
+truth\prediction
+            0       1
+    0  236093   34478
+    1   64154  165275
+Total: 500000
+
+  "0" vs. the others
+    auc: 0.87669  CI95[H][0.875733 0.877647] CI95[B][0.875714 0.877614]
+    p/r-auc: 0.871856  CI95[L][0.870591 0.87311] CI95[B][0.870476 0.873175]
+    ap: 0.871854   CI95[B][0.870471 0.87317]
+
+  "1" vs. the others
+    auc: 0.87669  CI95[H][0.875683 0.877697] CI95[B][0.875705 0.877653]
+    p/r-auc: 0.881022  CI95[L][0.879691 0.882341] CI95[B][0.879954 0.882077]
+    ap: 0.881022   CI95[B][0.879953 0.882077]
+
+

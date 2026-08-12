@@ -1001,8 +1001,20 @@ int main(int argc, char** argv) {
                      << eval_or.status().message();
         } else {
           const float test_acc = metric::Accuracy(eval_or.value());
+          // Binary classification: both one-vs-rest ROCs carry the same
+          // discrimination, so log the positive class' (last ROC's) AUC.
+          // LogLoss comes from the same evaluation pass. Keep everything on
+          // the one line parse_log_to_csv.py anchors on ('test-accuracy:').
+          const float test_logloss = metric::LogLoss(eval_or.value());
+          double test_auc = -1.0;
+          const auto& eval_cls = eval_or.value().classification();
+          if (eval_cls.rocs_size() > 0) {
+            test_auc = eval_cls.rocs(eval_cls.rocs_size() - 1).auc();
+          }
           LOG(INFO) << "Test-set evaluation on " << test_csv << " ("
-                    << test_ds.nrow() << " rows): test-accuracy:" << test_acc;
+                    << test_ds.nrow() << " rows): test-accuracy:" << test_acc
+                    << " test-auc:" << test_auc
+                    << " test-logloss:" << test_logloss;
           auto report_or = metric::TextReport(eval_or.value());
           if (report_or.ok()) {
             LOG(INFO) << "Test-set report:\n" << report_or.value();
