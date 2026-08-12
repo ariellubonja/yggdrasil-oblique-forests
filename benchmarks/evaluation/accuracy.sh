@@ -120,6 +120,14 @@ confirm_overwrite "$logfile" "$csvfile"
 finalize_log() {
   echo "Parsing log -> CSV..."
   if python3 benchmarks/utils/parse_log_to_csv.py "$logfile" "$csvfile" accuracy; then
+    # The parser may emit side CSVs (_auc/_logloss) next to the main one;
+    # prepend the same provenance block to every file it wrote.
+    local f tmp
+    for f in "${csvfile%.csv}_auc.csv" "${csvfile%.csv}_logloss.csv"; do
+      [[ -f "$f" ]] || continue
+      tmp=$(mktemp)
+      cat "$metafile" "$f" >"$tmp" && mv "$tmp" "$f"
+    done
     bench_prepend_provenance "$csvfile" "$metafile"
     rm -f "$logfile"
     echo "CSV: $csvfile  (log deleted on success)"
