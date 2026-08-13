@@ -702,6 +702,7 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
        weak_model_idx++) {
     auto& weak_model = weak_models_[weak_model_idx];
 
+    // This is where it goes to our familiar DT training
     // Look for the splits.
     RETURN_IF_ERROR(weak_model.tree_builder->FindBestSplitsWithThreadPool(
         {active_features_per_weak_models[weak_model_idx],

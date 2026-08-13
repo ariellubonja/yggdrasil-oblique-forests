@@ -236,6 +236,7 @@ DistributedGradientBoostedTreesLearner::TrainWithStatusImpl(
     const std::optional<std::string>& typed_valid_path) const {
   internal::Monitoring monitoring;
 
+  /* #region Configs */
   // Extract and check the configuration.
   auto config = training_config();
   model::proto::TrainingConfigLinking config_link;
@@ -246,8 +247,9 @@ DistributedGradientBoostedTreesLearner::TrainWithStatusImpl(
   RETURN_IF_ERROR(internal::SetDefaultHyperParameters(config, config_link,
                                                       data_spec, &spe_config));
   RETURN_IF_ERROR(internal::CheckConfiguration(deployment_, data_spec));
+/* #endregion */
 
-  // Working directory.
+  /* #region Set Working directory. */
   auto work_directory = deployment().cache_path();
   if (!deployment().try_resume_training()) {
     work_directory = file::JoinPath(
@@ -257,6 +259,7 @@ DistributedGradientBoostedTreesLearner::TrainWithStatusImpl(
   auto updated_deployment = deployment();
   updated_deployment.mutable_distribute()->set_working_directory(
       work_directory);
+  /* #endregion */
 
   // Detect if the training dataset is a stored in the dataset cache format
   // directly, or if the conversion should be done first.

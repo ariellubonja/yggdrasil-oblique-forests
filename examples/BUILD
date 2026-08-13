@@ -91,3 +91,36 @@ cc_binary(
         "@com_google_absl//absl/strings",
     ],
 )
+
+# Single-process demo of distributed GBT training (in-process workers).
+#
+#   bazel build -c opt //examples:distributed_gbt_demo
+#   bazel-bin/examples/distributed_gbt_demo --alsologtostderr --num_workers=4
+cc_binary(
+    name = "distributed_gbt_demo",
+    srcs = ["distributed_gbt_demo.cc"],
+    deps = [
+        "//yggdrasil_decision_forests/dataset:all_dataset_formats",
+        "//yggdrasil_decision_forests/dataset:data_spec",
+        "//yggdrasil_decision_forests/dataset:data_spec_cc_proto",
+        "//yggdrasil_decision_forests/dataset:data_spec_inference",
+        "//yggdrasil_decision_forests/dataset:vertical_dataset",
+        "//yggdrasil_decision_forests/dataset:vertical_dataset_io",
+        "//yggdrasil_decision_forests/learner:abstract_learner_cc_proto",
+        "//yggdrasil_decision_forests/learner:all_learners",
+        "//yggdrasil_decision_forests/learner:learner_library",
+        "//yggdrasil_decision_forests/learner/distributed_gradient_boosted_trees:dgbt_cc_proto",
+        "//yggdrasil_decision_forests/metric",
+        "//yggdrasil_decision_forests/metric:metric_cc_proto",
+        "//yggdrasil_decision_forests/metric:report",
+        "//yggdrasil_decision_forests/model:abstract_model",
+        "//yggdrasil_decision_forests/utils:filesystem",
+        "//yggdrasil_decision_forests/utils:logging",
+        "//yggdrasil_decision_forests/utils:random",
+        "//yggdrasil_decision_forests/utils/distribute:all_workers",
+        "//yggdrasil_decision_forests/utils/distribute/implementations/multi_thread",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/strings",
+    ],
+)
