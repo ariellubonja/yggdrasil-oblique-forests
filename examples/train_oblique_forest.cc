@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <random>
@@ -143,6 +144,13 @@ dataset::VerticalDataset MakeTrunkDataset(
 int main(int argc, char** argv) {
   const auto t_main_start = std::chrono::high_resolution_clock::now();
   absl::ParseCommandLine(argc, argv);
+  // The RF learner has the fork's benchmark shortcut: it exit(0)s right after
+  // the training block (skipping model finalization + return). Any
+  // post-training use of the returned model needs it disabled.
+  if (!absl::GetFlag(FLAGS_test_csv).empty() ||
+      !absl::GetFlag(FLAGS_model_out_dir).empty()) {
+    setenv("NO_EARLY_EXIT", "1", /*overwrite=*/1);
+  }
   const auto mode = absl::GetFlag(FLAGS_input_mode);
   if (mode.empty()) {
     std::cerr << "Error: --input_mode is required. Use csv or trunk.\n";

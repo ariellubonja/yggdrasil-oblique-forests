@@ -1708,6 +1708,11 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
   }
 
   decision_tree::SetLeafIndices(mdl->mutable_decision_trees());
+
+  // Benchmark protocol line, ported from the fork (runtime.sh's timing
+  // anchor). GBT has no early-exit shortcut, there or here.
+  LOG(INFO) << "gradient_boosted_trees.cc Training block took: "
+            << absl::ToDoubleSeconds(absl::Now() - begin_training) << " s";
   return std::move(mdl);
 }
 

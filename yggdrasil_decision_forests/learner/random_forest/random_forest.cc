@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <numeric>
@@ -878,6 +879,19 @@ RandomForestLearner::TrainWithStatusImpl(
         }
       });
     }
+  }
+
+  // Benchmark protocol line + early-exit, ported verbatim from the fork's
+  // random_forest.cc so runtime.sh / bench_repeat_cmd can time this branch
+  // identically: the timing anchor is the "Training block took:" line, and the
+  // exit(0) skips post-training finalization (disable with NO_EARLY_EXIT=1
+  // whenever the caller needs the returned model, e.g. --test_csv or
+  // --model_out_dir).
+  LOG(INFO) << "random_forest.cc Training block took: "
+            << absl::ToDoubleSeconds(absl::Now() - begin_training) << " s";
+  if (std::getenv("NO_EARLY_EXIT") == nullptr) {
+    LOG(WARNING) << "EXITING EARLY TO SPEED UP EXPERIMENTS!";
+    exit(0);
   }
 
   if (training_stopped_early) {
