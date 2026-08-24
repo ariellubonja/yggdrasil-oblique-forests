@@ -64,3 +64,35 @@ cc_binary(
         "@com_google_absl//absl/strings",
     ],
 )
+
+# Benchmark harness ported from the oblique-forests fork (branch ydf-may-2025).
+# Build:
+#   bazel build -c opt --config=linux_cpp17 --copt=-march=native --cxxopt=-O3 \
+#     //examples:train_oblique_forest
+cc_binary(
+    name = "train_oblique_forest",
+    srcs = ["train_oblique_forest.cc"],
+    deps = [
+        "//yggdrasil_decision_forests/dataset:all_dataset_formats",
+        "//yggdrasil_decision_forests/dataset:data_spec",
+        "//yggdrasil_decision_forests/dataset:data_spec_cc_proto",
+        "//yggdrasil_decision_forests/dataset:data_spec_inference",
+        "//yggdrasil_decision_forests/dataset:vertical_dataset",
+        "//yggdrasil_decision_forests/dataset:vertical_dataset_io",
+        "//yggdrasil_decision_forests/learner:all_learners",
+        "//yggdrasil_decision_forests/learner:learner_library",
+        "//yggdrasil_decision_forests/learner/decision_tree:training",
+        "//yggdrasil_decision_forests/learner/gradient_boosted_trees:gradient_boosted_trees_cc_proto",
+        "//yggdrasil_decision_forests/learner/random_forest:random_forest_cc_proto",
+        "//yggdrasil_decision_forests/metric",
+        "//yggdrasil_decision_forests/metric:metric_cc_proto",
+        "//yggdrasil_decision_forests/metric:report",
+        "//yggdrasil_decision_forests/model:model_library",
+        "//yggdrasil_decision_forests/utils:logging",
+        "//yggdrasil_decision_forests/utils:random",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/flags:parse",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
