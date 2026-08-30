@@ -21,11 +21,14 @@ HISTOGRAM_EQUAL_WIDTH ⇒ 255. Code paths verified by byte-comparing the model's
 
 ## Files & arms
 
-| file | arms | scope |
-|---|---|---|
-| `pr245_cc18_projection_split.csv` | `exact`, `hist_eqw` (255 cand), `hist_random` (**num_candidates=1**, inherited axis-aligned default) | primary test, 34 ds |
-| `pr245_cc18_projection_split_nc64.csv` | `exact`, `hist_random_nc64` (**num_candidates=64 explicit**) | diagnostic re-run, 34 ds |
-| `pr245_cc18_new_default.csv` | `exact`, `hist_random_default` (num_candidates **omitted**, new oblique default 64 from code) | default-plumbing check, 5 worst-offender ds |
+Single file `pr245_cc18_accuracy.csv`, 34 ds × 10 folds × 4 arms:
+
+| arm | meaning |
+|---|---|
+| `exact` | EXACT oblique split (control; shared across runs, verified identical) |
+| `hist_eqw` | HISTOGRAM_EQUAL_WIDTH, 255 candidates |
+| `hist_random_nc1` | HISTOGRAM_RANDOM, **num_candidates=1** (inherited axis-aligned default) |
+| `hist_random_nc64` | HISTOGRAM_RANDOM, **num_candidates=64 explicit** (diagnostic re-run) |
 
 ## Results (per-dataset mean Δ accuracy vs `exact`, 95% CI over 34 datasets)
 
@@ -43,8 +46,9 @@ HISTOGRAM_EQUAL_WIDTH ⇒ 255. Code paths verified by byte-comparing the model's
    `projection_split` dispatch.
 3. Therefore the oblique `projection_split` HISTOGRAM_RANDOM default is **64**,
    deliberately diverging from axis-aligned `numerical_split` (still 1, verified
-   byte-identical / no regression). `pr245_cc18_new_default.csv` confirms the
-   shipped default: bit-identical to the explicit-64 arm on all 5 datasets.
+   byte-identical / no regression). A default-plumbing check (num_candidates
+   omitted ⇒ 64 from code) was bit-identical to the explicit-64 arm on the 5
+   worst-offender datasets.
 
 Open items: `num_candidates: 0` set explicitly yields a degenerate
 majority-class model; regression tasks unvalidated (dispatch is
