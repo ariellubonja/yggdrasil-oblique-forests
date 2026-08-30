@@ -1,5 +1,22 @@
 # PR #409 (lazy-candidate-shuffle) — seed-noise study, 2026-08-14
 
+> **Replication, 2026-08-30** — the full 100-seed × {gcc, icx} × {base, head}
+> matrix was rebuilt from scratch (fresh binaries, same worktree/commits,
+> `--config=linux_avx2 --dynamic_mode=off`, gcc 13.3 / icx via oneAPI) and
+> rerun: **all 1,200 metric values are bit-identical** to
+> `results_matrix_100seeds.csv` (`sort`ed files `cmp` equal;
+> `results_matrix_100seeds_rerun_2026-08-30.csv`). The derived table below
+> therefore reproduces exactly (t = +0.11/+0.49/−0.73 gcc, +0.26/+0.58/−0.71
+> icx; base out-of-band 12/10/12 gcc, 5/9/12 icx). The runs are fully
+> deterministic per (compiler, commit, seed) — the study's residual noise is
+> seed choice, not run-to-run jitter.
+>
+> Reproduce: `seed_study_test.patch` (applied on top of `01417698` or
+> `21591b7e` in a worktree), build the test target with the flags above, then
+> `run_seeds.sh <binary> <compiler> <arm> <out.csv>` (100 seeds = `default` +
+> 3001–3099, 8-way parallel, cwd = worktree root since test data paths are
+> cwd-relative) and `compare.py results_matrix_100seeds.csv <out.csv>...`.
+
 > **Update, same day — 100 seeds × {gcc, icx} × {base, head}** (1,200 runs,
 > `results_matrix_100seeds.csv`, figure `pr409_seed_study.png`):
 >
