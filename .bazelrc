@@ -47,6 +47,14 @@ build:disable_std_upper_bound_vectorization --cxxopt="-DDISABLE_STD_UPPER_BOUND_
 # This flag swaps back to the original std::sort
 build:exact_std_sort --cxxopt="-DEXACT_STD_SORT=1"
 
+# PR#356 replication A/B (histogram threshold-scan entropy):
+#   control  = pre-PR per-candidate BinaryToIntegerConfusionMatrix Set/Sub + FinalEntropy
+#   pr356    = the PR's inline entropy, with the later unweighted-binary
+#              count*log(count) table path disabled (isolates the PR's diff)
+# Stock (no config) = inline entropy + entropy table. Mutually exclusive.
+build:histogram_confusion_control --cxxopt="-DHISTOGRAM_CONFUSION_CONTROL=1"
+build:histogram_pr356_inline --cxxopt="-DHISTOGRAM_PR356_INLINE=1"
+
 build --copt=-march=native --cxxopt="-O3"
 
 

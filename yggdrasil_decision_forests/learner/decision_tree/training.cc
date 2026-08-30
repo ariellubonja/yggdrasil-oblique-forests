@@ -2424,21 +2424,39 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
   }
   }
 
+#if defined(HISTOGRAM_CONFUSION_CONTROL) && defined(HISTOGRAM_PR356_INLINE)
+#error "histogram_confusion_control and histogram_pr356_inline are mutually exclusive"
+#endif
+  const double initial_entropy = label_distribution.Entropy();
+#ifdef HISTOGRAM_CONFUSION_CONTROL
+  // Pre-PR#356 control: per-candidate BinaryToIntegerConfusionMatrix
+  // Set/Sub + FinalEntropy, exactly as upstream before the PR.
+  utils::BinaryToIntegerConfusionMatrixDouble confusion;
+  confusion.SetNumClassesIntDim(num_label_classes);
+#else
   // Inline entropy: skips the BinaryToIntegerConfusionMatrix Set/Sub round-trip
   // by reading neg counts as (label_distribution - pos). Equivalent to
   // confusion.FinalEntropy(), minus the per-candidate-split matrix setup.
-  const double initial_entropy = label_distribution.Entropy();
   const int num_classes = label_distribution.NumClasses();
   const double total_sum = label_distribution.NumObservations();
   const double inv_total = (total_sum > 0) ? 1.0 / total_sum : 0.0;
+#ifdef HISTOGRAM_PR356_INLINE
+  // PR#356 replication treatment: the PR's inline entropy only; the later
+  // unweighted-binary count*log(count) table path stays off.
+  const bool use_unweighted_binary_entropy = false;
+#else
   const bool use_unweighted_binary_entropy =
       weights.empty() && num_label_classes == 3;
+#endif
+#endif  // HISTOGRAM_CONFUSION_CONTROL
+#ifndef HISTOGRAM_CONFUSION_CONTROL
   std::vector<double> count_log_count;
   if (use_unweighted_binary_entropy) {
     CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kEntropyTableSetup);
     count_log_count = internal::BuildCountLogCountTable(
         static_cast<int64_t>(total_sum));
   }
+#endif
 
   // Select the best threshold.
   bool found_split = false;
@@ -2453,6 +2471,13 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       continue;
     }
 
+#ifdef HISTOGRAM_CONFUSION_CONTROL
+    confusion.mutable_neg()->Set(label_distribution);
+    confusion.mutable_neg()->Sub(candidate_split.pos_label_distribution);
+    confusion.mutable_pos()->Set(candidate_split.pos_label_distribution);
+
+    const double final_entropy = confusion.FinalEntropy();
+#else
     const auto& pos = candidate_split.pos_label_distribution;
     const double pos_sum = pos.NumObservations();
     const double neg_sum = total_sum - pos_sum;
@@ -2483,6 +2508,7 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       }
       final_entropy = w_entropy * inv_total;
     }
+#endif  // HISTOGRAM_CONFUSION_CONTROL
     const double information_gain = initial_entropy - final_entropy;
     if (information_gain > condition->split_score()) {
       condition->set_split_score(information_gain);
@@ -2491,10 +2517,19 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
       condition->set_attribute(attribute_idx);
       condition->set_num_training_examples_without_weight(
           selected_examples.size());
+#ifdef HISTOGRAM_CONFUSION_CONTROL
+      condition->set_num_training_examples_with_weight(
+          confusion.NumObservations());
+      condition->set_num_pos_training_examples_without_weight(
+          candidate_split.num_positive_examples_without_weights);
+      condition->set_num_pos_training_examples_with_weight(
+          confusion.pos().NumObservations());
+#else
       condition->set_num_training_examples_with_weight(total_sum);
       condition->set_num_pos_training_examples_without_weight(
           candidate_split.num_positive_examples_without_weights);
       condition->set_num_pos_training_examples_with_weight(pos_sum);
+#endif
       condition->set_na_value(na_replacement >= candidate_split.threshold);
       found_split = true;
     }
