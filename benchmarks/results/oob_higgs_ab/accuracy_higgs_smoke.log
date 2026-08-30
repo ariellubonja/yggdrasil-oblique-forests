@@ -1,0 +1,47 @@
+ARM=smoke  HEAD=1a168b16  trees=8  train=benchmarks/data/HIGGS_train_100k.csv
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_train_100k.csv" --test_csv "benchmarks/data/HIGGS_test_20k.csv" --label_col class --num_trees=8 --compute_oob_performances=true
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1787854439.274615  359976 train_oblique_forest.cc:582] Loading CSV in a single pass: benchmarks/data/HIGGS_train_100k.csv
+I0000 00:00:1787854439.279572  359976 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1787854439.696682  359976 vertical_dataset_io.cc:91] 100000 examples read. Memory: usage:11MB allocated:11MB. 0 (0%) examples have been skipped.
+I0000 00:00:1787854439.699710  359976 train_oblique_forest.cc:589] Single-pass CSV load complete: 100000 rows, 29 columns.
+I0000 00:00:1787854439.699745  359976 train_oblique_forest.cc:706] -1 (automatic) threads requested. 22 threads set.
+I0000 00:00:1787854439.699752  359976 train_oblique_forest.cc:776] Configuring oblique splits
+I0000 00:00:1787854439.699754  359976 train_oblique_forest.cc:861] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1787854439.699761  359976 train_oblique_forest.cc:891] train_oblique_forest wall-time - Loading/Init (pre-train): 0.425183s
+I0000 00:00:1787854439.699805  359976 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1787854439.699806  359976 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1787854439.699816  359976 random_forest.cc:534] Training random forest on 100000 example(s) and 28 feature(s).
+I0000 00:00:1787854439.699827  359976 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1787854439.702270  359976 random_forest.cc:663] num_threads being used: 22
+I0000 00:00:1787854439.951441  359999 random_forest.cc:2018] Train tree 1/8 accuracy:0.601918 logloss:14.3483 [index:0 total:0.22s tree:0.22s]
+I0000 00:00:1787854440.100051  359998 random_forest.cc:2018] Train tree 8/8 accuracy:0.630953 logloss:5.3145 [index:2 total:0.36s tree:0.36s]
+I0000 00:00:1787854440.100138  359976 random_forest.cc:899] random_forest.cc Training block took: 0.40036 s
+I0000 00:00:1787854440.100164  359976 random_forest.cc:2030] Final OOB metrics: accuracy:0.630953 logloss:5.3145
+I0000 00:00:1787854440.200475  359976 train_oblique_forest.cc:964] train_oblique_forest wall-time - Training + Post-Processing: 0.500703s
+I0000 00:00:1787854440.342473  359976 decision_forest.cc:817] Model loaded with 8 root(s), 204488 node(s), and 28 input feature(s).
+I0000 00:00:1787854440.342495  359976 abstract_model.cc:1500] Engine "RandomForestGeneric" built
+I0000 00:00:1787854440.354725  359976 train_oblique_forest.cc:1014] Test-set evaluation on benchmarks/data/HIGGS_test_20k.csv (20000 rows): test-accuracy:0 test-auc:0 test-logloss:36.0437
+I0000 00:00:1787854440.354833  359976 train_oblique_forest.cc:1020] Test-set report:
+Number of predictions (without weights): 20000
+Number of predictions (with weights): 20000
+Task: CLASSIFICATION
+Label: class
+
+Accuracy: 0  CI95[W][0 0.000149775]
+LogLoss: : 36.0437
+ErrorRate: : 1
+
+Default Accuracy: : 1
+Default LogLoss: : 1.60066e-14
+Default ErrorRate: : 0
+
+Confusion Table:
+truth\prediction
+       1  0
+    1  0  0
+    0  0  0
+Total: 20000
+
+
+WALL_TOTAL_S: 1.115265459
