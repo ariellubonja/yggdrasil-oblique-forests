@@ -1,0 +1,72 @@
+diff --git a/yggdrasil_decision_forests/learner/random_forest/random_forest_test.cc b/yggdrasil_decision_forests/learner/random_forest/random_forest_test.cc
+index 7d167263..eafd88e4 100644
+--- a/yggdrasil_decision_forests/learner/random_forest/random_forest_test.cc
++++ b/yggdrasil_decision_forests/learner/random_forest/random_forest_test.cc
+@@ -13,6 +13,9 @@
+  * limitations under the License.
+  */
+ 
++#include <cstdlib>
++#include <cstdio>
++
+ #include "yggdrasil_decision_forests/learner/random_forest/random_forest.h"
+ 
+ #include <algorithm>
+@@ -353,8 +356,19 @@ TEST_F(RandomForestOnAdult, NoWinnerTakeAllWithWeights) {
+   auto* rf_config = train_config_.MutableExtension(
+       random_forest::proto::random_forest_config);
+   rf_config->set_winner_take_all_inference(false);
++  if (const char* seed_env = getenv("YDF_TEST_SEED"))
++    train_config_.set_random_seed(atoi(seed_env));
++  check_model = false;  // seed study: skip save/reload + engine checks
++  // Seed study: icx default fp-model=fast makes the oblique dot-product
++  // round differently between splitter and re-partition; demote the
++  // strict check to the production default (warning).
++  rf_config->mutable_decision_tree()
++      ->set_internal_error_on_wrong_splitter_statistics(false);
+   TrainAndEvaluateModel(/*numerical_weight_attribute=*/"age",
+                         /*emulate_weight_with_duplication=*/true);
++  fprintf(stderr, "SEED_STUDY %s seed=%s metric=%.6f\n", "AdultNWTAWeights",
++          getenv("YDF_TEST_SEED") ? getenv("YDF_TEST_SEED") : "default",
++          metric::Accuracy(evaluation_));
+   EXPECT_NEAR(metric::Accuracy(evaluation_), 0.8415, 0.012);
+ }
+ 
+@@ -699,7 +713,18 @@ TEST_F(RandomForestOnAbalone, SparseOblique) {
+       random_forest::proto::random_forest_config);
+   rf_config->mutable_decision_tree()->mutable_sparse_oblique_split();
+   SetExpectedSortingStrategy(Internal::IN_NODE, &train_config_);
++  if (const char* seed_env = getenv("YDF_TEST_SEED"))
++    train_config_.set_random_seed(atoi(seed_env));
++  check_model = false;  // seed study: skip save/reload + engine checks
++  // Seed study: icx default fp-model=fast makes the oblique dot-product
++  // round differently between splitter and re-partition; demote the
++  // strict check to the production default (warning).
++  rf_config->mutable_decision_tree()
++      ->set_internal_error_on_wrong_splitter_statistics(false);
+   TrainAndEvaluateModel();
++  fprintf(stderr, "SEED_STUDY %s seed=%s metric=%.6f\n", "AbaloneSPO",
++          getenv("YDF_TEST_SEED") ? getenv("YDF_TEST_SEED") : "default",
++          metric::RMSE(evaluation_));
+   EXPECT_NEAR(metric::RMSE(evaluation_), 2.054, 0.01);
+ }
+ 
+@@ -1208,7 +1233,18 @@ TEST_F(RandomForestOnSimPTE, LowerBound) {
+   rf_config->mutable_decision_tree()->mutable_uplift()->set_split_score(
+       decision_tree::proto::DecisionTreeTrainingConfig::Uplift::
+           CONSERVATIVE_EUCLIDEAN_DISTANCE);
++  if (const char* seed_env = getenv("YDF_TEST_SEED"))
++    train_config_.set_random_seed(atoi(seed_env));
++  check_model = false;  // seed study: skip save/reload + engine checks
++  // Seed study: icx default fp-model=fast makes the oblique dot-product
++  // round differently between splitter and re-partition; demote the
++  // strict check to the production default (warning).
++  rf_config->mutable_decision_tree()
++      ->set_internal_error_on_wrong_splitter_statistics(false);
+   TrainAndEvaluateModel();
++  fprintf(stderr, "SEED_STUDY %s seed=%s metric=%.6f\n", "SimPTELowerBound",
++          getenv("YDF_TEST_SEED") ? getenv("YDF_TEST_SEED") : "default",
++          metric::Qini(evaluation_));
+   EXPECT_NEAR(metric::Qini(evaluation_), 0.10889, 0.002);
+ }
+ 
