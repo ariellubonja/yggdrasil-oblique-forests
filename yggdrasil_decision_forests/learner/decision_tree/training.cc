@@ -1481,16 +1481,15 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
 }
 
 #ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
-// True if an axis-aligned split search over "candidate_attributes" cannot
-// possibly return anything but kNoBetterSplitFound, i.e. the whole job is dead
-// work.
+// True if an axis-aligned split search over "candidate_attributes" can
+// only return kNoBetterSplitFound
 //
 // All three per-attribute splitters (classification, regression, regression
-// with hessian gain) bail out with kNoBetterSplitFound at the top of their
-// NUMERICAL and DISCRETIZED_NUMERICAL cases when the "split_axis" oneof does
-// not hold an axis_aligned_split -- which is the case for every sparse-oblique
-// configuration. The other column types (categorical, boolean, ...) have no
-// such guard and do real work, so they disqualify the shortcut.
+// with hessian gain) early exit with kNoBetterSplitFound in their
+// NUMERICAL and DISCRETIZED_NUMERICAL cases when "split_axis" oneof does
+// not contain axis_aligned_split -- true for every sparse-oblique
+// config. Other column types (categorical, boolean, ...) have no
+// such guard, so the shortcut doesn't apply.
 bool AxisAlignedJobsAreNoop(
     const dataset::VerticalDataset& train_dataset,
     const proto::DecisionTreeTrainingConfig& dt_config,
@@ -1631,19 +1630,16 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   // Number of jobs actually dispatched to the workers. Normally all of them.
   int num_jobs_to_schedule = num_jobs;
 #ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
-  // Under a sparse-oblique config over numerical features, every axis-aligned
-  // job returns kNoBetterSplitFound without reading a single feature value, yet
-  // each one still costs a channel round-trip (two mutex acquisitions plus a
-  // futex wake), a proto::NodeCondition allocation and -- most expensively -- a
+  // Issue: In sparse oblique with numerical features, every axis-aligned
+  // job always returns kNoBetterSplitFound but costs mutex acquisitions + a
   // full mt19937 re-seed in FindBestConditionFromSplitterWorkRequest. At
-  // num_features = 400k that dead work dominates training. Skip dispatching
-  // them; the RNG stream is left untouched by the discard() below, and since a
-  // no-op job can never report kBetterSplitFound, "best_condition" is
-  // unchanged.
+  // At short-wide datasets (e.g. rows = 15k, cols = 400k) that dead work dominates.
+  // 
+  // Fix: Skip dispatching them: the RNG stream is left untouched by the discard() below
   //
-  // The num_oblique_jobs > 0 guard covers the degenerate case (e.g.
-  // GetNumProjections() == 0) where dropping the axis-aligned jobs would leave
-  // nothing to dispatch and the manager would block forever on GetResult().
+  // num_oblique_jobs > 0 covers the degenerate case (GetNumProjections() == 0)
+  // where dropping the axis-aligned jobs would leave
+  // nothing to dispatch and the manager would deadlock on GetResult().
   if (cache->axis_aligned_jobs_are_noop < 0) {
     cache->axis_aligned_jobs_are_noop =
         AxisAlignedJobsAreNoop(train_dataset, dt_config, candidate_attributes)
