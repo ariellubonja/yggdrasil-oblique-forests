@@ -1,0 +1,206 @@
+Official Review of Submission1627 by Reviewer Lm8h
+Official Reviewby Reviewer Lm8h20 Mar 2026, 11:43 (modified: 15 May 2026, 22:27)Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, Reviewer Lm8h, AuthorsRevisions
+Paper Summary:
+The authors propose an improved method to find the splits when learning oblique trees. This method switches dynamically between sorting and historgrams to do so. This switching is based on the observation that existing methods use histograms when dealing with large data while the more sparse nodes would benefit from a sorting technique. A highly optimized implementation is presented.
+
+Paper Strengths:
+This work provides a faster method to learn oblique trees, a method that is known to be computationally expensive but with better expressivity.
+
+The method is clear from the description and the improvements are experimentally validated.
+
+Paper Weaknesses:
+The improvement is for one particular technique. Given that this technique is also not that common, a more extensive evaluation is warranted. It should also be motivated why this speedup is providing an advantage compare to other techniques (i.e. if the performance of the base technique is not sufficient, why speed it up). For example, axis based techniques such as XGBoost. Is the YDF technique with a 2x speedup better than XGBT or other techniques (speed and accuracy wise)? The authors have space left, thus this cannot be a space issue (thus even if the YDF paper shows performance, it would have been good to reconfirm these results given that there is space to show results).
+
+The experiments do not really prove the point that there is an issue with large datasets and runtime. For example, table 2 has datasets that require only a bit over 5 minutes of training time. There is also something wrong in Table 3. there is no GPU speedup for Trunk-10M but a slowdown. The accuracy comparison is also performed on 'smaller OpenML datasets'. Why if the purpose of the method is to scale up?
+
+In the appendix, it is not clear how this links to Floyd's algorithm. I understand what the idea is but this does not follow from the pseudocode. Floyd's algorithm has as many calls for a random number as there are elements required. Here the call is still within the double loop, so no calls are saved. Something seems missing.
+
+Overall, the paper seems incomplete and not yet mature. There is a neat idea and a good execution of the code, but inconsistent experimentation for an implementation focused contribution.
+
+Resubmission:
+N/A
+
+Questions And Suggestions For Rebuttal:
+How does the technique compare to non YDF techniques (e.g. XGBoost).
+Is the contribution of avoid histograms specific for YDF because it learns to purity (which other methods do not)?
+Is the contribution an implementation of the MIGHT algorithm or were additional steps required?
+Why is the Wise-1 dataset used as motivation in sec2 but then not used in the experiments?
+Why different datasets in the different experiments (the longest runtime reported is a bit over 15 min).
+Relevance: 3: Moderate - The work is somewhat relevant to the Research track of KDD and is of narrow interest to a sub-community
+Novelty: 2: Low - The ideas are relatively minor and largely incremental. The work builds heavily on existing research.
+Technical Quality: 2: Low - The paper has several technical weaknesses, such as minor methodological flaws, insufficient analysis, or unsupported conclusions. While the work shows some level of competence, it lacks thoroughness and precision. Improvements are necessary for it to be considered robust.
+Presentation: 3: Moderate - The paper is organized and generally clear. The writing is mostly free of grammatical and typographical errors, making it easy to read. Figures and tables are effectively used to support the text. The presentation facilitates understanding and conveys the key points effectively.
+Reproducibility: 3: Moderate - The paper provides a clear and detailed description of the methods, data, and procedures used. Supplementary materials, such as datasets and code, are available and sufficiently documented. Reproducing the results would be feasible with the provided information, though some effort may still be required.
+Reviewer Confidence: 4: High - The reviewer is an expert in the subject area and has extensive knowledge of the research methods and context of the paper. They are highly confident in their ability to provide an accurate and thorough assessment. Their evaluation is based on deep expertise and a comprehensive understanding of the work.
+Ethics Review Flag: No
+Ethics Review Description: N/A
+Rebuttal by Authors
+Rebuttalby Authors (Ariel Lubonja, Jungsang Yoon, Haoyin Xu, Yue Wan, +5 more)10 Apr 2026, 22:23 (modified: 11 Apr 2026, 06:53)Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, AuthorsRevisions
+Rebuttal:
+Re: Paper Weaknesses (PW) Paragraph 1
+
+Thank you for the review. We ran a preliminary comparison to XGBoost in YDF (with realistic parameters: 6 depth, 5 minimum examples / node, shrinkage 0.1 and no bagging) and found interesting results: XGBoost is 2.4x faster (44.5s vs. 107.5s) on Epsilon and 2.7x on Trunk-1M, but slightly slower on SUSY (260.2s v. 245.4s). A full comparison will be added. We note our contribution is accelerating sparse oblique random forest, which is algorithmically distinct from axis-aligned GBT methods (XGBoost, LightGBM, CatBoost), and GBTs are often trained to depth 4-8, not full depth. Hence our comparison to YDF’s axis-aligned RF in Figure 7. However, a GBT baseline is a good and useful addition.
+
+PW 2
+
+Runtime: We agree the datasets could be larger to highlight how the fundamental bottleneck we address, and our contribution, scales with n (samples) and p (projections). Table 3 indeed has a mistake: Trunk-10M entries for CPU and GPU should be swapped. Thank you.
+
+Accuracy: The goal of our accuracy results was to show parity to baselines: unchanged SO-RF and conventional RF. HIGGS, SUSY, Epsilon, as well as 18/78 OpenML CC18 datasets met our criteria: Binary Classification, fully numeric, dense features (e.g. no graph laplacians or one-hot encoded features). Of those, we reported 4. Reporting accuracy on our proprietary dataset was discarded in favor of reproducibility.
+
+PW 3:
+
+You are correct - the pseudocode shows the original slow double loop. We wanted to show that the total number of successes follows Binomial(np, nk/p), motivating the replacement of the whole inner loop with a single Binomial(). This is indeed not shown and makes A.1 confusing. We appreciate the careful read of the appendix.
+
+Questions And Suggestions For Rebuttal
+
+Q1: see PW 1
+
+Q2: Adapting between histograms and sorting applies to tree models that (1) do not pre-sort or pre-histogram the data, (2) have enough samples to justify histograms at high levels and (3) train to depth that justifies sorting at low levels. Purity is not a requirement, just depth. Vectorization and GPU contributions are unaffected by depth/Purity.
+
+Q3: see PW 1
+
+Q4: Wise-1 is only 352 x 2523 - too small for performance benchmarking, and is proprietary, undermining accuracy reproducibility. The original experiment was brought down from 8h to 30min.
+
+Q5: see PW2
+
+Official Comment by Reviewer Lm8h
+Official Commentby Reviewer Lm8h16 Apr 2026, 10:31Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, Authors
+Comment:
+Thank you for the clarifications.
+
+I agree that oblique trees are different than axis-aligned trees. But axis-aligned trees are popular because they are faster to learn and as a consequence in practice reach high accuracies (e.g. cheaper to add more trees). If this method speeds up to remove this hurdle of oblique trees, it would have been useful to also show this. Thus to also add the accuracy results of the XGBoost experiment.
+
+The suggested corrections and additions in the rebuttals will be valuable. My main concern that remains is a missing reproducible large datasets experiment to really show the scaling empirically at larger sizes. Also, since this is a single submission round venue, it requires multiple changes to parts that turned out to be incorrect and that will not pass peer-review. This makes me hesitant to alter my scores.
+
+Official Review of Submission1627 by Reviewer 6iRE
+Official Reviewby Reviewer 6iRE20 Mar 2026, 09:27 (modified: 15 May 2026, 22:27)Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, Reviewer 6iRE, AuthorsRevisions
+Paper Summary:
+This paper speeds up sparse oblique forest training for the MIGHT algorithm in YDF. It combines: (1) dynamic switching between exact sorting and histograms by node size, (2) AVX-2 vectorized histogram construction, and (3) hybrid CPU-GPU execution that offloads large nodes to the GPU. The paper reports 1.7-2.5x end-to-end speedup over SO-YDF exact on large datasets, with no meaningful accuracy loss.
+
+Paper Strengths:
+S1. It targets a real bottleneck in MIGHT, improving practicality for very high-dimensional data. S2. The three optimizations are distinct, motivated, and ablated via microbenchmarks. S3. Table 4 suggests dynamic histograms preserve accuracy relative to exact splits on the tested datasets.
+
+Paper Weaknesses:
+W1. The novelty is low and the ideas are mostly established systems techniques. The core idea is straightforward: histograms are better for large nodes, sorting is better for small nodes, so the system switches between them. SIMD vectorization and CPU/GPU dispatch are also standard optimization techniques. The contribution is therefore mainly an engineering combination for SO-YDF, not a new algorithmic or data mining insight. W2. The adaptive switching rule is simplistic and underanalyzed. The "dynamic" part is essentially a one-time crossover threshold chosen by a startup microbenchmark, then applied using node cardinality during training. The paper does not analyze whether this rule remains reliable when the effective scenario changes quickly across nodes or depends on other factors such as projection count, feature dimensionality, sparsity, cache behavior, or contention. It is therefore unclear how robust the switching policy is beyond the tested setup. W3. The experimental coverage of scenarios is not convincing. The paper argues that high-row, low-dimensional datasets are a reasonable proxy for the large-wide biomedical setting that motivates the work, but this is only an assumption. Most performance evidence comes from HIGGS, SUSY, Epsilon, and synthetic Trunk rather than truly ultra-wide real datasets. The paper also does not show that the chosen datasets cover the main regimes where sorting should win, histograms should win, and the crossover should matter. W4. The accuracy evaluation is weak for the target use case, and Table 4 is itself somewhat suspicious. Accuracy is evaluated mainly on small OpenML datasets, not on the large settings used for the performance claims and not on the biomedical-scale workloads motivating the paper. In Table 4, several methods appear to have exactly the same accuracy on multiple datasets, which is unusual and needs explanation: it is unclear whether this is due to rounding, averaging over runs, deterministic training behavior, or some reporting artifact. The paper states that differences are statistically indistinguishable, but it does not report significance testing details in a convincing way for the target setting. W5. The GPU contribution is modest on real datasets. GPU acceleration is only 11.1% on HIGGS, 6.95% on SUSY, 0.75% on Epsilon, and 2.02% on Trunk-100k. The much larger gain is on synthetic Trunk-10M. Since the GPU only helps the largest nodes and occupancy stays below 70%, the practical value of the GPU contribution is limited in the real benchmarks shown. W6. The paper lacks competitive baseline context. The paper compares mainly against SO-YDF exact and RF exact. Without comparison to optimized tree learners such as LightGBM, XGBoost, or CatBoost, it is hard to judge whether a 1.7-2.5x speedup over SO-YDF is practically meaningful. W7. Table 4 appears after the references in the submitted PDF, which is not proper paper formatting and makes the presentation look careless.
+
+Resubmission:
+N/A.
+
+Questions And Suggestions For Rebuttal:
+W1-W7.
+
+Relevance: 2: Low - The connection to KDD is weak
+Novelty: 2: Low - The ideas are relatively minor and largely incremental. The work builds heavily on existing research.
+Technical Quality: 2: Low - The paper has several technical weaknesses, such as minor methodological flaws, insufficient analysis, or unsupported conclusions. While the work shows some level of competence, it lacks thoroughness and precision. Improvements are necessary for it to be considered robust.
+Presentation: 1: Poor - The paper is poorly organized and difficult to follow. The writing is unclear, with numerous grammatical and typographical errors. Figures and tables, if present, are poorly designed or hard to understand. Overall, the presentation detracts significantly from the readability and comprehension of the work.
+Reproducibility: 3: Moderate - The paper provides a clear and detailed description of the methods, data, and procedures used. Supplementary materials, such as datasets and code, are available and sufficiently documented. Reproducing the results would be feasible with the provided information, though some effort may still be required.
+Reviewer Confidence: 3: Moderate - The reviewer has a good understanding of the subject area and is familiar with the research methods and context of the paper. They feel confident in their ability to accurately assess the quality and significance of the work. Their evaluation is based on a solid grasp of the content and context.
+Ethics Review Flag: No
+Ethics Review Description: NA.
+Rebuttal by Authors
+Rebuttalby Authors (Ariel Lubonja, Jungsang Yoon, Haoyin Xu, Yue Wan, +5 more)10 Apr 2026, 22:53 (modified: 11 Apr 2026, 06:53)Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, AuthorsRevisions
+Rebuttal:
+W1: Systems contributions are core to KDD — YDF (KDD'23, our baseline), and XGBoost (KDD'16) are precedents. Our techniques address constraints unique to oblique forests where standard GBT optimizations (pre-sorting, histogram subtraction, symmetric trees) cannot apply
+
+W2: This is an excellent point: the switching threshold depends on node cardinality, which is the dominant cost driver. The threshold is not sensitive to projection count or sparsity because sorting/histogramming is performed after the Feature Projection (the resulting projection vectors are already dense) and the projections are evaluated sequentially (on CPU). Similarly, feature dimensionality only affects runtime in that it is directly proportional to projection count: typically 
+. We do not account for cache behavior or contention, but it is a very interesting future direction.
+
+W3: Dataset width only affects the number of projections, which does not affect the crossover point. But the point is well taken: an experiment showcasing sort-histogram-adaptive regimes would have very clearly described the compute landscape. The GPU contribution does scale with n. features/projections, as we evaluate all projections simultaneously, and synthetic data lets us control this.
+
+W4: The goal of our accuracy results was to show parity with our baseline. HIGGS, SUSY, Epsilon, and 18/78 OpenML CC18 datasets met our criteria: Binary Classification, fully numeric, dense features. We select 4/18 for the paper. Reporting accuracy on our proprietary dataset was discarded in favor of reproducibility.
+
+We rounded the accuracy results to discourage over-interpretation. Reporting more than 0.1% accuracy on randomized forests seems misleading. This is an average over 20 trials: you are right that we should report hypothesis testing and confidence intervals.
+
+W5: The GPU contribution is positioned as forward-looking for very large datasets, where the 39% gain on Trunk-10M is representative.
+
+W6: We agree. We ran a preliminary comparison to XGBoost in YDF (with realistic parameters: 6 depth, 5 minimum examples / node, shrinkage 0.1 and no bagging) and found interesting results: XGBoost is 2.4x faster (44.5s vs. 107.5s) on Epsilon and 2.7x on Trunk-1M, but slightly slower on SUSY (260.2s v. 245.4s). We do note GBTs are algorithmically and parameters are different. A full comparison will be added.
+
+W7: This is a formatting error and LaTeX has been updated. Apologies.
+
+Reply to the Rebuttal.
+Official Commentby Reviewer 6iRE15 Apr 2026, 12:59Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, Authors
+Comment:
+Thank you for your response. Regarding W2, I believe that cache behavior is an important systems consideration and merits further discussion. For the remaining weaknesses, your rebuttal either provides a reasonable explanation or clearly acknowledges the limitations of the current version. Thank you for the clarification.
+
+Official Review of Submission1627 by Reviewer 4iUy
+Official Reviewby Reviewer 4iUy20 Mar 2026, 05:06 (modified: 15 May 2026, 22:27)Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, Reviewer 4iUy, AuthorsRevisions
+Paper Summary:
+The paper presents an optimization training algorithm implementation for sparse oblique forests in the Yggdrasil Random Forest framework via adaptive histogram computation and a vectorization. To do so, the authors first note that there is a break-even point in the runtime when using histograms for tree induction and feature sorting in which feature sorting becomes more efficient when less data is available (typically happening further down the tree). Naturally, they propose to combine both aspects and start with histogram computations and then dynamically switch to feature sorting at some point. Second, they propose to vectorize histogram filling by a two step approach: first, items are sorted in more coarse-grained bins (i.e. a group of bins), and then, in a second step, a more fine-grained sorting is used to find the actual bin. With clever use of SIMD instructions, this approach becomes faster than a direct binary search. Finally, the authors also discuss a hybrid CPU-GPU implementation of their approach and perform extensive benchmarking in the experimental section. Expectantly, the proposed approach is quicker than current implementations.
+
+Paper Strengths:
+Well-written paper that is complex, but easy to follow
+While the dynamic histogram idea is somewhat straightforward, the benchmarking and evaluation to find the break-even point is quite complex to pull off in practice
+This approach is a valuable addition to the Yggdrasil Random Forest framework, and the proposed optimizations can also be interesting to other (oblique) tree-based methods
+Paper Weaknesses:
+While the paper is generally well-written, it refers to the MIGHT algorithm in the intro and background section, with a strange way of explaining it. I am still unsure what the overlap between MIGHT and oblique RFs are
+Resubmission:
+This is not a resubmission
+
+Questions And Suggestions For Rebuttal:
+I am confused about MIGHT. Please clarify whether this is correct or not: MIGHT is an oblique random forest algorithm (plus some p-value computations) that serves as your example algorithm. You seem to have implemented MIGHT in Yggdrasil, whereas previously it was implemented in scikit-learn. You do not really apply it to the same datasets (i.e. gene expression data), and you do not really explain what it does, because you do not care about this in this paper. Furthermore, you mostly care about the oblique random forest construction. In any case, I was a bit confused by the presentation here. To me, what you present here is not an improvement of MIGHT, but improvements to RF induction, and hence it is a bit more general. Likewise, the end of the intro and section 2 threw me off. I think, it would have been enough to say, "we tackle oblique random forest, which is the basis for many algorithms \cite{..}".
+Relevance: 3: Moderate - The work is somewhat relevant to the Research track of KDD and is of narrow interest to a sub-community
+Novelty: 3: Moderate - The paper introduces a new and interesting idea or approach that adds value to the field. The contribution is original and represents an advancement of existing knowledge, demonstrating solid innovation and creativity.
+Technical Quality: 4: High - The paper exhibits a high level of technical quality with a rigorous and well-executed methodology and analysis. The results are highly reliable, well-supported, and thorough. The work demonstrates technical excellence and sets a high standard for quality in the field.
+Presentation: 4: High - The paper is well-organized and very clear. The writing is precise, engaging, and free of errors. Figures and tables are well-designed and seamlessly integrated into the text, enhancing the reader's comprehension. The presentation is polished and professional, making the paper a pleasure to read and understand.
+Reproducibility: 3: Moderate - The paper provides a clear and detailed description of the methods, data, and procedures used. Supplementary materials, such as datasets and code, are available and sufficiently documented. Reproducing the results would be feasible with the provided information, though some effort may still be required.
+Reviewer Confidence: 4: High - The reviewer is an expert in the subject area and has extensive knowledge of the research methods and context of the paper. They are highly confident in their ability to provide an accurate and thorough assessment. Their evaluation is based on deep expertise and a comprehensive understanding of the work.
+Ethics Review Flag: No
+Ethics Review Description: No ethics review needed
+Rebuttal by Authors
+Rebuttalby Authors (Ariel Lubonja, Jungsang Yoon, Haoyin Xu, Yue Wan, +5 more)10 Apr 2026, 22:58 (modified: 10 Apr 2026, 23:13)Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, AuthorsRevisions
+Rebuttal:
+Your interpretation is correct. MIGHT is an oblique RF algorithm with added calibration/validation steps. Our optimizations target the oblique RF construction subroutine, which is the computational bottleneck. We appreciate the suggestion to revise the intro and Section 2 to decouple the general oblique RF optimization from the MIGHT application. Your suggested framing of oblique random forest construction and MIGHT is clearer are we will adopt it.
+
+Official Comment by Reviewer 4iUy
+Official Commentby Reviewer 4iUy15 Apr 2026, 04:40Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, Authors
+Comment:
+Okay, cool! I think changing the flow a bit makes the paper more approachable. I retain my (overall positive) score.
+
+Official Review of Submission1627 by Reviewer NQ3S
+Official Reviewby Reviewer NQ3S18 Mar 2026, 12:33 (modified: 15 May 2026, 22:27)Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, Reviewer NQ3S, AuthorsRevisions
+Paper Summary:
+This paper introduces an optimized method to accelerate sparse oblique random forests. The authors improve the training process by dynamically switching between sorting and building histograms, and they further speed up the system using simple vector instructions and a hybrid CPU-GPU design. It allows the model to perform even faster than sparse oblique random forests and standard random forests on large datasets.
+
+Paper Strengths:
+The authors propose a very practical method to speed up sparse oblique random forests.
+
+It clearly explains why sparse oblique splits are costly.
+
+Paper Weaknesses:
+The contribution of this paper is small. The updates to Sparse Oblique Forests are only engineering changes. For example, the method uses SIMD vectorized histograms and shares tasks between GPUs and CPUs. These changes make the model faster, but they do not add new theory contribution.
+
+The paper lacks a clear problem definition and enough background information to explain the new method. The text must be complete on its own, so readers do not need to read other papers to understand the work. Following the KDD template, you should have two more pages for further explanation.
+
+The number of datasets used in the tests are too small. Authors should add datasets with different data shapes and class counts to clearly show the performance gains.
+
+They only compare the new method to Sparse Oblique Forests, so the results do not show if the method is useful in general. The authors should test or explain if their updates can improve other ensemble tree algorithms.
+
+The crossover point comes from a microbenchmark that runs once per machine, but data shape and node size vary during training, so this fixed threshold may be suboptimal. A sensitivity study or an online cost model would improve confidence.
+
+Resubmission:
+Not a resubmission.
+
+Questions And Suggestions For Rebuttal:
+Please see the Paper Weaknesses above.
+
+Relevance: 3: Moderate - The work is somewhat relevant to the Research track of KDD and is of narrow interest to a sub-community
+Novelty: 2: Low - The ideas are relatively minor and largely incremental. The work builds heavily on existing research.
+Technical Quality: 2: Low - The paper has several technical weaknesses, such as minor methodological flaws, insufficient analysis, or unsupported conclusions. While the work shows some level of competence, it lacks thoroughness and precision. Improvements are necessary for it to be considered robust.
+Presentation: 3: Moderate - The paper is organized and generally clear. The writing is mostly free of grammatical and typographical errors, making it easy to read. Figures and tables are effectively used to support the text. The presentation facilitates understanding and conveys the key points effectively.
+Reproducibility: 3: Moderate - The paper provides a clear and detailed description of the methods, data, and procedures used. Supplementary materials, such as datasets and code, are available and sufficiently documented. Reproducing the results would be feasible with the provided information, though some effort may still be required.
+Reviewer Confidence: 3: Moderate - The reviewer has a good understanding of the subject area and is familiar with the research methods and context of the paper. They feel confident in their ability to accurately assess the quality and significance of the work. Their evaluation is based on a solid grasp of the content and context.
+Ethics Review Flag: No
+Ethics Review Description: No ethical issues
+Rebuttal by Authors
+Rebuttalby Authors (Ariel Lubonja, Jungsang Yoon, Haoyin Xu, Yue Wan, +5 more)10 Apr 2026, 23:18 (modified: 11 Apr 2026, 06:53)Program Chairs, Senior Area Chairs, Area Chairs, Reviewers Submitted, AuthorsRevisions
+Rebuttal:
+W1: Systems contributions at KDD have a strong precedent: YDF (KDD'23, our baseline) and XGBoost (KDD'16). Our work addresses a setting where conventional optimizations (pre-sorting, histogram subtraction, symmetric trees) do not transfer due to projections happening at runtime.
+
+W2: Our treatment of MIGHT, YDF, and their role in random forests confused the context and contribution. Based on reviewers’ feedback, our treatment would have been more effective without getting into the details of MIGHT and purity, instead further explaining Sparse Oblique, its uses and compute challenges. Thanks for the feedback. We will simplify the language going forward.
+
+W3: Our current datasets were chosen to isolate the effect of sample count on the histogram/sort crossover, but we agree broader coverage strengthens the evaluation.
+
+W4: This is a good point. We ran a preliminary comparison to XGBoost in YDF (with realistic parameters: 6 depth, 5 minimum examples / node, shrinkage 0.1 and no bagging) and found interesting results: XGBoost is 2.4x faster (44.5s vs. 107.5s) on Epsilon and 2.7x on Trunk-1M, but slightly slower on SUSY (260.2s v. 245.4s). A full comparison be included. We will note the algorithmic and usage (parameter) differences between the methods.
+
+W5: We run the benchmark once at the start of training for each dataset. The heuristic must remain simple, as it is evaluated very frequently–once per node. The data shape does not vary for the entire forest. Our language should have been more specific “A simple microbenchmark evaluates the crossover point on the local architecture and is run once before training the entire forest.”
+
