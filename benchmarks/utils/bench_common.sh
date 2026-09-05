@@ -90,12 +90,17 @@ ensure_icx() {
 }
 
 # $1 = --enable | --disable; $2 = "force" to ignore BENCH_ECORE_TOGGLE.
-# No-op unless BENCH_ECORE_TOGGLE=true. The helper itself no-ops on any CPU
-# other than the 185H, so this is safe everywhere.
+# Only the 185H laptop needs it; checked here without sudo so other hosts never
+# prompt. `sudo -n` fails fast instead of hanging a non-interactive session.
 bench_ecores() {
   [[ "${2:-}" == "force" || "$BENCH_ECORE_TOGGLE" == "true" ]] || return 0
   [[ -x "$SET_CPU_E_FEATURES" ]] || return 0
-  sudo "$SET_CPU_E_FEATURES" "$1"
+  [[ "$(uname -s)" == "Linux" && -r /proc/cpuinfo ]] || return 0
+  grep -q 'Core(TM) Ultra 9 185H' /proc/cpuinfo || return 0
+  if ! sudo -n "$SET_CPU_E_FEATURES" "$1"; then
+    echo "ERROR: E-core toggle needs sudo without a prompt. Run 'sudo -v' first." >&2
+    exit 1
+  fi
 }
 
 # Re-enable e-cores when the script exits (call once, early).
@@ -103,12 +108,52 @@ bench_restore_ecores_on_exit() {
   trap 'bench_ecores --enable' EXIT
 }
 
-# Build with EXTRA_BAZEL_CONFIGS appended, e-cores on for the build only.
+# Flags every benchmark build needs regardless of the branch's .bazelrc: the
+# icx pin (Linux only; macOS has no icx), platform configs (c++17 on upstream
+# YDF), and the shared disk cache when present. Duplicates in .bazelrc are harmless.
+bench_bazel_platform_flags() {
+  local flags=(--enable_platform_specific_config)
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    flags+=(--repo_env=CC=icx --repo_env=CXX=icpx)
+  fi
+  if [[ -d "$HOME/.cache/bazel-disk" ]]; then
+    flags+=(--disk_cache="$HOME/.cache/bazel-disk")
+  fi
+  printf '%s\n' "${flags[@]}"
+}
+
+# Linux binaries must carry icx's signature. Flags only express intent; this
+# checks the artifact, so a silent gcc fallback aborts the run instead of
+# corrupting every timing. No-op on macOS (Apple clang, numbers don't count).
+bench_assert_icx_binary() {
+  local bin="$1" sig
+  [[ "$(uname -s)" == "Linux" ]] || return 0
+  [[ -f "$bin" ]] || { echo "ERROR: built binary not found: $bin" >&2; exit 1; }
+  sig=$( { readelf -p .comment "$bin" 2>/dev/null || strings "$bin"; } \
+         | grep -i -m1 -E 'Intel\(R\) oneAPI|Intel\(R\) LLVM|icx' || true)
+  if [[ -z "$sig" ]]; then
+    echo "ERROR: $bin was NOT compiled by icx (no Intel signature in .comment)." >&2
+    echo "       Inspect with: readelf -p .comment $bin" >&2
+    exit 1
+  fi
+  echo "Compiler check OK: ${sig#*]}"
+}
+
+# Build with EXTRA_BAZEL_CONFIGS appended, e-cores on for the build only, then
+# verify every //target's binary really came from icx (Linux).
 bazel_build() {
   ensure_icx
   bench_ecores --enable
-  bazel build "$@" "${EXTRA_BAZEL_CONFIGS_ARR[@]}"
+  local platform_flags=()
+  while IFS= read -r f; do platform_flags+=("$f"); done < <(bench_bazel_platform_flags)
+  bazel build "$@" "${platform_flags[@]}" "${EXTRA_BAZEL_CONFIGS_ARR[@]}"
   bench_ecores --disable
+  local arg label
+  for arg in "$@"; do
+    [[ "$arg" == //* ]] || continue
+    label="${arg#//}"; label="${label/:/\/}"
+    bench_assert_icx_binary "bazel-bin/$label"
+  done
 }
 
 # ---------- output files ----------
@@ -154,11 +199,18 @@ csv_escape() {
 # (bazel configs are invisible in the binary command line).
 #   bench_provenance_block "NUM_TREES: $NUM_TREES" | tee -a "$logfile" "$metafile"
 bench_provenance_block() {
-  # Hardware serial for traceability. dmidecode needs root and is Linux-only;
-  # keep the error text in the field rather than aborting -- best effort.
+  # Hardware serial for traceability, best effort and never interactive:
+  # dmidecode needs root (sudo -n so it fails instead of prompting); macOS
+  # reads it from ioreg.
   local machine_serial
-  machine_serial=$(sudo dmidecode -s system-serial-number 2>&1) \
-    || machine_serial="dmidecode failed: $machine_serial"
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    machine_serial=$(ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null \
+      | awk -F'"' '/IOPlatformSerialNumber/{print $4}') || machine_serial="unavailable"
+  else
+    machine_serial=$(sudo -n dmidecode -s system-serial-number 2>&1) \
+      || machine_serial="dmidecode unavailable: $machine_serial"
+  fi
+  [[ -n "$machine_serial" ]] || machine_serial="unavailable"
   machine_serial="${machine_serial//$'\n'/ ; }"   # keep the field on one line
   local model=""
   if [[ "$(uname -s)" == "Linux" ]]; then
@@ -173,8 +225,19 @@ bench_provenance_block() {
   echo "git_branch: $(git branch --show-current 2>/dev/null || echo unknown)"
   echo "machine: $model (nproc=$(bench_nproc))"
   echo "machine_serial: $machine_serial"
+  # Linux is pinned to icx by bazel_build; elsewhere bazel's cc_configure
+  # honours $CC (Homebrew LLVM on the Mac), so report that, not /usr/bin/cc.
+  local compiler
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    compiler=$(icx --version 2>/dev/null | head -1) || compiler="icx missing"
+  else
+    compiler=$("${CC:-cc}" --version 2>/dev/null | head -1) || compiler="unknown"
+    compiler="${compiler} [${CC:-cc}]"
+  fi
+  echo "compiler: ${compiler:-unknown}"
   echo "EXTRA_BAZEL_CONFIGS: ${EXTRA_BAZEL_CONFIGS:-<none>}"
   echo "EXTRA_TRAIN_ARGS: ${EXTRA_TRAIN_ARGS:-<none>}"
+  echo "NUM_TREES_DIVISOR: ${NUM_TREES_DIVISOR:-1}"
   local line
   for line in "$@"; do
     echo "$line"
@@ -285,10 +348,16 @@ is_dynamic_method() {
 # sequentially, so the "5x cores to prevent skewness" heuristic doesn't apply;
 # use a fixed count instead. Matches every spelling absl accepts:
 # "--ensemble_method Boosting", "=Boosting", and a quoted value.
+# NUM_TREES_DIVISOR (default 1) scales the count down for quick preliminary
+# passes; NUM_TREES lands in the provenance header, so such runs never match a
+# full-protocol result.
 bench_num_trees() {
+  local base divisor="${NUM_TREES_DIVISOR:-1}"
   if [[ "$EXTRA_TRAIN_ARGS" =~ --ensemble_method[[:space:]=]+\"?Boosting ]]; then
-    echo 300
+    base=300
   else
-    echo $(( $(bench_nproc) * 5 ))
+    base=$(( $(bench_nproc) * 5 ))
   fi
+  [[ "$divisor" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: NUM_TREES_DIVISOR must be a positive integer, got '$divisor'" >&2; exit 2; }
+  echo $(( base / divisor > 0 ? base / divisor : 1 ))
 }
