@@ -16,7 +16,11 @@ set -euo pipefail
 #   EXTRA_TRAIN_ARGS     binary flags, e.g. '--numerical_split_type "Dynamic
 #                        Random Histogram" --histogram_num_bins=64
 #                        --dynamic_split_threshold=250'
-# Both are recorded in the CSV provenance header. The CSV's `algorithm` column
+#   CSV_DATASETS_OVERRIDE / TRUNK_DATASETS_OVERRIDE
+#                        space-separated subset of the dataset lists below, or
+#                        "none" to skip a group. Selection only: every other
+#                        setting keeps its default.
+# All are recorded in the CSV provenance header. The CSV's `algorithm` column
 # is derived by the parser from the command line, so pass the flags that
 # identify the experiment (feature_split_type / numerical_split_type /
 # ensemble_method / dynamic_split_threshold) in EXTRA_TRAIN_ARGS.
@@ -74,12 +78,24 @@ TRUNK_DATASETS=(
   "15000|400000"
 )
 
+# Dataset selection overrides (see header). Entries keep the "path|label" /
+# "rows|cols" forms above.
+if [[ -n "${CSV_DATASETS_OVERRIDE:-}" ]]; then
+  if [[ "$CSV_DATASETS_OVERRIDE" == "none" ]]; then CSV_DATASETS=()
+  else read -r -a CSV_DATASETS <<<"$CSV_DATASETS_OVERRIDE"; fi
+fi
+if [[ -n "${TRUNK_DATASETS_OVERRIDE:-}" ]]; then
+  if [[ "$TRUNK_DATASETS_OVERRIDE" == "none" ]]; then TRUNK_DATASETS=()
+  else read -r -a TRUNK_DATASETS <<<"$TRUNK_DATASETS_OVERRIDE"; fi
+fi
+
 # =========================
 # Main Script
 # =========================
 
 BUILD_TARGET="//examples:train_oblique_forest"
-BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native" --repo_env=CC=icx --repo_env=CXX=icpx)
+# icx pin, platform configs and disk cache come from bench_common's bazel_build.
+BAZEL_FLAGS=(-c opt --cxxopt="-O3" --cxxopt="-march=native")
 
 # Always: enable -> build -> disable -> run -> re-enable at end.
 # All bazel builds are wrapped by bench_common's bazel_build() so CPU E features
@@ -136,6 +152,8 @@ BASE_ARGS="--num_trees=$NUM_TREES"
 metafile="$(mktemp)"
 bench_provenance_block \
   "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS" \
+  "CSV_DATASETS: ${CSV_DATASETS[*]:-<none>}" \
+  "TRUNK_DATASETS: ${TRUNK_DATASETS[*]:-<none>}" \
   | tee -a "$logfile" "$metafile"
 
 run_cmd() {

@@ -85,7 +85,10 @@ follow it wherever it is more specific than this file.
   4 B for fp32) and does the biggest fit with headroom? Predict runtime per run
   from prior results (`scripts/find_prior_baseline.py --estimate`). If a single
   run is predicted to exceed the notification threshold, say so up front; still
-  start the one-run pass, as instructed.
+  start the one-run pass, as instructed. If a default dataset exceeds the
+  machine's comfortable RAM, warn (critical) but run it anyway: the user chose
+  the default list knowingly, and the runner records an OOM as a labelled cell
+  rather than crashing the pass.
 - Never rebuild or re-run what an existing, matching prior result already
   answers; reuse it and say so.
 
@@ -95,24 +98,55 @@ follow it wherever it is more specific than this file.
   tip first (`git merge-tree` tells you if it is clean), so arm A is the current
   tip and the replication check is meaningful. Arm A = build without the
   config, arm B = with it.
-- **Unconditional change**: two worktrees (`git worktree add`), one per ref.
-  Symlink or point the data directory into each worktree; result CSVs are
-  written per worktree and copied back to the main results tree.
-- **Upstream baseline**: use the repository's tooling branch that tracks
-  upstream (see reference). Port the candidate onto it (cherry-pick; resolve
-  conflicts that come from fork-only context; show the resulting diff in the
-  report because this ported branch is usually the PR branch). If the
-  candidate depends on fork-only infrastructure and cannot be ported, say so
-  and stop that target.
+- **Unconditional change**: two source states, built one after the other in
+  the same tree (check out A, build, copy the binary out; check out B, build,
+  copy). The runner rebuilds into one `bazel-bin` anyway, so a second checkout
+  buys nothing on a clean, dedicated benchmarking checkout such as the m7i.
+  Use a `git worktree` only when the working tree carries uncommitted work you
+  must not disturb (a dev laptop); then symlink the data directory into it and
+  copy result CSVs back to the main results tree.
+- **Upstream baseline**: the repository keeps a tooling branch that tracks
+  upstream (fork: `upstream-bench`), so nothing has to be recreated: check it
+  out (in place, or in a worktree by the rule above), port the candidate onto
+  it (cherry-pick; resolve conflicts that come from fork-only context; show the
+  resulting diff in the report, since this ported branch is usually the PR
+  branch). If the candidate depends on fork-only infrastructure and cannot be
+  ported, say so and stop that target.
 - Build each arm through the repository's runner (it applies the compiler
   pin, platform configs and the post-build compiler check). Keep a copy of
   each arm's binary for the identity check later. A build failure is a stop:
   notify the user, do not patch around it.
 
-### 2. First pass: one run per arm
+### 2. Model equivalence first (minutes, before any timing)
+
+Establish what the change does to the model before timing anything, because
+the answer decides what kind of report this is. A bit-identical model makes
+the timing the whole story. A changed model makes the speedup a trade-off and
+the accuracy delta the headline, and the user must hear that before an hour
+of timing is spent on it. It is also the cheapest step: at the reduced model
+size the fork's procedure takes a few minutes.
+
+- Train both arms on the identity set and hash the saved models (fork:
+  `scripts/ydf_bitid_cc18.sh binA binB <dir>`, 10 fixed CC18 tasks).
+- Run the accuracy sweep on both arms at the same reduced size and diff the
+  per-fold values (fork: `accuracy.sh` for A and B, compare the CSV bodies;
+  identical when the trees are bit-identical, otherwise per-task mean ± std
+  deltas).
+- If anything differs, put a **MODEL CHANGED** warning at the top of every
+  report and in your first message to the user, with the per-task deltas, and
+  keep going with the timing unless the user has said otherwise. If everything
+  matches, say so in one line and move on.
+
+### 3. Quick timing pass: one run per arm, reduced model size
 
 Run the runner with `--runs=1` (or its equivalent) on the **default dataset
-list**, arm A then arm B, never concurrently. While it runs, keep a monitor on
+list**, arm A then arm B, never concurrently, at the reduced model size the
+repository sanctions for preliminary passes (for the fork:
+`NUM_TREES_DIVISOR=10`, i.e. 10× fewer trees). Per-tree cost is what scales,
+so a 10× cheaper pass predicts the full protocol's per-run time to within
+noise while exercising every dataset, both builds, the parser and the report.
+Datasets stay the default ones: smaller substitute shapes change the regime
+and were ruled out by the user. While it runs, keep a monitor on
 the log (Claude Code: the `Monitor` tool running `scripts/watch_runs.sh <log>
 <limit_seconds>`): it emits one line per run start/finish, every OOM/ERROR,
 and a single `LONG_RUN` line when a run passes the limit (default 7200 s). On
@@ -124,25 +158,32 @@ Why one run first: nobody knows how long a run takes until it has run once, and
 a 3-run protocol on a 2-hour dataset is a day of machine time that must be a
 deliberate choice, not a default.
 
-### 3. Report, then decide
+### 4. Report, then decide
 
 Report the one-run table (`scripts/compare_runs.py A.csv B.csv`) with the
 inferred protocol, the machine, and per-dataset wall times. Then:
 
-- **Every run under 30 minutes** → continue to the full protocol without
-  asking.
-- **Any run over 30 minutes** → stop. Report which datasets are slow and how
-  long the full protocol would take. Propose a **smaller shape from the same
-  regime** (a wide dataset stays wide, a tall one stays tall: e.g. 15k × 400k
-  → 15k × 40k) using the runner's dataset override, run its one-run pass, and
-  report again. The user decides whether the full protocol on the big shapes is
-  worth it.
+- **Not on a verdict machine** (a laptop, a Mac, any dev box) → stop here.
+  The quick pass is all a local machine ever runs; the full protocol belongs
+  on the verdict machine and runs elsewhere only if the user explicitly asks
+  for it. Say what the full protocol would cost there (≈ 10× the reduced run
+  per repetition) so the user can plan the m7i session.
+- **On a verdict machine, every reduced-size run under 3 minutes** (so every
+  full-size run is predicted under 30 minutes) → continue to the full
+  protocol (default model size, default repetitions) without asking.
+- **On a verdict machine, any reduced-size run over 3 minutes** → stop.
+  Report which datasets are slow and how long the full protocol would take.
+  Propose a **smaller shape from the same regime** (a wide dataset stays wide,
+  a tall one stays tall: e.g. 15k × 400k → 15k × 40k) using the runner's
+  dataset override, run its one-run pass, and report again. The user decides
+  whether the full protocol on the big shapes is worth it.
 - Any OOM or error → stop and notify; include the runner's log path.
 
-### 4. Full protocol and replication
+### 5. Full protocol and replication (verdict machine)
 
 Run the default repetitions (median of N as the runner defines it) for both
-arms. Then run `scripts/find_prior_baseline.py --like A.csv` against the
+arms, and repeat the accuracy sweep at default model size as the confirmation
+of step 2. Then run `scripts/find_prior_baseline.py --like A.csv` against the
 results tree: it finds the newest earlier CSV with the same provenance
 (machine class, configs, args, tree count) and reports per-dataset drift.
 Within tolerance (default 3 %) means the machine and code state are as before
@@ -150,23 +191,20 @@ and B's speedup is attributable to the change. Beyond tolerance means something
 else moved (code, build, machine state); report it as a finding and do not
 claim a speedup until it is understood.
 
-### 5. Identity or accuracy
-
-A speedup is only admissible if you also say what it did to the model. Follow
-the reference's procedure (for the fork: hash-compare A and B models on 10
-fixed CC18 tasks with `scripts/ydf_bitid_cc18.sh`, then run the full
-accuracy sweep on both arms and compare). Bit-identical trees are the strongest
-statement; if they differ, the accuracy comparison is the statement, and the
-difference itself is a headline finding.
-
 ### 6. Report and deliverables
 
 Write `compare.md` next to the two CSVs in the results tree, containing: the
 verdict table with gates applied (defaults: < 15 % time saved = failed
 experiment, ≥ 20 % = ★), the geometric mean, the replication table, the
-identity/accuracy result, both provenance blocks, the exact commands and env
+model-equivalence result from step 2 (with the MODEL CHANGED warning first if
+it applies), both provenance blocks, the exact commands and env
 used, the machine caveats, and what was *not* done (skipped shapes, one-run
-only, no verdict machine). Then ask the user where the results should be
+only, no verdict machine). Keep every deliverable for one candidate in its own
+directory (`<results tree>/verify/<candidate>/<vs-baseline>/`) so the run can
+be reproduced from the files alone, and commit that directory **on the
+candidate branch**: the results describe that change and should travel with
+it when it is merged. Never commit on the baseline branch; merging the results
+into it is the user's decision. Then ask the user where the results should be
 published if the reference offers a choice (for the fork: engineering change →
 Drive `PRs/<candidate>`, research change → Drive `Results/<area>`). For an
 engineering change that will be merged, remind the user that the baseline must
@@ -188,11 +226,12 @@ state.
 ## Machines
 
 Numbers count only on the designated measurement hosts (see reference). On
-any other host the pipeline still runs, but the report must say "mechanics
-only, no verdict", must compare the runtime ISA banner and compiler against
+any other host only the quick pass runs (never the full protocol unless the
+user explicitly asks), and the report must say "mechanics only, no verdict", must compare the runtime ISA banner and compiler against
 the verdict machine's, and must raise a **critical warning** when a benchmark
-cannot run at all there (SIMD paths absent, dataset larger than RAM, missing
-compiler). Predict the RAM case before running.
+cannot be trusted or cannot run there (SIMD paths absent, dataset larger than
+RAM, missing compiler). Predict the RAM case before running and report OOM
+cells as such.
 
 ## Adapting to your repository
 

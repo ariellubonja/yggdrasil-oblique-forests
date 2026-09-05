@@ -9,28 +9,62 @@
     },
     {
       "id": 2,
-      "prompt": "Compare origin/lazy-candidate-shuffle against upstream/main. I want to know if it is actually faster before I ping the reviewer.",
+      "prompt": "Compare origin/lazy-candidate-shuffle against upstream/main on this mac. I want to know if it is actually faster before I ping the reviewer.",
       "expected_output": "Upstream target: worktree on upstream-bench, cherry-pick the 3 commits (they apply cleanly), arm A = upstream-bench, arm B = ported branch, RF protocol with --numerical_split_type \"Exact\" on both arms. The report must state explicitly that Exact vs Exact is being compared because upstream lacks SPO histogramming (PR expected week of 2026-09-07). One-run pass on the default list, 30-minute rule, compare.md, identity check, question about Drive destination (engineering \u2192 PRs/lazy-candidate-shuffle). No hyperparameter edits.",
-      "files": []
+      "files": [],
+      "assertions": [
+        "Arm A is the upstream-bench branch (trimmed harness, provenance git_branch upstream-bench or its sha) and arm B is upstream-bench plus the cherry-picked candidate; no fork-only flags anywhere",
+        "States explicitly that Exact vs Exact is compared because upstream lacks sparse-oblique histogramming (PR expected the week of 2026-09-07)",
+        "Both arms run the RF protocol with --numerical_split_type \"Exact\" (no --ensemble_method Boosting) visible in the CSV provenance",
+        "Cherry-picks the candidate's 3 commits (they apply cleanly) and includes or points to the ported diff in the report",
+        "Runs the model-equivalence check (10-task CC18 hashes + accuracy.sh both arms at reduced size) BEFORE the timing pass and states identical/differ; if they differ a MODEL CHANGED warning leads the report",
+        "Quick pass only: NUM_TREES_DIVISOR=10 (5 RF trees on this Mac), NUM_RUNS 1, default dataset list, arms sequential, and no full 3-run protocol because the Mac is not a verdict machine",
+        "Benchmark script defaults untouched (checksums of runtime.sh, accuracy.sh, bench_common.sh, parse_log_to_csv.py unchanged vs the copies it ran with)",
+        "Warns about the ~24 GB trunk shapes on a 32 GB Mac before running them and reports any OOM cells",
+        "compare.md exists with the per-dataset A/B table, gates (15/20 %), geometric mean and both provenance blocks; report says mechanics only / no verdict",
+        "Replication: reports that no prior CSV matches this protocol (upstream-bench, RF Exact, this machine) rather than inventing a baseline",
+        "Does not commit on any branch (upstream-bench and rebased-main HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user",
+        "Names the follow-up: full protocol on the m7i (and the same-regime smaller shape if a quick run exceeded 3 min)"
+      ]
     },
     {
       "id": 3,
-      "prompt": "run the speedup verification of origin/gbt-high-dim-speedup vs origin/rebased-main on this mac (but check if i merged it already, i dont remember)",
-      "expected_output": "Infers GBT protocol (--ensemble_method Boosting) from the diff (concurrent split manager, SKIP_DEAD_AXIS_ALIGNED_JOBS), rebases onto the tip, arm B = --config=skip_dead_axis_jobs. Predicts from gbt_e2e.csv that 15k\u00d7400k is a ~2 h run and says so before starting. One run per arm; LONG_RUN monitor armed; phone notification if a single run passes 2 h; stops after the one-run pass, reports, proposes 15000|40000 via TRUNK_DATASETS_OVERRIDE and runs it. Cites the 2026-08-07 laptop measurement (3.96\u00d7, trees identical) as the expectation. Intended for the m7i; on a Mac it must predict the RAM problem and raise the critical warning.",
+      "prompt": "run a quick speedup check of origin/gbt-high-dim-speedup vs origin/rebased-main on this mac, 10x fewer trees (but check if i merged it already, i dont remember)",
+      "expected_output": "Infers GBT protocol from the diff, confirms the branch is unmerged, rebases onto the tip, arm B = --config=skip_dead_axis_jobs. Quick pass: NUM_TREES_DIVISOR=10, --runs=1, default datasets, sequential arms, RAM warning for the 24 GB shapes. Then the 3-minute rule stops it (15k x 400k ~13 min in arm A), reports, proposes 15000|40000. compare.md, bit-identity on 10 CC18 tasks, mechanics-only disclaimer, Drive question left for the user, nothing committed.",
       "files": [],
       "assertions": [
         "Detects that origin/gbt-high-dim-speedup is NOT merged into rebased-main (2 outstanding commits) and says so before measuring",
         "Infers the GBT protocol from the diff: both arms run with --ensemble_method Boosting (visible in CSV provenance EXTRA_TRAIN_ARGS)",
         "Arm B is built with EXTRA_BAZEL_CONFIGS=--config=skip_dead_axis_jobs and arm A without (visible in the two CSVs' provenance)",
         "Benchmark script defaults untouched: runtime.sh, accuracy.sh, bench_common.sh, parse_log_to_csv.py, .bazelrc checksums unchanged vs pre_state.txt",
-        "Predicts from rows x cols x 4 B that the three ~24 GB trunk shapes do not fit 32 GB and raises a critical warning instead of attempting them",
-        "First pass is exactly one run per arm (NUM_RUNS: 1 in provenance), arms run sequentially, never concurrently",
+        "Warns (critical) before running that the three ~24 GB trunk shapes exceed comfortable RAM on a 32 GB Mac, then runs the default list anyway and reports any OOM cells",
+        "Quick pass is exactly one run per arm at 10x fewer trees (NUM_RUNS: 1, NUM_TREES: 30, NUM_TREES_DIVISOR: 10 in provenance) on the default dataset list, arms sequential",
         "Report states the Mac is mechanics-only (no verdict) and notes the compiler/ISA differ from the m7i",
-        "After the long-run/RAM stop, proposes and runs the same-regime smaller shape 15000|40000 via TRUNK_DATASETS_OVERRIDE (not by editing the script)",
+        "Stops after the quick pass without auto-starting the full 3-run protocol (Mac is not a verdict machine; 15k x 400k also exceeds the 3-minute rule), reports, and names the follow-up (m7i full protocol and/or the 15000|40000 same-regime shape)",
         "compare.md exists with a per-dataset A/B table, gates (15/20 %), geometric mean and both provenance blocks",
         "Cites prior evidence for expectations/durations: gbt_e2e.csv m7i numbers and/or the 2026-08-07 laptop measurement (3.96x, trees identical)",
-        "Runs the 10-task CC18 bit-identity check on the two arm binaries and states identical/differ",
+        "Runs the model-equivalence check (10-task CC18 hashes + accuracy.sh on both arms at reduced size) BEFORE the timing pass and states identical/differ, with a MODEL CHANGED warning up front if they differ",
         "Does not commit anything (HEAD of rebased-main unchanged) and does not upload to Drive without asking; leaves the PRs/ vs Results/ question for the user"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "compare origin/gbt-high-dim-speedup against upstream/main on this mac. smoke test of the upstream path, quick pass only",
+      "expected_output": "Upstream target for the flag-gated GBT change: upstream-bench as arm A, candidate ported with one conflict resolved, Exact-vs-Exact reminder, model equivalence first, quick pass (30 trees, 1 run, default list), no full protocol on the Mac, compare.md + report with the port diff, nothing committed.",
+      "files": [],
+      "assertions": [
+        "Arm A is the upstream-bench branch (trimmed harness; provenance git_branch upstream-bench or its sha) and arm B is upstream-bench plus the ported candidate",
+        "Ports the candidate onto upstream-bench, resolving the fork-only-context conflict (CHRONO_SCOPE line in training.cc and the .bazelrc hunk) and includes or points to the resulting diff in the report",
+        "States explicitly that Exact vs Exact is compared because upstream lacks sparse-oblique histogramming (PR expected the week of 2026-09-07)",
+        "Both arms use --ensemble_method Boosting and --numerical_split_type \"Exact\"; arm B carries the SKIP_DEAD_AXIS_ALIGNED_JOBS define (via --config=skip_dead_axis_jobs or an explicit -D in EXTRA_BAZEL_CONFIGS), visible in provenance",
+        "Runs the model-equivalence check (10-task CC18 hashes + accuracy.sh both arms at reduced size) BEFORE the timing pass and states identical/differ (trees expected identical; a MODEL CHANGED warning must lead if not)",
+        "Quick pass only: NUM_TREES_DIVISOR=10 (30 GBT trees), NUM_RUNS 1, default dataset list, arms sequential, no full 3-run protocol because the Mac is not a verdict machine",
+        "Benchmark script defaults untouched (checksums of runtime.sh, accuracy.sh, bench_common.sh, parse_log_to_csv.py unchanged vs the copies it ran with)",
+        "Warns about the ~24 GB trunk shapes on a 32 GB Mac before running them and reports any OOM cells",
+        "compare.md exists with the per-dataset A/B table, gates (15/20 %), geometric mean and both provenance blocks; report says mechanics only / no verdict",
+        "Replication: reports that no prior CSV matches this protocol (upstream-bench, GBT Exact, this machine) rather than inventing a baseline; cites today's fork-side quick pass or the 2026-08-07 measurement as the expectation",
+        "Does not commit on rebased-main or upstream-bench (HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user, noting the baseline roll-forward for an engineering change",
+        "Names the follow-up: full protocol on the m7i"
       ]
     }
   ]

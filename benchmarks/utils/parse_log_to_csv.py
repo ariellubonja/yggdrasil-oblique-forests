@@ -106,9 +106,11 @@ def parse_cmd(args, vectorized=False):
         dataset = "unknown"
 
     # Binary defaults: feature_split_type=Oblique, ensemble_method=Bagging.
-    m_split = re.search(r'--feature_split_type "([^"]+)"', args)
+    # Flags may be written `--flag value`, `--flag "quoted value"` or
+    # `--flag=value` (EXTRA_TRAIN_ARGS is free-form); accept all three.
+    m_split = re.search(r'--feature_split_type[= ]"?([^"=][^"]*?)"?(?=\s+--|\s*$)', args)
     is_oblique = 'Oblique' in (m_split.group(1) if m_split else "Oblique")
-    m_ens = re.search(r'--ensemble_method\s+(\w+)', args)
+    m_ens = re.search(r'--ensemble_method[= ]"?(\w+)"?', args)
     is_boosting = (m_ens.group(1) if m_ens else "Bagging") == "Boosting"
 
     # Family label = obliqueness x ensemble:
@@ -119,7 +121,7 @@ def parse_cmd(args, vectorized=False):
     else:
         family = "GBT" if is_boosting else "RF"
 
-    m_method = re.search(r'--numerical_split_type "([^"]+)"', args)
+    m_method = re.search(r'--numerical_split_type[= ]"?([^"=][^"]*?)"?(?=\s+--|\s*$)', args)
     method = m_method.group(1).replace(' ', '_') if m_method else "unknown"
     if vectorized:
         method = f"Vectorized_{method}"

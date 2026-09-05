@@ -27,10 +27,15 @@ for t in "${TASKS[@]}"; do
       --compute_oob_performances=true $EXTRA_TRAIN_ARGS --model_out_dir \"$OUT/$t.$arm\"" \
       > "$OUT/$t.$arm.log" 2>&1 || { echo "| $t | $NUM_TREES | arm $arm FAILED (see $OUT/$t.$arm.log) |"; fail=1; continue 2; }
   done
-  if "$REPO/benchmarks/evaluation/compare_models.sh" "$OUT/$t.A" "$OUT/$t.B" > "$OUT/$t.compare.txt" 2>&1; then
-    echo "| $t | $NUM_TREES | BIT-IDENTICAL |"
-  else
-    echo "| $t | $NUM_TREES | **DIFFER** ($(grep -m1 RESULT "$OUT/$t.compare.txt")) |"; fail=1
-  fi
+  # compare_models.sh exits 1 for "trees identical, metadata differs" too; GBT
+  # headers carry training logs that differ run to run, so the nodes-* verdict
+  # in its RESULT line is the signal.
+  "$REPO/benchmarks/evaluation/compare_models.sh" "$OUT/$t.A" "$OUT/$t.B" > "$OUT/$t.compare.txt" 2>&1 || true
+  res=$(grep -m1 '^RESULT:' "$OUT/$t.compare.txt" || echo "RESULT: no output")
+  case "$res" in
+    *BIT-IDENTICAL*)   echo "| $t | $NUM_TREES | BIT-IDENTICAL |" ;;
+    *TREES\ IDENTICAL*) echo "| $t | $NUM_TREES | TREES IDENTICAL (metadata differs; expected for GBT headers) |" ;;
+    *)                 echo "| $t | $NUM_TREES | **TREES DIFFER** ($res) |"; fail=1 ;;
+  esac
 done
 exit $fail

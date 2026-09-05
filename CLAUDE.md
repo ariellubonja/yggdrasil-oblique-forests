@@ -48,6 +48,12 @@ below directly; the user should never have to relay between them.
   `ariel_notes/journal.md`; before a meeting, draft the agenda from it plus the board as a
   new Doc in the Drive folder.
 
+## Subagents (decided 2026-09-05)
+
+Start every subagent with `model: opus` (Agent tool `model: "opus"`, `claude -p --model
+claude-opus-5` in harnesses) unless the user explicitly names another model. Fable-class
+workers exhaust the account's session limit within an afternoon; Opus is the default worker.
+
 ## Dataset policy (decided 2026-09-04)
 
 Only **fully numeric, NaN-free** feature data is allowed in experiments — the fp32 hot path
