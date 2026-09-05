@@ -1,0 +1,126 @@
+# Reference: ariellubonja/yggdrasil-decision-forests (oblique RF fork)
+
+Everything repo-specific the workflow in SKILL.md needs. Verified 2026-09-05.
+
+## Refs and baselines
+
+| name | what | notes |
+|---|---|---|
+| `origin/rebased-main` | the fork's integration branch, default baseline | full instrumentation; default protocol available |
+| `upstream/main` | google/yggdrasil-decision-forests | fetch with `git fetch upstream` (remote is unshallowed since 2026-09-05; true merge-base b506e72f, 2026-05-12) |
+| `upstream-bench` | upstream/main + one tooling commit | trimmed harness + the three scripts. Refresh with `git rebase upstream/main`; only upstream-owned file touched is `examples/BUILD` |
+
+Two baseline targets, two protocols:
+
+1. **vs `origin/rebased-main`**: default protocol (below). Flag-gated changes
+   are A/B'd on one tree via `EXTRA_BAZEL_CONFIGS`. Arm A must replicate the
+   newest matching CSV under `benchmarks/results` (tolerance 3 %; same-protocol
+   m7i runs a month apart drifted 0.2–1.0 %).
+2. **vs `upstream/main`**: worktree on `upstream-bench`, cherry-pick the
+   candidate. The trimmed harness has **no** Dynamic histogram types, row-major
+   store, `RM_MAX_ROWS` or RF early exit. **SPORF comparisons are Exact vs
+   Exact** because upstream has no sparse-oblique histogramming yet; a PR
+   adding it is expected the week of 2026-09-07. **Tell the user this on every
+   upstream run** and check whether that PR has landed (then update this file
+   and the `speedup-verification-two-baselines` memory).
+
+Worktree recipe (upstream target):
+```bash
+git worktree add ../ydf-upstream-bench upstream-bench
+cd ../ydf-upstream-bench && ln -s <repo>/benchmarks/data benchmarks/data
+git checkout -b upstream-bench/<candidate> && git cherry-pick <base>..<candidate>   # resolve fork-only context
+```
+`benchmarks/results` is gitignored there; copy CSVs back into the fork's tree.
+
+## Scripts and knobs (never edit the scripts' defaults)
+
+| script | job | knobs |
+|---|---|---|
+| `benchmarks/evaluation/runtime.sh [--runs=N] <suffix>` | e2e wall time, median of N (default 3), builds first | `EXTRA_BAZEL_CONFIGS`, `EXTRA_TRAIN_ARGS`, `CSV_DATASETS_OVERRIDE`, `TRUNK_DATASETS_OVERRIDE` ("none" skips a group) |
+| `benchmarks/evaluation/accuracy.sh <suffix>` | CC18 10-fold held-out accuracy (34 tasks) | `EXTRA_BAZEL_CONFIGS`, `EXTRA_TRAIN_ARGS`, `ACCURACY_DATA_DIR` |
+| `benchmarks/evaluation/compare_models.sh <dirA> <dirB>` | sha256 of saved models; exit 0 = bit-identical | — |
+| `benchmarks/utils/bench_common.sh` | shared: icx pin (Linux), post-build compiler check, e-core toggle (185H only), provenance | `ONEAPI_SETVARS` |
+| `benchmarks/utils/parse_log_to_csv.py` | log → CSV; derives `algorithm` from the command line | pass flags as `--flag "value"` or `--flag=value`; older CSVs may carry `SPORF_unknown`/mislabelled families, so match priors on provenance, not on `algorithm` |
+
+Output: `benchmarks/results/<suffix>.csv` with a provenance head
+(`date_utc, git_sha, git_branch, machine, machine_serial, compiler,
+EXTRA_BAZEL_CONFIGS, EXTRA_TRAIN_ARGS, NUM_TREES NUM_RUNS, CSV_DATASETS,
+TRUNK_DATASETS`) then `dataset,algorithm,median_s,stddev_s`. There are no
+`.meta` sidecars despite older docs. Tree count is set by the script:
+5 × nproc for RF, 300 for Boosting; do not pass `--num_trees`.
+
+The binary logs `Training block took: X s` (fork learners; the trimmed
+harness prints it itself as TrainWithStatus wall time). `bench_common`
+parses that line, not the harness wall-time lines.
+
+## Protocol flags (put only these in `EXTRA_TRAIN_ARGS`)
+
+| path the change touches | `EXTRA_TRAIN_ARGS` on rebased-main | on upstream-bench |
+|---|---|---|
+| RF sparse-oblique, default | `--numerical_split_type "Dynamic Random Histogram"` (bins 64, threshold 250 are the binary defaults) | `--numerical_split_type "Exact"` |
+| RF Exact path (sort, scan) | `--numerical_split_type "Exact"` | same |
+| GBT / concurrent split manager | `--ensemble_method Boosting --numerical_split_type "Dynamic Random Histogram"` | `--ensemble_method Boosting --numerical_split_type "Exact"` |
+| axis-aligned | `--feature_split_type "Axis Aligned"` + split type | same |
+
+Flag-gated candidates: read `git diff <base>..<cand> -- .bazelrc` for the
+`build:<name>` line and pass `EXTRA_BAZEL_CONFIGS=--config=<name>` for arm B.
+Example: `origin/gbt-high-dim-speedup` adds `build:skip_dead_axis_jobs`; it is
+GBT-only, merges cleanly onto the tip, and was measured on the laptop on
+2026-08-07 (10 trees): 3.96× e2e on 15k×400k Boosting, trees identical.
+
+## Default datasets, RAM, and prior m7i durations (seconds per run)
+
+| dataset | fp32 RAM | RF Dynamic (240 t) | RF Exact (240 t) | GBT Dynamic (300 t) | GBT Exact (300 t) |
+|---|---:|---:|---:|---:|---:|
+| HIGGS 11M×29 | 1.3 GB (+8 GB CSV) | 306 | 373 | 1332 | 2006 |
+| trunk 1.5M×4096 | 24.6 GB | 280 | 342 | 318 | 424 |
+| trunk 150k×40k | 24 GB | 80 | 93 | 749 | 717 |
+| trunk 15k×400k | 24 GB | 24 | 27 | 7235 | 7596 |
+
+Sources: `ablation_vectorized_dynamic/dfs_vectorized_dynamic.csv`,
+`dfs_exact_hwy.csv`, `GBT/gbt_e2e.csv` (m7i, Xeon 8488C, 48 vCPU). GBT on
+15k×400k is a 2-hour run: the long-run protocol applies; the same-regime
+smaller shape is `15000|40000`. On a 32 GB Mac the three 24 GB trunk shapes
+will not fit: predict and raise the critical warning instead of running them.
+
+## Identity and accuracy (after the timing verdict)
+
+1. Keep a copy of each arm's binary (`bazel-bin/examples/train_oblique_forest`
+   is overwritten by the next build).
+2. `EXTRA_TRAIN_ARGS=<protocol> scripts/ydf_bitid_cc18.sh binA binB <outdir>`:
+   10 fixed numeric NaN-free CC18 tasks (banknote, diabetes, wdbc, kc1, pc4,
+   qsar-biodeg, spambase, madelon, Bioresponse, phoneme), fold 0, model
+   hashes via `compare_models.sh`.
+3. `accuracy.sh` for both arms with the same `EXTRA_BAZEL_CONFIGS`/`EXTRA_TRAIN_ARGS`;
+   bit-identical claims must match the CSV bodies exactly, otherwise report
+   per-task mean ± std deltas.
+
+## Gates and report
+
+< 15 % time saved = failed experiment (log it anyway); ≥ 20 % = ★. Replication
+tolerance 3 %. Report file: `benchmarks/results/verify/<candidate>/compare.md`
+next to `A.csv`, `B.csv`, and the identity output. Do not commit results; tell
+the user which files exist.
+
+Publishing (ask each time): engineering change bound for a YDF PR → Drive
+`PRs/<candidate>` (folder id `1jby_ffbw7sDIimRvF-8VV-Y8KLT2t7pV`), and remind
+the user the baseline rolls forward once merged; research change → Drive
+`Results/<area>` (`1uqNO9vyD7EucxvlLGpqxq5a73fBm_VCA`; subfolders
+ApplyProjection, GBT, EvaluateProjection, Axis-Aligned, GPU). CSV uploads via
+`create_file` with text/csv become Sheets.
+
+## Machines
+
+| host | role | notes |
+|---|---|---|
+| AWS m7i (Xeon 8488C, 48 vCPU, 384 GB) | verdict machine; Claude Code runs on it directly | icx mandatory (enforced by `bench_common`); `sudo -n` works |
+| Alienware m16 R2 (Ultra 9 185H) | secondary verdict machine | e-cores off for timing (scripts do it; sudo exemption exists); 6 P-cores |
+| Mac (M1 Pro, 10 cores, 32 GB) | development; **mechanics only, no verdict** | Apple clang; no x86 SIMD paths; 24 GB trunk shapes do not fit |
+
+Check the ISA banner (`USING INSTRUCTION SET:`) in the log; a Mac run that
+does not exercise the AVX paths is not representative of the m7i.
+
+## Concurrency check
+
+`pgrep -f 'bazel-bin/examples/train_oblique_forest'` and
+`pgrep -f 'evaluation/(runtime|accuracy).sh'` must be empty before starting.
