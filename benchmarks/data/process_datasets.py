@@ -5,9 +5,15 @@
        (TabArena problem_type in {binary, regression}; TabReD task.type in
        {binclass, regression}).  Multiclass datasets are dropped entirely.
     2. Drop every non-numeric column.
-    3. Then, if the total miss% of what remains is < 10%, drop every row that
-       still has a missing item.  If miss% >= 10% the dataset is dropped
-       entirely instead (row-dropping there would delete most of the data).
+    3. Missing values, by --missing (default keep):
+         keep       drop columns with >= --col-miss-threshold % NaN (default 50),
+                    then keep every row; NaN cells stay in X.npy and are imputed
+                    with the training-fold column mean by make_folds.py (YDF's own
+                    oblique na_replacement rule).  Only rows with a missing
+                    target are dropped.
+         drop-rows  the original rule: drop every row with any missing item.
+       Either way the dataset is dropped if the surviving numeric block has
+       miss% >= --miss-threshold (default 10).
 
 Details of how each step is applied
 -----------------------------------
@@ -28,7 +34,7 @@ Step 3 (miss%):
   Rows with a missing target are always dropped, independent of the threshold.
 
 Outputs (benchmarks/data/processed/<benchmark>/<dataset>/):
-  X.npy       float32, (rows, numeric columns), no NaN
+  X.npy       float32, (rows, numeric columns); NaN kept under --missing keep
   y.npy       int8 0/1 for binary, float32 for regression
   info.json   provenance, feature names, class mapping, and the full before/after
               row & column accounting for this dataset
@@ -38,15 +44,15 @@ Outputs (benchmarks/data/processed/<benchmark>/<dataset>/):
 Nothing is written for a dataset that step 1 or step 3 rejects; the manifest CSV
 records it with a "kept" flag and a reason.
 
-WARNING: step 3 is applied as specified, and on several TabReD datasets nearly
-every row carries at least one NaN, so they collapse to a handful of rows.  The
-manifest reports rows_kept / pct_rows_kept for every dataset; use
---min-rows-frac to additionally reject datasets that lose more than a given
-fraction of their rows.
+WARNING: under --missing drop-rows several datasets collapse (APSFailure 76k->756,
+cooking-time 320k->2.9k, maps-routing and sberbank-housing -> 0 rows) because
+nearly every row carries at least one NaN; that is why keep is the default.
+The manifest reports rows_kept / pct_rows_kept and n_cols_dropped_missing.
 
 Usage:
   .venv/bin/python benchmarks/data/process_datasets.py \
       [--out DIR] [--csv manifest.csv] [--keep-binary] [--min-rows-frac 0.0] \
+      [--missing keep|drop-rows] [--col-miss-threshold 50.0]
       [--miss-threshold 10.0] [--only NAME ...] [--dry-run]
 """
 import argparse
@@ -60,8 +66,7 @@ import numpy as np
 import pandas as pd
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TABARENA = os.path.join(REPO_ROOT, "benchmarks", "data", "tabarena")
-TABRED = os.path.join(REPO_ROOT, "benchmarks", "data", "tabred")
+DEFAULT_SRC = os.path.join(REPO_ROOT, "benchmarks", "data")
 DEFAULT_OUT = os.path.join(REPO_ROOT, "benchmarks", "data", "processed")
 
 NUMERIC_KINDS = set("iuf")
@@ -96,6 +101,7 @@ def write_dataset(odir, X, y, info, dry_run):
 
 def process_tabarena(args):
     rows = []
+    TABARENA = os.path.join(args.src, "tabarena")
     if not os.path.isdir(TABARENA):
         return rows
     for name in sorted(os.listdir(TABARENA), key=str.lower):
@@ -134,6 +140,19 @@ def process_tabarena(args):
             print(f"[skip] TabArena/{name}: {rec['reason']}")
             continue
 
+        # --- step 3a (keep): drop columns that are mostly NaN ---
+        n_hi = 0
+        if args.missing == "keep":
+            col_pct = 100.0 * df[num_feats].isna().mean()
+            hi = [c for c in num_feats if col_pct[c] >= args.col_miss_threshold]
+            n_hi = len(hi)
+            num_feats = [c for c in num_feats if c not in hi]
+        rec.update(n_cols_dropped_missing=n_hi, missing_policy=args.missing)
+        if not num_feats:
+            rec["reason"] = "no numeric columns after missing-column drop"
+            rows.append(rec)
+            print(f"[skip] TabArena/{name}: {rec['reason']}")
+            continue
         sub = df[num_feats]
         na = sub.isna().to_numpy()
         cells = na.size
@@ -141,13 +160,15 @@ def process_tabarena(args):
         pct = 100.0 * miss / cells if cells else 0.0
         rec.update(n_missing=miss, pct_missing=pct)
 
-        # --- step 3: miss% gate, then drop rows with any missing item ---
+        # --- step 3b: miss% gate, then row policy ---
         if pct >= args.miss_threshold:
             rec["reason"] = f"miss%={pct:.2f} >= {args.miss_threshold}"
             rows.append(rec)
             print(f"[skip] TabArena/{name}: {rec['reason']}")
             continue
-        keep = ~na.any(axis=1) & ~df[target].isna().to_numpy()
+        keep = ~df[target].isna().to_numpy()
+        if args.missing == "drop-rows":
+            keep &= ~na.any(axis=1)
         n_keep = int(keep.sum())
         rec.update(rows_kept=n_keep, rows_dropped=len(df) - n_keep,
                    pct_rows_kept=100.0 * n_keep / len(df) if len(df) else 0.0)
@@ -166,7 +187,8 @@ def process_tabarena(args):
                         feature_names=num_feats,
                         n_rows=int(X.shape[0]), n_features=int(X.shape[1]),
                         original_n_rows=len(df), original_n_features=len(feats),
-                        pct_missing_numeric_block=pct)
+                        pct_missing_numeric_block=pct, missing_policy=args.missing,
+                        n_cols_dropped_missing=n_hi)
         write_dataset(os.path.join(args.out, "tabarena", name), X, y, out_info, args.dry_run)
         rec.update(kept=1)
         rows.append(rec)
@@ -182,25 +204,36 @@ def _load(ddir, fn, mmap=True):
     return np.load(p, mmap_mode="r" if mmap else None)
 
 
-def _nan_scan(blocks, n_rows):
-    """Chunked NaN scan over float memmaps: (total NaN, per-row any-NaN mask)."""
+def _nan_scan(blocks, n_rows, keepcols=None):
+    """Chunked NaN scan over float memmaps -> (total NaN, per-row any-NaN mask,
+    per-block per-column NaN counts). keepcols: per-block column masks."""
     miss = 0
     row_mask = np.zeros(n_rows, dtype=bool)
+    col_counts = [np.zeros(_ncols(a), dtype=np.int64) for a in blocks]
     for start in range(0, n_rows, CHUNK_ROWS):
         stop = min(start + CHUNK_ROWS, n_rows)
-        for a in blocks:
+        for bi, a in enumerate(blocks):
             if a is None or a.dtype.kind != "f":
                 continue
             m = np.isnan(np.asarray(a[start:stop]))
             if m.ndim == 1:
                 m = m[:, None]
+            if keepcols is not None:
+                m = m[:, keepcols[bi]]
             miss += int(m.sum())
             row_mask[start:stop] |= m.any(axis=1)
-    return miss, row_mask
+            if keepcols is None:
+                col_counts[bi] += m.sum(axis=0)
+    return miss, row_mask, col_counts
+
+
+def _ncols(a):
+    return 0 if a is None else (1 if a.ndim == 1 else a.shape[1])
 
 
 def process_tabred(args):
     rows = []
+    TABRED = os.path.join(args.src, "tabred")
     if not os.path.isdir(TABRED):
         return rows
     for name in sorted(os.listdir(TABRED), key=str.lower):
@@ -226,8 +259,7 @@ def process_tabred(args):
         y_raw = _load(ddir, "y.npy", mmap=False)
         n_rows = len(y_raw)
 
-        def ncols(a):
-            return 0 if a is None else (1 if a.ndim == 1 else a.shape[1])
+        ncols = _ncols
 
         # --- step 2: keep x_num (and x_bin under --keep-binary); drop x_cat ---
         blocks = [x_num] + ([x_bin] if args.keep_binary else [])
@@ -242,18 +274,36 @@ def process_tabred(args):
             print(f"[skip] TabReD/{name}: {rec['reason']}")
             continue
 
-        miss, row_mask = _nan_scan(blocks, n_rows)
+        # --- step 3a (keep): drop columns that are mostly NaN ---
+        keepcols = [np.ones(ncols(b), dtype=bool) for b in blocks]
+        n_hi = 0
+        if args.missing == "keep":
+            _, _, col_counts = _nan_scan(blocks, n_rows)
+            keepcols = [100.0 * c / max(n_rows, 1) < args.col_miss_threshold
+                        for c in col_counts]
+            n_hi = sum(int((~k).sum()) for k in keepcols)
+            n_num -= n_hi
+        rec.update(n_cols_dropped_missing=n_hi, missing_policy=args.missing,
+                   n_numeric_cols=n_num, n_cols_dropped=n_in - n_num)
+        if n_num == 0:
+            rec["reason"] = "no numeric columns after missing-column drop"
+            rows.append(rec)
+            print(f"[skip] TabReD/{name}: {rec['reason']}")
+            continue
+        miss, row_mask, _ = _nan_scan(blocks, n_rows, keepcols)
         cells = n_rows * n_num
         pct = 100.0 * miss / cells if cells else 0.0
         rec.update(n_missing=miss, pct_missing=pct)
 
-        # --- step 3 ---
+        # --- step 3b: miss% gate, then row policy ---
         if pct >= args.miss_threshold:
             rec["reason"] = f"miss%={pct:.2f} >= {args.miss_threshold}"
             rows.append(rec)
             print(f"[skip] TabReD/{name}: {rec['reason']}")
             continue
-        keep = ~row_mask
+        keep = np.ones(n_rows, dtype=bool)
+        if args.missing == "drop-rows":
+            keep &= ~row_mask
         if y_raw.dtype.kind == "f":
             keep &= ~np.isnan(y_raw)
         n_keep = int(keep.sum())
@@ -268,23 +318,24 @@ def process_tabred(args):
         idx = np.flatnonzero(keep)
         X = np.empty((n_keep, n_num), dtype=np.float32)
         off = 0
-        for b in blocks:
-            w = ncols(b)
+        names = []
+        for bi, b in enumerate(blocks):
             col = np.asarray(b[idx]).astype(np.float32, copy=False)
-            X[:, off:off + w] = col.reshape(n_keep, w)
+            col = col.reshape(n_keep, ncols(b))[:, keepcols[bi]]
+            w = col.shape[1]
+            X[:, off:off + w] = col
             off += w
+            pfx = "num" if b is x_num else "bin"
+            names += [f"{pfx}_{i}" for i in np.flatnonzero(keepcols[bi])]
         y, mapping = encode_target(y_raw[idx], task)
-
-        names = [f"num_{i}" for i in range(ncols(x_num))]
-        if args.keep_binary and x_bin is not None:
-            names += [f"bin_{i}" for i in range(ncols(x_bin))]
         out_info = dict(name=name, benchmark="TabReD", task=task,
                         score=info.get("task", {}).get("score"),
                         target_feature="y", class_mapping=mapping,
                         feature_names=names,
                         n_rows=int(X.shape[0]), n_features=int(X.shape[1]),
                         original_n_rows=n_rows, original_n_features=n_in,
-                        pct_missing_numeric_block=pct)
+                        pct_missing_numeric_block=pct, missing_policy=args.missing,
+                        n_cols_dropped_missing=n_hi)
         odir = os.path.join(args.out, "tabred", name)
         write_dataset(odir, X, y, out_info, args.dry_run)
 
@@ -316,13 +367,19 @@ def process_tabred(args):
 
 FIELDS = ["benchmark", "dataset", "task", "kept", "reason", "n_rows_in",
           "n_features_in", "n_numeric_cols", "n_cols_dropped", "n_missing",
-          "pct_missing", "rows_kept", "rows_dropped", "pct_rows_kept"]
+          "pct_missing", "rows_kept", "rows_dropped", "pct_rows_kept",
+          "missing_policy", "n_cols_dropped_missing"]
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--src", default=DEFAULT_SRC, help="dir holding tabarena/ and tabred/")
     ap.add_argument("--out", default=DEFAULT_OUT)
+    ap.add_argument("--missing", choices=["keep", "drop-rows"], default="keep",
+                    help="keep NaN for fold-time mean imputation, or drop rows")
+    ap.add_argument("--col-miss-threshold", type=float, default=50.0,
+                    help="--missing keep: drop columns with >= this %% NaN first")
     ap.add_argument("--csv", default=os.path.join(
         REPO_ROOT, "benchmarks", "results", "dataset_properties", "processed_manifest.csv"))
     ap.add_argument("--miss-threshold", type=float, default=10.0,
@@ -346,7 +403,7 @@ def main():
           f"{sum(1 for r in kept if r['benchmark']=='TabReD')} TabReD)")
     thin = [r for r in kept if r.get("pct_rows_kept", 100.0) < 50.0]
     if thin:
-        print("WARNING: lost >50% of rows to the missing-row drop:")
+        print("WARNING: lost >50% of rows to the row drop:")
         for r in sorted(thin, key=lambda r: r["pct_rows_kept"]):
             print(f"  {r['benchmark']}/{r['dataset']}: {r['rows_kept']:,} of "
                   f"{r['n_rows_in']:,} rows ({r['pct_rows_kept']:.2f}%)")

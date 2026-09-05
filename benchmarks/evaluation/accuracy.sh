@@ -65,7 +65,9 @@ BASE_ARGS="--compute_oob_performances=true"
 
 # CSV datasets are built from the CC18 binary tasks. Entries are
 # "task_dir|label_col".
-CC18_DIR="benchmarks/data/cc18_binary_csv"
+# ACCURACY_DATA_DIR overrides the task dir (e.g. benchmarks/data/tabular_folds
+# from make_folds.py); any task_*/ tree in the CC18 fold layout works.
+CC18_DIR="${ACCURACY_DATA_DIR:-benchmarks/data/cc18_binary_csv}"
 if [[ ! -d "$CC18_DIR" ]]; then
   echo "ERROR: $CC18_DIR not found. Run from repo root." >&2
   exit 1

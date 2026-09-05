@@ -33,6 +33,8 @@ ARM_ORDER = [
     ("Random_bins256", "Random, 256 bins"),
 ]
 MAIN_ARMS = ARM_ORDER[:2]  # per-dataset table: shipped config + worst case only
+# Summary table: bin counts other than 64/256 are grayed out (context only).
+FOCUS_ARMS = {"Dynamic_Random_Histogram_thresh250", "Random", "Random_bins256"}
 
 LEARNERS = ["SPO-RF", "SPO-GBT"]
 
@@ -83,7 +85,7 @@ def make_summary(agg):
         "% Deltas are (arm - Exact) held-out test accuracy in units of 10^-3;",
         "% positive = histogram arm better. Aggregates over per-dataset means of",
         "% paired per-(seed,fold) deltas; margins = smallest margin passing at alpha=0.05.",
-        "\\begin{table}",
+        "\\begin{table*}",
         "\\centering",
         "\\caption{Held-out test accuracy of random-histogram split finding vs.\\ "
         "exact splits, aggregated over 36 datasets (34 OpenML CC18 binary tasks, "
@@ -100,20 +102,23 @@ def make_summary(agg):
         "\\begin{tabular}{llrccccc}",
         "\\toprule",
         "Learner & Split finder & $n$ & $\\Delta$ [95\\% CI] ($\\times 10^{-3}$)"
-        " & LOO $\\Delta$ [95\\% CI] & W/T/L & Margin ($\\times 10^{-3}$)"
+        " & LOO $\\Delta$ Acc. [95\\% CI] & W/T/L & Margin ($\\times 10^{-3}$)"
         " & Sig. \\\\",
     ]
     for learner in LEARNERS:
         lines.append("\\midrule")
         for arm, label in ARM_ORDER:
             s = agg[(learner, arm)]
-            lines.append(
-                f"{learner if (arm, label) == ARM_ORDER[0] else ''} & {label} & "
-                f"{s['n']} & {fmt3(s['mean'])} [{fmt3(s['lo'])}, {fmt3(s['hi'])}]"
-                f" & {fmt3(s['loo_mean'])} [{fmt3(s['loo_lo'])}, "
-                f"{fmt3(s['loo_hi'])}]"
-                f" & {s['wtl']} & {s['noninf'] * 1e3:g} & {s['n_sig']} \\\\")
-    lines += ["\\bottomrule", "\\end{tabular}", "\\end{table}", ""]
+            cells = [learner if (arm, label) == ARM_ORDER[0] else "", label,
+                     f"{s['n']}",
+                     f"{fmt3(s['mean'])} [{fmt3(s['lo'])}, {fmt3(s['hi'])}]",
+                     f"{fmt3(s['loo_mean'])} [{fmt3(s['loo_lo'])}, "
+                     f"{fmt3(s['loo_hi'])}]",
+                     s["wtl"], f"{s['noninf'] * 1e3:g}", f"{s['n_sig']}"]
+            if arm not in FOCUS_ARMS:
+                cells = [f"\\textcolor{{gray}}{{{c}}}" if c else c for c in cells]
+            lines.append(" & ".join(cells) + " \\\\")
+    lines += ["\\bottomrule", "\\end{tabular}", "\\end{table*}", ""]
     return "\n".join(lines)
 
 
