@@ -1,0 +1,37 @@
+{
+  "skill_name": "verify-speedup",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We switched the Exact (CART) split search to hwy VQSort a while back; the exact_std_sort bazel config restores std::sort. Verify the speedup of VQSort over std::sort on origin/rebased-main for the random forest Exact path, and tell me whether the models are bit-identical.",
+      "expected_output": "Flag-gated A/B on one tree: arm A = --config=exact_std_sort, arm B = default, EXTRA_TRAIN_ARGS='--numerical_split_type \"Exact\"', RF. One run per arm on the full default dataset list first, then the 30-minute rule. compare.md with per-dataset speedup, gates, provenance for both arms, and a replication section (on a non-m7i host: no matching prior for this machine, stated). Bit-identity via the 10-task CC18 hash check with a clear identical/differ statement. On a Mac: mechanics-only disclaimer, RAM prediction for the 24 GB trunk shapes, critical warning about SIMD/RAM, no verdict claimed. No edits to the benchmark scripts' defaults.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Compare origin/lazy-candidate-shuffle against upstream/main. I want to know if it is actually faster before I ping the reviewer.",
+      "expected_output": "Upstream target: worktree on upstream-bench, cherry-pick the 3 commits (they apply cleanly), arm A = upstream-bench, arm B = ported branch, RF protocol with --numerical_split_type \"Exact\" on both arms. The report must state explicitly that Exact vs Exact is being compared because upstream lacks SPO histogramming (PR expected week of 2026-09-07). One-run pass on the default list, 30-minute rule, compare.md, identity check, question about Drive destination (engineering \u2192 PRs/lazy-candidate-shuffle). No hyperparameter edits.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "run the speedup verification of origin/gbt-high-dim-speedup vs origin/rebased-main on this mac (but check if i merged it already, i dont remember)",
+      "expected_output": "Infers GBT protocol (--ensemble_method Boosting) from the diff (concurrent split manager, SKIP_DEAD_AXIS_ALIGNED_JOBS), rebases onto the tip, arm B = --config=skip_dead_axis_jobs. Predicts from gbt_e2e.csv that 15k\u00d7400k is a ~2 h run and says so before starting. One run per arm; LONG_RUN monitor armed; phone notification if a single run passes 2 h; stops after the one-run pass, reports, proposes 15000|40000 via TRUNK_DATASETS_OVERRIDE and runs it. Cites the 2026-08-07 laptop measurement (3.96\u00d7, trees identical) as the expectation. Intended for the m7i; on a Mac it must predict the RAM problem and raise the critical warning.",
+      "files": [],
+      "assertions": [
+        "Detects that origin/gbt-high-dim-speedup is NOT merged into rebased-main (2 outstanding commits) and says so before measuring",
+        "Infers the GBT protocol from the diff: both arms run with --ensemble_method Boosting (visible in CSV provenance EXTRA_TRAIN_ARGS)",
+        "Arm B is built with EXTRA_BAZEL_CONFIGS=--config=skip_dead_axis_jobs and arm A without (visible in the two CSVs' provenance)",
+        "Benchmark script defaults untouched: runtime.sh, accuracy.sh, bench_common.sh, parse_log_to_csv.py, .bazelrc checksums unchanged vs pre_state.txt",
+        "Predicts from rows x cols x 4 B that the three ~24 GB trunk shapes do not fit 32 GB and raises a critical warning instead of attempting them",
+        "First pass is exactly one run per arm (NUM_RUNS: 1 in provenance), arms run sequentially, never concurrently",
+        "Report states the Mac is mechanics-only (no verdict) and notes the compiler/ISA differ from the m7i",
+        "After the long-run/RAM stop, proposes and runs the same-regime smaller shape 15000|40000 via TRUNK_DATASETS_OVERRIDE (not by editing the script)",
+        "compare.md exists with a per-dataset A/B table, gates (15/20 %), geometric mean and both provenance blocks",
+        "Cites prior evidence for expectations/durations: gbt_e2e.csv m7i numbers and/or the 2026-08-07 laptop measurement (3.96x, trees identical)",
+        "Runs the 10-task CC18 bit-identity check on the two arm binaries and states identical/differ",
+        "Does not commit anything (HEAD of rebased-main unchanged) and does not upload to Drive without asking; leaves the PRs/ vs Results/ question for the user"
+      ]
+    }
+  ]
+}
