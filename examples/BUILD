@@ -66,3 +66,28 @@ cc_binary(
         "@com_google_absl//absl/strings",
     ],
 )
+
+# Benchmark harness shared with the ariellubonja fork (benchmarks/evaluation/*.sh).
+cc_binary(
+    name = "train_oblique_forest",
+    srcs = ["train_oblique_forest.cc"],
+    deps = [
+        "//yggdrasil_decision_forests/dataset:csv_example_reader",
+        "//yggdrasil_decision_forests/dataset:data_spec",
+        "//yggdrasil_decision_forests/learner:learner_library",
+        "//yggdrasil_decision_forests/learner/decision_tree:training",
+        "//yggdrasil_decision_forests/learner/gradient_boosted_trees",
+        "//yggdrasil_decision_forests/learner/random_forest",
+        "//yggdrasil_decision_forests/metric",
+        "//yggdrasil_decision_forests/metric:metric_cc_proto",
+        "//yggdrasil_decision_forests/metric:report",
+        "//yggdrasil_decision_forests/model:model_library",
+        "//yggdrasil_decision_forests/model/random_forest",
+        "//yggdrasil_decision_forests/utils:distribution",
+        "//yggdrasil_decision_forests/utils:logging",
+        "//yggdrasil_decision_forests/utils:random",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
