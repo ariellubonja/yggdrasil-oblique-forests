@@ -536,6 +536,18 @@ For accuracy experiments, we include data from the OpenML CC18 benchmarks~\cite{
 
 \TODO{Dynamic benefit as effect of dataset size at levels 16 (check others \& choose). Depth 16 vs. Purity}
 
+\begin{figure}[t]
+    \centering
+    % Placeholder: replace the framed box with \includegraphics when the plot exists.
+    \fbox{\begin{minipage}[c][0.22\textheight][c]{0.92\linewidth}
+        \centering\itshape\color{gray}
+        Placeholder --- dynamic-histogram speedup vs.\ dataset size, depth 16
+    \end{minipage}}
+    \caption{\TODO{Placeholder.} Benefit of dynamic histograms as a function of dataset size, at tree depth 16.}
+    \label{fig:dyn-vs-size}
+\end{figure}
+
+
  Experiments were run on a AWS m7i.metal-24xl instance with 48 physical cores 384 GiB of memory running Ubuntu 24.04. YDF is compiled with ICX version 2025.2.1 with AVX-512 support ({\sf --AVX-512}). Experiments run a thread pool of 48 workers threads and train 1024 trees. Results are an average of 20 trials.
 
 Our core result shows that dynamic histograms with vectorization consistently reduce end-to-end runtime relative to the SO-YDF exact baseline and that the advantage grows with the number of samples (Table \ref{tab:overall}). We present the same data normalized to the performance of SO-YDF to show the percentage improvement (Figure \ref{fig:overall}). We isolate the performance benefit of dynamic histograms alone from dynamic with vectorization. When training full-depth trees on all 48 cores, dynamic histograms deliver a 20-30\% reduction in runtime versus YDF-SO exact and vectorization adds another 20-30\%. The overall improvement is more than a factor of 2 on the larger datasets (Higgs and SUSY). We also include results comparing with axis-aligned random forests to show that sparse oblique training can be completed as fast or faster. We do not show histograms methods for RF or SO because they are 2-4 times slower than exact when training to purity. 
@@ -657,9 +669,121 @@ We present vectorized adaptive histograms to accelerate sparse oblique random fo
 
 \section{Appendix}
 
+\subsection{Datasets}
+\label{app:datasets}
+
+\begin{table*}[t]
+\centering
+\caption{All datasets used in this paper, by source. Rows and features are those of the version we train on: for OpenML CC18 the full task (10-fold CV); for TabArena and TabReD the numeric feature columns only (non-numeric columns and columns with $\geq$50\% missing values are dropped; remaining missing cells are imputed with the training-fold column mean, the same replacement YDF's oblique splits apply, so every method trains on the identical matrix). TabArena/TabReD multiclass tasks and datasets exceeding 10\% missing values are excluded. Task: bin = binary classification, reg = regression. Trunk~\cite{trunk} is a synthetic generator; we sweep rows and features in the ranges shown. Eight datasets appear in both CC18 and TabArena.}
+\label{tab:all-datasets}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}l c r r@{}}
+\toprule
+Dataset & Task & Rows & Feat. \\
+\midrule
+\multicolumn{4}{@{}l}{\textit{Large real (UCI~\cite{higgs_280,susy_279} / LIBSVM~\cite{chang2011libsvm})}} \\
+HIGGS & bin & 11,000,000 & 28 \\
+SUSY & bin & 5,000,000 & 18 \\
+Epsilon & bin & 400,000 & 2,000 \\
+\multicolumn{4}{@{}l}{\textit{Synthetic~\cite{trunk}}} \\
+Trunk & bin & 100k--10M & 128--4,096 \\
+\multicolumn{4}{@{}l}{\textit{OpenML CC18~\cite{bischl2017openml}}} \\
+adult & bin & 48,842 & 14 \\
+bank-marketing & bin & 45,211 & 16 \\
+banknote-authentication & bin & 1,372 & 4 \\
+Bioresponse & bin & 3,751 & 1,776 \\
+blood-transfusion-service-center & bin & 748 & 4 \\
+breast-w & bin & 699 & 9 \\
+churn & bin & 5,000 & 20 \\
+climate-model-simulation-crashes & bin & 540 & 18 \\
+credit-approval & bin & 690 & 15 \\
+credit-g & bin & 1,000 & 20 \\
+cylinder-bands & bin & 540 & 37 \\
+diabetes & bin & 768 & 8 \\
+dresses-sales & bin & 500 & 12 \\
+electricity & bin & 45,312 & 8 \\
+ilpd & bin & 583 & 10 \\
+Internet-Advertisements & bin & 3,279 & 1,558 \\
+jm1 & bin & 10,885 & 21 \\
+kc1 & bin & 2,109 & 21 \\
+kc2 & bin & 522 & 21 \\
+kr-vs-kp & bin & 3,196 & 36 \\
+madelon & bin & 2,600 & 500 \\
+nomao & bin & 34,465 & 118 \\
+numerai28.6 & bin & 96,320 & 21 \\
+ozone-level-8hr & bin & 2,534 & 72 \\
+pc1 & bin & 1,109 & 21 \\
+pc3 & bin & 1,563 & 37 \\
+pc4 & bin & 1,458 & 37 \\
+PhishingWebsites & bin & 11,055 & 30 \\
+phoneme & bin & 5,404 & 5 \\
+qsar-biodeg & bin & 1,055 & 41 \\
+spambase & bin & 4,601 & 57 \\
+tic-tac-toe & bin & 958 & 9 \\
+wdbc & bin & 569 & 30 \\
+wilt & bin & 4,839 & 5 \\
+\multicolumn{4}{@{}l}{\textit{TabArena~\cite{tabarena}}} \\
+airfoil\_self\_noise & reg & 1,503 & 4 \\
+used-Fiat-500 & reg & 1,538 & 6 \\
+APSFailure & bin & 76,000 & 170 \\
+\bottomrule
+\end{tabular}
+\hspace{1.5em}
+\begin{tabular}{@{}l c r r@{}}
+\toprule
+Dataset & Task & Rows & Feat. \\
+\midrule
+bank-marketing & bin & 45,211 & 5 \\
+Bank\_Customer\_Churn & bin & 10,000 & 6 \\
+Bioresponse & bin & 3,751 & 1,776 \\
+blood-transfusion & bin & 748 & 4 \\
+churn & bin & 5,000 & 15 \\
+coil2000\_insurance\_policies & bin & 9,822 & 80 \\
+concrete\_compressive & reg & 1,030 & 8 \\
+credit-g & bin & 1,000 & 7 \\
+credit\_card\_default & bin & 30,000 & 20 \\
+customer\_satisf.\_airline & bin & 129,880 & 5 \\
+diabetes & bin & 768 & 8 \\
+Diabetes130US & bin & 71,518 & 8 \\
+diamonds & reg & 53,940 & 6 \\
+E-CommereShippingData & bin & 10,999 & 6 \\
+Fitness\_Club & bin & 1,500 & 3 \\
+Food\_Delivery\_Time & reg & 45,451 & 6 \\
+GiveMeSomeCredit & bin & 150,000 & 10 \\
+hazelnut-spread-contam. & bin & 2,400 & 30 \\
+healthcare\_insurance & reg & 1,338 & 3 \\
+heloc & bin & 10,459 & 23 \\
+houses & reg & 20,640 & 8 \\
+HR\_Analytics\_Job\_Change & bin & 19,158 & 2 \\
+in\_vehicle\_coupon & bin & 12,684 & 2 \\
+Is-this-a-good-customer & bin & 1,723 & 5 \\
+jm1 & bin & 10,885 & 21 \\
+Marketing\_Campaign & bin & 2,240 & 16 \\
+miami\_housing & reg & 13,776 & 14 \\
+online\_shoppers\_intention & bin & 12,330 & 10 \\
+physiochemical\_protein & reg & 45,730 & 9 \\
+polish\_bankruptcy & bin & 5,910 & 64 \\
+qsar-biodeg & bin & 1,054 & 36 \\
+QSAR-TID-11 & reg & 5,742 & 1,024 \\
+QSAR\_fish\_toxicity & reg & 907 & 6 \\
+seismic-bumps & bin & 2,584 & 11 \\
+superconductivity & reg & 21,263 & 81 \\
+taiwanese\_bankruptcy & bin & 6,819 & 94 \\
+wine\_quality & reg & 6,497 & 11 \\
+\multicolumn{4}{@{}l}{\textit{TabReD~\cite{tabred}}} \\
+cooking-time & reg & 319,986 & 186 \\
+ecom-offers & bin & 160,057 & 113 \\
+homesite-insurance & bin & 260,753 & 253 \\
+weather & reg & 423,795 & 100 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
 \subsection{Full datasets accuracy}
 
 \input{table_per_dataset_accuracy}
+
 
 \subsection{STD::Sort \& Highway Sort}
 
