@@ -1,5 +1,7 @@
 # Oblique RF performance research — auto-loaded context
 
+Be concise.
+
 All work in this repo targets one thing: making `ProjectionEvaluator::Evaluate()`
 (ApplyProjection) in `yggdrasil_decision_forests/learner/decision_tree/oblique.cc`
 faster. This is the standing context — follow it.
@@ -78,3 +80,9 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   epsilon, `processed/` — the suites live on the m7i.
 
 @oblique_context/OBLIQUE_CONTEXT.md
+
+## Benchmark dataset rules (user directive, 2026-09-04)
+
+- **HIGGS is only ever used at its full size (10.5M-row train / 500k test).** Do not create or run row
+  subsamples/prefixes of HIGGS (100k, 300k, 1M, 3M ...) for any experiment, speedup map included.
+- **Single seed.** Do not run extra-seed repeats of benchmark arms (no `--seed 2` sweeps); timing repeats are fine.
