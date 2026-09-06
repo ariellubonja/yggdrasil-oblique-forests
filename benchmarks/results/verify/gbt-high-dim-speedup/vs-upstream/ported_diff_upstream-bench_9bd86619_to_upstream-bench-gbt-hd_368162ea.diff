@@ -1,0 +1,133 @@
+diff --git a/.bazelrc b/.bazelrc
+index 54680b94..790cfe31 100644
+--- a/.bazelrc
++++ b/.bazelrc
+@@ -128,3 +128,9 @@ build:wasm --host_cxxopt="-fno-exceptions"
+ # Optional. Just to make it compatible with dynamic linking and TensorFlow.
+ # build --cxxopt="-D_GLIBCXX_USE_CXX11_ABI=0"
+ # build --host_cxxopt="-D_GLIBCXX_USE_CXX11_ABI=0"
++
++# Do not dispatch axis-aligned split jobs that a sparse-oblique config over
++# numerical features guarantees will return kNoBetterSplitFound. Removes one
++# channel round-trip + mt19937 re-seed per candidate attribute per node in the
++# concurrent split manager (GBT). Bit-identical trees.
++build:skip_dead_axis_jobs --cxxopt="-DSKIP_DEAD_AXIS_ALIGNED_JOBS=1"
+diff --git a/yggdrasil_decision_forests/learner/decision_tree/training.cc b/yggdrasil_decision_forests/learner/decision_tree/training.cc
+index d96ca7b5..ba396972 100644
+--- a/yggdrasil_decision_forests/learner/decision_tree/training.cc
++++ b/yggdrasil_decision_forests/learner/decision_tree/training.cc
+@@ -1480,6 +1480,34 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
+   return found_good_condition;
+ }
+ 
++#ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
++// True if an axis-aligned split search over "candidate_attributes" can
++// only return kNoBetterSplitFound
++//
++// All three per-attribute splitters (classification, regression, regression
++// with hessian gain) early exit with kNoBetterSplitFound in their
++// NUMERICAL and DISCRETIZED_NUMERICAL cases when "split_axis" oneof does
++// not contain axis_aligned_split -- true for every sparse-oblique
++// config. Other column types (categorical, boolean, ...) have no
++// such guard, so the shortcut doesn't apply.
++bool AxisAlignedJobsAreNoop(
++    const dataset::VerticalDataset& train_dataset,
++    const proto::DecisionTreeTrainingConfig& dt_config,
++    const absl::Span<const int32_t> candidate_attributes) {
++  if (dt_config.has_axis_aligned_split()) {
++    return false;
++  }
++  for (const int32_t attribute_idx : candidate_attributes) {
++    const auto type = train_dataset.data_spec().columns(attribute_idx).type();
++    if (type != dataset::proto::ColumnType::NUMERICAL &&
++        type != dataset::proto::ColumnType::DISCRETIZED_NUMERICAL) {
++      return false;
++    }
++  }
++  return true;
++}
++#endif  // SKIP_DEAD_AXIS_ALIGNED_JOBS
++
+ absl::StatusOr<bool> FindBestConditionConcurrentManager(
+     const dataset::VerticalDataset& train_dataset,
+     const absl::Span<const UnsignedExampleIdx> selected_examples,
+@@ -1599,7 +1627,31 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
+   // splitter.
+   min_num_jobs_to_test += num_oblique_jobs;
+ 
+-  cache->durable_response_list.resize(num_jobs);
++  // Number of jobs actually dispatched to the workers. Normally all of them.
++  int num_jobs_to_schedule = num_jobs;
++#ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
++  // Issue: In sparse oblique with numerical features, every axis-aligned
++  // job always returns kNoBetterSplitFound but costs mutex acquisitions + a
++  // full mt19937 re-seed in FindBestConditionFromSplitterWorkRequest. At
++  // At short-wide datasets (e.g. rows = 15k, cols = 400k) that dead work dominates.
++  // 
++  // Fix: Skip dispatching them: the RNG stream is left untouched by the discard() below
++  //
++  // num_oblique_jobs > 0 covers the degenerate case (GetNumProjections() == 0)
++  // where dropping the axis-aligned jobs would leave
++  // nothing to dispatch and the manager would deadlock on GetResult().
++  if (cache->axis_aligned_jobs_are_noop < 0) {
++    cache->axis_aligned_jobs_are_noop =
++        AxisAlignedJobsAreNoop(train_dataset, dt_config, candidate_attributes)
++            ? 1
++            : 0;
++  }
++  if (cache->axis_aligned_jobs_are_noop == 1 && num_oblique_jobs > 0) {
++    num_jobs_to_schedule = num_oblique_jobs;
++  }
++#endif  // SKIP_DEAD_AXIS_ALIGNED_JOBS
++
++  cache->durable_response_list.resize(num_jobs_to_schedule);
+ 
+   // Marks all the caches "available".
+   cache->available_cache_idxs.resize(cache->splitter_cache_list.size());
+@@ -1670,7 +1722,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
+   }
+ 
+   // Schedule some non-oblique jobs if threads are still available.
+-  while (next_job_to_schedule < std::min(num_threads, num_jobs) &&
++  while (next_job_to_schedule < std::min(num_threads, num_jobs_to_schedule) &&
+          !cache->available_cache_idxs.empty()) {
+     DCHECK_GE(next_job_to_schedule, num_oblique_jobs);
+     const int attribute_idx =
+@@ -1745,14 +1797,14 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
+       break;
+     }
+ 
+-    if (next_job_to_process >= num_jobs) {
++    if (next_job_to_process >= num_jobs_to_schedule) {
+       // We have processed all the jobs.
+       break;
+     }
+ 
+     // Schedule the testing of more conditions.
+     while (!cache->available_cache_idxs.empty() &&
+-           next_job_to_schedule < num_jobs) {
++           next_job_to_schedule < num_jobs_to_schedule) {
+       processor.Submit(build_request(
+           next_job_to_schedule,
+           /*attribute_idx=*/
+diff --git a/yggdrasil_decision_forests/learner/decision_tree/training.h b/yggdrasil_decision_forests/learner/decision_tree/training.h
+index 4469edd4..732eea26 100644
+--- a/yggdrasil_decision_forests/learner/decision_tree/training.h
++++ b/yggdrasil_decision_forests/learner/decision_tree/training.h
+@@ -296,6 +296,16 @@ struct PerThreadCache {
+ 
+   // Used to handle selected leaf example indices.
+   std::vector<UnsignedExampleIdx> leaf_example_buffer;
++
++#ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
++  // Memo for "every candidate attribute's axis-aligned split search is a
++  // guaranteed no-op" (see FindBestConditionConcurrentManager). The predicate
++  // only depends on the data spec and the training config, neither of which
++  // changes during training, but evaluating it is O(num_features) -- which is
++  // exactly the per-node cost this optimization exists to remove. -1 = not yet
++  // computed, 0 = false, 1 = true.
++  int axis_aligned_jobs_are_noop = -1;
++#endif
+ };
+ 
+ // Signature of a function that sets the value (i.e. the prediction) of a leaf
