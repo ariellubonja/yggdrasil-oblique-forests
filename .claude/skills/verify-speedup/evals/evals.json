@@ -10,10 +10,10 @@
     {
       "id": 2,
       "prompt": "Compare origin/lazy-candidate-shuffle against upstream/main on this mac. I want to know if it is actually faster before I ping the reviewer.",
-      "expected_output": "Upstream target: worktree on upstream-bench, cherry-pick the 3 commits (they apply cleanly), arm A = upstream-bench, arm B = ported branch, RF protocol with --numerical_split_type \"Exact\" on both arms. The report must state explicitly that Exact vs Exact is being compared because upstream lacks SPO histogramming (PR expected week of 2026-09-07). One-run pass on the default list, 30-minute rule, compare.md, identity check, question about Drive destination (engineering \u2192 PRs/lazy-candidate-shuffle). No hyperparameter edits.",
+      "expected_output": "Upstream target: worktree on upstream-main-benchmarks, cherry-pick the 3 commits (they apply cleanly), arm A = upstream-main-benchmarks, arm B = ported branch, RF protocol with --numerical_split_type \"Exact\" on both arms. The report must state explicitly that Exact vs Exact is being compared because upstream lacks SPO histogramming (PR expected week of 2026-09-07). One-run pass on the default list, 30-minute rule, compare.md, identity check, question about Drive destination (engineering \u2192 PRs/lazy-candidate-shuffle). No hyperparameter edits.",
       "files": [],
       "assertions": [
-        "Arm A is the upstream-bench branch (trimmed harness, provenance git_branch upstream-bench or its sha) and arm B is upstream-bench plus the cherry-picked candidate; no fork-only flags anywhere",
+        "Arm A is the upstream-main-benchmarks branch (trimmed harness, provenance git_branch upstream-main-benchmarks or its sha) and arm B is upstream-main-benchmarks plus the cherry-picked candidate; no fork-only flags anywhere",
         "States explicitly that Exact vs Exact is compared because upstream lacks sparse-oblique histogramming (PR expected the week of 2026-09-07)",
         "Both arms run the RF protocol with --numerical_split_type \"Exact\" (no --ensemble_method Boosting) visible in the CSV provenance",
         "Cherry-picks the candidate's 3 commits (they apply cleanly) and includes or points to the ported diff in the report",
@@ -22,8 +22,8 @@
         "Benchmark script defaults untouched (checksums of runtime.sh, accuracy.sh, bench_common.sh, parse_log_to_csv.py unchanged vs the copies it ran with)",
         "Warns about the ~24 GB trunk shapes on a 32 GB Mac before running them and reports any OOM cells",
         "compare.md exists with the per-dataset A/B table, gates (15/20 %), geometric mean and both provenance blocks; report says mechanics only / no verdict",
-        "Replication: reports that no prior CSV matches this protocol (upstream-bench, RF Exact, this machine) rather than inventing a baseline",
-        "Does not commit on any branch (upstream-bench and rebased-main HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user",
+        "Replication: reports that no prior CSV matches this protocol (upstream-main-benchmarks, RF Exact, this machine) rather than inventing a baseline",
+        "Does not commit on any branch (upstream-main-benchmarks and rebased-main HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user",
         "Names the follow-up: full protocol on the m7i (and the same-regime smaller shape if a quick run exceeded 3 min)"
       ]
     },
@@ -50,11 +50,11 @@
     {
       "id": 4,
       "prompt": "compare origin/gbt-high-dim-speedup against upstream/main on this mac. smoke test of the upstream path, quick pass only",
-      "expected_output": "Upstream target for the flag-gated GBT change: upstream-bench as arm A, candidate ported with one conflict resolved, Exact-vs-Exact reminder, model equivalence first, quick pass (30 trees, 1 run, default list), no full protocol on the Mac, compare.md + report with the port diff, nothing committed.",
+      "expected_output": "Upstream target for the flag-gated GBT change: upstream-main-benchmarks as arm A, candidate ported with one conflict resolved, Exact-vs-Exact reminder, model equivalence first, quick pass (30 trees, 1 run, default list), no full protocol on the Mac, compare.md + report with the port diff, nothing committed.",
       "files": [],
       "assertions": [
-        "Arm A is the upstream-bench branch (trimmed harness; provenance git_branch upstream-bench or its sha) and arm B is upstream-bench plus the ported candidate",
-        "Ports the candidate onto upstream-bench, resolving the fork-only-context conflict (CHRONO_SCOPE line in training.cc and the .bazelrc hunk) and includes or points to the resulting diff in the report",
+        "Arm A is the upstream-main-benchmarks branch (trimmed harness; provenance git_branch upstream-main-benchmarks or its sha) and arm B is upstream-main-benchmarks plus the ported candidate",
+        "Ports the candidate onto upstream-main-benchmarks, resolving the fork-only-context conflict (CHRONO_SCOPE line in training.cc and the .bazelrc hunk) and includes or points to the resulting diff in the report",
         "States explicitly that Exact vs Exact is compared because upstream lacks sparse-oblique histogramming (PR expected the week of 2026-09-07)",
         "Both arms use --ensemble_method Boosting and --numerical_split_type \"Exact\"; arm B carries the SKIP_DEAD_AXIS_ALIGNED_JOBS define (via --config=skip_dead_axis_jobs or an explicit -D in EXTRA_BAZEL_CONFIGS), visible in provenance",
         "Runs the model-equivalence check (10-task CC18 hashes + accuracy.sh both arms at reduced size) BEFORE the timing pass and states identical/differ (trees expected identical; a MODEL CHANGED warning must lead if not)",
@@ -62,8 +62,8 @@
         "Benchmark script defaults untouched (checksums of runtime.sh, accuracy.sh, bench_common.sh, parse_log_to_csv.py unchanged vs the copies it ran with)",
         "Warns about the ~24 GB trunk shapes on a 32 GB Mac before running them and reports any OOM cells",
         "compare.md exists with the per-dataset A/B table, gates (15/20 %), geometric mean and both provenance blocks; report says mechanics only / no verdict",
-        "Replication: reports that no prior CSV matches this protocol (upstream-bench, GBT Exact, this machine) rather than inventing a baseline; cites today's fork-side quick pass or the 2026-08-07 measurement as the expectation",
-        "Does not commit on rebased-main or upstream-bench (HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user, noting the baseline roll-forward for an engineering change",
+        "Replication: reports that no prior CSV matches this protocol (upstream-main-benchmarks, GBT Exact, this machine) rather than inventing a baseline; cites today's fork-side quick pass or the 2026-08-07 measurement as the expectation",
+        "Does not commit on rebased-main or upstream-main-benchmarks (HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user, noting the baseline roll-forward for an engineering change",
         "Names the follow-up: full protocol on the m7i"
       ]
     }

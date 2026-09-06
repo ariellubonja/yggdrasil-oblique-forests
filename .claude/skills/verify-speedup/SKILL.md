@@ -106,7 +106,7 @@ follow it wherever it is more specific than this file.
   must not disturb (a dev laptop); then symlink the data directory into it and
   copy result CSVs back to the main results tree.
 - **Upstream baseline**: the repository keeps a tooling branch that tracks
-  upstream (fork: `upstream-bench`), so nothing has to be recreated: check it
+  upstream (fork: `upstream-main-benchmarks`), so nothing has to be recreated: check it
   out (in place, or in a worktree by the rule above), port the candidate onto
   it (cherry-pick; resolve conflicts that come from fork-only context; show the
   resulting diff in the report, since this ported branch is usually the PR

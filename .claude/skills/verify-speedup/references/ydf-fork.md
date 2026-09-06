@@ -8,7 +8,7 @@ Everything repo-specific the workflow in SKILL.md needs. Verified 2026-09-05.
 |---|---|---|
 | `origin/rebased-main` | the fork's integration branch, default baseline | full instrumentation; default protocol available |
 | `upstream/main` | google/yggdrasil-decision-forests | fetch with `git fetch upstream` (remote is unshallowed since 2026-09-05; true merge-base b506e72f, 2026-05-12) |
-| `upstream-bench` | upstream/main + one tooling commit | trimmed harness + the three scripts. Refresh with `git rebase upstream/main`; only upstream-owned file touched is `examples/BUILD` |
+| `upstream-main-benchmarks` | upstream/main + one tooling commit | trimmed harness + the three scripts. Refresh with `git rebase upstream/main`; only upstream-owned file touched is `examples/BUILD` |
 
 Two baseline targets, two protocols:
 
@@ -16,7 +16,7 @@ Two baseline targets, two protocols:
    are A/B'd on one tree via `EXTRA_BAZEL_CONFIGS`. Arm A must replicate the
    newest matching CSV under `benchmarks/results` (tolerance 3 %; same-protocol
    m7i runs a month apart drifted 0.2–1.0 %).
-2. **vs `upstream/main`**: worktree on `upstream-bench`, cherry-pick the
+2. **vs `upstream/main`**: worktree on `upstream-main-benchmarks`, cherry-pick the
    candidate. The trimmed harness has **no** Dynamic histogram types, row-major
    store, `RM_MAX_ROWS` or RF early exit. **SPORF comparisons are Exact vs
    Exact** because upstream has no sparse-oblique histogramming yet; a PR
@@ -26,16 +26,16 @@ Two baseline targets, two protocols:
 
 Upstream target recipe. On the m7i (clean, dedicated checkout) work in place:
 ```bash
-git checkout upstream-bench                       # arm A
-git checkout -b upstream-bench/<candidate> && git cherry-pick <base>..<candidate>   # arm B; resolve fork-only context
+git checkout upstream-main-benchmarks                       # arm A
+git checkout -b upstream-main-benchmarks/<candidate> && git cherry-pick <base>..<candidate>   # arm B; resolve fork-only context
 ```
 On a dev machine whose tree has uncommitted work, do the same inside
-`git worktree add <dir> upstream-bench` with `ln -s <repo>/benchmarks/data <dir>/benchmarks/data`.
-`benchmarks/results` is gitignored on upstream-bench; copy CSVs back into the fork's tree.
-Refreshing `upstream-bench` after fork-side tooling changes: `git rebase upstream/main`,
+`git worktree add <dir> upstream-main-benchmarks` with `ln -s <repo>/benchmarks/data <dir>/benchmarks/data`.
+`benchmarks/results` is gitignored on upstream-main-benchmarks; copy CSVs back into the fork's tree.
+Refreshing `upstream-main-benchmarks` after fork-side tooling changes: `git rebase upstream/main`,
 copy the scripts over, regenerate the harness with
 `python3 benchmarks/utils/make_trimmed_harness.py examples/train_oblique_forest.cc <wt>/examples/train_oblique_forest.cc`
-(fork checkout as cwd), build, commit on `upstream-bench`.
+(fork checkout as cwd), build, commit on `upstream-main-benchmarks`.
 
 ## Scripts and knobs (never edit the scripts' defaults)
 
@@ -60,7 +60,7 @@ parses that line, not the harness wall-time lines.
 
 ## Protocol flags (put only these in `EXTRA_TRAIN_ARGS`)
 
-| path the change touches | `EXTRA_TRAIN_ARGS` on rebased-main | on upstream-bench |
+| path the change touches | `EXTRA_TRAIN_ARGS` on rebased-main | on upstream-main-benchmarks |
 |---|---|---|
 | RF sparse-oblique, default | `--numerical_split_type "Dynamic Random Histogram"` (bins 64, threshold 250 are the binary defaults) | `--numerical_split_type "Exact"` |
 | RF Exact path (sort, scan) | `--numerical_split_type "Exact"` | same |
@@ -126,7 +126,7 @@ tolerance 3 %. Results directory: `benchmarks/results/verify/<candidate>/
 vs-rebased-main/` or `.../vs-upstream/`, holding `A.csv`, `B.csv`, the accuracy
 CSVs, `bitid.md`, `compare.md` and `report.md`. Commit that directory on the
 candidate branch (use a worktree of it when the main tree is busy) — never on
-`rebased-main` or `upstream-bench`; the user merges it into `rebased-main`
+`rebased-main` or `upstream-main-benchmarks`; the user merges it into `rebased-main`
 themselves. No `Co-Authored-By` trailers (CLA). Tell the user the commit sha.
 
 Publishing (ask each time): engineering change bound for a YDF PR → Drive
