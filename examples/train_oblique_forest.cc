@@ -70,6 +70,16 @@ ABSL_FLAG(int, num_threads, -1, "Number of threads to use.");
 ABSL_FLAG(int, num_trees, 240, "Number of trees in the random forest.");
 ABSL_FLAG(int, tree_depth, -1,
           "Maximum depth of trees (-1 for unlimited).");
+ABSL_FLAG(int, min_examples, -1,
+          "Minimum number of training examples in a node for it to be split "
+          "(YDF decision_tree.min_examples). -1 keeps the harness default: 1 "
+          "for Bagging (train to purity), 5 for Boosting.");
+ABSL_FLAG(int, num_candidate_attributes, 0,
+          "Axis-aligned splits only: number of candidate attributes tested "
+          "per node. 0 keeps the harness default (the same ceil(F^exponent) "
+          "count as the oblique projection budget, i.e. RF-style sqrt(F)); "
+          "-1 tests every attribute (standard GBT behaviour, e.g. XGBoost); "
+          "any positive value is used as-is.");
 
 ABSL_FLAG(std::string, feature_split_type, "Oblique",
           "Type of feature splits in decision trees: 'Axis Aligned' or 'Oblique'.");
@@ -758,7 +768,12 @@ int main(int argc, char** argv) {
     tree_depth = 6;
   }
   dt_config->set_max_depth(tree_depth);
-  dt_config->set_min_examples(ensemble_method == "Boosting" ? 5 : 1);
+  {
+    const int min_examples_flag = absl::GetFlag(FLAGS_min_examples);
+    dt_config->set_min_examples(
+        min_examples_flag >= 1 ? min_examples_flag
+                               : (ensemble_method == "Boosting" ? 5 : 1));
+  }
 
   const auto growing_strategy = absl::GetFlag(FLAGS_growing_strategy);
   if (growing_strategy == "GlobalBestFirst") {
@@ -799,8 +814,14 @@ int main(int argc, char** argv) {
       }
     }
 
-    const int num_candidates = model::decision_tree::GetNumProjections(
+    int num_candidates = model::decision_tree::GetNumProjections(
         *dt_config, num_numerical_features);
+    const int nca_flag = absl::GetFlag(FLAGS_num_candidate_attributes);
+    if (nca_flag == -1) {
+      num_candidates = -1;  // YDF: -1 = all attributes.
+    } else if (nca_flag > 0) {
+      num_candidates = nca_flag;
+    }
     dt_config->set_num_candidate_attributes(num_candidates);
 
     // Clear sparse_oblique_split so axis-aligned splits are used, not oblique
