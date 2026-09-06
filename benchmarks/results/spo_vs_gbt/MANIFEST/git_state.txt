@@ -1,0 +1,82 @@
+date_utc: 2026-09-05T16:44:58Z
+HEAD: 576cc1dd08e17405f390e777498e1dd5adc90b96
+branch: rebased-main
+--- git status --short
+ M CLAUDE.md
+ M benchmarks/results/overleaf-sept-3-26/main.bib
+ M benchmarks/results/overleaf-sept-3-26/main.tex
+ M examples/train_oblique_forest.cc
+?? benchmarks/data/tabarena_binary_csv/
+?? benchmarks/data/tabred_binary_csv/
+?? benchmarks/data/tabred_raw_mirror/
+?? benchmarks/evaluation/spo_vs_gbt/
+?? benchmarks/results/gbt_fix_high_dim_mutex_exact.csv
+?? benchmarks/results/gbt_fix_high_dim_mutex_scalar_random.csv
+?? benchmarks/results/overleaf-sept-3-26/spo_vs_gbt_results.tex
+?? benchmarks/results/spo_vs_gbt/
+--- git diff (tracked, excluding paper snapshot)
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 7b760972..54546661 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -47,3 +47,9 @@ below directly; the user should never have to relay between them.
+   new Doc in the Drive folder.
+ 
+ @oblique_context/OBLIQUE_CONTEXT.md
++
++## Benchmark dataset rules (user directive, 2026-09-04)
++
++- **HIGGS is only ever used at its full size (10.5M-row train / 500k test).** Do not create or run row
++  subsamples/prefixes of HIGGS (100k, 300k, 1M, 3M ...) for any experiment, speedup map included.
++- **Single seed.** Do not run extra-seed repeats of benchmark arms (no `--seed 2` sweeps); timing repeats are fine.
+diff --git a/examples/train_oblique_forest.cc b/examples/train_oblique_forest.cc
+index fc262f31..12c8fd14 100644
+--- a/examples/train_oblique_forest.cc
++++ b/examples/train_oblique_forest.cc
+@@ -70,6 +70,16 @@ ABSL_FLAG(int, num_threads, -1, "Number of threads to use.");
+ ABSL_FLAG(int, num_trees, 240, "Number of trees in the random forest.");
+ ABSL_FLAG(int, tree_depth, -1,
+           "Maximum depth of trees (-1 for unlimited).");
++ABSL_FLAG(int, min_examples, -1,
++          "Minimum number of training examples in a node for it to be split "
++          "(YDF decision_tree.min_examples). -1 keeps the harness default: 1 "
++          "for Bagging (train to purity), 5 for Boosting.");
++ABSL_FLAG(int, num_candidate_attributes, 0,
++          "Axis-aligned splits only: number of candidate attributes tested "
++          "per node. 0 keeps the harness default (the same ceil(F^exponent) "
++          "count as the oblique projection budget, i.e. RF-style sqrt(F)); "
++          "-1 tests every attribute (standard GBT behaviour, e.g. XGBoost); "
++          "any positive value is used as-is.");
+ 
+ ABSL_FLAG(std::string, feature_split_type, "Oblique",
+           "Type of feature splits in decision trees: 'Axis Aligned' or 'Oblique'.");
+@@ -758,7 +768,12 @@ int main(int argc, char** argv) {
+     tree_depth = 6;
+   }
+   dt_config->set_max_depth(tree_depth);
+-  dt_config->set_min_examples(ensemble_method == "Boosting" ? 5 : 1);
++  {
++    const int min_examples_flag = absl::GetFlag(FLAGS_min_examples);
++    dt_config->set_min_examples(
++        min_examples_flag >= 1 ? min_examples_flag
++                               : (ensemble_method == "Boosting" ? 5 : 1));
++  }
+ 
+   const auto growing_strategy = absl::GetFlag(FLAGS_growing_strategy);
+   if (growing_strategy == "GlobalBestFirst") {
+@@ -799,8 +814,14 @@ int main(int argc, char** argv) {
+       }
+     }
+ 
+-    const int num_candidates = model::decision_tree::GetNumProjections(
++    int num_candidates = model::decision_tree::GetNumProjections(
+         *dt_config, num_numerical_features);
++    const int nca_flag = absl::GetFlag(FLAGS_num_candidate_attributes);
++    if (nca_flag == -1) {
++      num_candidates = -1;  // YDF: -1 = all attributes.
++    } else if (nca_flag > 0) {
++      num_candidates = nca_flag;
++    }
+     dt_config->set_num_candidate_attributes(num_candidates);
+ 
+     // Clear sparse_oblique_split so axis-aligned splits are used, not oblique
