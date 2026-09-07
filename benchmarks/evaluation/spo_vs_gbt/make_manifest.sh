@@ -22,7 +22,7 @@ cd "$REPO"
   echo "branch: $(git rev-parse --abbrev-ref HEAD)"
   echo "--- git status --short"; git status --short
   echo "--- git diff (tracked, excluding paper snapshot)"
-  git diff -- . ':!benchmarks/results/overleaf-sept-3-26' ':!*.bib' ':!*.tex'
+  git diff -- . ':!benchmarks/results/overleaf-spaa27' ':!*.bib' ':!*.tex'
 } > "$OUT/git_state.txt"
 
 /home/ubuntu/gbt_venv/bin/python -m pip freeze > "$OUT/pip_freeze.txt" 2>/dev/null || true

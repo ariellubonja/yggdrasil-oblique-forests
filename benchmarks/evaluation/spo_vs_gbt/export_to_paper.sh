@@ -4,7 +4,7 @@
 #   bash export_to_paper.sh <analysis_dir> [<overleaf_snapshot_dir>]
 set -euo pipefail
 A="${1:?analysis dir (output of analyze.py --out-dir)}"
-P="${2:-/home/ubuntu/yggdrasil-oblique-forests/benchmarks/results/overleaf-sept-3-26}"
+P="${2:-/home/ubuntu/yggdrasil-oblique-forests/benchmarks/results/overleaf-spaa27}"
 F="$P/figures/results"
 mkdir -p "$F"
 
