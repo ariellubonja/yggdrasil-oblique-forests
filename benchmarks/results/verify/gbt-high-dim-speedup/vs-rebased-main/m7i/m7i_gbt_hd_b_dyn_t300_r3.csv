@@ -1,0 +1,19 @@
+==== PROVENANCE ====
+date_utc: 2026-09-07T01:09:53Z
+git_sha: 5cf2e9a4
+git_branch: gbt-high-dim-speedup
+machine: Intel(R) Xeon(R) Platinum 8488C (nproc=48)
+machine_serial: ec2d65b4-2555-44a5-d802-ecaea08b3ad7
+compiler: Intel(R) oneAPI DPC++/C++ Compiler 2025.2.1 (2025.2.0.20250806)
+EXTRA_BAZEL_CONFIGS: --config=skip_dead_axis_jobs
+EXTRA_TRAIN_ARGS: --ensemble_method Boosting --numerical_split_type "Dynamic Random Histogram"
+NUM_TREES_DIVISOR: 1
+NUM_TREES: 300  NUM_RUNS: 3
+CSV_DATASETS: benchmarks/data/HIGGS_with_header.csv|class
+TRUNK_DATASETS: 1500000|4096 150000|40000 15000|40000
+====================
+dataset,algorithm,median_s,stddev_s
+HIGGS_with_header,SPO-GBT_Dynamic_Random_Histogram,1294,1.822096
+trunk_1500000_x_4096,SPO-GBT_Dynamic_Random_Histogram,304.71,3.181777
+trunk_150000_x_40000,SPO-GBT_Dynamic_Random_Histogram,47.8265,0.623909
+trunk_15000_x_40000,SPO-GBT_Dynamic_Random_Histogram,8.74456,0.061610
