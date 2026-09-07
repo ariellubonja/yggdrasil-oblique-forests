@@ -138,6 +138,12 @@ _RANDOM64 = ["--numerical_split_type", "Random", "--histogram_num_bins", "64"]
 _DYN64 = ["--numerical_split_type", "Dynamic Random Histogram",
           "--histogram_num_bins", "64", "--dynamic_split_threshold", "250"]
 _BOOSTING = ["--ensemble_method", "Boosting"]
+# 256-bin variants (added 2026-09-07): the "default" binary picks the AVX-512
+# 256-threshold upper_bound kernel at runtime (training.cc HistogramBinner:
+# thr.size()==256 && avx512f); "scalar" disables it. 64 bins use the AVX2 kernel.
+_RANDOM256 = ["--numerical_split_type", "Random", "--histogram_num_bins", "256"]
+_DYN256 = ["--numerical_split_type", "Dynamic Random Histogram",
+           "--histogram_num_bins", "256", "--dynamic_split_threshold", "250"]
 
 ARMS: dict[str, dict] = {
     # ---- RF family: 240 trees, unlimited depth, min_examples 1 (purity) ----
@@ -161,6 +167,11 @@ ARMS: dict[str, dict] = {
         "ydf_flags": _OBLIQUE + _RANDOM64,
         "trees": 240, "tree_depth": -1, "min_examples": None, "py_ctor": None,
     },
+    "spo_rf_rand256_vec": {
+        "family": "rf", "engine": "ydf_fork", "binary": "default",
+        "ydf_flags": _OBLIQUE + _RANDOM256,
+        "trees": 240, "tree_depth": -1, "min_examples": None, "py_ctor": None,
+    },
     "spo_rf_dyn_scalar": {
         "family": "rf", "engine": "ydf_fork", "binary": "scalar",
         "ydf_flags": _OBLIQUE + _DYN64,
@@ -169,6 +180,11 @@ ARMS: dict[str, dict] = {
     "spo_rf_dyn_vec": {
         "family": "rf", "engine": "ydf_fork", "binary": "default",
         "ydf_flags": _OBLIQUE + _DYN64,
+        "trees": 240, "tree_depth": -1, "min_examples": None, "py_ctor": None,
+    },
+    "spo_rf_dyn256_vec": {
+        "family": "rf", "engine": "ydf_fork", "binary": "default",
+        "ydf_flags": _OBLIQUE + _DYN256,
         "trees": 240, "tree_depth": -1, "min_examples": None, "py_ctor": None,
     },
     "aa_rf_exact": {
@@ -200,6 +216,11 @@ ARMS: dict[str, dict] = {
         "ydf_flags": _OBLIQUE + _DYN64 + _BOOSTING,
         "trees": 300, "tree_depth": 6, "min_examples": None, "py_ctor": None,
     },
+    "spo_gbt_dyn256_vec": {
+        "family": "gbt", "engine": "ydf_fork", "binary": "default",
+        "ydf_flags": _OBLIQUE + _DYN256 + _BOOSTING,
+        "trees": 300, "tree_depth": 6, "min_examples": None, "py_ctor": None,
+    },
     "aa_gbt_exact": {
         "family": "gbt", "engine": "ydf_fork", "binary": "default",
         "ydf_flags": _AXIS_ALIGNED + _EXACT + _BOOSTING
@@ -221,8 +242,27 @@ ARMS: dict[str, dict] = {
     },
 }
 
-# Canonical "listed order" (SPEC.md Arms table + v2 addendum A1: 15 arms,
+# Canonical "listed order" (SPEC.md Arms table + v2 addendum A1: 15 arms, plus
+# the three 256-bin AVX-512 arms added 2026-09-07 = 18,
 # RF family first then GBT family, xgboost_rf/lightgbm_rf last within the RF
 # family) that run_suite.py's --arms default and its "run order: ... arm in
 # arms (listed order)" use.
 ARM_ORDER: list[str] = list(ARMS.keys())
+
+# Smoke-test-only arms (not in ARM_ORDER, never in a default run): the scalar
+# binary at 256 bins, used to prove the AVX-512 256-bin kernel is bit-identical
+# to std::upper_bound (compare_models.sh; verified 2026-09-07 on APSFailure
+# fold 0 for rand256, dyn256 and gbt dyn256: TREES IDENTICAL).
+ARMS_SMOKE_ONLY: dict[str, dict] = {
+    "spo_rf_rand256_scalar": {
+        "family": "rf", "engine": "ydf_fork", "binary": "scalar",
+        "ydf_flags": _OBLIQUE + _RANDOM256,
+        "trees": 240, "tree_depth": -1, "min_examples": None, "py_ctor": None,
+    },
+    "spo_rf_dyn256_scalar": {
+        "family": "rf", "engine": "ydf_fork", "binary": "scalar",
+        "ydf_flags": _OBLIQUE + _DYN256,
+        "trees": 240, "tree_depth": -1, "min_examples": None, "py_ctor": None,
+    },
+}
+ARMS.update(ARMS_SMOKE_ONLY)  # after ARM_ORDER is frozen

@@ -75,14 +75,14 @@ dataset a tie when $|\Delta\mathrm{AUC}|<0.005$.
 
 \paragraph{Accuracy.}
 Table~\ref{tab:spo-vs-gbt-summary} and Figure~\ref{fig:spo-vs-gbt-cd} summarize the suite. In
-the RF family the nine learners are statistically indistinguishable (Friedman $p=0.15$ over
+the RF family the eleven learners are statistically indistinguishable (Friedman $p=0.06$ over
 the 33 suite datasets plus HIGGS and SUSY; Epsilon is excluded from the RF ranking because the
 library RF modes fail on it): SPO Dyn-Vec ties the SPO exact baseline on 34 of 36 datasets and
 never differs from it significantly, ties XGBoost's RF mode on 15 datasets (7 wins, 13 losses,
 mean $\Delta$AUC $0.005$ in XGBoost's favour) and beats LightGBM's RF mode on 11 datasets with
-one loss. In the GBT family the differences are significant (Friedman $p=2\times10^{-6}$, 36
-datasets): CatBoost ranks first (2.1), followed by SPO-GBT exact (3.1), XGBoost (3.5) and SPO-GBT
-Dyn-Vec (3.6), ahead of axis-aligned YDF GBT (4.3) and LightGBM (4.4); SPO-GBT Dyn-Vec beats
+one loss. In the GBT family the differences are significant (Friedman $p=6\times10^{-6}$, 36
+datasets): CatBoost ranks first (2.4), followed by SPO-GBT exact (3.6), XGBoost (4.0) and SPO-GBT
+Dyn-Vec (4.1), ahead of axis-aligned YDF GBT (4.8) and LightGBM (5.0); SPO-GBT Dyn-Vec beats
 LightGBM on 17 datasets (8 losses) and ties XGBoost on 17 (9 wins, 10 losses). No pairwise
 comparison against SPO Dyn-Vec survives Holm correction,
 i.e. on these datasets sparse oblique splits are as accurate as the best axis-aligned learners,
@@ -117,6 +117,21 @@ XGBoost/LightGBM and 24\,s for CatBoost) because the $\sqrt{F}$ projections per 
 fewer than the 2000 features the axis-aligned learners must histogram. On the small suite
 every learner trains in well under a minute; the per-dataset AUCs and training times are in the
 appendix (Tables~\ref{tab:spo-vs-gbt-per-dataset-rf-auc}--\ref{tab:spo-vs-gbt-per-dataset-gbt-time}).
+
+\paragraph{Histogram resolution.}
+The histogram arms above use 64 bins. We also ran the random and dynamic finders with 256 bins,
+where the binning kernel switches from AVX2 to a two-level AVX-512 search (verified
+bit-identical to the scalar \texttt{std::upper\_bound} path on the saved forests). With the
+histogram-only finder, 256 bins buy a small accuracy gain (mean $\Delta$AUC $+0.0009$ over the
+36 datasets, 22 wins/5 ties/9 losses against 64 bins) at $1.55\times$ the training time
+(HIGGS 560 vs.\ 382\,s). With the dynamic finder the extra bins only touch nodes with at least
+250 rows, so training time is unchanged ($0.98\times$; HIGGS 288 vs.\ 296\,s) and accuracy is a
+wash on the suite ($\Delta$AUC $-0.0003$, 11/6/19) and marginally higher on the three large
+datasets (HIGGS 0.8472 vs.\ 0.8472, SUSY 0.8745 vs.\ 0.8745, Epsilon 0.8574 vs.\ 0.8568). For
+SPO-GBT, 256 bins recover most of the gap to the exact finder on HIGGS (AUC 0.8120 vs.\ 0.8104,
+exact 0.8123) and SUSY (0.8770 vs.\ 0.8767) at the same cost ($1.02\times$ on the suite,
+1226 vs.\ 1242\,s on HIGGS). The 256-bin arms are included in the rankings above
+(Table~\ref{tab:spo-vs-gbt-summary}) and do not change any conclusion.
 
 \paragraph{Take-away.}
 The answer to ``if XGBoost is sufficient, why speed up SPO?'' is that XGBoost is sufficient for

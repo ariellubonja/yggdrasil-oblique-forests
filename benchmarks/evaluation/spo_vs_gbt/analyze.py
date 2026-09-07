@@ -33,7 +33,7 @@ result CSVs into:
     win/tie/loss (tie = |dAUC| < 0.005);
   - speed: per-dataset training-time ratios (headline time = train_s, the
     "Training block took" timer -- PROTOCOL.md D1-rev) with geometric means
-    that exclude rows < 2000 datasets from the headline number while still
+    that exclude datasets with <= 10,000 rows from the headline number while still
     listing them;
   - figures (matplotlib, PDF+PNG): a D4 cross-family AUC-vs-train_s
     Pareto scatter per huge dataset (arms as consistent markers, family by
@@ -43,7 +43,7 @@ result CSVs into:
   - booktabs LaTeX tables for the paper (make_paper_tables -- generated
     only, never hand-edited).
 
-The 15-arm roster (names, family, engine, binary, canonical order) is
+The 18-arm roster (15 SPEC.md arms + 3 256-bin AVX-512 arms added 2026-09-07; names, family, engine, binary, canonical order) is
 imported from arms.py in this directory rather than hardcoded here (SPEC.md
 v2 addendum A9) -- see load_arms() for the fallback used while arms.py's own
 addendum item (A1, a concurrent deliverable) hasn't landed the two new
@@ -100,13 +100,16 @@ _FALLBACK_ARMS: dict[str, dict] = {
     "spo_rf_exact_hwy": {"family": "rf", "engine": "ydf_fork", "binary": "default"},
     "spo_rf_rand_scalar": {"family": "rf", "engine": "ydf_fork", "binary": "scalar"},
     "spo_rf_rand_vec": {"family": "rf", "engine": "ydf_fork", "binary": "default"},
+    "spo_rf_rand256_vec": {"family": "rf", "engine": "ydf_fork", "binary": "default"},
     "spo_rf_dyn_scalar": {"family": "rf", "engine": "ydf_fork", "binary": "scalar"},
     "spo_rf_dyn_vec": {"family": "rf", "engine": "ydf_fork", "binary": "default"},
+    "spo_rf_dyn256_vec": {"family": "rf", "engine": "ydf_fork", "binary": "default"},
     "aa_rf_exact": {"family": "rf", "engine": "ydf_fork", "binary": "default"},
     "xgboost_rf": {"family": "rf", "engine": "xgboost", "binary": None},
     "lightgbm_rf": {"family": "rf", "engine": "lightgbm", "binary": None},
     "spo_gbt_exact_hwy": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
     "spo_gbt_dyn_vec": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
+    "spo_gbt_dyn256_vec": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
     "aa_gbt_exact": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
     "xgboost": {"family": "gbt", "engine": "xgboost", "binary": None},
     "lightgbm": {"family": "gbt", "engine": "lightgbm", "binary": None},
@@ -158,13 +161,16 @@ ARM_LABELS: dict[str, str] = {
     "spo_rf_exact_hwy": "SPO-RF Exact (Highway)",
     "spo_rf_rand_scalar": "SPO-RF Random (scalar)",
     "spo_rf_rand_vec": "SPO-RF Random (vec)",
+    "spo_rf_rand256_vec": "SPO-RF Random-256 (AVX-512)",
     "spo_rf_dyn_scalar": "SPO-RF Dyn (scalar)",
     "spo_rf_dyn_vec": "SPO-RF Dyn-Vec [ours]",
+    "spo_rf_dyn256_vec": "SPO-RF Dyn-256 (AVX-512)",
     "aa_rf_exact": "AA-RF Exact",
     "xgboost_rf": "XGBoost RF mode",
     "lightgbm_rf": "LightGBM RF mode",
     "spo_gbt_exact_hwy": "SPO-GBT Exact",
     "spo_gbt_dyn_vec": "SPO-GBT Dyn-Vec [ours]",
+    "spo_gbt_dyn256_vec": "SPO-GBT Dyn-256 (AVX-512)",
     "aa_gbt_exact": "AA-GBT Exact",
     "xgboost": "XGBoost",
     "lightgbm": "LightGBM",
@@ -179,8 +185,9 @@ GBT_BASELINE = "spo_gbt_dyn_vec"        # "ours", GBT family
 ALPHA = 0.05
 # D8: tie band for AUC (the primary metric) in the two fixed comparison sets.
 AUC_TIE_BAND = 0.005
-# D8: "datasets with < 2000 rows are excluded from headline speed ratios".
-MIN_ROWS_FOR_HEADLINE_SPEED = 2000
+# D8 (revised 2026-09-07, user directive): only datasets with MORE THAN 10,000
+# rows count toward the headline speed ratios (was: rows < 2000 excluded).
+MIN_ROWS_FOR_HEADLINE_SPEED = 10_000
 
 # D8's fixed, small comparison sets (never the ad hoc "RF baseline vs GBT
 # libs" cross-family comparison the v1 draft used -- D4 forbids ranking the
@@ -654,7 +661,7 @@ def speed_ratio_table(df: pd.DataFrame, baseline: str,
     over folds (train_s, the "Training block took" timer -- add_headline_time,
     PROTOCOL.md D1-rev). Two trailing rows give the across-dataset geometric
     mean per method:
-    GEOMEAN_ALL (every dataset) and GEOMEAN_HEADLINE (D8: rows >= 2000 only
+    GEOMEAN_ALL (every dataset) and GEOMEAN_HEADLINE (D8-rev: rows > 10,000 only
     -- small datasets are excluded from the headline number because
     thread-pool startup dominates there, but every dataset's own ratio is
     still listed in the per-dataset rows above)."""
@@ -675,12 +682,12 @@ def speed_ratio_table(df: pd.DataFrame, baseline: str,
         vals = vals[vals > 0]
         return float(stats.gmean(vals)) if len(vals) else np.nan
 
-    headline_mask = (rows_by_ds.reindex(ratio.index) >= min_rows_for_headline).fillna(False)
+    headline_mask = (rows_by_ds.reindex(ratio.index) > min_rows_for_headline).fillna(False)
     geo_all = ratio.apply(_gmean, axis=0)
     geo_headline = ratio[headline_mask].apply(_gmean, axis=0)
     excluded = sorted(rows_by_ds[~headline_mask].index) if not rows_by_ds.empty else []
     if excluded:
-        print(f"[speed_ratio_table] excluded from GEOMEAN_HEADLINE (rows < "
+        print(f"[speed_ratio_table] excluded from GEOMEAN_HEADLINE (rows <= "
               f"{min_rows_for_headline}, still listed per-dataset above): "
               f"{', '.join(str(x) for x in excluded)}", file=sys.stderr)
 
@@ -688,7 +695,7 @@ def speed_ratio_table(df: pd.DataFrame, baseline: str,
     out.insert(1, "rows", out["dataset"].map(rows_by_ds))
     summary_rows = pd.DataFrame([
         {"dataset": "GEOMEAN_ALL", "rows": np.nan, **geo_all.to_dict()},
-        {"dataset": f"GEOMEAN_HEADLINE(rows>={min_rows_for_headline})", "rows": np.nan,
+        {"dataset": f"GEOMEAN_HEADLINE(rows>{min_rows_for_headline})", "rows": np.nan,
          **geo_headline.to_dict()},
     ])
     out = pd.concat([out, summary_rows], ignore_index=True)
@@ -1419,7 +1426,7 @@ def _main_summary_block(summary_sub: pd.DataFrame, all_df_sub: pd.DataFrame) -> 
     within its own family (Friedman/Nemenyi's rank, not cross-family --
     D4), and the geometric-mean training-time ratio vs this arm's own
     family baseline (spo_rf_dyn_vec for RF, spo_gbt_dyn_vec for GBT),
-    restricted to datasets with >= MIN_ROWS_FOR_HEADLINE_SPEED rows (D8's
+    restricted to datasets with > MIN_ROWS_FOR_HEADLINE_SPEED rows (D8-rev's
     headline-speed rule, reused here rather than re-derived)."""
     rf_rank, _ = mean_rank_table(summary_sub, RF_ARMS, "auc_mean", ascending=False)
     gbt_rank, _ = mean_rank_table(summary_sub, GBT_ARMS, "auc_mean", ascending=False)
@@ -1989,7 +1996,7 @@ def fabricate_selftest_data(root: Path, seed: int = 0) -> tuple[Path, Path, Path
 
 def run_selftest(root: Path) -> int:
     print(f"[selftest] fabricating synthetic CSVs under {root}", flush=True)
-    assert len(ALL_ARMS) == 15, f"expected the 15-arm SPEC.md roster, got {len(ALL_ARMS)}: {ALL_ARMS}"
+    assert len(ALL_ARMS) == 18, f"expected the 15-arm SPEC.md roster + 3 256-bin arms, got {len(ALL_ARMS)}: {ALL_ARMS}"
     suite_path, large_path, spm_path = fabricate_selftest_data(root)
     out_dir = root / "analysis_out"
     result = analyze(suite_path, large_path, spm_path, out_dir)
