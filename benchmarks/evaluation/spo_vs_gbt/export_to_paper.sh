@@ -10,11 +10,11 @@ mkdir -p "$F"
 
 # tables: rename file + label (never hand-edit the generated bodies)
 sed 's/\\label{tab:main-summary-all}/\\label{tab:spo-vs-gbt-summary}/' \
-    "$A/tables/table_main_summary_all_datasets.tex" > "$P/table_spo_vs_gbt_summary.tex"
+    "$A/tables/table_main_summary_all_datasets_both.tex" > "$P/table_spo_vs_gbt_summary_both.tex"
 sed 's/\\label{tab:huge-datasets}/\\label{tab:spo-vs-gbt-huge}/' \
-    "$A/tables/table_huge_datasets.tex" > "$P/table_spo_vs_gbt_huge.tex"
-sed 's/\\label{tab:per-dataset-appendix}/\\label{tab:spo-vs-gbt-per-dataset}/' \
-    "$A/tables/table_per_dataset_appendix.tex" > "$P/table_spo_vs_gbt_per_dataset.tex"
+    "$A/tables/table_huge_datasets_both.tex" > "$P/table_spo_vs_gbt_huge_both.tex"
+sed 's/\\label{tab:per-dataset-appendix/\\label{tab:spo-vs-gbt-per-dataset/' \
+    "$A/tables/table_per_dataset_appendix_both.tex" > "$P/table_spo_vs_gbt_per_dataset_both.tex"
 
 # figures
 declare -A MAP=(

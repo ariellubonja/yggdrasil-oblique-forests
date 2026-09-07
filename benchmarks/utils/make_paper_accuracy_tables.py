@@ -6,9 +6,9 @@ Inputs (produced by accuracy_stats.py):
   <stats_dir>/per_dataset_SPO-{RF,GBT}_accuracy.csv
 
 Outputs (written to <stats_dir>/paper/):
-  table_main_summary.tex        -- compact aggregate table (main text)
-  table_per_dataset_accuracy.tex-- 36-dataset x 2-learner x 3-arm table (appendix)
-  preview.md                    -- markdown rendering of both
+  table_main_summary_accuracy.tex -- compact aggregate table (main text)
+  table_per_dataset_accuracy.tex  -- 36-dataset x 2-learner x 3-arm table (appendix)
+  preview.md                      -- markdown rendering of both
 
 Usage: make_paper_accuracy_tables.py [stats_dir]
        (default stats_dir: benchmarks/results/accuracy/hist_vs_exact_accuracy)
@@ -27,9 +27,6 @@ DEFAULT_DIR = os.path.join(
 ARM_ORDER = [
     ("Dynamic_Random_Histogram_thresh250", "Dynamic (64 bins, $\\tau{=}250$)"),
     ("Random", "Random, 64 bins"),
-    ("Random_bins16", "Random, 16 bins"),
-    ("Random_bins32", "Random, 32 bins"),
-    ("Random_bins128", "Random, 128 bins"),
     ("Random_bins256", "Random, 256 bins"),
 ]
 MAIN_ARMS = ARM_ORDER[:2]  # per-dataset table: shipped config + worst case only
@@ -226,7 +223,7 @@ def main():
     out_dir = os.path.join(stats_dir, "paper")
     os.makedirs(out_dir, exist_ok=True)
     for name, content in [
-            ("table_main_summary.tex", make_summary(agg)),
+            ("table_main_summary_accuracy.tex", make_summary(agg)),
             ("table_per_dataset_accuracy.tex", make_per_dataset(frames)),
             ("preview.md", md_preview(agg, frames))]:
         with open(os.path.join(out_dir, name), "w") as f:
