@@ -69,9 +69,10 @@ parses that line, not the harness wall-time lines.
 
 Flag-gated candidates: read `git diff <base>..<cand> -- .bazelrc` for the
 `build:<name>` line and pass `EXTRA_BAZEL_CONFIGS=--config=<name>` for arm B.
-Example: `origin/gbt-high-dim-speedup` adds `build:skip_dead_axis_jobs`; it is
-GBT-only, merges cleanly onto the tip, and was measured on the laptop on
-2026-08-07 (10 trees): 3.96× e2e on 15k×400k Boosting, trees identical.
+Example: `origin/gbt-high-dim-speedup` added `build:skip_dead_axis_jobs` (GBT-only,
+measured on the laptop 2026-08-07, 10 trees: 3.96× e2e on 15k×400k Boosting, trees
+identical). Since 2026-09-07 that behaviour is unconditional on `rebased-main`; the
+config no longer exists, so do not pass it.
 
 ## Default datasets, RAM, and prior m7i durations (seconds per run)
 

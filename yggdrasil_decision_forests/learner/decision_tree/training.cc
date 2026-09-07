@@ -1603,7 +1603,6 @@ absl::StatusOr<bool> FindBestConditionSingleThreadManager(
   return found_good_condition;
 }
 
-#ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
 // True if an axis-aligned split search over "candidate_attributes" can
 // only return kNoBetterSplitFound
 //
@@ -1629,7 +1628,6 @@ bool AxisAlignedJobsAreNoop(
   }
   return true;
 }
-#endif  // SKIP_DEAD_AXIS_ALIGNED_JOBS
 
 absl::StatusOr<bool> FindBestConditionConcurrentManager(
     const dataset::VerticalDataset& train_dataset,
@@ -1762,7 +1760,6 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
 
   // Number of jobs actually dispatched to the workers. Normally all of them.
   int num_jobs_to_schedule = num_jobs;
-#ifdef SKIP_DEAD_AXIS_ALIGNED_JOBS
   // Issue: In sparse oblique with numerical features, every axis-aligned
   // job always returns kNoBetterSplitFound but costs mutex acquisitions + a
   // full mt19937 re-seed in FindBestConditionFromSplitterWorkRequest. At
@@ -1782,7 +1779,6 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   if (cache->axis_aligned_jobs_are_noop == 1 && num_oblique_jobs > 0) {
     num_jobs_to_schedule = num_oblique_jobs;
   }
-#endif  // SKIP_DEAD_AXIS_ALIGNED_JOBS
 
   cache->durable_response_list.resize(num_jobs_to_schedule);
 

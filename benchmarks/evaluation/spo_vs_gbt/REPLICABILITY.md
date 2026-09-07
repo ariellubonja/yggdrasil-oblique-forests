@@ -37,7 +37,8 @@ record the CLI, host, python and library versions at the time each CSV was creat
   applied before rebuilding. *Commit it before anything else drifts.*
 - Three binaries in `/home/ubuntu/spo_vs_gbt/bin/`, built by `build_bins.sh`
   (icx 2025.2, `-c opt -O3 -march=native --config=skip_dead_axis_jobs`, plus per-binary
-  config): `default` (Highway VQSort exact + vectorized histograms), `exact_std_sort`
+  config; since 2026-09-07 the skip is unconditional and that config is gone, so omit it
+  when rebuilding from a newer tree): `default` (Highway VQSort exact + vectorized histograms), `exact_std_sort`
   (`--config=exact_std_sort`), `scalar` (`--config=disable_std_upper_bound_vectorization`).
   sha256 of each is in `MANIFEST/inputs.sha256`; `bin/<name>.gitsha` holds the source sha.
 - **Two binary generations appear in `engine_version`:** `3752acb9` (pre-cherry-pick build;
