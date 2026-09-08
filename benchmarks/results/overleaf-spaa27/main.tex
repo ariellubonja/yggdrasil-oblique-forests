@@ -14,6 +14,9 @@
 
 \usepackage{hyperref} % clickable \ref links
 
+% float barriers: keep results floats inside their subsection
+\usepackage{placeins}
+
 % generated pgfplots figures (figures/results/*.tex)
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
@@ -398,6 +401,8 @@ For accuracy experiments, we include data from the OpenML CC18 benchmarks~\cite{
 
 \subsection{Scalability}
 
+\TODO{Ask Randal: Scalability by n. cores? RF trees are trivially parallelizable}
+
 \textbf{
 std::sort v. HWY v. Random Hist v. Vec Random Hist GBT \& RF , as a fn. of data size}
 
@@ -415,7 +420,7 @@ Examining speedup reveals that SO-YDF training is compute bound on the CPU. Figu
 \subsection{Ablation - Dynamic Vectorized Histograms}
 \label{sec:dyn}
 
-\textbf{benefit of each method on dataset X at levels 4, 8, 16, purity}
+\textbf{benefit of each method on dataset X at depth 4, 8, 16, purity}
 
  Experiments were run on a AWS m7i.metal-24xl instance with 48 physical cores 384 GiB of memory running Ubuntu 24.04. YDF is compiled with ICX version 2025.2.1 with AVX-512 support ({\sf --AVX-512}). Experiments run a thread pool of 48 workers threads and train 1024 trees. Results are an average of 20 trials.
 
@@ -429,12 +434,19 @@ Our core result shows that dynamic histograms with vectorization consistently re
     \centering
     \includegraphics[width=1\linewidth]{figures/results/E2E_speedup_vs_Exact.pdf}
     % \vspace{-15px}
-    \caption{End-to-end training time normalized to the performance of SO-YDF with exact splits.}
+    \caption{End-to-end training time on select datasets, normalized to the performance of SO-YDF with exact splits.}
     % \vspace{-15px}
     \Description{End-to-end evaluation reveals the benefit of our methods - up to 35\% reduction in runtime with only Dynamic, and up to 50\% with Vectorized Dynamic. It also reveals the similarity in performance of RF Exact to SO Exact.}
     \label{fig:overall}
 \end{figure}
 
+\input{spo_vs_gbt_results}
+% tab:spo-vs-gbt-timing is input from spo_vs_gbt_results.tex, next to the
+% Training time discussion; these two are accuracy only.
+\input{table_spo_vs_gbt_summary_both}
+\input{table_spo_vs_gbt_huge_both}
+
+\FloatBarrier
 \subsection{Accuracy Comparison}
 
 We quantify the effect of dynamic histograms on the accuracy of classification tasks across our performance datasets and a selection of smaller OpenML datasets (Table \ref{tab:accuracy}). All methods were given the same number of trees.
@@ -442,9 +454,7 @@ The accuracy of dynamic histograms tracks histograms in SO-YDF and in most cases
 
 \input{table_main_summary_accuracy}
 
-\input{spo_vs_gbt_results}
-\input{table_spo_vs_gbt_summary_both}
-\input{table_spo_vs_gbt_huge_both}
+\FloatBarrier
 
 \section{Conclusions and Discussion}
 

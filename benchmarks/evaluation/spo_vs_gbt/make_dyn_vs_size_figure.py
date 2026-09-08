@@ -69,6 +69,17 @@ def load_points() -> pd.DataFrame:
             rows.append(dict(dataset=r.dataset, rows=nr, features=nf, arm=arm,
                              train_s=r.median_s, synthetic=True, src="ablation"))
     df = pd.DataFrame(rows)
+    # A shape may now appear in more than one source (the B6 speedup_map sweep
+    # covers three shapes the ablation CSVs already had). Keep one source per
+    # dataset -- a speedup is a ratio, so numerator and denominator must come
+    # from the same campaign -- preferring the source with the most arms.
+    src_rank = {"large_results": 0, "ablation": 1, "speedup_map": 2}
+    arms_per = df.groupby(["dataset", "src"])["arm"].nunique()
+    keep = {ds: min(g.index.get_level_values("src"),
+                     key=lambda sc: (-g.loc[(ds, sc)], src_rank.get(sc, 9)))
+            for ds, g in arms_per.groupby(level="dataset")}
+    df = df[[keep[r.dataset] == r.src for r in df.itertuples()]].copy()
+
     base = df[df.arm == BASE].set_index("dataset").train_s
     df = df[df.arm != BASE].copy()
     df["speedup"] = base.reindex(df.dataset).values / df.train_s.values

@@ -42,7 +42,7 @@ each a single held-out split. Training time is the learner's own training timer 
 all trees; for the Python libraries the wall time of \texttt{fit()} on an in-memory
 \texttt{float32} matrix, which includes their binning). YDF additionally spends a
 single-threaded post-training pass on structural variable importances and leaf indexing
-(400\,s on HIGGS RF, reported separately in Table~\ref{tab:spo-vs-gbt-huge}); the Python
+(400\,s on HIGGS RF, reported separately in Table~\ref{tab:spo-vs-gbt-timing}); the Python
 libraries compute importances lazily, so this pass is excluded from every headline time. ROC
 AUC is the primary metric (several suite datasets have 2--7\% positives); accuracy and
 log-loss are reported alongside. Across datasets we use mean ranks with a Friedman test and
@@ -93,7 +93,12 @@ LightGBM-RF, and the two library RF modes exhaust the 377\,GB of the machine on 
 all three. In the GBT family at depth~6 the axis-aligned learners are more accurate than SPO-GBT
 on HIGGS (0.825 vs 0.810) and Epsilon (0.943 vs 0.935) and tie on SUSY.
 
+% all runtime numbers, split out of the accuracy tables (analyze.py)
+\input{table_spo_vs_gbt_timing_both}
+
 \paragraph{Training time.}
+Table~\ref{tab:spo-vs-gbt-timing} collects every runtime number: the geometric-mean ratio
+over the suite and wall-clock seconds on the three large datasets.
 Figure~\ref{fig:spo-vs-gbt-pareto} places every learner on the accuracy--time plane of the three
 large datasets. In the RF family, our work moves SPO from the slowest learner to the fastest: on
 HIGGS the published SO-YDF exact baseline needs 719\,s, SPO Dyn-Vec 296\,s ($2.4\times$; the
@@ -153,7 +158,7 @@ Shallow trees consist only of large nodes, where every split is found by the vec
 histogram, so the histogram contribution is largest there; as depth grows the exact finder takes
 over for the millions of small nodes and both arms converge, which is exactly the regime the
 dynamic switch was designed for---without it the histogram-only arm is slower than exact at
-full depth (382\,s vs 363\,s on HIGGS, Table~\ref{tab:spo-vs-gbt-huge}).
+full depth (382\,s vs 363\,s on HIGGS, Table~\ref{tab:spo-vs-gbt-timing}).
 \textbf{Stopping criterion}: raising the minimum node size from 1 to 5, 20 and 100 examples
 removes the smallest nodes and raises the full-depth speedup from $1.22\times$ to $1.23$,
 $1.27$ and $1.31\times$. \textbf{Width} (Trunk, 1M rows, full depth): from 32 to 8192
@@ -199,3 +204,4 @@ $P=4$ projections per node the exact scan is already cheap.
     \Description{Two scatter panels with features on the x axis and rows on the y axis, both log scale, points colored and annotated by speedup.}
     \label{fig:rowcol-map}
 \end{figure*}
+

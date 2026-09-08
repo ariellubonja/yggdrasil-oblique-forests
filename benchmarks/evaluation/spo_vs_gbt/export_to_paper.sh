@@ -8,13 +8,20 @@ P="${2:-/home/ubuntu/yggdrasil-oblique-forests/benchmarks/results/overleaf-spaa2
 F="$P/figures/results"
 mkdir -p "$F"
 
-# tables: rename file + label (never hand-edit the generated bodies)
-sed 's/\\label{tab:main-summary-all}/\\label{tab:spo-vs-gbt-summary}/' \
-    "$A/tables/table_main_summary_all_datasets_both.tex" > "$P/table_spo_vs_gbt_summary_both.tex"
-sed 's/\\label{tab:huge-datasets}/\\label{tab:spo-vs-gbt-huge}/' \
-    "$A/tables/table_huge_datasets_both.tex" > "$P/table_spo_vs_gbt_huge_both.tex"
-sed 's/\\label{tab:per-dataset-appendix/\\label{tab:spo-vs-gbt-per-dataset/' \
-    "$A/tables/table_per_dataset_appendix_both.tex" > "$P/table_spo_vs_gbt_per_dataset_both.tex"
+# tables: rename file + label/ref (never hand-edit the generated bodies). The
+# tables cross-reference each other, so rewrite \ref{} as well as \label{}.
+RELABEL='s/{tab:main-summary-all}/{tab:spo-vs-gbt-summary}/g;
+         s/{tab:huge-datasets}/{tab:spo-vs-gbt-huge}/g;
+         s/{tab:timing}/{tab:spo-vs-gbt-timing}/g;
+         s/{tab:per-dataset-appendix/{tab:spo-vs-gbt-per-dataset/g'
+sed "$RELABEL" "$A/tables/table_main_summary_all_datasets_both.tex" \
+    > "$P/table_spo_vs_gbt_summary_both.tex"
+sed "$RELABEL" "$A/tables/table_huge_datasets_both.tex" \
+    > "$P/table_spo_vs_gbt_huge_both.tex"
+sed "$RELABEL" "$A/tables/table_timing_both.tex" \
+    > "$P/table_spo_vs_gbt_timing_both.tex"
+sed "$RELABEL" "$A/tables/table_per_dataset_appendix_both.tex" \
+    > "$P/table_spo_vs_gbt_per_dataset_both.tex"
 
 # figures
 declare -A MAP=(
