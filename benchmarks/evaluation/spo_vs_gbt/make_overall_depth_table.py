@@ -1,114 +1,149 @@
 #!/usr/bin/env python3
-"""tab:overall -- end-to-end CPU training time (s) by dataset, with one section per depth.
+"""tab:overall -- end-to-end SPO-RF training time (s) by dataset, one section per depth.
 
-Columns: SPO-RF / SPO-GBT / AA-RF x {Exact (Highway), Dyn. Hist. (scalar), Vec. Dyn. Hist.}.
-Sources (benchmarks/results/): spo_vs_gbt/large_results.csv (HIGGS/SUSY/Epsilon, mean over
-reps), spo_vs_gbt/speedup_map.csv (HIGGS depth ladder, GBT depth cells, Trunk), and
-ablation_vectorized_dynamic/ (Trunk 1.5Mx4096, medians of 3). RF = 240 trees / min_examples 1;
-GBT = 300 trees / min_examples 5, and the harness maps GBT depth -1 to its default 6, so
-GBT rows appear only under explicit depths. Missing cells print as --. Emits a full table*.
+Rows: the pinned speedup-map selection (B7, 2026-09-08): HIGGS, SUSY, Epsilon,
+GiveMeSomeCredit, trunk 1M x {32,512,2048} and the row-column shapes with rows > 100k
+or cols > 100k (D8-rev2; 15k x 4096 and 15k x 40k are run but not tabulated).
+Columns: 6 split finders -- Exact (std::sort), Exact (Highway VQSort),
+Random histogram (scalar, 64 bins), Vectorized random histogram (AVX2, 64 bins),
+Dynamic (scalar, 64 bins), Vectorized dynamic (AVX2, 64 bins).
+Depths: 6, 10, 16, 24, full (purity). 240 trees, min_examples 1, 48 threads, seed 1.
+
+Source: benchmarks/results/spo_vs_gbt/speedup_map.csv (rep 1) plus any
+speedup_map_rep<k>.csv beside it (reps 2..); a cell shows median +- sample std
+over the reps present (a single run shows just the value) and the caption states
+the rep count. Missing cells print as --.
+Emits table_overall_depth.tex (do not hand-edit) and a plain-text preview.
 """
 from __future__ import annotations
 
 import argparse
-import io
 from pathlib import Path
 
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-RES = ROOT / "benchmarks" / "results"
+RES = ROOT / "benchmarks" / "results" / "spo_vs_gbt"
 
-COLS = [  # (family label, [arms in Exact / Dyn / Vec-Dyn order])
-    ("SPO-RF", ["spo_rf_exact_hwy", "spo_rf_dyn_scalar", "spo_rf_dyn_vec"]),
-    ("SPO-GBT", ["spo_gbt_exact_hwy", "spo_gbt_dyn_scalar", "spo_gbt_dyn_vec"]),
-    ("AA-RF", ["aa_rf_exact", "aa_rf_dyn_scalar", "aa_rf_dyn_vec"]),
+ARMS = [  # (arm, header line 1, header line 2)
+    ("spo_rf_exact_stdsort", "Exact", "std::sort"),
+    ("spo_rf_exact_hwy", "Exact", "HWY"),
+    ("spo_rf_rand_scalar", "Random Hist.", "scalar, 64 bins"),
+    ("spo_rf_rand_vec", "Vec. Random Hist.", "AVX2, 64 bins"),
+    ("spo_rf_dyn_scalar", "Dynamic Hist.", "scalar, 64 bins"),
+    ("spo_rf_dyn_vec", "Vec. Dynamic Hist.", "AVX2, 64 bins"),
 ]
-DATASETS = [  # (key in CSVs, display name)
-    ("HIGGS", "Higgs"), ("SUSY", "SUSY"), ("EPSILON", "Epsilon"),
+DATASETS = [  # (key in speedup_map.csv, display name)
+    ("higgs_10500000", "HIGGS 10.5M$\\times$28"),
+    ("SUSY", "SUSY 4.5M$\\times$18"),
+    ("EPSILON", "Epsilon 400k$\\times$2000"),
+    ("GiveMeSomeCredit", "GiveMeSomeCredit 150k$\\times$10"),
+    ("trunk_1000000_x_32", "Trunk 1M$\\times$32"),
+    ("trunk_1000000_x_512", "Trunk 1M$\\times$512"),
+    ("trunk_1000000_x_2048", "Trunk 1M$\\times$2048"),
+    ("trunk_15000_x_400000", "Trunk 15k$\\times$400k"),
+    ("trunk_15000_x_1600000", "Trunk 15k$\\times$1.6M"),
+    ("trunk_150000_x_4096", "Trunk 150k$\\times$4096"),
+    ("trunk_150000_x_40000", "Trunk 150k$\\times$40k"),
+    ("trunk_150000_x_160000", "Trunk 150k$\\times$160k"),
+    ("trunk_150000_x_400000", "Trunk 150k$\\times$400k"),
     ("trunk_1500000_x_4096", "Trunk 1.5M$\\times$4096"),
-    ("trunk_1000000_x_128", "Trunk 1M$\\times$128"),
-    ("trunk_1000000_x_8192", "Trunk 1M$\\times$8192"),
+    ("trunk_1500000_x_16384", "Trunk 1.5M$\\times$16384"),
+    ("trunk_1500000_x_40000", "Trunk 1.5M$\\times$40k"),
+    ("trunk_4500000_x_4096", "Trunk 4.5M$\\times$4096"),
 ]
-ALIASES = {"higgs_10500000": "HIGGS", "HIGGS_with_header": "HIGGS"}
+DEPTHS = [6, 10, 16, 24, -1]
 DEPTH_LABEL = {-1: "Full depth (purity)"}
-ABL_FILES = {
-    "dfs_exact_hwy.csv": "spo_rf_exact_hwy",
-    "dfs_scalar_dynamic.csv": "spo_rf_dyn_scalar",
-    "dfs_vectorized_dynamic.csv": "spo_rf_dyn_vec",
-}
 
 
-def _read_provenance_csv(path: Path) -> pd.DataFrame:
-    body = path.read_text().split("====================\n", 1)[-1]
-    return pd.read_csv(io.StringIO(body))
+def load_cells() -> tuple[pd.DataFrame, int]:
+    """(dataset, arm, depth) -> median / std of train_s over reps; returns (df, max reps seen)."""
+    files = [RES / "speedup_map.csv"] + sorted(RES.glob("speedup_map_rep*.csv"))
+    parts = []
+    for k, f in enumerate(files, 1):
+        d = pd.read_csv(f)
+        d = d[(d.status == "OK") & (d.min_examples == 1) & (d.family == "rf")]
+        d = d.assign(rep=k)
+        parts.append(d[["dataset", "arm", "max_depth", "train_s", "rep"]])
+    df = pd.concat(parts)
+    g = df.groupby(["dataset", "arm", "max_depth"], as_index=False).agg(
+        train_s=("train_s", "median"), std_s=("train_s", lambda x: x.std(ddof=1)),
+        n=("rep", "nunique"))
+    return g, int(g.n.max()) if len(g) else 0
 
 
-def load_cells() -> pd.DataFrame:
-    """One row per (dataset, arm, depth) with mean train_s; family-native min_examples only."""
-    rows = []
-    large = pd.read_csv(RES / "spo_vs_gbt" / "large_results.csv")
-    large = large[large.status == "OK"]
-    for (ds, arm, depth), g in large.groupby(["dataset", "method", "max_depth"]):
-        rows.append(dict(dataset=ds, arm=arm, depth=int(depth), train_s=g.train_s.mean()))
-    spm = pd.read_csv(RES / "spo_vs_gbt" / "speedup_map.csv")
-    spm = spm[(spm.status == "OK") & (spm.min_examples == spm.family.map({"rf": 1, "gbt": 5}))]
-    spm = spm[~((spm.family == "gbt") & (spm.max_depth == -1))]  # harness default = 6
-    for (ds, arm, depth), g in spm.groupby(["dataset", "arm", "max_depth"]):
-        rows.append(dict(dataset=ALIASES.get(ds, ds), arm=arm, depth=int(depth),
-                         train_s=g.train_s.mean()))
-    for fname, arm in ABL_FILES.items():
-        for _, r in _read_provenance_csv(RES / "ablation_vectorized_dynamic" / fname).iterrows():
-            rows.append(dict(dataset=ALIASES.get(r.dataset, r.dataset), arm=arm, depth=-1,
-                             train_s=r.median_s))
-    df = pd.DataFrame(rows)
-    # large_results (2 reps) wins over speedup_map / ablation single runs for the same cell.
-    return df.groupby(["dataset", "arm", "depth"], as_index=False).first()
+def _num(v: float) -> str:
+    return f"{v:.1f}" if v < 100 else f"{v:.0f}"
 
 
-def emit_tex(df: pd.DataFrame) -> str:
-    cell = {(r.dataset, r.arm, r.depth): r.train_s for r in df.itertuples()}
-    depths = sorted(set(df.depth), key=lambda d: (d == -1, d))
+def _fmt(c: tuple[float, float] | None, pm: str = "$\\pm$") -> str:
+    """median +- std; std omitted when only one rep (NaN)."""
+    if c is None:
+        return "--"
+    med, sd = c
+    if sd != sd:  # NaN: single run
+        return _num(med)
+    return f"{_num(med)} {pm} {_num(sd) if med < 100 else f'{sd:.0f}'}"
+
+
+def emit_tex(df: pd.DataFrame, nrep: int) -> str:
+    cell = {(r.dataset, r.arm, int(r.max_depth)): (r.train_s, r.std_s) for r in df.itertuples()}
+    ncol = len(ARMS) + 1
     L = [
         "% Generated by benchmarks/evaluation/spo_vs_gbt/make_overall_depth_table.py -- do not hand-edit.",
         "\\begin{table*}[t]", "    \\centering", "    \\small",
-        "    \\begin{tabular}{l|ccc|ccc|ccc}", "        \\hline",
+        "    \\begin{tabular}{l|cc|cc|cc}", "        \\hline",
         "        \\multirow{2}{*}{\\textbf{Dataset}} & " + " & ".join(
-            f"\\multicolumn{{3}}{{c{'|' if i < 2 else ''}}}{{\\textbf{{{fam}}}}}" for i, (fam, _) in enumerate(COLS)) + " \\\\",
-        "        \\cline{2-10}",
-        "         & " + " & ".join(["\\textbf{Exact} & \\textbf{Dyn. Hist.} & \\textbf{Vec. Dyn. Hist.}"] * 3) + " \\\\",
+            f"\\textbf{{{h1}}}" for _, h1, _ in ARMS) + " \\\\",
+        "         & " + " & ".join(f"\\scriptsize {h2}" for _, _, h2 in ARMS) + " \\\\",
         "        \\hline",
     ]
-    for d in depths:
-        body = []
-        for key, name in DATASETS:
-            vals = [cell.get((key, arm, d)) for _, arms in COLS for arm in arms]
-            if all(v is None for v in vals):
-                continue
-            body.append(f"        {name} & " + " & ".join("--" if v is None else f"{v:.1f}" for v in vals) + " \\\\")
-        if not body:
-            continue
+    for d in DEPTHS:
         label = DEPTH_LABEL.get(d, f"Depth {d}")
-        L += [f"        \\multicolumn{{10}}{{l}}{{\\textit{{{label}}}}} \\\\", *body, "        \\hline"]
+        L.append(f"        \\multicolumn{{{ncol}}}{{l}}{{\\textit{{{label}}}}} \\\\")
+        for key, name in DATASETS:
+            vals = [cell.get((key, arm, d)) for arm, _, _ in ARMS]
+            L.append(f"        {name} & " + " & ".join(_fmt(v) for v in vals) + " \\\\")
+        L.append("        \\hline")
+    reps = "single run" if nrep <= 1 else f"median $\\pm$ sample std over {nrep} runs"
     L += [
         "    \\end{tabular}",
-        "    \\caption{End-to-end CPU training time (s), 48 threads, m7i.metal-24xl. SPO-RF and AA-RF: 240 trees, "
-        "min\\_examples 1; SPO-GBT: 300 trees, min\\_examples 5. Exact = Highway VQSort. Histograms use 64 bins; "
-        "vectorized histograms use AVX-512. Dynamic switches to exact below 250 examples. -- = not run.}",
+        "    \\caption{End-to-end SPO-RF training time (s) by tree depth: 240 trees, min\\_examples 1, "
+        "48 threads, m7i.metal-24xl, " + reps + ". Exact = presorted scan with std::sort or Highway VQSort. "
+        "Histogram finders use 64 bins; vectorized variants use the AVX2 upper\\_bound kernel. Dynamic "
+        "switches to exact below 250 examples. Trunk = synthetic $R\\times C$ dataset. -- = not run.}",
         "    \\label{tab:overall}",
         "\\end{table*}", "",
     ]
     return "\n".join(L)
 
 
+def emit_text(df: pd.DataFrame) -> str:
+    cell = {(r.dataset, r.arm, int(r.max_depth)): (r.train_s, r.std_s) for r in df.itertuples()}
+    heads = [f"{h1} ({h2})" for _, h1, h2 in ARMS]
+    w = 28
+    out = []
+    for d in DEPTHS:
+        out.append(f"== {DEPTH_LABEL.get(d, f'Depth {d}')}")
+        out.append("Dataset".ljust(w) + "".join(h[:22].rjust(24) for h in heads))
+        for key, name in DATASETS:
+            name = name.replace("$\\times$", "x")
+            vals = [cell.get((key, arm, d)) for arm, _, _ in ARMS]
+            out.append(name.ljust(w) + "".join(_fmt(v, "+-").rjust(24) for v in vals))
+        out.append("")
+    return "\n".join(out)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(RES / "overleaf-spaa27" / "table_overall_depth.tex"))
+    ap.add_argument("--out", default=str(ROOT / "benchmarks" / "results" / "overleaf-spaa27" / "table_overall_depth.tex"))
+    ap.add_argument("--text-only", action="store_true")
     a = ap.parse_args()
-    df = load_cells()
-    Path(a.out).write_text(emit_tex(df))
-    print(emit_tex(df))
-    print(f"wrote {a.out}")
+    df, nrep = load_cells()
+    print(emit_text(df))
+    if not a.text_only:
+        Path(a.out).write_text(emit_tex(df, nrep))
+        print(f"wrote {a.out} (reps={nrep})")
 
 
 if __name__ == "__main__":

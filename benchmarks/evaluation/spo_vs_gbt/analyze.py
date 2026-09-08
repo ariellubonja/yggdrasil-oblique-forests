@@ -187,7 +187,11 @@ ALPHA = 0.05
 AUC_TIE_BAND = 0.005
 # D8 (revised 2026-09-07, user directive): only datasets with MORE THAN 10,000
 # rows count toward the headline speed ratios (was: rows < 2000 excluded).
-MIN_ROWS_FOR_HEADLINE_SPEED = 10_000
+# D8-rev2 (2026-09-08): a dataset counts for headline speed if rows > 100,000 OR
+# features > 100,000 (either axis; strict >). Sub-100k sets train in seconds and
+# say nothing about a speedup.
+MIN_ROWS_FOR_HEADLINE_SPEED = 100_000
+MIN_COLS_FOR_HEADLINE_SPEED = 100_000
 
 # D8's fixed, small comparison sets (never the ad hoc "RF baseline vs GBT
 # libs" cross-family comparison the v1 draft used -- D4 forbids ranking the
@@ -661,10 +665,10 @@ def speed_ratio_table(df: pd.DataFrame, baseline: str,
     over folds (train_s, the "Training block took" timer -- add_headline_time,
     PROTOCOL.md D1-rev). Two trailing rows give the across-dataset geometric
     mean per method:
-    GEOMEAN_ALL (every dataset) and GEOMEAN_HEADLINE (D8-rev: rows > 10,000 only
-    -- small datasets are excluded from the headline number because
-    thread-pool startup dominates there, but every dataset's own ratio is
-    still listed in the per-dataset rows above)."""
+    GEOMEAN_ALL (every dataset) and GEOMEAN_HEADLINE (D8-rev2: rows > 100,000 OR
+    features > 100,000 only -- smaller datasets train in seconds, where fixed
+    setup dominates, but every dataset's own ratio is still listed in the
+    per-dataset rows above)."""
     cols = ["dataset", "rows"] + ALL_ARMS
     if "time_s" not in df.columns:
         df = add_headline_time(df)
@@ -673,6 +677,8 @@ def speed_ratio_table(df: pd.DataFrame, baseline: str,
         return pd.DataFrame(columns=cols)
     med = ok.groupby(["dataset", "method"])["time_s"].median().unstack("method")
     rows_by_ds = ok.groupby("dataset")["rows"].first()
+    feat_by_ds = (ok.groupby("dataset")["features"].first() if "features" in ok.columns
+                  else pd.Series(np.nan, index=rows_by_ds.index))
     if baseline not in med.columns:
         med[baseline] = np.nan
     ratio = med.div(med[baseline], axis=0).replace([np.inf, -np.inf], np.nan)
@@ -682,20 +688,23 @@ def speed_ratio_table(df: pd.DataFrame, baseline: str,
         vals = vals[vals > 0]
         return float(stats.gmean(vals)) if len(vals) else np.nan
 
-    headline_mask = (rows_by_ds.reindex(ratio.index) > min_rows_for_headline).fillna(False)
+    headline_mask = ((rows_by_ds.reindex(ratio.index) > min_rows_for_headline)
+                     | (feat_by_ds.reindex(ratio.index) > MIN_COLS_FOR_HEADLINE_SPEED)).fillna(False)
     geo_all = ratio.apply(_gmean, axis=0)
     geo_headline = ratio[headline_mask].apply(_gmean, axis=0)
     excluded = sorted(rows_by_ds[~headline_mask].index) if not rows_by_ds.empty else []
     if excluded:
         print(f"[speed_ratio_table] excluded from GEOMEAN_HEADLINE (rows <= "
-              f"{min_rows_for_headline}, still listed per-dataset above): "
+              f"{min_rows_for_headline} and features <= {MIN_COLS_FOR_HEADLINE_SPEED}, "
+              f"still listed per-dataset above): "
               f"{', '.join(str(x) for x in excluded)}", file=sys.stderr)
 
     out = ratio.reset_index()
     out.insert(1, "rows", out["dataset"].map(rows_by_ds))
     summary_rows = pd.DataFrame([
         {"dataset": "GEOMEAN_ALL", "rows": np.nan, **geo_all.to_dict()},
-        {"dataset": f"GEOMEAN_HEADLINE(rows>{min_rows_for_headline})", "rows": np.nan,
+        {"dataset": f"GEOMEAN_HEADLINE(rows>{min_rows_for_headline}|cols>{MIN_COLS_FOR_HEADLINE_SPEED})",
+         "rows": np.nan,
          **geo_headline.to_dict()},
     ])
     out = pd.concat([out, summary_rows], ignore_index=True)
@@ -1471,7 +1480,8 @@ _HUGE_TABLE_FOOTNOTE = (
 
 _TIMING_TABLE_FOOTNOTE = (
     "Suite column: geometric mean over the suite datasets with more than "
-    f"{MIN_ROWS_FOR_HEADLINE_SPEED:,} rows (smaller ones are dominated by fixed setup cost); "
+    f"{MIN_ROWS_FOR_HEADLINE_SPEED:,} rows or more than {MIN_COLS_FOR_HEADLINE_SPEED:,} features "
+    "(smaller ones train in seconds and are dominated by fixed setup cost); "
     "$<1\\times$ means the arm is faster than ours. YDF's post-training finalization "
     "(structural variable importances and leaf indexing, a single-threaded walk with no "
     "counterpart in the python libraries' lazily-computed feature importances) is excluded "
@@ -1502,7 +1512,8 @@ def _main_summary_block(summary_sub: pd.DataFrame, all_df_sub: pd.DataFrame) -> 
     within its own family (Friedman/Nemenyi's rank, not cross-family --
     D4), and the geometric-mean training-time ratio vs this arm's own
     family baseline (spo_rf_dyn_vec for RF, spo_gbt_dyn_vec for GBT),
-    restricted to datasets with > MIN_ROWS_FOR_HEADLINE_SPEED rows (D8-rev's
+    restricted to datasets with > MIN_ROWS_FOR_HEADLINE_SPEED rows or
+    > MIN_COLS_FOR_HEADLINE_SPEED features (D8-rev2's
     headline-speed rule, reused here rather than re-derived)."""
     rf_rank, _ = mean_rank_table(summary_sub, RF_ARMS, "auc_mean", ascending=False)
     gbt_rank, _ = mean_rank_table(summary_sub, GBT_ARMS, "auc_mean", ascending=False)
