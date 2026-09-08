@@ -1171,6 +1171,10 @@ def fig_trunk_width(spm: pd.DataFrame, out_dir: Path) -> list[str]:
     if spm.empty:
         return _empty_panel(out_dir, "fig_trunk_width", "no trunk-width (B5) results yet")
     df = spm[(spm["status"] == "OK") & spm["dataset"].astype(str).str.startswith("trunk_")]
+    # B6 (2026-09-07) added trunk cells at other row counts; this panel is the
+    # B5 1M-row width series only (the row x column map is fig_rowcol_map).
+    if "rows" in df.columns and (pd.to_numeric(df["rows"], errors="coerce") == 1_000_000).any():
+        df = df[pd.to_numeric(df["rows"], errors="coerce") == 1_000_000]
     if df.empty:
         return _empty_panel(out_dir, "fig_trunk_width", "no trunk-width (B5) results yet")
     arms = [a for a in (EXACT_STDSORT, EXACT_HWY, SPEED_BASELINE) if a in set(df["method"])]
@@ -1202,6 +1206,71 @@ def fig_trunk_width(spm: pd.DataFrame, out_dir: Path) -> list[str]:
     fig.suptitle("Feature-width axis (B5) -- trunk generator")
     fig.tight_layout()
     return save_fig(fig, out_dir, "fig_trunk_width")
+
+
+def fig_rowcol_map(spm: pd.DataFrame, suite_df: pd.DataFrame, large_df: pd.DataFrame,
+                   out_dir: Path) -> tuple[list[str], pd.DataFrame]:
+    """B6 (2026-09-07): row x column map of the full-depth RF speedup of
+    dyn_vec over exact_stdsort (left) and exact_hwy (right). Points: every
+    trunk cell at unlimited depth / min_examples 1 (circles) plus the natural
+    datasets HIGGS, SUSY, EPSILON (large tier) and GiveMeSomeCredit (suite)
+    at their unlimited-depth RF medians (squares). Also returns the point
+    table (written as rowcol_map.csv by the caller)."""
+    arms = (EXACT_STDSORT, EXACT_HWY, SPEED_BASELINE)
+    pts = []
+    if not spm.empty:
+        t = spm[(spm["status"] == "OK") & spm["dataset"].astype(str).str.startswith("trunk_")
+                & (pd.to_numeric(spm["max_depth"], errors="coerce") == -1)
+                & (pd.to_numeric(spm["min_examples"], errors="coerce") == 1)]
+        med = t.groupby(["dataset", "rows", "features", "method"])["train_s"].median().unstack("method")
+        for (ds, rows, feats), r in med.iterrows():
+            if all(a in r.index and pd.notna(r[a]) for a in arms):
+                pts.append({"dataset": ds, "rows": rows, "features": feats, "kind": "trunk",
+                            **{a: r[a] for a in arms}})
+    nat = {"HIGGS": large_df, "SUSY": large_df, "EPSILON": large_df, "GiveMeSomeCredit": suite_df}
+    for ds, df in nat.items():
+        if df.empty or "time_s" not in df.columns:
+            continue
+        d = df[(df["dataset"] == ds) & (df["status"].isin(["OK", "SLOWPATH"]))]
+        if d.empty:
+            continue
+        m = d.groupby("method")["time_s"].median()
+        if all(a in m.index and pd.notna(m[a]) for a in arms):
+            pts.append({"dataset": ds, "rows": int(d["rows"].iloc[0]), "features": int(d["features"].iloc[0]),
+                        "kind": "natural", **{a: m[a] for a in arms}})
+    if not pts:
+        return _empty_panel(out_dir, "fig_rowcol_map", "no row x column map (B6) results yet"), pd.DataFrame()
+    tab = pd.DataFrame(pts)
+    tab["speedup_vs_stdsort"] = tab[EXACT_STDSORT] / tab[SPEED_BASELINE]
+    tab["speedup_vs_hwy"] = tab[EXACT_HWY] / tab[SPEED_BASELINE]
+    tab = tab.sort_values(["rows", "features"]).reset_index(drop=True)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.2))
+    for ax, col, title in ((axes[0], "speedup_vs_stdsort", f"Speedup vs {ARM_LABELS[EXACT_STDSORT]}"),
+                           (axes[1], "speedup_vs_hwy", f"Speedup vs {ARM_LABELS[EXACT_HWY]}")):
+        vmin, vmax = float(tab[col].min()), float(tab[col].max())
+        for kind, marker, size in (("trunk", "o", 260), ("natural", "s", 300)):
+            g = tab[tab["kind"] == kind]
+            if g.empty:
+                continue
+            sc = ax.scatter(g["features"], g["rows"], c=g[col], cmap="viridis", vmin=vmin, vmax=vmax,
+                            s=size, marker=marker, edgecolors="black", linewidths=0.6, zorder=3,
+                            label="trunk (synthetic)" if kind == "trunk" else "natural dataset")
+            for _, r in g.iterrows():
+                lbl = f"{r[col]:.2f}"
+                if kind == "natural":
+                    lbl = f"{r['dataset']}\n{r[col]:.2f}"
+                ax.annotate(lbl, (r["features"], r["rows"]), textcoords="offset points",
+                            xytext=(0, 12), ha="center", fontsize=7, zorder=4)
+        ax.set_xscale("log"); ax.set_yscale("log")
+        ax.set_xlabel("Features (log scale)"); ax.set_ylabel("Rows (log scale)")
+        ax.grid(True, which="both", alpha=0.25)
+        ax.set_title(title, fontsize=10)
+        ax.legend(fontsize=8, frameon=False, loc="lower left")
+        fig.colorbar(sc, ax=ax, label="speedup (x)", shrink=0.85)
+    fig.suptitle("Row x column map of the full-depth RF speedup of SPO Dyn-Vec (240 trees, 48 threads)")
+    fig.tight_layout()
+    return save_fig(fig, out_dir, "fig_rowcol_map"), tab
 
 
 def fig_gbt_depth(spm: pd.DataFrame, out_dir: Path) -> list[str]:
@@ -1782,6 +1851,12 @@ def analyze(suite_csv: str | Path | None, large_csv: str | Path | None,
     result["figures"] += fig_speedup_vs_depth(spm, fig_dir)
     result["figures"] += fig_speedup_vs_min_examples(spm, fig_dir)
     result["figures"] += fig_trunk_width(spm, fig_dir)
+    rc_figs, rc_tab = fig_rowcol_map(spm, suite_df, large_df, fig_dir)
+    result["figures"] += rc_figs
+    if not rc_tab.empty:
+        rc_path = out_dir / "rowcol_map.csv"
+        rc_tab.to_csv(rc_path, index=False)
+        result["csvs"]["rowcol_map"] = str(rc_path)
     result["figures"] += fig_gbt_depth(spm, fig_dir)
     if "rf" in cd_inputs:
         rank_df, friedman = cd_inputs["rf"]

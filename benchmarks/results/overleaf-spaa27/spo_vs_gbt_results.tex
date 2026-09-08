@@ -165,6 +165,16 @@ and 10 the gain is $1.30\times$ and $1.23\times$ on HIGGS and $1.09\times$ and $
 a 150k-row dataset (GiveMeSomeCredit), and at depth~30 on the latter the two arms tie
 ($0.97\times$): depth-limited boosting never reaches the small-node regime, so only the
 vectorized binning contributes, and its gain shrinks with the 150k-row dataset's node sizes.
+\textbf{Rows $\times$ columns} (Figure~\ref{fig:rowcol-map}): over a grid of fully grown
+forests from 15k to 4.5M rows and 4096 to 1.6M features (Trunk, up to 240\,GB of features in
+memory), plus the four natural datasets, the speedup is flat: $2.1$--$2.6\times$ over
+\texttt{std::sort} and $1.11$--$1.25\times$ over the Highway sort on every synthetic cell,
+with the row count mattering more than the width (the 15k-row cells, whose nodes almost all
+fall below the 250-row dynamic threshold, sit at the low end, the 4.5M-row cell at the high
+end). The natural datasets fall inside the same band (HIGGS $2.43\times$/$1.23\times$, SUSY
+$2.75$/$1.30$, Epsilon $2.49$/$1.17$); the one exception is the 10-feature GiveMeSomeCredit,
+where against the Highway sort the dynamic histogram breaks even ($0.94\times$) because with
+$P=4$ projections per node the exact scan is already cheap.
 
 \begin{figure*}[t]
     \centering
@@ -177,4 +187,15 @@ vectorized binning contributes, and its gain shrinks with the 150k-row dataset's
     feature count. Bottom left: HIGGS by minimum node size. Bottom right: SPO-GBT by depth.}
     \Description{Four panels of training-time speedup along depth, width, stopping criterion and boosting depth.}
     \label{fig:speedup-map}
+\end{figure*}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/results/spo_vs_gbt_rowcol_map.pdf}
+    \caption{Row $\times$ column map of the full-depth SPO-RF speedup of Dyn-Vec over exact
+    splitting with \texttt{std::sort} (left) and with Highway's sort (right); 240 trees, 48
+    threads. Circles: Trunk synthetic datasets; squares: HIGGS, SUSY, Epsilon and
+    GiveMeSomeCredit.}
+    \Description{Two scatter panels with features on the x axis and rows on the y axis, both log scale, points colored and annotated by speedup.}
+    \label{fig:rowcol-map}
 \end{figure*}

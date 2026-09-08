@@ -26,6 +26,7 @@ declare -A MAP=(
   [fig_trunk_width]=spo_vs_gbt_trunk_width
   [fig_speedup_vs_min_examples]=spo_vs_gbt_speedup_vs_min_examples
   [fig_gbt_depth]=spo_vs_gbt_gbt_depth
+  [fig_rowcol_map]=spo_vs_gbt_rowcol_map
 )
 for src in "${!MAP[@]}"; do
   cp -f "$A/figures/$src.pdf" "$F/${MAP[$src]}.pdf"
