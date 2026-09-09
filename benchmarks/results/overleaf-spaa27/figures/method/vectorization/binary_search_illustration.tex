@@ -1,0 +1,59 @@
+% std::upper_bound over 64 histogram bin boundaries (YDF scalar path), x = 11.7.
+% Visited nodes and untaken siblings are the exact libstdc++/libc++ midpoints.
+% Palette matches figures/method/double_sparsity_illustration.pdf.
+\definecolor{figblue}{HTML}{2A6AB5}
+\definecolor{figbluefill}{HTML}{4A90D9}
+\definecolor{figgreen}{HTML}{3D8B5E}
+\definecolor{figgreenfill}{HTML}{B8E6C8}
+\begin{tikzpicture}[
+  x=1.16cm, y=1.02cm, font=\scriptsize,
+  visited/.style={circle, fill=figbluefill!22, minimum size=1.02cm,
+                  inner sep=0pt, align=center, font=\tiny},
+  skipped/.style={circle, fill=black!5, text=black!45, minimum size=0.92cm,
+                  inner sep=0pt, align=center, font=\tiny},
+  result/.style={rectangle, fill=figgreenfill, text=figgreen!70!black, inner sep=3pt,
+                 font=\tiny, align=center},
+  taken/.style={draw=figblue, line width=0.9pt},
+  untaken/.style={draw=black!18, line width=0.5pt},
+  cmp/.style={font=\tiny, text=figblue, inner sep=1.5pt, fill=white},
+  elided/.style={fill=black!30, circle, inner sep=0.7pt}]
+
+  \node[visited] (n32) at (2.60,0.00)  {bin 32\\[-1.5pt]12.7};
+  \node[visited] (n16) at (1.00,-1.30) {bin 16\\[-1.5pt]7.8};
+  \node[skipped] (n48) at (4.25,-1.30) {bin 48};
+  \node[skipped] (n8)  at (0.00,-2.60) {bin 8};
+  \node[visited] (n24) at (2.20,-2.60) {bin 24\\[-1.5pt]10.2};
+  \node[skipped] (n20) at (1.25,-3.90) {bin 20};
+  \node[visited] (n28) at (3.30,-3.90) {bin 28\\[-1.5pt]12.1};
+  \node[visited] (n26) at (2.40,-5.20) {bin 26\\[-1.5pt]11.4};
+  \node[skipped] (n30) at (4.35,-5.20) {bin 30};
+  \node[skipped] (n25) at (1.55,-6.50) {bin 25};
+  \node[visited] (n27) at (3.30,-6.50) {bin 27\\[-1.5pt]11.9};
+  \node[result]  (res) at (3.30,-7.75) {$11.4\le x<11.9$\\[-1pt]$\Rightarrow$ bin 26};
+
+  \draw[untaken] (n32) -- (n48);
+  \draw[untaken] (n16) -- (n8);
+  \draw[untaken] (n24) -- (n20);
+  \draw[untaken] (n28) -- (n30);
+  \draw[untaken] (n26) -- (n25);
+  \draw[taken] (n32) -- (n16);
+  \draw[taken] (n16) -- (n24);
+  \draw[taken] (n24) -- (n28);
+  \draw[taken] (n28) -- (n26);
+  \draw[taken] (n26) -- (n27);
+  \draw[taken] (n27) -- (res);
+
+  \node[cmp, anchor=east] at (0.90,-0.55) {$x<12.7$};
+  \node[cmp, anchor=west] at (2.35,-1.95) {$x\ge 7.8$};
+  \node[cmp, anchor=west] at (3.45,-3.25) {$x\ge 10.2$};
+  \node[cmp, anchor=east] at (2.30,-4.55) {$x<12.1$};
+  \node[cmp, anchor=west] at (3.35,-5.85) {$x\ge 11.4$};
+  \node[cmp, anchor=west] at (3.90,-7.15) {$x<11.9$};
+
+  \foreach \dy in {0.24,0.44,0.64} {
+    \node[elided] at ($(n48.south)+(0,-\dy)$) {};
+    \node[elided] at ($(n8.south)+(0,-\dy)$) {};
+  }
+
+  \node[font=\scriptsize, anchor=west] at (-0.75,0.90) {search value $x=11.7$};
+\end{tikzpicture}
