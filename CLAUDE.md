@@ -119,6 +119,15 @@ Highway VQSort exact finder, 1350 with `--config=exact_std_sort`.** The harness 
 (`_DYN64` = 250, `_DYN64_SCALAR` = 4600). In the SPO-vs-GBT study only, the `spo_rf_dyn_scalar`
 rows recorded before 2026-09-09 used 250 and were re-run (they measured a mis-set threshold,
 not the method); earlier Dynamic-scalar results outside that study are not affected.
+Until those re-run numbers land, every dyn_scalar cell renders as `--` (rows moved to
+`benchmarks/results/spo_vs_gbt/_tests/` by `strip_dyn_scalar_thr250.py`).
+
+## Figures wait for final tables (user directive, 2026-09-09)
+
+**Do not update paper figures while table results are still in flux.** Regenerate and push
+tables only; leave the figures alone until the numbers behind them are final, then do one
+figure pass. Rationale: figures are PDFs, the Overleaf MCP is text-only, so each figure
+refresh is a manual re-upload — not worth repeating per data correction.
 
 ## Benchmark dataset rules (user directive, 2026-09-04)
 
