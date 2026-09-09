@@ -102,9 +102,12 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   post-processing inside a headline time; it is unavoidable only when accuracy is needed.
 - Dataset setup is outside the timer but inside wall time (`pre_train_s` = the harness
   "Loading/Init (pre-train)" line): CSV parse ≈ 140 ns/cell (HIGGS 10.5M×28: 44 s;
-  EPSILON 400k×2000: 111 s; SUSY: 12 s), in-process trunk generation ≈ 8.3 s per 1e9 cells
-  (1.5M×40k and 150k×400k: 500 s each). It is paid once per invocation, i.e. per
-  (arm, depth) cell, which is what makes wide-trunk sweeps setup-bound.
+  EPSILON 400k×2000: 111 s; SUSY: 12 s), in-process trunk generation ≈ 0.22 s per 1e9 cells
+  since 2026-09-09 (48-thread per-column fill + scoped `mallopt`, values bit-identical to the
+  old serial generator; was 8.3 s per 1e9 cells — 1.5M×40k and 150k×400k now 13 s each, were
+  500 s). It is paid once per invocation, i.e. per (arm, depth) cell. A third bucket is outside
+  BOTH timers but inside wall time: address-space teardown at the early `exit(0)` ≈ 0.105 s
+  per 1e9 cells (6.3 s on the 240 GB shapes).
 
 ## Dynamic-histogram switch threshold (user directive, 2026-09-09)
 

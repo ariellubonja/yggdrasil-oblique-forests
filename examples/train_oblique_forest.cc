@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <malloc.h>
 #include <map>
 #include <memory>
 #include <random>
@@ -196,13 +197,63 @@ dataset::proto::DataSpecification MakeSyntheticSpec(
   return spec;
 }
 
+// -------------------------------------------------- trunk verification hash
+// Env-gated (TRUNK_DATA_HASH): 64-bit FNV-1a over the raw bytes of every
+// feature column in column order, then over the label column's int32 values.
+// Only used to prove that a change to the generator is bit-identical; it is
+// deliberately dumb and single-threaded.
+namespace {
+
+inline uint64_t FnvUpdate(uint64_t h, const void* data, size_t n_bytes) {
+  const unsigned char* p = static_cast<const unsigned char*>(data);
+  for (size_t k = 0; k < n_bytes; ++k) {
+    h ^= static_cast<uint64_t>(p[k]);
+    h *= 0x100000001b3ULL;
+  }
+  return h;
+}
+
+void MaybeLogTrunkDataHash(const dataset::VerticalDataset& ds, int64_t rows,
+                           int cols) {
+  if (std::getenv("TRUNK_DATA_HASH") == nullptr) return;
+  const auto t0 = std::chrono::high_resolution_clock::now();
+  uint64_t h = 0xcbf29ce484222325ULL;
+  for (int j = 0; j < cols; ++j) {
+    const auto& v =
+        ds.ColumnWithCastWithStatus<dataset::VerticalDataset::NumericalColumn>(
+              j)
+            .value()
+            ->values();
+    h = FnvUpdate(h, v.data(), v.size() * sizeof(float));
+  }
+  const auto& y =
+      ds.ColumnWithCastWithStatus<dataset::VerticalDataset::CategoricalColumn>(
+            cols)
+          .value()
+          ->values();
+  h = FnvUpdate(h, y.data(), y.size() * sizeof(int32_t));
+  const std::chrono::duration<double> dur =
+      std::chrono::high_resolution_clock::now() - t0;
+  LOG(INFO) << "trunk data hash: " << std::hex << h << std::dec
+            << " (rows=" << rows << " cols=" << cols
+            << " hash_s=" << dur.count() << ")";
+}
+
+}  // namespace
+
 // -------------------------------------------------------------------- trunk
 dataset::VerticalDataset MakeTrunkDataset(const dataset::proto::DataSpecification& spec,
                                           int64_t rows, int cols, uint32_t seed) {
+  const auto t_gen_start = std::chrono::high_resolution_clock::now();
   dataset::VerticalDataset ds;
   ds.set_data_spec(spec);
   CHECK_OK(ds.CreateColumnsFromDataspec());
-  ds.Resize(rows);
+  // NOTE: no ds.Resize(rows) here. Resize() would serially allocate AND
+  // zero/NaN-fill every column on this thread, so the whole dataset would be
+  // first-touched single-threaded. Each worker resizes the columns it owns
+  // instead, so allocation, first touch and generation are all parallel. The
+  // label column is resized below on this thread.
+  ds.set_nrow(rows);
   using RNG = std::minstd_rand;
 
   constexpr int kNInformative = 256;
@@ -217,28 +268,83 @@ dataset::VerticalDataset MakeTrunkDataset(const dataset::proto::DataSpecificatio
   }
 
   // Fill the feature columns -------------------------------------------------
-  for (int j = 0; j < cols; ++j) {
-    // Deterministic per-column seed
-    std::seed_seq seq{seed, static_cast<uint32_t>(j)};
-    RNG rng(seq);
-    std::normal_distribution<float> normal(0.0f, 1.0f);
+  // Columns are independent: each is seeded from seed_seq{seed, j} and gets a
+  // fresh normal_distribution, so splitting them across threads reproduces the
+  // serial values bit-for-bit. The per-column body below is unchanged.
+  auto fill_columns = [&](int j_begin, int j_end) {
+    for (int j = j_begin; j < j_end; ++j) {
+      // Deterministic per-column seed
+      std::seed_seq seq{seed, static_cast<uint32_t>(j)};
+      RNG rng(seq);
+      std::normal_distribution<float> normal(0.0f, 1.0f);
 
-    auto* col = ds.MutableColumnWithCast<
-        dataset::VerticalDataset::NumericalColumn>(j)->mutable_values();
+      auto* col = ds.MutableColumnWithCast<
+          dataset::VerticalDataset::NumericalColumn>(j)->mutable_values();
+      col->resize(rows);
 
-    for (int64_t i = 0; i < rows; ++i) {
-      const bool cls1 = (i >= rows / 2);
-      const float mean = cls1 ? mu1[j] : mu0[j];
-      (*col)[i] = mean + normal(rng);
+      for (int64_t i = 0; i < rows; ++i) {
+        const bool cls1 = (i >= rows / 2);
+        const float mean = cls1 ? mu1[j] : mu0[j];
+        (*col)[i] = mean + normal(rng);
+      }
     }
+  };
+
+  const int n_threads = std::min<int>(
+      std::max(1u, std::thread::hardware_concurrency()), std::max(cols, 1));
+
+  // Serve the column allocations below from per-thread malloc arenas instead of
+  // one anonymous mmap per column. Above mmap_threshold (128 KB by default)
+  // glibc gives every allocation its own mmap; with one column per allocation
+  // and n_threads filling concurrently, each mmap write-locks the address space
+  // (mmap_lock) and merges into the neighbouring anonymous VMAs, so the workers
+  // serialize and first-touch minor faults cost ~4.9 us instead of ~1.65 us.
+  // 1.5M x 4096: 29 s of system time and 2.07 s of generation, vs 10 s / 1.35 s
+  // once the columns come from arenas (arena heaps are per-thread, so they do
+  // not contend). 32 MB is the largest value glibc accepts here
+  // (HEAP_MAX_SIZE / 2); mallopt returns 1, and the mmap count for the fill
+  // drops from one-per-column to ~O(heaps). Scoped to the fill: nothing else in
+  // the process allocates like this, and the training phase must keep stock
+  // allocator behaviour.
+  constexpr int kGenMmapThreshold = 32 * 1024 * 1024;
+  mallopt(M_MMAP_THRESHOLD, kGenMmapThreshold);
+
+  std::vector<std::thread> workers;
+  workers.reserve(n_threads);
+  const int chunk = (cols + n_threads - 1) / n_threads;
+  for (int t = 0; t < n_threads; ++t) {
+    const int j_begin = t * chunk;
+    const int j_end = std::min(cols, j_begin + chunk);
+    if (j_begin >= j_end) break;
+    workers.emplace_back(fill_columns, j_begin, j_end);
   }
+  for (auto& worker : workers) worker.join();
+
+  // Hand malloc back. Note that *any* mallopt call permanently disables glibc's
+  // dynamic mmap threshold, so restoring the 128 KB cold-start default would not
+  // restore stock behaviour -- it would pin malloc at a value glibc raises on its
+  // own, and the training block measured 21 % slower (1.77 s -> 2.16 s on
+  // 150k x 4096, 48 trees, depth 10). Restore instead to the state the dynamic
+  // policy converges to: munmap_chunk() ratchets mmap_threshold up to
+  // DEFAULT_MMAP_THRESHOLD_MAX (32 MB, the value already set above) and sets
+  // trim_threshold to twice it. With that, training measures within noise of
+  // stock (+0.9 % on 150k x 4096, +0.4 % on 1.5M x 4096).
+  mallopt(M_TRIM_THRESHOLD, 2 * kGenMmapThreshold);
 
   // Fill the label column ----------------------------------------------------
-  auto* y = ds.MutableColumnWithCast<
-      dataset::VerticalDataset::CategoricalColumn>(cols)->mutable_values();
+  auto* y_col = ds.MutableColumnWithCast<
+      dataset::VerticalDataset::CategoricalColumn>(cols);
+  y_col->mutable_values()->resize(rows);
+  auto* y = y_col->mutable_values();
   for (int64_t i = 0; i < rows; ++i)
     (*y)[i] = (i >= rows / 2) ? 2 : 1;                  // 1-based labels
 
+  {
+    const std::chrono::duration<double> gen_dur =
+        std::chrono::high_resolution_clock::now() - t_gen_start;
+    LOG(INFO) << "trunk generation: " << gen_dur.count() << "s";
+  }
+  MaybeLogTrunkDataHash(ds, rows, cols);
   return ds;
 }
 
