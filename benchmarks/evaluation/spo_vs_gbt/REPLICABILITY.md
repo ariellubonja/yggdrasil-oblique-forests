@@ -216,3 +216,8 @@ on an idle box; expect train_s within a few % (timing repeats on this box are <1
 - **B7 amendment (2026-09-09):** `spo_rf_dyn_scalar` removed from `cells_b7_{d16,d24,full}.json`
   mid-run (threshold mis-tuned for the scalar binner, see PROTOCOL.md); the depth-16 run was
   restarted with `run_b7.sh 1` (depths 6/10 and finished depth-16 cells skip via skip-existing).
+- **D15 dyn_scalar re-run (2026-09-09):** `spo_rf_dyn_scalar` threshold corrected 250 → 4600
+  (`arms.py _DYN64_SCALAR`; harness default now build-resolved). Old rows are in
+  `results/_tests/dyn_scalar_thr250_{speedup_map,large_results,suite_results}.csv`
+  (`strip_dyn_scalar_thr250.py`); `run_b7_dynscalar.sh` re-ran large, `cells_b7_dynscalar.json`
+  (19 entries × 5 depths) and suite under the lock. Row `cmd` shows the threshold used.

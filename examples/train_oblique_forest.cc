@@ -101,10 +101,30 @@ ABSL_FLAG(float, projection_density_factor, 1.5f,
           "Projection density factor.");
 ABSL_FLAG(float, num_projections_exponent, .5,
           "Exponent to determine number of projections.");
-ABSL_FLAG(int, dynamic_split_threshold, 250,
+ABSL_FLAG(int, dynamic_split_threshold, -2,
           "When using dynamic histogram splits, switch to exact splitting if "
           "the number of examples at a node is below this threshold. "
-          "Set to -1 to disable.");
+          "Set to -1 to disable. Default -2 = pick the build's tuned value "
+          "(2026-09-09): 250 with the vectorized (AVX2/AVX-512) binner; with "
+          "the scalar binner (-DDISABLE_STD_UPPER_BOUND_VECTORIZATION) 4600 "
+          "when the exact finder uses Highway VQSort and 1350 with "
+          "-DEXACT_STD_SORT. The scalar binner is slower, so the histogram "
+          "only pays off at larger nodes.");
+
+// Build-dependent default for --dynamic_split_threshold (see the flag doc).
+static int ResolveDynamicSplitThreshold() {
+  const int flag = absl::GetFlag(FLAGS_dynamic_split_threshold);
+  if (flag != -2) return flag;
+#if defined(DISABLE_STD_UPPER_BOUND_VECTORIZATION)
+#if defined(EXACT_STD_SORT)
+  return 1350;  // scalar binner + std::sort exact
+#else
+  return 4600;  // scalar binner + Highway VQSort exact
+#endif
+#else
+  return 250;  // vectorized binner (AVX2 64-bin / AVX-512 256-bin)
+#endif
+}
 
 ABSL_FLAG(std::string, ensemble_method, "Bagging",
           "Ensemble method: 'Bagging' (Random Forest) or 'Boosting' (Gradient Boosted Trees/MART).");
@@ -796,8 +816,11 @@ int main(int argc, char** argv) {
         absl::GetFlag(FLAGS_projection_density_factor));
     sos->set_num_projections_exponent(
         absl::GetFlag(FLAGS_num_projections_exponent));
-    sos->set_dynamic_split_threshold(
-        absl::GetFlag(FLAGS_dynamic_split_threshold));
+    const int dyn_thr = ResolveDynamicSplitThreshold();
+    LOG(INFO) << "dynamic_split_threshold = " << dyn_thr
+              << (absl::GetFlag(FLAGS_dynamic_split_threshold) == -2
+                      ? " (build default)" : " (from flag)");
+    sos->set_dynamic_split_threshold(dyn_thr);
   } else if (feature_split_type == "Axis Aligned") {
     LOG(INFO) << "Using axis-aligned splits";
 

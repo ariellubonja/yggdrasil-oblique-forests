@@ -102,6 +102,16 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   (1.5M×40k and 150k×400k: 500 s each). It is paid once per invocation, i.e. per
   (arm, depth) cell, which is what makes wide-trunk sweeps setup-bound.
 
+## Dynamic-histogram switch threshold (user directive, 2026-09-09)
+
+`--dynamic_split_threshold` (nodes below it use the exact finder) depends on the binner and
+the exact sort in the build. **Vectorized binner (default, AVX2 64-bin / AVX-512 256-bin):
+250.** **Scalar binner (`--config=disable_std_upper_bound_vectorization`): 4600 with the
+Highway VQSort exact finder, 1350 with `--config=exact_std_sort`.** The harness default
+(`-2`) resolves these from the build macros; `arms.py` passes them explicitly
+(`_DYN64` = 250, `_DYN64_SCALAR` = 4600). Every `spo_rf_dyn_scalar` result recorded before
+2026-09-09 used 250 and is invalid (it measured a mis-set threshold, not the method).
+
 ## Benchmark dataset rules (user directive, 2026-09-04)
 
 - **HIGGS is only ever used at its full size (10.5M-row train / 500k test).** Do not create or run row

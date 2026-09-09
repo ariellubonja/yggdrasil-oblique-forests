@@ -137,6 +137,12 @@ _EXACT = ["--numerical_split_type", "Exact"]
 _RANDOM64 = ["--numerical_split_type", "Random", "--histogram_num_bins", "64"]
 _DYN64 = ["--numerical_split_type", "Dynamic Random Histogram",
           "--histogram_num_bins", "64", "--dynamic_split_threshold", "250"]
+# Scalar binner (the "scalar" binary, -DDISABLE_STD_UPPER_BOUND_VECTORIZATION) is
+# slower per node, so the histogram only beats the Highway exact finder above
+# ~4600 rows (1350 with std::sort exact). Threshold fixed 2026-09-09; dyn_scalar
+# rows recorded before that used 250 (see PROTOCOL.md) and were re-run.
+_DYN64_SCALAR = ["--numerical_split_type", "Dynamic Random Histogram",
+                 "--histogram_num_bins", "64", "--dynamic_split_threshold", "4600"]
 _BOOSTING = ["--ensemble_method", "Boosting"]
 # 256-bin variants (added 2026-09-07): the "default" binary picks the AVX-512
 # 256-threshold upper_bound kernel at runtime (training.cc HistogramBinner:
@@ -174,7 +180,7 @@ ARMS: dict[str, dict] = {
     },
     "spo_rf_dyn_scalar": {
         "family": "rf", "engine": "ydf_fork", "binary": "scalar",
-        "ydf_flags": _OBLIQUE + _DYN64,
+        "ydf_flags": _OBLIQUE + _DYN64_SCALAR,
         "trees": 240, "tree_depth": -1, "min_examples": None, "py_ctor": None,
     },
     "spo_rf_dyn_vec": {
