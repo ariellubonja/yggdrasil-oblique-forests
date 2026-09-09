@@ -48,7 +48,11 @@ below directly; the user should never have to relay between them.
   `benchmarks/utils/make_paper_accuracy_tables.py` — never hand-edit them; regenerate.
   Overleaf MCP carries text only (no PDF/PNG upload) — generated figures go in as pgfplots
   `.tex`. Local LaTeX: MacTeX at `/Library/TeX/texbin` (`pdflatex`, `latexmk`; add to PATH,
-  agent shells don't have it) — compile-check figures/tables before pushing to Overleaf.
+  agent shells don't have it) — always compile-check LaTeX with it before pushing to
+  Overleaf, and look at the result: no poppler/pdftoppm on this Mac, so render with
+  `qlmanage -t -s 2000 -o . x.pdf` (page 1 → PNG) after `pdfjam x.pdf 11 -o p11.pdf` to pick
+  a page. The Overleaf MCP's working clone lives in `/private/tmp/overleaf-<id>` — diff
+  against it before pushing a whole file, it is ahead of the repo snapshot.
 - **Session notes** — append a dated summary of what was run, found and left open to
   `ariel_notes/journal.md`; before a meeting, draft the agenda from it plus the board as a
   new Doc in the Drive folder.

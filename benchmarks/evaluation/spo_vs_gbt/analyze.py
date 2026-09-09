@@ -1478,7 +1478,7 @@ _HUGE_TABLE_FOOTNOTE = (
     "no arm uses class weighting. Training times for the same runs are in "
     "Table~\\ref{tab:timing}.")
 
-TIMING_TABLE_WIDTH = "0.92\\linewidth"
+WIDE_TABLE_WIDTH = "0.92\\linewidth"
 
 _TIMING_TABLE_FOOTNOTE = (
     "Suite column: geometric mean over the suite datasets with more than "
@@ -1629,7 +1629,10 @@ def _huge_table_tex(large_summary: pd.DataFrame, large_raw: pd.DataFrame) -> str
                 if fn is not None and col in g.columns:
                     best[(ds, fam, col)] = getattr(g[col], fn)()
 
-    align = "l" + "cc" * len(datasets)
+    # tabular* + \extracolsep{\fill} (see _timing_table_tex): the footnote must
+    # stay outside the tabular or its spanning p{} hands the slack to the last
+    # column, which is what made EPSILON drift right of HIGGS/SUSY.
+    align = "@{\\extracolsep{\\fill}}l" + "cc" * len(datasets)
     header1 = ["\\multicolumn{1}{l}{}"] + [
         f"\\multicolumn{{2}}{{c}}{{{_latex_escape(ds)}}}" for ds in datasets]
     cmidrules = " ".join(f"\\cmidrule(lr){{{2 + 2 * i}-{3 + 2 * i}}}" for i in range(len(datasets)))
@@ -1663,12 +1666,13 @@ def _huge_table_tex(large_summary: pd.DataFrame, large_raw: pd.DataFrame) -> str
         "\\caption{Huge-dataset accuracy (single held-out split). "
         "Bold: best AUC/Acc.\\ per dataset within each family.}\n"
         "\\label{tab:huge-datasets}\n"
-        f"\\begin{{tabular}}{{{align}}}\n\\toprule\n"
+        f"\\begin{{tabular*}}{{{WIDE_TABLE_WIDTH}}}{{{align}}}\n\\toprule\n"
         f"{' & '.join(header1)} \\\\\n{cmidrules}\n{' & '.join(header2)} \\\\\n\\midrule\n"
         + "\n".join(lines) +
-        f"\n\\addlinespace\n\\multicolumn{{{ncols}}}{{p{{0.92\\linewidth}}}}"
-        f"{{\\footnotesize {_HUGE_TABLE_FOOTNOTE}}} \\\\\n"
-        "\\bottomrule\n\\end{tabular}\n\\end{table*}\n"
+        "\n\\bottomrule\n\\end{tabular*}\n"
+        f"\\\\[2pt]\n\\parbox{{{WIDE_TABLE_WIDTH}}}"
+        f"{{\\footnotesize {_HUGE_TABLE_FOOTNOTE}}}\n"
+        "\\end{table*}\n"
     )
 
 
@@ -1762,13 +1766,13 @@ def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
         "datasets, and wall-clock seconds on the three huge datasets (single held-out "
         "split). Bold: fastest per column within each family.}\n"
         "\\label{tab:timing}\n"
-        f"\\begin{{tabular*}}{{{TIMING_TABLE_WIDTH}}}{{{align}}}\n\\toprule\n"
+        f"\\begin{{tabular*}}{{{WIDE_TABLE_WIDTH}}}{{{align}}}\n\\toprule\n"
         f"{' & '.join(header1)} \\\\\n{cmidrules}\n{' & '.join(header2)} \\\\\n\\midrule\n"
         + "\n".join(lines) +
         "\n\\bottomrule\n\\end{tabular*}\n"
         # Footnote outside the tabular: a spanning p{} cell hands its excess
         # width to the last column, which starves \extracolsep of any slack.
-        f"\\\\[2pt]\n\\parbox{{{TIMING_TABLE_WIDTH}}}{{\\footnotesize {footnote}}}\n"
+        f"\\\\[2pt]\n\\parbox{{{WIDE_TABLE_WIDTH}}}{{\\footnotesize {footnote}}}\n"
         "\\end{table*}\n"
     )
 
