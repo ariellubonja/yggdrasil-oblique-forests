@@ -1478,14 +1478,16 @@ _HUGE_TABLE_FOOTNOTE = (
     "no arm uses class weighting. Training times for the same runs are in "
     "Table~\\ref{tab:timing}.")
 
+TIMING_TABLE_WIDTH = "0.92\\linewidth"
+
 _TIMING_TABLE_FOOTNOTE = (
     "Suite column: geometric mean over the suite datasets with more than "
     f"{MIN_ROWS_FOR_HEADLINE_SPEED:,} rows or more than {MIN_COLS_FOR_HEADLINE_SPEED:,} features "
     "(smaller ones train in seconds and are dominated by fixed setup cost); "
-    "$<1\\times$ means the arm is faster than ours. YDF's post-training finalization "
+    "$>1\\times$ means the arm is faster than ours. YDF's post-training finalization "
     "(structural variable importances and leaf indexing, a single-threaded walk with no "
     "counterpart in the python libraries' lazily-computed feature importances) is excluded "
-    "from the headline Train column and shown separately as Post. Accuracy for the same "
+    "from every time reported here. Accuracy for the same "
     "runs is in Tables~\\ref{tab:main-summary-all} and~\\ref{tab:huge-datasets}.")
 
 
@@ -1672,16 +1674,16 @@ def _huge_table_tex(large_summary: pd.DataFrame, large_raw: pd.DataFrame) -> str
 
 def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
                        large_raw: pd.DataFrame) -> str:
-    """All runtime numbers in one table: the suite's geometric-mean time ratio
-    vs.\\ our arm (from _main_summary_block) next to per-huge-dataset Train and
-    Post seconds (from _huge_table_tex's frames). Split out of those two tables
+    """All runtime numbers in one table: the suite's geometric-mean speedup
+    vs.\\ our arm (from _main_summary_block) next to per-huge-dataset training
+    seconds (from _huge_table_tex's frames). Split out of those two tables
     so the paper can state timing before the accuracy discussion; the numbers
     are the same runs, unchanged."""
     all_ds_seen = sorted(set(large_raw["dataset"].dropna().unique())
                           | set(large_summary["dataset"].dropna().unique()))
     preferred = [d for d in ("HIGGS", "SUSY", "EPSILON") if d in all_ds_seen]
     datasets = preferred + [d for d in all_ds_seen if d not in preferred]
-    ncols = 2 + 2 * len(datasets)
+    ncols = 2 + len(datasets)
 
     if (block.empty or not datasets) and block.empty:
         return (
@@ -1706,10 +1708,10 @@ def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
             v = v.iloc[0]
         return None if pd.isna(v) else float(v)
 
-    # Best-per-column within a family: min time ratio, min Train. Post is
-    # bookkeeping and is never bolded (same rule as the huge table had).
+    # Best-per-column within a family: max speedup, min Train.
     ratio_of = dict(zip(block["_arm"], block["time_ratio_geo"]))
-    best_ratio = {fam: g["time_ratio_geo"].min() for fam, g in block.groupby("family")}
+    best_speedup = {fam: (1.0 / g["time_ratio_geo"]).max()
+                    for fam, g in block.groupby("family")}
     best_train: dict[tuple[str, str], float] = {}
     if not large_summary.empty:
         fam_of = large_summary["method"].map(ARM_FAMILY)
@@ -1720,26 +1722,28 @@ def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
     def _row(m: str) -> str:
         fam = ARM_FAMILY[m]
         r = ratio_of.get(m, np.nan)
+        spd = 1.0 / r if r == r and r else np.nan
         cells = [_latex_escape(ARM_LABELS.get(m, m)),
-                 _best_fmt(r, best_ratio.get(fam), "{:.2f}", "$\\times$")]
+                 _best_fmt(spd, best_speedup.get(fam), "{:.2f}", "$\\times$")]
         for ds in datasets:
             st = status_map.get((ds, m))
             if st is not None and st != "OK":
-                cells.append(f"\\multicolumn{{2}}{{c}}{{{_latex_escape(st)}}}")
+                cells.append(_latex_escape(st))
                 continue
             tr = _cell(ds, m, "time_s_median")
-            po = _cell(ds, m, "median_post_s")
             cells.append("--" if tr is None else
                          _best_fmt(tr, best_train.get((ds, fam)), "{:.1f}"))
-            cells.append("--" if po is None else "{:.1f}".format(po))
         return " & ".join(cells) + r" \\"
 
-    align = "lr" + "cc" * len(datasets)
-    header1 = ["\\multicolumn{1}{l}{}", "\\multicolumn{1}{c}{Suite}"] + [
-        f"\\multicolumn{{2}}{{c}}{{{_latex_escape(ds)}}}" for ds in datasets]
-    cmidrules = "\\cmidrule(lr){2-2} " + " ".join(
-        f"\\cmidrule(lr){{{3 + 2 * i}-{4 + 2 * i}}}" for i in range(len(datasets)))
-    header2 = ["Method", "Time ratio vs.\\ ours"] + ["Train (s)", "Post (s)"] * len(datasets)
+    # tabular* + \extracolsep{\fill}: with only a handful of columns the
+    # footnote's p{} row is wider than the natural table, and a plain tabular
+    # dumps all the slack into the last column.
+    align = "@{\\extracolsep{\\fill}}lr" + "c" * len(datasets)
+    header1 = ["\\multicolumn{1}{l}{}", "\\multicolumn{1}{c}{Suite}",
+               f"\\multicolumn{{{len(datasets)}}}{{c}}{{Train (s)}}"]
+    cmidrules = ("\\cmidrule(lr){2-2} "
+                 f"\\cmidrule(lr){{3-{2 + len(datasets)}}}")
+    header2 = ["Method", "Speedup vs.\\ ours"] + [_latex_escape(ds) for ds in datasets]
 
     lines: list[str] = []
     prev_fam = None
@@ -1754,16 +1758,18 @@ def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
     return (
         "% auto-generated by analyze.py:make_paper_tables -- regenerate, do not hand-edit\n"
         "\\begin{table*}[t]\n\\centering\n\\small\n"
-        "\\caption{Training time: geometric-mean ratio vs.\\ our arm over the suite "
+        "\\caption{Training time: geometric-mean speedup vs.\\ our arm over the suite "
         "datasets, and wall-clock seconds on the three huge datasets (single held-out "
         "split). Bold: fastest per column within each family.}\n"
         "\\label{tab:timing}\n"
-        f"\\begin{{tabular}}{{{align}}}\n\\toprule\n"
+        f"\\begin{{tabular*}}{{{TIMING_TABLE_WIDTH}}}{{{align}}}\n\\toprule\n"
         f"{' & '.join(header1)} \\\\\n{cmidrules}\n{' & '.join(header2)} \\\\\n\\midrule\n"
         + "\n".join(lines) +
-        f"\n\\addlinespace\n\\multicolumn{{{ncols}}}{{p{{0.92\\linewidth}}}}"
-        f"{{\\footnotesize {footnote}}} \\\\\n"
-        "\\bottomrule\n\\end{tabular}\n\\end{table*}\n"
+        "\n\\bottomrule\n\\end{tabular*}\n"
+        # Footnote outside the tabular: a spanning p{} cell hands its excess
+        # width to the last column, which starves \extracolsep of any slack.
+        f"\\\\[2pt]\n\\parbox{{{TIMING_TABLE_WIDTH}}}{{\\footnotesize {footnote}}}\n"
+        "\\end{table*}\n"
     )
 
 

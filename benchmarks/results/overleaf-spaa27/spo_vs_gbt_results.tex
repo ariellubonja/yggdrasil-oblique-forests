@@ -42,8 +42,8 @@ each a single held-out split. Training time is the learner's own training timer 
 all trees; for the Python libraries the wall time of \texttt{fit()} on an in-memory
 \texttt{float32} matrix, which includes their binning). YDF additionally spends a
 single-threaded post-training pass on structural variable importances and leaf indexing
-(400\,s on HIGGS RF, reported separately in Table~\ref{tab:spo-vs-gbt-timing}); the Python
-libraries compute importances lazily, so this pass is excluded from every headline time. ROC
+(400\,s on HIGGS RF); the Python
+libraries compute importances lazily, so this pass is excluded from every reported time. ROC
 AUC is the primary metric (several suite datasets have 2--7\% positives); accuracy and
 log-loss are reported alongside. Across datasets we use mean ranks with a Friedman test and
 Nemenyi critical differences, and for the fixed comparisons of SPO Dyn-Vec against each
@@ -55,7 +55,7 @@ dataset a tie when $|\Delta\mathrm{AUC}|<0.005$.
     \centering
     \includegraphics[width=\linewidth]{figures/results/spo_vs_gbt_pareto_rf.pdf}
     \caption{Random-forest family on the three large datasets: test ROC AUC against training time
-    (log scale, 48 threads, 240 fully grown trees). Dashed line: Pareto frontier. Our SPO Dyn-Vec sits on
+    (log scale, 48 threads, 240 fully grown trees). Dashed line: \TODO{Pareto frontier}. Our SPO Dyn-Vec sits on
     the frontier of every dataset; the random-forest modes of XGBoost and LightGBM are one order of
     magnitude slower on HIGGS and SUSY and run out of memory (377\,GB) on Epsilon.}
     \Description{Three scatter panels of AUC versus training time for the RF-family learners.}
@@ -97,7 +97,7 @@ on HIGGS (0.825 vs 0.810) and Epsilon (0.943 vs 0.935) and tie on SUSY.
 \input{table_spo_vs_gbt_timing_both}
 
 \paragraph{Training time.}
-Table~\ref{tab:spo-vs-gbt-timing} collects every runtime number: the geometric-mean ratio
+Table~\ref{tab:spo-vs-gbt-timing} collects every runtime number: the geometric-mean speedup
 over the suite and wall-clock seconds on the three large datasets.
 Figure~\ref{fig:spo-vs-gbt-pareto} places every learner on the accuracy--time plane of the three
 large datasets. In the RF family, our work moves SPO from the slowest learner to the fastest: on

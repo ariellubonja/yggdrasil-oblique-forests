@@ -73,16 +73,16 @@ DYNAMIC_SPLIT_THRESHOLDS=(
 
 # Optional CSV datasets as "path|label_col" entries.
 CSV_DATASETS=(
-  # "benchmarks/data/HIGGS_with_header.csv|class"
-  # "benchmarks/data/SUSY_with_header.csv|class"
-  # "benchmarks/data/epsilon_normalized_train.csv|label"
+  "benchmarks/data/HIGGS_with_header.csv|class"
+  "benchmarks/data/SUSY_with_header.csv|class"
+  "benchmarks/data/epsilon_normalized_train.csv|label"
 )
 
 # Synthetic trunk datasets as "rows|cols" pairs.
 TRUNK_DATASETS=(
-  # "50000000|4"
   "1500000|4096"
-  # "3000|4000000"
+  "150000|40000"
+  "15000|400000"
 )
 
 # =========================
