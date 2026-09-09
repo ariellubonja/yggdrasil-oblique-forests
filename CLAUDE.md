@@ -101,8 +101,11 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   accuracy cells do, and the drivers record it separately as `train_post_s`. Never report
   post-processing inside a headline time; it is unavoidable only when accuracy is needed.
 - Dataset setup is outside the timer but inside wall time (`pre_train_s` = the harness
-  "Loading/Init (pre-train)" line): CSV parse ≈ 140 ns/cell (HIGGS 10.5M×28: 44 s;
-  EPSILON 400k×2000: 111 s; SUSY: 12 s), in-process trunk generation ≈ 0.22 s per 1e9 cells
+  "Loading/Init (pre-train)" line): CSV load ≈ 2.5 ns/cell warm since 2026-09-09 (block-parallel
+  `fast_csv` parser, always on, generic-reader fallback; dataset bit-identical: HIGGS 11M×29 0.8 s,
+  EPSILON 400k×2001 1.8 s; was ≈140 ns/cell = 48 s / 114 s; with a cold page cache both old and
+  new are disk-bound on the root EBS volume, ~135 MB/s ⇒ 61 s / 120 s), in-process trunk
+  generation ≈ 0.22 s per 1e9 cells
   since 2026-09-09 (48-thread per-column fill + scoped `mallopt`, values bit-identical to the
   old serial generator; was 8.3 s per 1e9 cells — 1.5M×40k and 150k×400k now 13 s each, were
   500 s). It is paid once per invocation, i.e. per (arm, depth) cell. A third bucket is outside

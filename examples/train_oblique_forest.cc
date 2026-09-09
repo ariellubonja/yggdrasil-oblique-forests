@@ -1,25 +1,39 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cerrno>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <limits>
 #include <malloc.h>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <random>
+#include <set>
 #include <thread>
 #include <utility>
+#include <vector>
+
+// Block-parallel CSV parser (see namespace fast_csv): mmap + POSIX file I/O.
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 
 #include "yggdrasil_decision_forests/dataset/data_spec_inference.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.h"
@@ -197,11 +211,9 @@ dataset::proto::DataSpecification MakeSyntheticSpec(
   return spec;
 }
 
-// -------------------------------------------------- trunk verification hash
-// Env-gated (TRUNK_DATA_HASH): 64-bit FNV-1a over the raw bytes of every
-// feature column in column order, then over the label column's int32 values.
-// Only used to prove that a change to the generator is bit-identical; it is
-// deliberately dumb and single-threaded.
+// ---------------------------------------------------- dataset verification hash
+// 64-bit FNV-1a over a VerticalDataset. TRUNK_DATA_HASH=1 = raw column values
+// (the old trunk hash); DATASET_HASH=1 adds types, dataspec stats, label vocab.
 namespace {
 
 inline uint64_t FnvUpdate(uint64_t h, const void* data, size_t n_bytes) {
@@ -213,29 +225,107 @@ inline uint64_t FnvUpdate(uint64_t h, const void* data, size_t n_bytes) {
   return h;
 }
 
+template <typename T>
+inline uint64_t FnvScalar(uint64_t h, T value) {
+  return FnvUpdate(h, &value, sizeof(value));
+}
+
+inline uint64_t FnvString(uint64_t h, absl::string_view s) {
+  h = FnvScalar(h, static_cast<uint64_t>(s.size()));
+  return FnvUpdate(h, s.data(), s.size());
+}
+
+constexpr uint64_t kFnvOffsetBasis = 0xcbf29ce484222325ULL;
+
+// Raw column contents, in dataspec order.
+uint64_t HashDatasetValues(const dataset::VerticalDataset& ds, bool with_types) {
+  uint64_t h = kFnvOffsetBasis;
+  const auto& spec = ds.data_spec();
+  for (int col_idx = 0; col_idx < spec.columns_size(); ++col_idx) {
+    const auto type = spec.columns(col_idx).type();
+    if (with_types) h = FnvScalar(h, static_cast<int32_t>(type));
+    if (type == dataset::proto::ColumnType::NUMERICAL) {
+      const auto& v =
+          ds.ColumnWithCastWithStatus<
+                dataset::VerticalDataset::NumericalColumn>(col_idx)
+              .value()
+              ->values();
+      h = FnvUpdate(h, v.data(), v.size() * sizeof(float));
+    } else if (type == dataset::proto::ColumnType::CATEGORICAL) {
+      const auto& v =
+          ds.ColumnWithCastWithStatus<
+                dataset::VerticalDataset::CategoricalColumn>(col_idx)
+              .value()
+              ->values();
+      h = FnvUpdate(h, v.data(), v.size() * sizeof(int32_t));
+    } else if (with_types) {
+      // Out of scope for this project (§1: numeric features + categorical
+      // label); hash a marker so an unexpected column type is still visible.
+      h = FnvScalar(h, static_cast<int32_t>(-1));
+    }
+  }
+  return h;
+}
+
+// Dataspec statistics + label vocabulary, in dataspec order. Map iteration is
+// avoided: vocabulary items are sorted by key first.
+uint64_t HashDataspecStats(uint64_t h, const dataset::proto::DataSpecification& spec) {
+  for (int col_idx = 0; col_idx < spec.columns_size(); ++col_idx) {
+    const auto& col = spec.columns(col_idx);
+    if (col.type() == dataset::proto::ColumnType::NUMERICAL) {
+      const auto& n = col.numerical();
+      h = FnvScalar(h, static_cast<double>(n.mean()));
+      h = FnvScalar(h, static_cast<double>(n.standard_deviation()));
+      h = FnvScalar(h, static_cast<float>(n.min_value()));
+      h = FnvScalar(h, static_cast<float>(n.max_value()));
+      h = FnvScalar(h, static_cast<int64_t>(col.count_nas()));
+    } else if (col.type() == dataset::proto::ColumnType::CATEGORICAL) {
+      const auto& c = col.categorical();
+      h = FnvScalar(h, static_cast<int64_t>(c.number_of_unique_values()));
+      h = FnvScalar(h, static_cast<int64_t>(c.most_frequent_value()));
+      std::vector<std::string> keys;
+      keys.reserve(c.items().size());
+      for (const auto& kv : c.items()) keys.push_back(kv.first);
+      std::sort(keys.begin(), keys.end());
+      for (const auto& key : keys) {
+        const auto& item = c.items().at(key);
+        h = FnvString(h, key);
+        h = FnvScalar(h, static_cast<int64_t>(item.index()));
+        h = FnvScalar(h, static_cast<int64_t>(item.count()));
+      }
+    }
+  }
+  return h;
+}
+
 void MaybeLogTrunkDataHash(const dataset::VerticalDataset& ds, int64_t rows,
                            int cols) {
   if (std::getenv("TRUNK_DATA_HASH") == nullptr) return;
   const auto t0 = std::chrono::high_resolution_clock::now();
-  uint64_t h = 0xcbf29ce484222325ULL;
-  for (int j = 0; j < cols; ++j) {
-    const auto& v =
-        ds.ColumnWithCastWithStatus<dataset::VerticalDataset::NumericalColumn>(
-              j)
-            .value()
-            ->values();
-    h = FnvUpdate(h, v.data(), v.size() * sizeof(float));
-  }
-  const auto& y =
-      ds.ColumnWithCastWithStatus<dataset::VerticalDataset::CategoricalColumn>(
-            cols)
-          .value()
-          ->values();
-  h = FnvUpdate(h, y.data(), y.size() * sizeof(int32_t));
+  const uint64_t h = HashDatasetValues(ds, /*with_types=*/false);
   const std::chrono::duration<double> dur =
       std::chrono::high_resolution_clock::now() - t0;
   LOG(INFO) << "trunk data hash: " << std::hex << h << std::dec
             << " (rows=" << rows << " cols=" << cols
+            << " hash_s=" << dur.count() << ")";
+}
+
+// Full loaded-dataset fingerprint: values + types + stats + label vocabulary.
+void MaybeLogDatasetHash(const dataset::VerticalDataset* ds) {
+  if (std::getenv("DATASET_HASH") == nullptr) return;
+  if (ds == nullptr) {
+    LOG(WARNING) << "DATASET_HASH=1 but the dataset is not materialized in "
+                    "this process yet; no hash logged.";
+    return;
+  }
+  const auto t0 = std::chrono::high_resolution_clock::now();
+  uint64_t h = HashDatasetValues(*ds, /*with_types=*/true);
+  h = HashDataspecStats(h, ds->data_spec());
+  const std::chrono::duration<double> dur =
+      std::chrono::high_resolution_clock::now() - t0;
+  LOG(INFO) << "dataset hash: " << std::hex << h << std::dec
+            << " (rows=" << ds->nrow()
+            << " cols=" << ds->data_spec().columns_size()
             << " hash_s=" << dur.count() << ")";
 }
 
@@ -244,15 +334,12 @@ void MaybeLogTrunkDataHash(const dataset::VerticalDataset& ds, int64_t rows,
 // -------------------------------------------------------------------- trunk
 dataset::VerticalDataset MakeTrunkDataset(const dataset::proto::DataSpecification& spec,
                                           int64_t rows, int cols, uint32_t seed) {
-  const auto t_gen_start = std::chrono::high_resolution_clock::now();
   dataset::VerticalDataset ds;
   ds.set_data_spec(spec);
   CHECK_OK(ds.CreateColumnsFromDataspec());
-  // NOTE: no ds.Resize(rows) here. Resize() would serially allocate AND
-  // zero/NaN-fill every column on this thread, so the whole dataset would be
-  // first-touched single-threaded. Each worker resizes the columns it owns
-  // instead, so allocation, first touch and generation are all parallel. The
-  // label column is resized below on this thread.
+  // No ds.Resize(rows): it would zero-fill every column serially on this thread.
+  // Each worker resizes its own columns, so allocation, first touch and
+  // generation are all parallel; the label column is resized below.
   ds.set_nrow(rows);
   using RNG = std::minstd_rand;
 
@@ -293,19 +380,9 @@ dataset::VerticalDataset MakeTrunkDataset(const dataset::proto::DataSpecificatio
   const int n_threads = std::min<int>(
       std::max(1u, std::thread::hardware_concurrency()), std::max(cols, 1));
 
-  // Serve the column allocations below from per-thread malloc arenas instead of
-  // one anonymous mmap per column. Above mmap_threshold (128 KB by default)
-  // glibc gives every allocation its own mmap; with one column per allocation
-  // and n_threads filling concurrently, each mmap write-locks the address space
-  // (mmap_lock) and merges into the neighbouring anonymous VMAs, so the workers
-  // serialize and first-touch minor faults cost ~4.9 us instead of ~1.65 us.
-  // 1.5M x 4096: 29 s of system time and 2.07 s of generation, vs 10 s / 1.35 s
-  // once the columns come from arenas (arena heaps are per-thread, so they do
-  // not contend). 32 MB is the largest value glibc accepts here
-  // (HEAP_MAX_SIZE / 2); mallopt returns 1, and the mmap count for the fill
-  // drops from one-per-column to ~O(heaps). Scoped to the fill: nothing else in
-  // the process allocates like this, and the training phase must keep stock
-  // allocator behaviour.
+  // Serve column allocations from per-thread arenas, not one anonymous mmap per
+  // column: 48 threads faulting into fresh mmaps serialize on mmap_lock (~4.9 us
+  // vs ~1.65 us per fault; 1.5M x 4096 gen 2.07 -> 1.35 s). 32 MB = glibc's max.
   constexpr int kGenMmapThreshold = 32 * 1024 * 1024;
   mallopt(M_MMAP_THRESHOLD, kGenMmapThreshold);
 
@@ -320,15 +397,9 @@ dataset::VerticalDataset MakeTrunkDataset(const dataset::proto::DataSpecificatio
   }
   for (auto& worker : workers) worker.join();
 
-  // Hand malloc back. Note that *any* mallopt call permanently disables glibc's
-  // dynamic mmap threshold, so restoring the 128 KB cold-start default would not
-  // restore stock behaviour -- it would pin malloc at a value glibc raises on its
-  // own, and the training block measured 21 % slower (1.77 s -> 2.16 s on
-  // 150k x 4096, 48 trees, depth 10). Restore instead to the state the dynamic
-  // policy converges to: munmap_chunk() ratchets mmap_threshold up to
-  // DEFAULT_MMAP_THRESHOLD_MAX (32 MB, the value already set above) and sets
-  // trim_threshold to twice it. With that, training measures within noise of
-  // stock (+0.9 % on 150k x 4096, +0.4 % on 1.5M x 4096).
+  // Restore, but NOT to 128 KB: any mallopt pins glibc's dynamic threshold, and
+  // that made the training block 21 % slower. Set the state the dynamic policy
+  // converges to instead (threshold 32 MB, trim 2x); training is then in noise.
   mallopt(M_TRIM_THRESHOLD, 2 * kGenMmapThreshold);
 
   // Fill the label column ----------------------------------------------------
@@ -339,11 +410,6 @@ dataset::VerticalDataset MakeTrunkDataset(const dataset::proto::DataSpecificatio
   for (int64_t i = 0; i < rows; ++i)
     (*y)[i] = (i >= rows / 2) ? 2 : 1;                  // 1-based labels
 
-  {
-    const std::chrono::duration<double> gen_dur =
-        std::chrono::high_resolution_clock::now() - t_gen_start;
-    LOG(INFO) << "trunk generation: " << gen_dur.count() << "s";
-  }
   MaybeLogTrunkDataHash(ds, rows, cols);
   return ds;
 }
@@ -482,6 +548,314 @@ int FillMatrixFromDataset(Matrix* matrix,
 
 /* #endregion */
 
+/* #region Block-parallel CSV parser */
+// Replaces dataset::LoadVerticalDataset for the all-NUMERICAL dataspec: mmap,
+// chunk at line boundaries, absl::SimpleAtof each cell into column[j][row]. Same
+// token -> same float bits; NA rule as CsvRowToExample; else -> generic reader.
+namespace fast_csv {
+
+// Parser threads: hardware_concurrency, independent of --num_threads (as the
+// trunk generator). CSV_PARSE_THREADS=1 runs the same parser inline.
+int NumParseThreads() {
+  if (const char* s = std::getenv("CSV_PARSE_THREADS")) {
+    const int v = std::atoi(s);
+    if (v > 0) return v;
+  }
+  return std::max(1u, std::thread::hardware_concurrency());
+}
+
+// Dynamic (atomic-counter) parallel for. Chunks are much more numerous than
+// threads, so a long line block cannot leave one worker behind.
+template <typename Fn>
+void ParallelFor(size_t n_items, int n_threads, Fn&& fn) {
+  if (n_items == 0) return;
+  const int nt =
+      std::max(1, std::min<int>(n_threads, static_cast<int>(n_items)));
+  std::atomic<size_t> next{0};
+  auto worker = [&]() {
+    for (;;) {
+      const size_t i = next.fetch_add(1, std::memory_order_relaxed);
+      if (i >= n_items) return;
+      fn(i);
+    }
+  };
+  if (nt == 1) {  // No thread at all: the 1-thread attribution arm.
+    worker();
+    return;
+  }
+  std::vector<std::thread> workers;
+  workers.reserve(nt);
+  for (int t = 0; t < nt; ++t) workers.emplace_back(worker);
+  for (auto& w : workers) w.join();
+}
+
+// Read-only mapping of the whole file.
+class Mapping {
+ public:
+  ~Mapping() {
+    if (data_ != nullptr) munmap(const_cast<char*>(data_), size_);
+    if (fd_ >= 0) close(fd_);
+  }
+  absl::Status Open(const std::string& path) {
+    fd_ = ::open(path.c_str(), O_RDONLY);
+    if (fd_ < 0) {
+      return absl::NotFoundError(absl::StrCat("Cannot open ", path, ": ",
+                                              std::strerror(errno)));
+    }
+    struct stat st;
+    if (::fstat(fd_, &st) != 0) {
+      return absl::InternalError(absl::StrCat("fstat failed: ",
+                                              std::strerror(errno)));
+    }
+    if (!S_ISREG(st.st_mode)) {
+      return absl::InvalidArgumentError("Not a regular file (no mmap)");
+    }
+    size_ = static_cast<size_t>(st.st_size);
+    if (size_ == 0) return absl::InvalidArgumentError("Empty CSV");
+    void* p = ::mmap(nullptr, size_, PROT_READ, MAP_PRIVATE, fd_, 0);
+    if (p == MAP_FAILED) {
+      data_ = nullptr;
+      return absl::ResourceExhaustedError(
+          absl::StrCat("mmap failed: ", std::strerror(errno)));
+    }
+    data_ = static_cast<const char*>(p);
+    // Sequential + willneed: the kernel reads ahead aggressively and drops
+    // pages behind us, which keeps a 16 GB file from evicting everything else.
+    ::madvise(p, size_, MADV_SEQUENTIAL);
+    ::madvise(p, size_, MADV_WILLNEED);
+    return absl::OkStatus();
+  }
+  const char* data() const { return data_; }
+  size_t size() const { return size_; }
+
+ private:
+  int fd_ = -1;
+  const char* data_ = nullptr;
+  size_t size_ = 0;
+};
+
+// Numerical cell -> float, reproducing CsvRowToExample's NUMERICAL branch.
+// Quotes are rejected earlier (whole-chunk scan), so the token is raw bytes.
+inline bool ParseCell(const char* b, size_t n, float* out) {
+  // As CsvRowToExample: lowercase "na"/"nan" or empty -> unset -> kNaValue.
+  // Length-gated compare instead of the old path's per-cell std::string.
+  if (n == 0) {
+    *out = dataset::VerticalDataset::NumericalColumn::kNaValue;
+    return true;
+  }
+  if (n <= 3 && (b[0] == 'n' || b[0] == 'N')) {
+    const bool a = (n >= 2) && (b[1] == 'a' || b[1] == 'A');
+    if (n == 2 && a) {
+      *out = dataset::VerticalDataset::NumericalColumn::kNaValue;
+      return true;
+    }
+    if (n == 3 && a && (b[2] == 'n' || b[2] == 'N')) {
+      *out = dataset::VerticalDataset::NumericalColumn::kNaValue;
+      return true;
+    }
+  }
+  return absl::SimpleAtof(absl::string_view(b, n), out);
+}
+
+absl::Status ParseNumericCsv(const std::string& path,
+                             const std::vector<std::string>& header,
+                             const dataset::proto::DataSpecification& spec,
+                             dataset::VerticalDataset* ds) {
+  Mapping map;
+  {
+    const absl::Status s = map.Open(path);
+    if (!s.ok()) return s;
+  }
+  const char* const base = map.data();
+  const size_t size = map.size();
+  const size_t ncol = header.size();
+
+  // ---- header -------------------------------------------------------------
+  const char* nl = static_cast<const char*>(std::memchr(base, '\n', size));
+  const size_t body_off = (nl == nullptr) ? size : (nl - base) + 1;
+  size_t header_len = body_off ? body_off - 1 : 0;
+  if (header_len > 0 && base[header_len - 1] == '\r') --header_len;
+  {
+    const std::vector<absl::string_view> raw =
+        absl::StrSplit(absl::string_view(base, header_len), ',');
+    if (raw.size() != ncol) {
+      return absl::InvalidArgumentError("Header field count mismatch");
+    }
+    for (size_t i = 0; i < ncol; ++i) {
+      if (raw[i] != header[i]) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Header field ", i,
+            " is padded or quoted; the generic reader matches unstripped names"));
+      }
+    }
+    const std::set<absl::string_view> uniq(raw.begin(), raw.end());
+    if (uniq.size() != ncol) {
+      return absl::InvalidArgumentError("Duplicate CSV header names");
+    }
+  }
+
+  // ---- chunk decomposition + pass 1 (count rows, validate bytes) ----------
+  const int n_threads = NumParseThreads();
+  const size_t body_size = size - body_off;
+  size_t chunk_bytes = 1;
+  if (body_size > 0) {
+    const size_t target_chunks = static_cast<size_t>(n_threads) * 8;
+    chunk_bytes = (body_size + target_chunks - 1) / target_chunks;
+    if (chunk_bytes < (4u << 20)) chunk_bytes = 4u << 20;  // >= 4 MB
+  }
+  const size_t n_chunks =
+      (body_size == 0) ? 0 : (body_size + chunk_bytes - 1) / chunk_bytes;
+
+  // Chunk boundaries snapped FORWARD to just past the next '\n', so every
+  // chunk starts on a line boundary and no line is split.
+  std::vector<size_t> chunk_begin(n_chunks + 1);
+  if (n_chunks > 0) {
+    chunk_begin[0] = body_off;
+    chunk_begin[n_chunks] = size;
+    for (size_t i = 1; i < n_chunks; ++i) {
+      const size_t b = body_off + i * chunk_bytes;
+      if (b >= size) {
+        chunk_begin[i] = size;
+        continue;
+      }
+      const char* p =
+          static_cast<const char*>(std::memchr(base + b, '\n', size - b));
+      chunk_begin[i] = (p == nullptr) ? size : (p - base) + 1;
+    }
+    for (size_t i = 1; i <= n_chunks; ++i) {
+      chunk_begin[i] = std::max(chunk_begin[i], chunk_begin[i - 1]);
+    }
+  }
+
+  std::vector<size_t> chunk_rows(n_chunks, 0);
+  std::mutex err_mu;
+  absl::Status first_error = absl::OkStatus();
+  std::atomic<bool> failed{false};
+  const auto record_error = [&](absl::Status s) {
+    std::lock_guard<std::mutex> lock(err_mu);
+    if (first_error.ok()) first_error = std::move(s);
+    failed.store(true, std::memory_order_relaxed);
+  };
+
+  ParallelFor(n_chunks, n_threads, [&](size_t ci) {
+    if (failed.load(std::memory_order_relaxed)) return;
+    const char* const begin = base + chunk_begin[ci];
+    const char* const end = base + chunk_begin[ci + 1];
+    const size_t len = static_cast<size_t>(end - begin);
+    // A quote anywhere means the generic reader's unquoting could differ.
+    if (std::memchr(begin, '"', len) != nullptr) {
+      record_error(absl::InvalidArgumentError(
+          "Quoted CSV field: not handled by the block-parallel parser"));
+      return;
+    }
+    // The generic reader ends a row on a bare '\r' too; only "\r\n" is safe.
+    for (const char* p = begin;;) {
+      const char* r = static_cast<const char*>(
+          std::memchr(p, '\r', static_cast<size_t>(end - p)));
+      if (r == nullptr) break;
+      if (r + 1 >= end || r[1] != '\n') {
+        record_error(absl::InvalidArgumentError("Bare CR in CSV"));
+        return;
+      }
+      p = r + 2;
+      if (p >= end) break;
+    }
+    // Count non-empty lines. An empty line would make the generic reader emit
+    // a single-field row and read out of bounds, so no real dataset has one;
+    // skipping is the robust reading of "the row does not exist".
+    size_t rows = 0;
+    for (const char* p = begin; p < end;) {
+      const char* q = static_cast<const char*>(
+          std::memchr(p, '\n', static_cast<size_t>(end - p)));
+      const char* line_end = (q == nullptr) ? end : q;
+      const char* le = line_end;
+      if (le > p && le[-1] == '\r') --le;
+      if (le != p) ++rows;
+      p = (q == nullptr) ? end : q + 1;
+    }
+    chunk_rows[ci] = rows;
+  });
+  if (!first_error.ok()) return first_error;
+
+  // Prefix sum -> first row index of each chunk.
+  std::vector<size_t> chunk_row0(n_chunks + 1, 0);
+  for (size_t i = 0; i < n_chunks; ++i) {
+    chunk_row0[i + 1] = chunk_row0[i] + chunk_rows[i];
+  }
+  const size_t nrow = chunk_row0[n_chunks];
+  if (nrow == 0) return absl::InvalidArgumentError("CSV has no data rows");
+
+  // ---- allocate columns ---------------------------------------------------
+  ds->set_data_spec(spec);
+  {
+    const absl::Status s = ds->CreateColumnsFromDataspec();
+    if (!s.ok()) return s;
+  }
+  ds->set_nrow(static_cast<dataset::VerticalDataset::row_t>(nrow));
+
+  std::vector<float*> col_data(ncol, nullptr);
+  ParallelFor(ncol, n_threads, [&](size_t j) {
+    auto* col = ds->MutableColumnWithCast<
+        dataset::VerticalDataset::NumericalColumn>(static_cast<int>(j));
+    col->mutable_values()->resize(nrow);
+    col_data[j] = col->mutable_values()->data();
+  });
+
+  // ---- pass 2 (parse + scatter into the columns) --------------------------
+  float* const* const cols = col_data.data();
+  ParallelFor(n_chunks, n_threads, [&](size_t ci) {
+    if (failed.load(std::memory_order_relaxed)) return;
+    const char* p = base + chunk_begin[ci];
+    const char* const end = base + chunk_begin[ci + 1];
+    size_t row = chunk_row0[ci];
+    while (p < end) {
+      const char* q = static_cast<const char*>(
+          std::memchr(p, '\n', static_cast<size_t>(end - p)));
+      const char* const next = (q == nullptr) ? end : q + 1;
+      const char* le = (q == nullptr) ? end : q;
+      if (le > p && le[-1] == '\r') --le;
+      if (le == p) {  // empty line, skipped in pass 1 as well
+        p = next;
+        continue;
+      }
+      const char* t = p;
+      size_t col_idx = 0;
+      for (;;) {
+        const char* c = static_cast<const char*>(
+            std::memchr(t, ',', static_cast<size_t>(le - t)));
+        const char* const tok_end = (c == nullptr) ? le : c;
+        if (col_idx >= ncol) {
+          record_error(absl::InvalidArgumentError(absl::StrCat(
+              "CSV row ", row, " has more fields than the header (", ncol, ")")));
+          return;
+        }
+        float value;
+        if (!ParseCell(t, static_cast<size_t>(tok_end - t), &value)) {
+          record_error(absl::InvalidArgumentError(absl::StrCat(
+              "Cannot parse value ", std::string(t, tok_end), " as a float")));
+          return;
+        }
+        cols[col_idx][row] = value;
+        ++col_idx;
+        if (c == nullptr) break;
+        t = c + 1;
+      }
+      if (col_idx != ncol) {
+        record_error(absl::InvalidArgumentError(absl::StrCat(
+            "CSV row ", row, " has ", col_idx, " fields, header has ", ncol)));
+        return;
+      }
+      ++row;
+      p = next;
+    }
+  });
+  if (!first_error.ok()) return first_error;
+  return absl::OkStatus();
+}
+
+}  // namespace fast_csv
+/* #endregion */
+
 /* #region Single-pass CSV load */
 // Loads a CSV into a VerticalDataset with a SINGLE file scan, avoiding YDF's
 // default two full reads (CreateDataSpec's statistics pass, then
@@ -547,9 +921,18 @@ absl::StatusOr<std::unique_ptr<dataset::VerticalDataset>> Load(
     col->set_type(dataset::proto::ColumnType::NUMERICAL);
   }
   auto ds = std::make_unique<dataset::VerticalDataset>();
-  const absl::Status load_status =
-      dataset::LoadVerticalDataset("csv:" + csv_path, numeric_spec, ds.get());
-  if (!load_status.ok()) return load_status;  // e.g. a non-numeric column.
+  // Kept minimal on purpose (2026-09-09): direct parser + 48-thread parse only.
+  // Dropped after measuring: mallopt, column-parallel stats, fast labels, madvise.
+  const absl::Status parsed =
+      fast_csv::ParseNumericCsv(csv_path, header, numeric_spec, ds.get());
+  if (!parsed.ok()) {
+    LOG(WARNING) << "Block-parallel CSV parse not applicable ("
+                 << parsed.message() << "); using YDF's generic reader.";
+    ds = std::make_unique<dataset::VerticalDataset>();  // drop partial state
+    const absl::Status load_status =
+        dataset::LoadVerticalDataset("csv:" + csv_path, numeric_spec, ds.get());
+    if (!load_status.ok()) return load_status;  // e.g. a non-numeric column.
+  }
 
   const int64_t nrow = ds->nrow();
   if (nrow <= 0) return absl::InvalidArgumentError("CSV has no data rows");
@@ -816,6 +1199,10 @@ int main(int argc, char** argv) {
             << ". Use csv, trunk, or tfrecord.\n";
   return 1;
 }
+
+  // DATASET_HASH=1: fingerprint of values, types, dataspec stats and label
+  // vocab, to prove a loader change is bit-identical. Slow; never in timing runs.
+  MaybeLogDatasetHash(ds_ptr);
 
   // 2) Configure learner
   model::proto::TrainingConfig train_config;
