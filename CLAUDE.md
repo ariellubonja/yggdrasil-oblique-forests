@@ -109,8 +109,9 @@ the exact sort in the build. **Vectorized binner (default, AVX2 64-bin / AVX-512
 250.** **Scalar binner (`--config=disable_std_upper_bound_vectorization`): 4600 with the
 Highway VQSort exact finder, 1350 with `--config=exact_std_sort`.** The harness default
 (`-2`) resolves these from the build macros; `arms.py` passes them explicitly
-(`_DYN64` = 250, `_DYN64_SCALAR` = 4600). Every `spo_rf_dyn_scalar` result recorded before
-2026-09-09 used 250 and is invalid (it measured a mis-set threshold, not the method).
+(`_DYN64` = 250, `_DYN64_SCALAR` = 4600). In the SPO-vs-GBT study only, the `spo_rf_dyn_scalar`
+rows recorded before 2026-09-09 used 250 and were re-run (they measured a mis-set threshold,
+not the method); earlier Dynamic-scalar results outside that study are not affected.
 
 ## Benchmark dataset rules (user directive, 2026-09-04)
 
