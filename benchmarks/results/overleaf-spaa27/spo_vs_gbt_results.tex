@@ -150,7 +150,7 @@ equal or better accuracy.
 \label{sec:speedup-map}
 
 Figure~\ref{fig:speedup-map} maps the end-to-end speedup of SPO Dyn-Vec over the two exact
-baselines along the four axes a practitioner controls. \textbf{Depth} (HIGGS, 10.5M rows, 240
+baselines along the axes a practitioner controls. \textbf{Depth} (HIGGS, 10.5M rows, 240
 trees): against exact splitting with Highway's vectorized sort the speedup is $1.78\times$ at
 depth~6, $1.57\times$ at 10, $1.42\times$ at 15, $1.35\times$ at 20 and $1.22\times$ for fully
 grown trees; against the published \texttt{std::sort} baseline it is $2.42\times$ at full depth.
@@ -170,7 +170,8 @@ and 10 the gain is $1.30\times$ and $1.23\times$ on HIGGS and $1.09\times$ and $
 a 150k-row dataset (GiveMeSomeCredit), and at depth~30 on the latter the two arms tie
 ($0.97\times$): depth-limited boosting never reaches the small-node regime, so only the
 vectorized binning contributes, and its gain shrinks with the 150k-row dataset's node sizes.
-\textbf{Rows $\times$ columns} (Figure~\ref{fig:rowcol-map}): over a grid of fully grown
+\textbf{Rows $\times$ columns} (Figure~\ref{fig:rowcol-map}, and
+Figure~\ref{fig:rowcol-map-stdsort} for the \texttt{std::sort} baseline): over a grid of fully grown
 forests from 15k to 4.5M rows and 4096 to 1.6M features (Trunk, up to 240\,GB of features in
 memory), plus the four natural datasets, the speedup is flat: $2.1$--$2.6\times$ over
 \texttt{std::sort} and $1.11$--$1.25\times$ over the Highway sort on every synthetic cell,
@@ -183,25 +184,23 @@ $P=4$ projections per node the exact scan is already cheap.
 
 \begin{figure*}[t]
     \centering
-    \includegraphics[width=0.49\linewidth]{figures/results/spo_vs_gbt_speedup_vs_depth.pdf}\hfill
-    \includegraphics[width=0.49\linewidth]{figures/results/spo_vs_gbt_trunk_width.pdf}\\[4pt]
-    \includegraphics[width=0.49\linewidth]{figures/results/spo_vs_gbt_speedup_vs_min_examples.pdf}\hfill
-    \includegraphics[width=0.49\linewidth]{figures/results/spo_vs_gbt_gbt_depth.pdf}
+    \includegraphics[width=0.60\linewidth]{figures/results/spo_vs_gbt_speedup_vs_depth.pdf}\hfill
+    \includegraphics[width=0.305\linewidth]{figures/results/spo_vs_gbt_trunk_width.pdf}\\[4pt]
+    \includegraphics[width=0.62\linewidth]{figures/results/spo_vs_gbt_gbt_depth.pdf}
     \caption{Speedup map of SPO Dyn-Vec. Top left: HIGGS (10.5M rows) by maximum depth, against
-    exact splitting with Highway's sort and with \texttt{std::sort}. Top right: Trunk with 1M rows by
-    feature count. Bottom left: HIGGS by minimum node size. Bottom right: SPO-GBT by depth.}
-    \Description{Four panels of training-time speedup along depth, width, stopping criterion and boosting depth.}
+    exact splitting with Highway's sort and with \texttt{std::sort}. Top right: training time on
+    Trunk with 1M rows by feature count. Bottom: SPO-GBT by depth.}
+    \Description{Three panels of training time and speedup along depth, width and boosting depth.}
     \label{fig:speedup-map}
 \end{figure*}
 
-\begin{figure*}[t]
+\begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth]{figures/results/spo_vs_gbt_rowcol_map.pdf}
     \caption{Row $\times$ column map of the full-depth SPO-RF speedup of Dyn-Vec over exact
-    splitting with \texttt{std::sort} (left) and with Highway's sort (right); 240 trees, 48
-    threads. Circles: Trunk synthetic datasets; squares: HIGGS, SUSY, Epsilon and
-    GiveMeSomeCredit.}
-    \Description{Two scatter panels with features on the x axis and rows on the y axis, both log scale, points colored and annotated by speedup.}
+    splitting with Highway's sort; 240 trees, 48 threads. Circles: Trunk synthetic datasets;
+    squares: HIGGS, SUSY, Epsilon and GiveMeSomeCredit. The same map against the
+    \texttt{std::sort} baseline is Figure~\ref{fig:rowcol-map-stdsort}.}
+    \Description{A scatter panel with features on the x axis and rows on the y axis, both log scale, points colored and annotated by speedup.}
     \label{fig:rowcol-map}
-\end{figure*}
-
+\end{figure}

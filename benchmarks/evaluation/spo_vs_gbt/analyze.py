@@ -1172,8 +1172,8 @@ def fig_speedup_vs_min_examples(spm: pd.DataFrame, out_dir: Path) -> list[str]:
 def fig_trunk_width(spm: pd.DataFrame, out_dir: Path) -> list[str]:
     """B5 (PROTOCOL.md D10): trunk-generator feature-width axis -- rows 1M,
     unlimited depth, cols {32,128,512,2048,8192}, arms {exact_stdsort,
-    exact_hwy, dyn_vec}. Left panel: time vs cols (log-x), one line per arm.
-    Right panel: speedup vs dyn_vec, same x axis. Cells are identified by
+    exact_hwy, dyn_vec}. Single panel: time vs cols (log-x), one line per arm
+    (the speedup companion panel was dropped 2026-09-09). Cells are identified by
     run_speedup_map.py's `dataset` column ("trunk_<rows>_x_<cols>"; A7) --
     read generically (dataset prefix "trunk_"), not by exact cell count, so
     this keeps working if the grid changes."""
@@ -1190,29 +1190,19 @@ def fig_trunk_width(spm: pd.DataFrame, out_dir: Path) -> list[str]:
     if not arms:
         return _empty_panel(out_dir, "fig_trunk_width", "no B5 arms found in speedup_map.csv")
     med = df.groupby(["features", "method"])["train_s"].median().reset_index()
-    base = med[med["method"] == SPEED_BASELINE][["features", "train_s"]].rename(
-        columns={"train_s": "t_base"})
-    fig, (ax_t, ax_s) = plt.subplots(1, 2, figsize=(11.5, 4.6))
+    fig, ax_t = plt.subplots(1, 1, figsize=(5.9, 4.6))
     for arm in arms:
         g = med[med["method"] == arm].sort_values("features")
         if g.empty:
             continue
         color, marker = ARM_STYLE[arm]
         ax_t.plot(g["features"], g["train_s"], color=color, marker=marker, label=ARM_LABELS[arm])
-        gm = g.merge(base, on="features", how="left")
-        gm["speedup"] = gm["t_base"] / gm["train_s"]
-        ax_s.plot(gm["features"], gm["speedup"], color=color, marker=marker, label=ARM_LABELS[arm])
-    for ax in (ax_t, ax_s):
-        ax.set_xscale("log")
-        ax.set_xlabel("Trunk width (features, log scale)")
-        ax.grid(True, which="both", alpha=0.25)
+    ax_t.set_xscale("log")
+    ax_t.set_xlabel("Trunk width (features, log scale)")
+    ax_t.grid(True, which="both", alpha=0.25)
     ax_t.set_ylabel("Training time [s]")
     ax_t.set_title("Time vs trunk width (1M rows, unlimited depth, 240 trees)")
-    ax_s.axhline(1.0, color="#999999", lw=0.8, ls="--")
-    ax_s.set_ylabel(f"Speedup vs {ARM_LABELS[SPEED_BASELINE]}")
-    ax_s.set_title("Speedup vs trunk width")
     ax_t.legend(fontsize=8, frameon=False)
-    fig.suptitle("Feature-width axis (B5) -- trunk generator")
     fig.tight_layout()
     return save_fig(fig, out_dir, "fig_trunk_width")
 
@@ -1220,7 +1210,9 @@ def fig_trunk_width(spm: pd.DataFrame, out_dir: Path) -> list[str]:
 def fig_rowcol_map(spm: pd.DataFrame, suite_df: pd.DataFrame, large_df: pd.DataFrame,
                    out_dir: Path) -> tuple[list[str], pd.DataFrame]:
     """B6 (2026-09-07): row x column map of the full-depth RF speedup of
-    dyn_vec over exact_stdsort (left) and exact_hwy (right). Points: every
+    dyn_vec, one standalone figure per exact baseline (2026-09-09):
+    fig_rowcol_map = vs exact_hwy (main text), fig_rowcol_map_stdsort =
+    vs exact_stdsort (appendix). Points: every
     trunk cell at unlimited depth / min_examples 1 (circles) plus the natural
     datasets HIGGS, SUSY, EPSILON (large tier) and GiveMeSomeCredit (suite)
     at their unlimited-depth RF medians (squares). Also returns the point
@@ -1254,17 +1246,19 @@ def fig_rowcol_map(spm: pd.DataFrame, suite_df: pd.DataFrame, large_df: pd.DataF
     tab["speedup_vs_hwy"] = tab[EXACT_HWY] / tab[SPEED_BASELINE]
     tab = tab.sort_values(["rows", "features"]).reset_index(drop=True)
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5.2))
-    for ax, col, title in ((axes[0], "speedup_vs_stdsort", f"Speedup vs {ARM_LABELS[EXACT_STDSORT]}"),
-                           (axes[1], "speedup_vs_hwy", f"Speedup vs {ARM_LABELS[EXACT_HWY]}")):
+    files = []
+    for col, baseline, name in (
+            ("speedup_vs_hwy", EXACT_HWY, "fig_rowcol_map"),
+            ("speedup_vs_stdsort", EXACT_STDSORT, "fig_rowcol_map_stdsort")):
+        fig, ax = plt.subplots(1, 1, figsize=(6.4, 5.2))
         vmin, vmax = float(tab[col].min()), float(tab[col].max())
         for kind, marker, size in (("trunk", "o", 260), ("natural", "s", 300)):
             g = tab[tab["kind"] == kind]
             if g.empty:
                 continue
+            # Marker shape is explained in the caption, not an in-axes legend.
             sc = ax.scatter(g["features"], g["rows"], c=g[col], cmap="viridis", vmin=vmin, vmax=vmax,
-                            s=size, marker=marker, edgecolors="black", linewidths=0.6, zorder=3,
-                            label="trunk (synthetic)" if kind == "trunk" else "natural dataset")
+                            s=size, marker=marker, edgecolors="black", linewidths=0.6, zorder=3)
             for _, r in g.iterrows():
                 lbl = f"{r[col]:.2f}"
                 if kind == "natural":
@@ -1274,12 +1268,14 @@ def fig_rowcol_map(spm: pd.DataFrame, suite_df: pd.DataFrame, large_df: pd.DataF
         ax.set_xscale("log"); ax.set_yscale("log")
         ax.set_xlabel("Features (log scale)"); ax.set_ylabel("Rows (log scale)")
         ax.grid(True, which="both", alpha=0.25)
-        ax.set_title(title, fontsize=10)
-        ax.legend(fontsize=8, frameon=False, loc="lower left")
+        # Keep the extreme row bands off the frame edge.
+        ax.set_ylim(float(tab["rows"].min()) / 1.7, float(tab["rows"].max()) * 1.7)
         fig.colorbar(sc, ax=ax, label="speedup (x)", shrink=0.85)
-    fig.suptitle("Row x column map of the full-depth RF speedup of SPO Dyn-Vec (240 trees, 48 threads)")
-    fig.tight_layout()
-    return save_fig(fig, out_dir, "fig_rowcol_map"), tab
+        fig.suptitle(f"Full-depth RF speedup of SPO Dyn-Vec over {ARM_LABELS[baseline]}\n"
+                     "(240 trees, 48 threads)", fontsize=10)
+        fig.tight_layout()
+        files += save_fig(fig, out_dir, name)
+    return files, tab
 
 
 def fig_gbt_depth(spm: pd.DataFrame, out_dir: Path) -> list[str]:

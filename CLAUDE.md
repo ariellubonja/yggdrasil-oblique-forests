@@ -122,6 +122,13 @@ not the method); earlier Dynamic-scalar results outside that study are not affec
 Until those re-run numbers land, every dyn_scalar cell renders as `--` (rows moved to
 `benchmarks/results/spo_vs_gbt/_tests/` by `strip_dyn_scalar_thr250.py`).
 
+## Do not write paper prose (user directive, 2026-09-09)
+
+**Never add or rewrite LaTeX body text with your own descriptions or interpretations of
+results.** Structural edits are fine: figure/table environments, includes, labels,
+cross-references, captions that state what a panel shows. Prose that explains, interprets or
+argues from the numbers is the user's to write, and only when they explicitly ask.
+
 ## Figures wait for final tables (user directive, 2026-09-09)
 
 **Do not update paper figures while table results are still in flux.** Regenerate and push
