@@ -213,3 +213,6 @@ study lock (`flock` on `run_all.lock`) so no two trainings overlap.
 To replicate one B7 cell: take its `cmd` from `speedup_map.csv` and run it under the lock
 on an idle box; expect train_s within a few % (timing repeats on this box are <1 % at
 300 s, larger for sub-second cells such as GiveMeSomeCredit at depth 6).
+- **B7 amendment (2026-09-09):** `spo_rf_dyn_scalar` removed from `cells_b7_{d16,d24,full}.json`
+  mid-run (threshold mis-tuned for the scalar binner, see PROTOCOL.md); the depth-16 run was
+  restarted with `run_b7.sh 1` (depths 6/10 and finished depth-16 cells skip via skip-existing).

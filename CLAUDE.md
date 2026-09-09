@@ -84,6 +84,24 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
 
 @oblique_context/OBLIQUE_CONTEXT.md
 
+## Timing rules: what `train_s` measures (recorded 2026-09-09)
+
+- The harness timer is the `random_forest.cc Training block took:` line (bootstrap + all trees
+  + the concurrent split manager). Right after it, `random_forest.cc` calls `exit(0)`
+  ("EXITING EARLY TO SPEED UP EXPERIMENTS!") unless `NO_EARLY_EXIT=1` is set — so pure
+  timing runs skip YDF's post-training finalization (structural variable importances, leaf
+  indexing, model return; a long single-threaded, unoptimized walk that we never measure).
+  `examples/train_oblique_forest.cc` sets `NO_EARLY_EXIT=1` only when `--test_csv` or
+  `--model_out_dir` is given (accuracy / model export need the model). GBT has no shortcut.
+- Consequence: runtime-only cells (speedup map, depth table) never pay post-processing;
+  accuracy cells do, and the drivers record it separately as `train_post_s`. Never report
+  post-processing inside a headline time; it is unavoidable only when accuracy is needed.
+- Dataset setup is outside the timer but inside wall time (`pre_train_s` = the harness
+  "Loading/Init (pre-train)" line): CSV parse ≈ 140 ns/cell (HIGGS 10.5M×28: 44 s;
+  EPSILON 400k×2000: 111 s; SUSY: 12 s), in-process trunk generation ≈ 8.3 s per 1e9 cells
+  (1.5M×40k and 150k×400k: 500 s each). It is paid once per invocation, i.e. per
+  (arm, depth) cell, which is what makes wide-trunk sweeps setup-bound.
+
 ## Benchmark dataset rules (user directive, 2026-09-04)
 
 - **HIGGS is only ever used at its full size (10.5M-row train / 500k test).** Do not create or run row
