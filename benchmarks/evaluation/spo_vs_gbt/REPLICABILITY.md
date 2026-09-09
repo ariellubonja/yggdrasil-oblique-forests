@@ -177,3 +177,39 @@ min** (HIGGS/SUSY) — use `--exclude-slow` unless those are wanted.
 run_all.sh'` (or `STAGES=<stage> bash run_all.sh`). Skip-existing is keyed on
 `(dataset, fold, rep, method, seed)`; delete the rows you want recomputed from the CSV
 first (keep a copy under `results/_tests/`), or the stage will skip them.
+
+## 9. Speedup-map stages added after the panel (B6, 256-bin arms, B7 depth table)
+
+All three append to `/home/ubuntu/spo_vs_gbt/results/speedup_map.csv` (copied to
+`benchmarks/results/spo_vs_gbt/speedup_map.csv` at the end of each stage/depth) via
+`run_speedup_map.py`, keyed `(dataset, max_depth, min_examples, arm)`, status OK ⇒ skipped
+on re-run. Same binaries (`bin/{default,scalar,exact_std_sort}`, sha in `bin/*.gitsha`),
+48 threads, seed 1, 240 trees, `--compute_oob_performances=false`; the recorded `train_s`
+is the harness "Training block took" timer, `cmd` is the exact argv. Every stage takes the
+study lock (`flock` on `run_all.lock`) so no two trainings overlap.
+
+- **B6 trunk row-column map (2026-09-07):** `run_b6.sh` → `cells_b6.json` (12 shapes ×
+  {exact_stdsort, exact_hwy, dyn_vec}, depth −1, min_examples 1). Trunk cells are generated
+  in-process from the seed (`--input_mode trunk --rows R --cols C`), no file. 36/36 OK, 6 h 21 m.
+- **256-bin arms (2026-09-07):** `run_256.sh` → suite + large for `spo_rf_rand256_vec`,
+  `spo_rf_dyn256_vec`, `spo_gbt_dyn256_vec` (`arms.py`; the `default` binary picks the
+  AVX-512 256-threshold kernel). Smoke test first: `compare_models.sh` on `--model_out_dir`
+  trees from the `default` vs `scalar` binaries, bit-identical (`/home/ubuntu/spo_vs_gbt/smoke256/`).
+- **B7 overall depth table (started 2026-09-08 20:58 UTC):** `run_b7.sh [REP]` →
+  `cells_b7_{d6,d10,d16,d24,full}.json`, depth-major. 19 entries (HIGGS 10.5M, SUSY, EPSILON,
+  GiveMeSomeCredit full `train.csv`, trunk 1M×{32,512,2048}, the 12 B6 shapes) × 6 SPO-RF
+  arms (exact_stdsort, exact_hwy, rand_scalar, rand_vec, dyn_scalar, dyn_vec) × depths
+  {6,10,16,24,−1}, min_examples 1. Natural datasets are explicit-`csv` cells (paths/label
+  cols in the cells files; HIGGS via the default rows→CSV map). REP=1 appends to
+  `speedup_map.csv` reusing existing purity cells; REP>1 writes
+  `results/speedup_map_rep<REP>.csv` with `--no-skip-existing`. Per-depth logs
+  `logs/b7_<tag>[_rep<k>].log`, markers `b7_<tag>[_rep<k>]_DONE`. Wall ≫ train_s because
+  trunk generation / CSV parse is redone per cell (depth 6: 5.3 h wall for 1.9 h training).
+  Table: `make_overall_depth_table.py` → `overleaf-spaa27/table_overall_depth.tex`, 17 rows
+  (D8-rev2 drops trunk 15k×4096 and 15k×40k), median ± sample std over the rep files present.
+- **Headline-speed rule D8-rev2 (2026-09-08):** `analyze.py` counts a dataset for runtime
+  only if rows > 100,000 OR features > 100,000 (`MIN_ROWS/MIN_COLS_FOR_HEADLINE_SPEED`).
+
+To replicate one B7 cell: take its `cmd` from `speedup_map.csv` and run it under the lock
+on an idle box; expect train_s within a few % (timing repeats on this box are <1 % at
+300 s, larger for sub-second cells such as GiveMeSomeCredit at depth 6).
