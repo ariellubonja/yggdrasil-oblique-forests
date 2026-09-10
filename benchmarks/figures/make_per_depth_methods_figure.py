@@ -7,13 +7,15 @@ benchmarks/results/per_function_timing/COARSE/<cpu>/<arm dir>/<dataset>/raw/<nam
 (rows = one per depth; metric = the depth's summed NodeTrain seconds).
 
 Usage: python3 benchmarks/figures/make_per_depth_methods_figure.py [--out DIR]
-           [--split {Oblique,"Axis Aligned"}] [--datasets HIGGS,SUSY,Epsilon]
+           [--split {Oblique,"Axis Aligned"}] [--datasets HIGGS,SUSY,Epsilon] [--fig1]
 Writes per_depth_methods[_aa].{pdf,png} and the matching .csv (tidy long form).
 --split="Axis Aligned" reads the "Axis Aligned | ..." arm dirs (same four arms,
 axis-aligned RF, num_candidate_attributes = sqrt(F)) and defaults to HIGGS only.
 --ensemble=Boosting reads the "Boosting | Oblique | ..." dirs (SPO-GBT, 5 trees, depth 50,
 1 thread) and plots the per-depth NodeTrain averaged over the trees in the run
 (the RF panels are single-tree runs, so no averaging happens there).
+--fig1 builds the paper's Figure 1: HIGGS only, one panel per model family
+(SPO-GBT, sparse oblique RF, axis-aligned RF) under one shared legend.
 """
 import argparse, sys
 from pathlib import Path
@@ -40,6 +42,11 @@ DATASET_DIRS = {"HIGGS": "HIGGS_with_header", "SUSY": "SUSY_with_header",
 DEFAULT_DATASETS = {"Oblique": "HIGGS,SUSY,Epsilon", "Axis Aligned": "HIGGS"}
 STEM_OUT = {"Oblique": "per_depth_methods", "Axis Aligned": "per_depth_methods_aa"}
 STEM_OUT_GBT = "per_depth_methods_gbt"
+STEM_OUT_FIG1 = "per_depth_methods_fig1"
+# Paper Figure 1: (panel title, arm dir prefix, split) -- HIGGS, one panel per model family.
+FIG1_PANELS = [("SPO-GBT", "Boosting | Oblique", "Oblique"),
+               ("Sparse oblique RF", "Oblique", "Oblique"),
+               ("Axis-aligned RF", "Axis Aligned", "Axis Aligned")]
 COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]   # dataviz reference palette, slots 1-4
 STYLES = ["-", "-", "--", "--"]
 
@@ -65,53 +72,40 @@ def load(path: Path) -> pd.DataFrame:
     return d
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(ROOT / "benchmarks/figures"))
-    ap.add_argument("--split", choices=list(STEM_OUT), default="Oblique")
-    ap.add_argument("--datasets", default=None, help="comma list of " + ",".join(DATASET_DIRS))
-    ap.add_argument("--ensemble", choices=["Bagging", "Boosting"], default="Bagging")
-    ap.add_argument("--max_depth", type=int, default=None, help="crop the x axis (e.g. 10 for GBT)")
-    a = ap.parse_args()
-    out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    gbt = a.ensemble == "Boosting"
-    datasets = (a.datasets or DEFAULT_DATASETS["Oblique" if gbt else a.split]).split(",")
-    stem_out = STEM_OUT_GBT if gbt else STEM_OUT[a.split]
-    arm_prefix = f"Boosting | {a.split}" if gbt else a.split
+def series_for(arm_prefix: str, split: str, ds_label: str, max_depth=None):
+    """The four method curves for one (arm family, dataset) panel."""
+    ds_dir = DATASET_DIRS[ds_label]
+    overrides = STEM_OVERRIDES.get(split, {}) if not arm_prefix.startswith("Boosting") else {}
+    out = []
+    for label, arm_suffix, stems in ARMS:
+        stem = overrides.get((label, ds_dir), stems.get(ds_dir, stems["*"]))
+        p = BASE / f"{arm_prefix} | {arm_suffix}" / ds_dir / "raw" / f"{stem}.csv"
+        if not p.exists():
+            print(f"  missing: {p.relative_to(ROOT)}", file=sys.stderr); continue
+        d = load(p)
+        if max_depth is not None:
+            d = d[d["depth"] <= max_depth]
+        d.insert(0, "method", label); d.insert(0, "dataset", ds_label)
+        out.append((label, d))
+    return out
 
-    tidy, panels = [], []
-    for ds_label in datasets:
-        ds_dir = DATASET_DIRS[ds_label]
-        series = []
-        for label, arm_suffix, stems in ARMS:
-            overrides = {} if gbt else STEM_OVERRIDES.get(a.split, {})
-            stem = overrides.get((label, ds_dir), stems.get(ds_dir, stems["*"]))
-            p = BASE / f"{arm_prefix} | {arm_suffix}" / ds_dir / "raw" / f"{stem}.csv"
-            if not p.exists():
-                print(f"  missing: {p.relative_to(ROOT)}", file=sys.stderr); continue
-            d = load(p)
-            if a.max_depth is not None:
-                d = d[d["depth"] <= a.max_depth]
-            d.insert(0, "method", label); d.insert(0, "dataset", ds_label)
-            tidy.append(d); series.append((label, d))
-        if series:
-            panels.append((ds_label, series))
-    if not panels:
-        sys.exit("no data found")
-    pd.concat(tidy).to_csv(out / f"{stem_out}.csv", index=False)
 
+def draw(panels, out, stem_out, tag_panel=False):
+    """One row of panels sharing a single legend; panels = [(title, series)].
+
+    tag_panel adds a `panel` column -- needed only when panels share a dataset."""
+    pd.concat([d.assign(panel=title) if tag_panel else d
+               for title, series in panels for _, d in series]
+              ).to_csv(out / f"{stem_out}.csv", index=False)
     plt.rcParams.update({"font.size": 9, "axes.spines.top": False, "axes.spines.right": False,
                          "axes.edgecolor": "#8a8984", "xtick.color": "#52514e",
                          "ytick.color": "#52514e", "axes.labelcolor": "#0b0b0b"})
     fig, axes = plt.subplots(1, len(panels), figsize=(3.2 * len(panels), 2.6), squeeze=False)
-    for ax, (ds_label, series) in zip(axes[0], panels):
+    for ax, (title, series) in zip(axes[0], panels):
         for label, d in series:
             k = [x[0] for x in ARMS].index(label)
             ax.fill_between(d["depth"], 0, d["node_train_s"], color=COLORS[k], alpha=0.12, lw=0)
             ax.plot(d["depth"], d["node_train_s"], STYLES[k], color=COLORS[k], lw=1.6, label=label)
-        title = ds_label if a.split == "Oblique" else f"{ds_label}, axis-aligned RF"
-        if gbt:
-            title = f"{ds_label}, SPO-GBT"
         ax.set_title(title, fontsize=10, loc="left")
         ax.set_xlabel("Tree depth"); ax.set_ylim(bottom=0); ax.set_xlim(left=1)
         ax.grid(axis="y", color="#e6e5e0", lw=0.6); ax.set_axisbelow(True)
@@ -124,6 +118,45 @@ def main():
     for ext in ("pdf", "png"):
         fig.savefig(out / f"{stem_out}.{ext}", dpi=200, bbox_inches="tight")
     print("wrote", out / (stem_out + ".{pdf,png,csv}"))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=str(ROOT / "benchmarks/figures"))
+    ap.add_argument("--split", choices=list(STEM_OUT), default="Oblique")
+    ap.add_argument("--datasets", default=None, help="comma list of " + ",".join(DATASET_DIRS))
+    ap.add_argument("--ensemble", choices=["Bagging", "Boosting"], default="Bagging")
+    ap.add_argument("--max_depth", type=int, default=None, help="crop the x axis (e.g. 10 for GBT)")
+    ap.add_argument("--fig1", action="store_true",
+                    help="paper Figure 1: one HIGGS panel per model family, shared legend")
+    a = ap.parse_args()
+    out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+
+    if a.fig1:
+        panels = [(t, series_for(pre, sp, "HIGGS", a.max_depth)) for t, pre, sp in FIG1_PANELS]
+        panels = [p for p in panels if p[1]]
+        if len(panels) != len(FIG1_PANELS):
+            sys.exit("fig1: a model family has no data")
+        draw(panels, out, STEM_OUT_FIG1, tag_panel=True)
+        return
+
+    gbt = a.ensemble == "Boosting"
+    datasets = (a.datasets or DEFAULT_DATASETS["Oblique" if gbt else a.split]).split(",")
+    stem_out = STEM_OUT_GBT if gbt else STEM_OUT[a.split]
+    arm_prefix = f"Boosting | {a.split}" if gbt else a.split
+
+    panels = []
+    for ds_label in datasets:
+        series = series_for(arm_prefix, a.split, ds_label, a.max_depth)
+        if not series:
+            continue
+        title = ds_label if a.split == "Oblique" else f"{ds_label}, axis-aligned RF"
+        if gbt:
+            title = f"{ds_label}, SPO-GBT"
+        panels.append((title, series))
+    if not panels:
+        sys.exit("no data found")
+    draw(panels, out, stem_out)
 
 
 if __name__ == "__main__":
