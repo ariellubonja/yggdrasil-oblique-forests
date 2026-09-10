@@ -18,7 +18,7 @@ Shapes: `trunk100k` = trunk 100k×4096; `higgs` = HIGGS_with_header.csv 11M×28;
 
 ## Collection
 
-`benchmarks/profiling/roofline/run_roofline.sh <shape> [arms]` = `advisor --collect=roofline --interval=<ms>` and no
+`benchmarks/src/profiling/roofline/run_roofline.sh <shape> [arms]` = `advisor --collect=roofline --interval=<ms>` and no
 cache simulation (`CACHESIM=0`, file suffix `_nocs`; L1-level intensity, the classic CARM roofline), then the CSV
 exports the analysis needs (`survey`, `survey --show-functions`, `top-down`, `roofs`) and Advisor's own HTML rooflines.
 Instrumented slowdown of the training block: 7–12× on the fork binaries, 4.5× (trunk) to 6× (HIGGS) on May-2025.
@@ -37,7 +37,7 @@ Instrumented slowdown of the training block: 7–12× on the fork binaries, 4.5�
 - Never run `advisor --report` on a project whose collection is still running: it destroys the FLOP-data merge
   (that is how `may2025_exact epsilon` lost its FLOP data; not re-run).
 
-## Analysis (`benchmarks/profiling/roofline/roofline_analysis.py`)
+## Analysis (`benchmarks/src/profiling/roofline/roofline_analysis.py`)
 
 Advisor books each sample on the innermost node, and that node is often an *inlined callee* rather than the loop
 (`std::isnan`, `vector::operator[]`, `AttributeValue`). In the May-2025 binary 87 % of `Evaluate`'s time sits on the

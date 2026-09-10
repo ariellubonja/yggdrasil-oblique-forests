@@ -61,7 +61,7 @@ hot-gate comparison, joining 1:1 on `(tree, depth)` since trees stay bit-identic
 - `DW1_COL_SHARE_OUT=<path>` — same numbers as CSV (`tree,depth,nodes,rows,cols_touched,
   num_features,refs,pairs,share,shared_cols,max_nodes_col,useful,swept,eff,nodewise,amort`);
   works with `DW1_COL_STATS=0`. First write of the process truncates.
-- `benchmarks/utils/compare_dw1_colshare.py full.csv hot.csv -l full -l hot` joins two runs.
+- `benchmarks/src/utils/compare_dw1_colshare.py full.csv hot.csv -l full -l hot` joins two runs.
 - Set `DW1_NODE_SIZES_DEPTH=-1` too, or the unrelated node-size dump also fires.
 
 `share` = mean nodes per touched column (1.0 = none); `swept` = `cols_touched × depth rows` =
@@ -174,17 +174,17 @@ Standard shapes: HIGGS 11M×29 (tall-narrow), trunk 3M×4096 (~49 GB), 1.5M×409
 
 ## Measurement tooling
 
-- **Verdict:** `benchmarks/evaluation/runtime.sh` (e2e; Quick then Full; writes CSV + `.meta`
+- **Verdict:** `benchmarks/src/runtime.sh` (e2e; Quick then Full; writes CSV + `.meta`
   provenance sidecar — never delete `.meta`), `accuracy.sh` (must match exactly for
   bit-identity experiments). Drive variants via `EXTRA_BAZEL_CONFIGS` / `EXTRA_TRAIN_ARGS`;
   per-dataset isolation via `CSV_DATASETS_OVERRIDE` / `TRUNK_DATASETS_OVERRIDE`.
-- **Insight:** `benchmarks/profiling/parallel_chrono.py --bazel_config=NAME` — per-tree-depth
+- **Insight:** `benchmarks/src/profiling/parallel_chrono.py --bazel_config=NAME` — per-tree-depth
   Σ per chrono scope; results under
-  `benchmarks/results/per_function_timing/<CPU>/<projection> | <split> | /<dataset>/`.
+  `benchmarks/results/runtime/per_function_timing/<CPU>/<projection> | <split> | /<dataset>/`.
   Reuse committed baselines; new baselines: `n_trees=5, rows=3000000, num_threads=1`.
 - Median of 3 trees via `--num_trees=3` in ONE process (never 3 process invocations).
 - Machines: dev Mac (arm64; plain `bazel build -c opt`, icx pin ignored) — **Mac numbers don't
   count**; measurement boxes: AWS m7i (Xeon 8488C, 48 vCPU) and the i9-185H laptop (E-cores
-  off for timing — `benchmarks/utils/set_cpu_e_features.sh`; scripts handle it). perf yes;
+  off for timing — `benchmarks/src/utils/set_cpu_e_features.sh`; scripts handle it). perf yes;
   VTune/Advisor memory-access profiles never (freezes the box). Significance gate:
   **<15 % e2e = failed experiment** (log it anyway); ★ at ≥20 %.

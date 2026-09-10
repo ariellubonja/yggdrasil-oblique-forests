@@ -12,7 +12,7 @@ Random Forest (Bagging) and GBT (Boosting)?
 Every number in these CSVs is **held-out test-set** performance. Each training
 run is given `--test_csv`; the binary evaluates the trained model on that file
 and logs one line (`test-accuracy: … test-auc: … test-logloss: …`), which
-`benchmarks/utils/parse_log_to_csv.py` prefers over the RF-OOB / GBT
+`benchmarks/src/utils/parse_log_to_csv.py` prefers over the RF-OOB / GBT
 train-accuracy fallback. The fallback was never used here — every fold cell in
 every CSV is test-set accuracy. OOB is still computed during RF training
 (`--compute_oob_performances=true`) but does not appear in the CSVs.
@@ -23,11 +23,11 @@ same discrimination) and `*_logloss.csv`. Same shape as the main CSV.
 
 ## How the runs were made
 
-Two mechanisms, both driven by `benchmarks/evaluation/run_hve_m7i_all.sh`
+Two mechanisms, both driven by `benchmarks/src/run_hve_m7i_all.sh`
 (phases 0–4, resumable — finished CSVs are skipped on rerun):
 
 1. **CC18 sweeps** (`accuracy_hve_<learner>_<arm>_s<seed>*.csv`): plain
-   `benchmarks/evaluation/accuracy.sh <suffix>` invocations, one per
+   `benchmarks/src/accuracy.sh <suffix>` invocations, one per
    learner × arm × seed, parameterized via `EXTRA_TRAIN_ARGS` /
    `EXTRA_BAZEL_CONFIGS` (recorded in each CSV's provenance header).
    accuracy.sh = 10-fold CV over the 34 OpenML CC18 binary tasks in
@@ -36,7 +36,7 @@ Two mechanisms, both driven by `benchmarks/evaluation/run_hve_m7i_all.sh`
    One training run per fold; `fold_k` column = fold k−1's test CSV.
    `--num_trees` is owned by accuracy.sh: **RF 240** (5 × nproc), **GBT 300**.
    The seed sweep is the outer loop of
-   `benchmarks/evaluation/run_hist_vs_exact_accuracy.sh`.
+   `benchmarks/src/run_hist_vs_exact_accuracy.sh`.
 
 2. **Physics held-out runs** (`accuracy_hve_physics*.csv`): NOT accuracy.sh —
    direct `train_oblique_forest` invocations (phase1 of the chain), one run
@@ -65,7 +65,7 @@ the split finder distinguishable from switching the RNG seed?).
 
 ## Analysis
 
-`hist_vs_exact_accuracy/` is the output of `benchmarks/utils/accuracy_stats.py`
+`hist_vs_exact_accuracy/` is the output of `benchmarks/src/utils/accuracy_stats.py`
 over all these CSVs: `report.md` (all seeds; the physics rows join CC18 as 2
 extra datasets → 36 total), `seed1_only/` (primary view), per-dataset CSVs,
 LaTeX tables, `tidy.csv`. Unit of analysis is the dataset; per-dataset paired

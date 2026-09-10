@@ -6,7 +6,7 @@
 set -euo pipefail
 BIN_A="$1"; BIN_B="$2"; OUT="$3"
 REPO="$(git rev-parse --show-toplevel)"
-source "$REPO/benchmarks/utils/bench_common.sh"
+source "$REPO/benchmarks/src/utils/bench_common.sh"
 CC18="${ACCURACY_DATA_DIR:-$REPO/benchmarks/data/cc18_binary_csv}"
 # Fixed, numeric, NaN-free (dataset policy 2026-09-04), spanning 4..1776 features.
 TASKS=(task_10093_banknote-authentication task_37_diabetes task_9946_wdbc task_3917_kc1
@@ -30,7 +30,7 @@ for t in "${TASKS[@]}"; do
   # compare_models.sh exits 1 for "trees identical, metadata differs" too; GBT
   # headers carry training logs that differ run to run, so the nodes-* verdict
   # in its RESULT line is the signal.
-  "$REPO/benchmarks/evaluation/compare_models.sh" "$OUT/$t.A" "$OUT/$t.B" > "$OUT/$t.compare.txt" 2>&1 || true
+  "$REPO/benchmarks/src/compare_models.sh" "$OUT/$t.A" "$OUT/$t.B" > "$OUT/$t.compare.txt" 2>&1 || true
   res=$(grep -m1 '^RESULT:' "$OUT/$t.compare.txt" || echo "RESULT: no output")
   case "$res" in
     *BIT-IDENTICAL*)   echo "| $t | $NUM_TREES | BIT-IDENTICAL |" ;;

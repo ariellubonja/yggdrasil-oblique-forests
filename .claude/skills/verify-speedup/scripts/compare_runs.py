@@ -2,7 +2,7 @@
 """Compare two benchmark result CSVs (arm A = baseline, arm B = candidate) and
 write a markdown verdict table.
 
-Input CSV format (what benchmarks/evaluation/runtime.sh writes):
+Input CSV format (what benchmarks/src/runtime.sh writes):
     ==== PROVENANCE ====      optional "key: value" header block, closed by a
     ...                       line of '=' signs
     ====================

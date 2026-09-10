@@ -34,18 +34,18 @@ On a dev machine whose tree has uncommitted work, do the same inside
 `benchmarks/results` is gitignored on upstream-main-benchmarks; copy CSVs back into the fork's tree.
 Refreshing `upstream-main-benchmarks` after fork-side tooling changes: `git rebase upstream/main`,
 copy the scripts over, regenerate the harness with
-`python3 benchmarks/utils/make_trimmed_harness.py examples/train_oblique_forest.cc <wt>/examples/train_oblique_forest.cc`
+`python3 benchmarks/src/utils/make_trimmed_harness.py examples/train_oblique_forest.cc <wt>/examples/train_oblique_forest.cc`
 (fork checkout as cwd), build, commit on `upstream-main-benchmarks`.
 
 ## Scripts and knobs (never edit the scripts' defaults)
 
 | script | job | knobs |
 |---|---|---|
-| `benchmarks/evaluation/runtime.sh [--runs=N] <suffix>` | e2e wall time, median of N (default 3), builds first | `EXTRA_BAZEL_CONFIGS`, `EXTRA_TRAIN_ARGS`, `CSV_DATASETS_OVERRIDE`, `TRUNK_DATASETS_OVERRIDE` ("none" skips a group) |
-| `benchmarks/evaluation/accuracy.sh <suffix>` | CC18 10-fold held-out accuracy (34 tasks) | `EXTRA_BAZEL_CONFIGS`, `EXTRA_TRAIN_ARGS`, `ACCURACY_DATA_DIR` |
-| `benchmarks/evaluation/compare_models.sh <dirA> <dirB>` | sha256 of saved models; exit 0 = bit-identical | — |
-| `benchmarks/utils/bench_common.sh` | shared: icx pin (Linux), post-build compiler check, e-core toggle (185H only), provenance, tree count | `ONEAPI_SETVARS`, `NUM_TREES_DIVISOR` (default 1; **10 for every preliminary pass, on every machine**) |
-| `benchmarks/utils/parse_log_to_csv.py` | log → CSV; derives `algorithm` from the command line | pass flags as `--flag "value"` or `--flag=value`; older CSVs may carry `SPORF_unknown`/mislabelled families, so match priors on provenance, not on `algorithm` |
+| `benchmarks/src/runtime.sh [--runs=N] <suffix>` | e2e wall time, median of N (default 3), builds first | `EXTRA_BAZEL_CONFIGS`, `EXTRA_TRAIN_ARGS`, `CSV_DATASETS_OVERRIDE`, `TRUNK_DATASETS_OVERRIDE` ("none" skips a group) |
+| `benchmarks/src/accuracy.sh <suffix>` | CC18 10-fold held-out accuracy (34 tasks) | `EXTRA_BAZEL_CONFIGS`, `EXTRA_TRAIN_ARGS`, `ACCURACY_DATA_DIR` |
+| `benchmarks/src/compare_models.sh <dirA> <dirB>` | sha256 of saved models; exit 0 = bit-identical | — |
+| `benchmarks/src/utils/bench_common.sh` | shared: icx pin (Linux), post-build compiler check, e-core toggle (185H only), provenance, tree count | `ONEAPI_SETVARS`, `NUM_TREES_DIVISOR` (default 1; **10 for every preliminary pass, on every machine**) |
+| `benchmarks/src/utils/parse_log_to_csv.py` | log → CSV; derives `algorithm` from the command line | pass flags as `--flag "value"` or `--flag=value`; older CSVs may carry `SPORF_unknown`/mislabelled families, so match priors on provenance, not on `algorithm` |
 
 Output: `benchmarks/results/<suffix>.csv` with a provenance head
 (`date_utc, git_sha, git_branch, machine, machine_serial, compiler,
@@ -117,7 +117,7 @@ size, arm A: Bioresponse 35.7 s, Internet-Ads 25.1 s, madelon 10.1 s, nomao
    `EXTRA_BAZEL_CONFIGS`/`EXTRA_TRAIN_ARGS` (34 tasks × 10 folds, a few
    minutes at 30 GBT / 5 RF trees); `diff` the CSV bodies. Identical bodies
    confirm bit-identity; any difference → **MODEL CHANGED** warning with
-   per-task mean ± std deltas (`benchmarks/utils/accuracy_stats.py` helps).
+   per-task mean ± std deltas (`benchmarks/src/utils/accuracy_stats.py` helps).
 4. On the m7i the full protocol repeats step 3 at default size.
 
 ## Gates and report

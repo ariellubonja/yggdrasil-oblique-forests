@@ -324,7 +324,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--csv", default=os.path.join(
-        REPO_ROOT, "benchmarks", "results", "dataset_properties", "processed_manifest.csv"))
+        REPO_ROOT, "benchmarks", "data", "dataset_properties", "processed_manifest.csv"))
     ap.add_argument("--miss-threshold", type=float, default=10.0,
                     help="drop the dataset if its numeric-block miss%% is >= this")
     ap.add_argument("--keep-binary", action="store_true",
