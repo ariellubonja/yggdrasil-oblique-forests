@@ -70,6 +70,11 @@ DYNAMIC_SPLIT_THRESHOLDS=(
   4600
   5100
 )
+# Optional override of the ladder above, e.g.
+#   DYNAMIC_SPLIT_THRESHOLDS_OVERRIDE="$(seq -s' ' 1100 500 10000)"
+if [[ -n "${DYNAMIC_SPLIT_THRESHOLDS_OVERRIDE:-}" ]]; then
+  read -ra DYNAMIC_SPLIT_THRESHOLDS <<<"$DYNAMIC_SPLIT_THRESHOLDS_OVERRIDE"
+fi
 
 # Optional CSV datasets as "path|label_col" entries.
 CSV_DATASETS=(

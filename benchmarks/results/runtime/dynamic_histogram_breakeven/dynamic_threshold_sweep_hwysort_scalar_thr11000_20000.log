@@ -1,0 +1,1347 @@
+==== PROVENANCE ====
+date_utc: 2026-09-10T21:24:06Z
+git_sha: f43ac459-dirty
+git_branch: rebased-main
+machine: Intel(R) Xeon(R) Platinum 8488C (nproc=48)
+machine_serial: ec2d65b4-2555-44a5-d802-ecaea08b3ad7
+compiler: Intel(R) oneAPI DPC++/C++ Compiler 2025.2.1 (2025.2.0.20250806)
+EXTRA_BAZEL_CONFIGS: --config=disable_std_upper_bound_vectorization
+EXTRA_TRAIN_ARGS: --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+NUM_TREES_DIVISOR: 1
+NUM_TREES: 240  NUM_RUNS: 1
+DYNAMIC_SPLIT_THRESHOLDS: 11000 12000 13000 14000 15000 16000 17000 18000 19000 20000
+====================
+
+
+======== DYNAMIC THRESHOLD SWEEP  configs: --config=disable_std_upper_bound_vectorization  args: --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64 ========
+
+
+
+======== Threshold 11000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=11000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789075447.312977  110920 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789075448.246444  110920 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789075448.246513  110920 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789075448.246523  110920 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789075448.246525  110920 train_oblique_forest.cc:1313] dynamic_split_threshold = 11000 (from flag)
+I0000 00:00:1789075448.246527  110920 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789075448.246536  110920 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.933589s
+I0000 00:00:1789075448.246594  110920 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789075448.246596  110920 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789075448.246609  110920 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789075448.246621  110920 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789075448.247233  110920 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789075518.608181  111087 random_forest.cc:881] Train tree 1/240  [index:35 total:1m10.36s tree:1m10.36s]
+I0000 00:00:1789075590.181365  111082 random_forest.cc:881] Train tree 49/240  [index:51 total:2m21.93s tree:1m10.59s]
+I0000 00:00:1789075661.586549  111082 random_forest.cc:881] Train tree 97/240  [index:96 total:3m33.34s tree:1m11.40s]
+I0000 00:00:1789075734.968547  111082 random_forest.cc:881] Train tree 145/240  [index:144 total:4m46.72s tree:1m13.38s]
+I0000 00:00:1789075806.057564  111098 random_forest.cc:881] Train tree 193/240  [index:196 total:5m57.81s tree:1m10.43s]
+I0000 00:00:1789075819.078296  110920 random_forest.cc:899] random_forest.cc Training block took: 370.832 s
+W0000 00:00:1789075819.078329  110920 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=11000 median=370.832s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=11000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789075825.330585  112561 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789075825.670556  112561 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789075825.670618  112561 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789075825.670629  112561 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789075825.670630  112561 train_oblique_forest.cc:1313] dynamic_split_threshold = 11000 (from flag)
+I0000 00:00:1789075825.670632  112561 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789075825.670641  112561 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.340082s
+I0000 00:00:1789075825.670696  112561 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789075825.670698  112561 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789075825.670708  112561 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789075825.670719  112561 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789075825.671297  112561 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789075849.765712  112709 random_forest.cc:881] Train tree 1/240  [index:25 total:24.09s tree:24.09s]
+I0000 00:00:1789075874.863959  112709 random_forest.cc:881] Train tree 49/240  [index:48 total:49.19s tree:25.10s]
+I0000 00:00:1789075900.194977  112693 random_forest.cc:881] Train tree 97/240  [index:98 total:1m14.52s tree:25.11s]
+I0000 00:00:1789075925.027482  112694 random_forest.cc:881] Train tree 145/240  [index:145 total:1m39.36s tree:24.80s]
+I0000 00:00:1789075950.021184  112693 random_forest.cc:881] Train tree 193/240  [index:193 total:2m4.35s tree:24.98s]
+I0000 00:00:1789075954.179015  112561 random_forest.cc:899] random_forest.cc Training block took: 128.508 s
+W0000 00:00:1789075954.179051  112561 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=11000 median=128.508s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=11000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789075956.794323  113244 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789075958.519139  113244 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789075958.519210  113244 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789075958.519219  113244 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789075958.519220  113244 train_oblique_forest.cc:1313] dynamic_split_threshold = 11000 (from flag)
+I0000 00:00:1789075958.519223  113244 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789075958.519231  113244 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.72493s
+I0000 00:00:1789075958.519392  113244 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789075958.519398  113244 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789075958.519744  113244 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789075958.519807  113244 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789075958.520533  113244 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789075970.010291  113414 random_forest.cc:881] Train tree 1/240  [index:12 total:11.49s tree:11.49s]
+I0000 00:00:1789075993.154733  113417 random_forest.cc:881] Train tree 97/240  [index:97 total:34.63s tree:11.51s]
+I0000 00:00:1789076016.321727  113417 random_forest.cc:881] Train tree 193/240  [index:192 total:57.80s tree:11.61s]
+I0000 00:00:1789076017.476728  113244 random_forest.cc:899] random_forest.cc Training block took: 58.9575 s
+W0000 00:00:1789076017.476766  113244 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=11000 median=58.9575s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=11000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789076017.756750  113688 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789076019.130053  113688 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789076019.130087  113688 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789076019.130089  113688 train_oblique_forest.cc:1313] dynamic_split_threshold = 11000 (from flag)
+I0000 00:00:1789076019.130093  113688 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789076019.130103  113688 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.37338s
+I0000 00:00:1789076019.130434  113688 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789076019.130440  113688 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789076019.131080  113688 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789076019.131220  113688 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789076019.132162  113688 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789076082.830373  113750 random_forest.cc:881] Train tree 1/240  [index:11 total:1m3.70s tree:1m3.69s]
+I0000 00:00:1789076147.970600  113786 random_forest.cc:881] Train tree 49/240  [index:70 total:2m8.84s tree:1m2.78s]
+I0000 00:00:1789076214.342679  113786 random_forest.cc:881] Train tree 97/240  [index:96 total:3m15.21s tree:1m6.37s]
+I0000 00:00:1789076280.641460  113786 random_forest.cc:881] Train tree 145/240  [index:144 total:4m21.51s tree:1m6.30s]
+I0000 00:00:1789076347.101109  113766 random_forest.cc:881] Train tree 193/240  [index:194 total:5m27.97s tree:1m6.30s]
+I0000 00:00:1789076352.190746  113688 random_forest.cc:899] random_forest.cc Training block took: 333.061 s
+W0000 00:00:1789076352.190788  113688 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=11000 median=333.061s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=11000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789076353.273996  115073 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789076354.603959  115073 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789076354.603997  115073 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789076354.603999  115073 train_oblique_forest.cc:1313] dynamic_split_threshold = 11000 (from flag)
+I0000 00:00:1789076354.604003  115073 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789076354.604012  115073 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.33005s
+I0000 00:00:1789076354.606360  115073 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789076354.606392  115073 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789076354.612485  115073 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789076354.613528  115073 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789076354.616558  115073 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789076372.123460  115152 random_forest.cc:881] Train tree 1/240  [index:26 total:17.51s tree:17.51s]
+I0000 00:00:1789076392.243343  115146 random_forest.cc:881] Train tree 90/240  [index:79 total:37.63s tree:19.19s]
+I0000 00:00:1789076412.575509  115145 random_forest.cc:881] Train tree 144/240  [index:143 total:57.96s tree:19.66s]
+I0000 00:00:1789076444.851406  115168 random_forest.cc:881] Train tree 193/240  [index:192 total:1m30.23s tree:18.15s]
+I0000 00:00:1789076449.257995  115073 random_forest.cc:899] random_forest.cc Training block took: 94.654 s
+W0000 00:00:1789076449.258036  115073 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=11000 median=94.654s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=11000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789076449.902226  115560 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789076451.314016  115560 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789076451.314049  115560 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789076451.314051  115560 train_oblique_forest.cc:1313] dynamic_split_threshold = 11000 (from flag)
+I0000 00:00:1789076451.314055  115560 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789076451.314066  115560 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.41187s
+I0000 00:00:1789076451.341692  115560 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789076451.341988  115560 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789076451.406873  115560 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789076451.417412  115560 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789076451.442033  115560 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789076456.056605  115647 random_forest.cc:881] Train tree 1/240  [index:3 total:4.61s tree:4.61s]
+I0000 00:00:1789076476.148347  115639 random_forest.cc:881] Train tree 200/240  [index:196 total:24.71s tree:5.19s]
+I0000 00:00:1789076477.880229  115560 random_forest.cc:899] random_forest.cc Training block took: 26.5661 s
+W0000 00:00:1789076477.880266  115560 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=11000 median=26.5661s stddev=N/As n=1
+
+
+======== Threshold 12000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=12000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789076478.511415  115783 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789076479.434066  115783 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789076479.434132  115783 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789076479.434142  115783 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789076479.434143  115783 train_oblique_forest.cc:1313] dynamic_split_threshold = 12000 (from flag)
+I0000 00:00:1789076479.434146  115783 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789076479.434154  115783 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.922767s
+I0000 00:00:1789076479.434211  115783 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789076479.434213  115783 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789076479.434225  115783 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789076479.434237  115783 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789076479.434809  115783 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789076549.605704  115953 random_forest.cc:881] Train tree 1/240  [index:29 total:1m10.17s tree:1m10.17s]
+I0000 00:00:1789076621.165979  115919 random_forest.cc:881] Train tree 49/240  [index:50 total:2m21.73s tree:1m10.78s]
+I0000 00:00:1789076693.090439  115919 random_forest.cc:881] Train tree 97/240  [index:96 total:3m33.66s tree:1m11.92s]
+I0000 00:00:1789076764.677858  115919 random_forest.cc:881] Train tree 145/240  [index:144 total:4m45.24s tree:1m11.59s]
+I0000 00:00:1789076837.772702  115948 random_forest.cc:881] Train tree 193/240  [index:196 total:5m58.34s tree:1m10.86s]
+I0000 00:00:1789076848.238611  115783 random_forest.cc:899] random_forest.cc Training block took: 368.804 s
+W0000 00:00:1789076848.238642  115783 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=12000 median=368.804s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=12000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789076854.550203  117404 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789076854.887741  117404 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789076854.887810  117404 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789076854.887819  117404 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789076854.887822  117404 train_oblique_forest.cc:1313] dynamic_split_threshold = 12000 (from flag)
+I0000 00:00:1789076854.887824  117404 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789076854.887833  117404 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.337657s
+I0000 00:00:1789076854.887890  117404 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789076854.887893  117404 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789076854.887904  117404 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789076854.887916  117404 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789076854.888495  117404 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789076879.221333  117567 random_forest.cc:881] Train tree 1/240  [index:36 total:24.33s tree:24.33s]
+I0000 00:00:1789076903.661250  117548 random_forest.cc:881] Train tree 49/240  [index:49 total:48.77s tree:24.22s]
+I0000 00:00:1789076929.321743  117548 random_forest.cc:881] Train tree 97/240  [index:96 total:1m14.43s tree:25.66s]
+I0000 00:00:1789076954.178610  117548 random_forest.cc:881] Train tree 145/240  [index:144 total:1m39.29s tree:24.86s]
+I0000 00:00:1789076979.946973  117534 random_forest.cc:881] Train tree 193/240  [index:204 total:2m5.06s tree:24.42s]
+I0000 00:00:1789076983.197325  117404 random_forest.cc:899] random_forest.cc Training block took: 128.309 s
+W0000 00:00:1789076983.197361  117404 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=12000 median=128.309s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=12000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789076985.819940  118084 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789076987.520749  118084 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789076987.520812  118084 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789076987.520822  118084 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789076987.520824  118084 train_oblique_forest.cc:1313] dynamic_split_threshold = 12000 (from flag)
+I0000 00:00:1789076987.520826  118084 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789076987.520834  118084 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.70092s
+I0000 00:00:1789076987.521006  118084 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789076987.521012  118084 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789076987.521353  118084 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789076987.521417  118084 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789076987.522145  118084 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789076998.999340  118277 random_forest.cc:881] Train tree 1/240  [index:7 total:11.48s tree:11.47s]
+I0000 00:00:1789077022.210254  118259 random_forest.cc:881] Train tree 97/240  [index:98 total:34.69s tree:11.55s]
+I0000 00:00:1789077045.480948  118261 random_forest.cc:881] Train tree 193/240  [index:193 total:57.96s tree:11.61s]
+I0000 00:00:1789077046.538646  118084 random_forest.cc:899] random_forest.cc Training block took: 59.0178 s
+W0000 00:00:1789077046.538687  118084 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=12000 median=59.0178s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=12000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789077046.818325  118531 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789077048.158413  118531 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789077048.158448  118531 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789077048.158451  118531 train_oblique_forest.cc:1313] dynamic_split_threshold = 12000 (from flag)
+I0000 00:00:1789077048.158454  118531 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789077048.158464  118531 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.34016s
+I0000 00:00:1789077048.158806  118531 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789077048.158812  118531 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789077048.159497  118531 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789077048.159634  118531 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789077048.160610  118531 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789077111.687984  118616 random_forest.cc:881] Train tree 1/240  [index:30 total:1m3.53s tree:1m3.52s]
+I0000 00:00:1789077177.450774  118588 random_forest.cc:881] Train tree 49/240  [index:70 total:2m9.29s tree:1m3.20s]
+I0000 00:00:1789077243.625036  118617 random_forest.cc:881] Train tree 97/240  [index:100 total:3m15.46s tree:1m5.25s]
+I0000 00:00:1789077309.168947  118617 random_forest.cc:881] Train tree 145/240  [index:144 total:4m21.01s tree:1m5.54s]
+I0000 00:00:1789077375.132562  118617 random_forest.cc:881] Train tree 193/240  [index:192 total:5m26.97s tree:1m5.96s]
+I0000 00:00:1789077380.241363  118531 random_forest.cc:899] random_forest.cc Training block took: 332.083 s
+W0000 00:00:1789077380.241402  118531 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=12000 median=332.083s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=12000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789077381.310228  119930 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789077382.592026  119930 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789077382.592062  119930 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789077382.592064  119930 train_oblique_forest.cc:1313] dynamic_split_threshold = 12000 (from flag)
+I0000 00:00:1789077382.592068  119930 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789077382.592078  119930 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.28188s
+I0000 00:00:1789077382.594805  119930 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789077382.594840  119930 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789077382.601807  119930 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789077382.603065  119930 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789077382.606589  119930 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789077400.211105  120013 random_forest.cc:881] Train tree 1/240  [index:35 total:17.60s tree:17.60s]
+I0000 00:00:1789077420.215631  119995 random_forest.cc:881] Train tree 91/240  [index:87 total:37.61s tree:18.90s]
+I0000 00:00:1789077454.392498  119987 random_forest.cc:881] Train tree 145/240  [index:144 total:1m11.79s tree:18.61s]
+I0000 00:00:1789077474.448253  119982 random_forest.cc:881] Train tree 210/240  [index:223 total:1m31.84s tree:17.79s]
+I0000 00:00:1789077476.122844  119930 random_forest.cc:899] random_forest.cc Training block took: 93.5307 s
+W0000 00:00:1789077476.122883  119930 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=12000 median=93.5307s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=12000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789077476.772124  120409 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789077478.178632  120409 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789077478.178664  120409 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789077478.178668  120409 train_oblique_forest.cc:1313] dynamic_split_threshold = 12000 (from flag)
+I0000 00:00:1789077478.178672  120409 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789077478.178681  120409 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.40658s
+I0000 00:00:1789077478.205799  120409 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789077478.206097  120409 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789077478.270758  120409 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789077478.281196  120409 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789077478.305953  120409 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789077482.887478  120461 random_forest.cc:881] Train tree 1/240  [index:3 total:4.58s tree:4.58s]
+I0000 00:00:1789077502.911323  120474 random_forest.cc:881] Train tree 201/240  [index:200 total:24.61s tree:5.06s]
+I0000 00:00:1789077504.628189  120409 random_forest.cc:899] random_forest.cc Training block took: 26.4495 s
+W0000 00:00:1789077504.628224  120409 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=12000 median=26.4495s stddev=N/As n=1
+
+
+======== Threshold 13000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=13000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789077505.257805  120632 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789077506.172396  120632 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789077506.172469  120632 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789077506.172480  120632 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789077506.172481  120632 train_oblique_forest.cc:1313] dynamic_split_threshold = 13000 (from flag)
+I0000 00:00:1789077506.172483  120632 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789077506.172492  120632 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.914714s
+I0000 00:00:1789077506.172553  120632 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789077506.172555  120632 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789077506.172567  120632 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789077506.172580  120632 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789077506.173168  120632 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789077576.769604  120805 random_forest.cc:881] Train tree 1/240  [index:0 total:1m10.60s tree:1m10.60s]
+I0000 00:00:1789077648.005026  120805 random_forest.cc:881] Train tree 49/240  [index:48 total:2m21.83s tree:1m11.23s]
+I0000 00:00:1789077719.548274  120770 random_forest.cc:881] Train tree 97/240  [index:107 total:3m33.38s tree:1m10.31s]
+I0000 00:00:1789077791.933294  120764 random_forest.cc:881] Train tree 145/240  [index:150 total:4m45.76s tree:1m11.65s]
+I0000 00:00:1789077864.103749  120805 random_forest.cc:881] Train tree 193/240  [index:202 total:5m57.93s tree:1m10.96s]
+I0000 00:00:1789077871.978735  120632 random_forest.cc:899] random_forest.cc Training block took: 365.806 s
+W0000 00:00:1789077871.978772  120632 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=13000 median=365.806s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=13000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789077878.308919  122239 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789077878.638538  122239 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789077878.638610  122239 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789077878.638619  122239 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789077878.638621  122239 train_oblique_forest.cc:1313] dynamic_split_threshold = 13000 (from flag)
+I0000 00:00:1789077878.638623  122239 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789077878.638632  122239 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.32974s
+I0000 00:00:1789077878.638692  122239 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789077878.638694  122239 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789077878.638705  122239 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789077878.638716  122239 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789077878.639295  122239 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789077903.188031  122392 random_forest.cc:881] Train tree 1/240  [index:15 total:24.55s tree:24.55s]
+I0000 00:00:1789077928.111007  122392 random_forest.cc:881] Train tree 49/240  [index:48 total:49.47s tree:24.92s]
+I0000 00:00:1789077953.144878  122401 random_forest.cc:881] Train tree 97/240  [index:99 total:1m14.51s tree:24.81s]
+I0000 00:00:1789077978.117051  122401 random_forest.cc:881] Train tree 145/240  [index:144 total:1m39.48s tree:24.97s]
+I0000 00:00:1789078003.525636  122399 random_forest.cc:881] Train tree 193/240  [index:214 total:2m4.89s tree:24.23s]
+I0000 00:00:1789078006.711388  122239 random_forest.cc:899] random_forest.cc Training block took: 128.073 s
+W0000 00:00:1789078006.711421  122239 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=13000 median=128.073s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=13000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789078009.333874  122923 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789078011.051714  122923 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789078011.051778  122923 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789078011.051788  122923 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789078011.051790  122923 train_oblique_forest.cc:1313] dynamic_split_threshold = 13000 (from flag)
+I0000 00:00:1789078011.051791  122923 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789078011.051800  122923 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.71795s
+I0000 00:00:1789078011.051966  122923 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789078011.051979  122923 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789078011.052316  122923 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789078011.052381  122923 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789078011.053116  122923 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789078022.585570  123092 random_forest.cc:881] Train tree 1/240  [index:26 total:11.53s tree:11.53s]
+I0000 00:00:1789078045.673670  123117 random_forest.cc:881] Train tree 97/240  [index:96 total:34.62s tree:11.57s]
+I0000 00:00:1789078068.825276  123117 random_forest.cc:881] Train tree 193/240  [index:192 total:57.77s tree:11.61s]
+I0000 00:00:1789078070.424313  122923 random_forest.cc:899] random_forest.cc Training block took: 59.3725 s
+W0000 00:00:1789078070.424351  122923 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=13000 median=59.3725s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=13000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789078070.704576  123366 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789078072.054708  123366 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789078072.054743  123366 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789078072.054745  123366 train_oblique_forest.cc:1313] dynamic_split_threshold = 13000 (from flag)
+I0000 00:00:1789078072.054749  123366 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789078072.054759  123366 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.35021s
+I0000 00:00:1789078072.055119  123366 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789078072.055124  123366 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789078072.055816  123366 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789078072.055956  123366 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789078072.056946  123366 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789078135.476393  123444 random_forest.cc:881] Train tree 1/240  [index:30 total:1m3.42s tree:1m3.42s]
+I0000 00:00:1789078200.100280  123431 random_forest.cc:881] Train tree 49/240  [index:70 total:2m8.04s tree:1m2.12s]
+I0000 00:00:1789078266.458938  123431 random_forest.cc:881] Train tree 97/240  [index:96 total:3m14.40s tree:1m6.36s]
+I0000 00:00:1789078332.372174  123431 random_forest.cc:881] Train tree 145/240  [index:144 total:4m20.32s tree:1m5.91s]
+I0000 00:00:1789078397.888814  123431 random_forest.cc:881] Train tree 193/240  [index:192 total:5m25.83s tree:1m5.52s]
+I0000 00:00:1789078403.194996  123366 random_forest.cc:899] random_forest.cc Training block took: 331.14 s
+W0000 00:00:1789078403.195036  123366 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=13000 median=331.14s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=13000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789078404.268624  124746 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789078405.549837  124746 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789078405.549872  124746 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789078405.549875  124746 train_oblique_forest.cc:1313] dynamic_split_threshold = 13000 (from flag)
+I0000 00:00:1789078405.549879  124746 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789078405.549889  124746 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.28129s
+I0000 00:00:1789078405.552664  124746 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789078405.552700  124746 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789078405.559727  124746 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789078405.561020  124746 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789078405.564456  124746 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789078422.736144  124820 random_forest.cc:881] Train tree 1/240  [index:26 total:17.17s tree:17.17s]
+I0000 00:00:1789078442.761158  124842 random_forest.cc:881] Train tree 86/240  [index:92 total:37.20s tree:18.23s]
+I0000 00:00:1789078462.821818  124812 random_forest.cc:881] Train tree 144/240  [index:143 total:57.26s tree:19.35s]
+I0000 00:00:1789078495.637036  124840 random_forest.cc:881] Train tree 193/240  [index:194 total:1m30.07s tree:17.94s]
+I0000 00:00:1789078499.423832  124746 random_forest.cc:899] random_forest.cc Training block took: 93.8739 s
+W0000 00:00:1789078499.423868  124746 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=13000 median=93.8739s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=13000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789078500.068928  125221 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789078501.535213  125221 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789078501.535245  125221 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789078501.535247  125221 train_oblique_forest.cc:1313] dynamic_split_threshold = 13000 (from flag)
+I0000 00:00:1789078501.535250  125221 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789078501.535259  125221 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.46636s
+I0000 00:00:1789078501.558193  125221 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789078501.558459  125221 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789078501.622156  125221 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789078501.632721  125221 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789078501.657509  125221 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789078506.293702  125283 random_forest.cc:881] Train tree 1/240  [index:3 total:4.64s tree:4.63s]
+I0000 00:00:1789078526.336495  125297 random_forest.cc:881] Train tree 200/240  [index:208 total:24.68s tree:4.70s]
+I0000 00:00:1789078527.947861  125221 random_forest.cc:899] random_forest.cc Training block took: 26.4126 s
+W0000 00:00:1789078527.947897  125221 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=13000 median=26.4126s stddev=N/As n=1
+
+
+======== Threshold 14000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=14000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789078528.577627  125447 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789078529.501182  125447 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789078529.501255  125447 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789078529.501265  125447 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789078529.501267  125447 train_oblique_forest.cc:1313] dynamic_split_threshold = 14000 (from flag)
+I0000 00:00:1789078529.501269  125447 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789078529.501278  125447 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.923678s
+I0000 00:00:1789078529.501336  125447 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789078529.501338  125447 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789078529.501351  125447 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789078529.501362  125447 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789078529.501938  125447 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789078599.702294  125627 random_forest.cc:881] Train tree 1/240  [index:47 total:1m10.20s tree:1m10.19s]
+I0000 00:00:1789078671.042194  125627 random_forest.cc:881] Train tree 49/240  [index:48 total:2m21.54s tree:1m11.34s]
+I0000 00:00:1789078742.777142  125621 random_forest.cc:881] Train tree 97/240  [index:100 total:3m33.28s tree:1m10.67s]
+I0000 00:00:1789078814.514664  125595 random_forest.cc:881] Train tree 145/240  [index:148 total:4m45.01s tree:1m10.86s]
+I0000 00:00:1789078886.097974  125595 random_forest.cc:881] Train tree 193/240  [index:192 total:5m56.60s tree:1m11.58s]
+I0000 00:00:1789078898.599532  125447 random_forest.cc:899] random_forest.cc Training block took: 369.098 s
+W0000 00:00:1789078898.599567  125447 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=14000 median=369.098s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=14000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789078904.909078  127074 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789078905.236670  127074 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789078905.236735  127074 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789078905.236744  127074 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789078905.236746  127074 train_oblique_forest.cc:1313] dynamic_split_threshold = 14000 (from flag)
+I0000 00:00:1789078905.236748  127074 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789078905.236756  127074 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.327705s
+I0000 00:00:1789078905.236815  127074 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789078905.236817  127074 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789078905.236827  127074 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789078905.236838  127074 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789078905.237413  127074 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789078929.555949  127213 random_forest.cc:881] Train tree 1/240  [index:29 total:24.32s tree:24.31s]
+I0000 00:00:1789078954.270321  127213 random_forest.cc:881] Train tree 49/240  [index:48 total:49.03s tree:24.71s]
+I0000 00:00:1789078979.858833  127191 random_forest.cc:881] Train tree 97/240  [index:102 total:1m14.62s tree:24.80s]
+I0000 00:00:1789079004.098159  127214 random_forest.cc:881] Train tree 145/240  [index:146 total:1m38.86s tree:24.15s]
+I0000 00:00:1789079029.416008  127195 random_forest.cc:881] Train tree 193/240  [index:193 total:2m4.18s tree:24.83s]
+I0000 00:00:1789079033.496866  127074 random_forest.cc:899] random_forest.cc Training block took: 128.26 s
+W0000 00:00:1789079033.496903  127074 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=14000 median=128.26s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=14000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789079036.115695  127756 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789079037.839026  127756 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789079037.839087  127756 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789079037.839097  127756 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789079037.839099  127756 train_oblique_forest.cc:1313] dynamic_split_threshold = 14000 (from flag)
+I0000 00:00:1789079037.839101  127756 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789079037.839109  127756 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.72344s
+I0000 00:00:1789079037.839272  127756 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789079037.839278  127756 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789079037.839621  127756 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789079037.839684  127756 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789079037.840411  127756 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789079049.288127  127927 random_forest.cc:881] Train tree 1/240  [index:21 total:11.45s tree:11.44s]
+I0000 00:00:1789079072.283208  127918 random_forest.cc:881] Train tree 97/240  [index:97 total:34.44s tree:11.46s]
+I0000 00:00:1789079095.416713  127918 random_forest.cc:881] Train tree 193/240  [index:192 total:57.58s tree:11.60s]
+I0000 00:00:1789079097.005395  127756 random_forest.cc:899] random_forest.cc Training block took: 59.1663 s
+W0000 00:00:1789079097.005435  127756 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=14000 median=59.1663s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=14000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789079097.286920  128191 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789079098.666832  128191 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789079098.666867  128191 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789079098.666869  128191 train_oblique_forest.cc:1313] dynamic_split_threshold = 14000 (from flag)
+I0000 00:00:1789079098.666872  128191 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789079098.666881  128191 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.37999s
+I0000 00:00:1789079098.667179  128191 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789079098.667184  128191 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789079098.667784  128191 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789079098.667897  128191 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789079098.668727  128191 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789079161.972921  128256 random_forest.cc:881] Train tree 1/240  [index:3 total:1m3.30s tree:1m3.30s]
+I0000 00:00:1789079227.545237  128268 random_forest.cc:881] Train tree 49/240  [index:92 total:2m8.88s tree:1m2.08s]
+I0000 00:00:1789079293.044298  128256 random_forest.cc:881] Train tree 97/240  [index:100 total:3m14.38s tree:1m4.48s]
+I0000 00:00:1789079357.640839  128268 random_forest.cc:881] Train tree 145/240  [index:146 total:4m18.97s tree:1m4.39s]
+I0000 00:00:1789079424.406441  128268 random_forest.cc:881] Train tree 193/240  [index:192 total:5m25.74s tree:1m6.77s]
+I0000 00:00:1789079430.926017  128191 random_forest.cc:899] random_forest.cc Training block took: 332.259 s
+W0000 00:00:1789079430.926058  128191 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=14000 median=332.259s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=14000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789079431.994550  129578 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789079433.323478  129578 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789079433.323513  129578 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789079433.323515  129578 train_oblique_forest.cc:1313] dynamic_split_threshold = 14000 (from flag)
+I0000 00:00:1789079433.323519  129578 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789079433.323530  129578 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.32901s
+I0000 00:00:1789079433.325887  129578 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789079433.325919  129578 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789079433.332031  129578 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789079433.333103  129578 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789079433.336127  129578 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789079450.380501  129680 random_forest.cc:881] Train tree 1/240  [index:5 total:17.04s tree:17.04s]
+I0000 00:00:1789079470.578437  129662 random_forest.cc:881] Train tree 87/240  [index:90 total:37.24s tree:18.47s]
+I0000 00:00:1789079490.847921  129655 random_forest.cc:881] Train tree 144/240  [index:143 total:57.51s tree:19.25s]
+I0000 00:00:1789079522.904038  129661 random_forest.cc:881] Train tree 193/240  [index:195 total:1m29.57s tree:17.74s]
+I0000 00:00:1789079527.365706  129578 random_forest.cc:899] random_forest.cc Training block took: 94.0422 s
+W0000 00:00:1789079527.365747  129578 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=14000 median=94.0422s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=14000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789079528.006330  130054 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789079529.507806  130054 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789079529.507839  130054 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789079529.507841  130054 train_oblique_forest.cc:1313] dynamic_split_threshold = 14000 (from flag)
+I0000 00:00:1789079529.507845  130054 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789079529.507855  130054 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.50155s
+I0000 00:00:1789079529.530677  130054 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789079529.530945  130054 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789079529.594521  130054 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789079529.604936  130054 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789079529.629445  130054 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789079534.247566  130113 random_forest.cc:881] Train tree 1/240  [index:3 total:4.62s tree:4.61s]
+I0000 00:00:1789079554.267096  130140 random_forest.cc:881] Train tree 202/240  [index:208 total:24.64s tree:4.68s]
+I0000 00:00:1789079555.793946  130054 random_forest.cc:899] random_forest.cc Training block took: 26.2861 s
+W0000 00:00:1789079555.793991  130054 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=14000 median=26.2861s stddev=N/As n=1
+
+
+======== Threshold 15000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=15000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789079556.421602  130286 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789079557.337058  130286 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789079557.337136  130286 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789079557.337146  130286 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789079557.337148  130286 train_oblique_forest.cc:1313] dynamic_split_threshold = 15000 (from flag)
+I0000 00:00:1789079557.337150  130286 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789079557.337159  130286 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.915583s
+I0000 00:00:1789079557.337220  130286 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789079557.337222  130286 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789079557.337235  130286 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789079557.337247  130286 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789079557.337823  130286 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789079627.228848  130422 random_forest.cc:881] Train tree 1/240  [index:34 total:1m9.89s tree:1m9.89s]
+I0000 00:00:1789079698.123851  130422 random_forest.cc:881] Train tree 49/240  [index:48 total:2m20.79s tree:1m10.89s]
+I0000 00:00:1789079769.846979  130431 random_forest.cc:881] Train tree 97/240  [index:99 total:3m32.51s tree:1m10.15s]
+I0000 00:00:1789079841.184343  130454 random_forest.cc:881] Train tree 145/240  [index:148 total:4m43.85s tree:1m10.77s]
+I0000 00:00:1789079913.529908  130454 random_forest.cc:881] Train tree 193/240  [index:192 total:5m56.19s tree:1m12.34s]
+I0000 00:00:1789079925.880541  130286 random_forest.cc:899] random_forest.cc Training block took: 368.543 s
+W0000 00:00:1789079925.880578  130286 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=15000 median=368.543s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=15000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789079932.233174  131903 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789079932.560358  131903 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789079932.560434  131903 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789079932.560444  131903 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789079932.560446  131903 train_oblique_forest.cc:1313] dynamic_split_threshold = 15000 (from flag)
+I0000 00:00:1789079932.560448  131903 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789079932.560456  131903 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.327307s
+I0000 00:00:1789079932.560516  131903 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789079932.560518  131903 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789079932.560528  131903 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789079932.560540  131903 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789079932.561119  131903 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789079956.957667  132047 random_forest.cc:881] Train tree 1/240  [index:36 total:24.40s tree:24.39s]
+I0000 00:00:1789079981.034167  132047 random_forest.cc:881] Train tree 49/240  [index:48 total:48.47s tree:24.08s]
+I0000 00:00:1789080006.627315  132046 random_forest.cc:881] Train tree 97/240  [index:101 total:1m14.07s tree:24.70s]
+I0000 00:00:1789080031.672636  132025 random_forest.cc:881] Train tree 145/240  [index:145 total:1m39.11s tree:24.93s]
+I0000 00:00:1789080056.523396  132025 random_forest.cc:881] Train tree 193/240  [index:192 total:2m3.96s tree:24.85s]
+I0000 00:00:1789080061.086565  131903 random_forest.cc:899] random_forest.cc Training block took: 128.526 s
+W0000 00:00:1789080061.086601  131903 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=15000 median=128.526s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=15000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789080063.742785  132591 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789080065.492125  132591 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789080065.492191  132591 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789080065.492200  132591 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789080065.492202  132591 train_oblique_forest.cc:1313] dynamic_split_threshold = 15000 (from flag)
+I0000 00:00:1789080065.492204  132591 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789080065.492213  132591 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.74945s
+I0000 00:00:1789080065.492377  132591 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789080065.492384  132591 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789080065.492722  132591 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789080065.492787  132591 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789080065.493517  132591 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789080076.939008  132758 random_forest.cc:881] Train tree 1/240  [index:29 total:11.45s tree:11.44s]
+I0000 00:00:1789080100.029049  132783 random_forest.cc:881] Train tree 97/240  [index:97 total:34.54s tree:11.52s]
+I0000 00:00:1789080123.149063  132758 random_forest.cc:881] Train tree 193/240  [index:193 total:57.66s tree:11.51s]
+I0000 00:00:1789080124.413608  132591 random_forest.cc:899] random_forest.cc Training block took: 58.9214 s
+W0000 00:00:1789080124.413653  132591 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=15000 median=58.9214s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=15000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789080124.695055  133035 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789080126.041350  133035 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789080126.041385  133035 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789080126.041387  133035 train_oblique_forest.cc:1313] dynamic_split_threshold = 15000 (from flag)
+I0000 00:00:1789080126.041391  133035 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789080126.041402  133035 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.34637s
+I0000 00:00:1789080126.041751  133035 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789080126.041757  133035 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789080126.042446  133035 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789080126.042591  133035 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789080126.043571  133035 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789080190.138605  133110 random_forest.cc:881] Train tree 1/240  [index:30 total:1m4.10s tree:1m4.09s]
+I0000 00:00:1789080254.417698  133089 random_forest.cc:881] Train tree 49/240  [index:70 total:2m8.37s tree:1m2.54s]
+I0000 00:00:1789080319.501628  133088 random_forest.cc:881] Train tree 97/240  [index:100 total:3m13.46s tree:1m3.57s]
+I0000 00:00:1789080385.991706  133088 random_forest.cc:881] Train tree 145/240  [index:144 total:4m19.95s tree:1m6.49s]
+I0000 00:00:1789080451.841497  133128 random_forest.cc:881] Train tree 193/240  [index:199 total:5m25.80s tree:1m4.67s]
+I0000 00:00:1789080457.298647  133035 random_forest.cc:899] random_forest.cc Training block took: 331.257 s
+W0000 00:00:1789080457.298686  133035 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=15000 median=331.257s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=15000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789080458.399467  134412 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789080459.746219  134412 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789080459.746251  134412 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789080459.746253  134412 train_oblique_forest.cc:1313] dynamic_split_threshold = 15000 (from flag)
+I0000 00:00:1789080459.746256  134412 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789080459.746265  134412 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.34683s
+I0000 00:00:1789080459.748585  134412 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789080459.748616  134412 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789080459.754754  134412 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789080459.755831  134412 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789080459.758886  134412 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789080476.781359  134510 random_forest.cc:881] Train tree 1/240  [index:5 total:17.02s tree:17.02s]
+I0000 00:00:1789080496.842245  134476 random_forest.cc:881] Train tree 86/240  [index:90 total:37.08s tree:18.24s]
+I0000 00:00:1789080516.999830  134474 random_forest.cc:881] Train tree 144/240  [index:143 total:57.24s tree:19.14s]
+I0000 00:00:1789080549.433595  134494 random_forest.cc:881] Train tree 193/240  [index:194 total:1m29.67s tree:17.90s]
+I0000 00:00:1789080552.864700  134412 random_forest.cc:899] random_forest.cc Training block took: 93.1184 s
+W0000 00:00:1789080552.864738  134412 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=15000 median=93.1184s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=15000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789080553.517909  134887 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789080554.941868  134887 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789080554.941901  134887 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789080554.941903  134887 train_oblique_forest.cc:1313] dynamic_split_threshold = 15000 (from flag)
+I0000 00:00:1789080554.941907  134887 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789080554.941918  134887 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.42404s
+I0000 00:00:1789080554.968556  134887 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789080554.968827  134887 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789080555.033194  134887 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789080555.043590  134887 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789080555.068495  134887 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789080559.686034  134983 random_forest.cc:881] Train tree 1/240  [index:3 total:4.62s tree:4.61s]
+I0000 00:00:1789080579.753751  134970 random_forest.cc:881] Train tree 205/240  [index:197 total:24.69s tree:5.17s]
+I0000 00:00:1789080580.724534  134887 random_forest.cc:899] random_forest.cc Training block took: 25.7826 s
+W0000 00:00:1789080580.724569  134887 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=15000 median=25.7826s stddev=N/As n=1
+
+
+======== Threshold 16000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=16000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789080581.357157  135110 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789080582.275499  135110 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789080582.275574  135110 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789080582.275584  135110 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789080582.275586  135110 train_oblique_forest.cc:1313] dynamic_split_threshold = 16000 (from flag)
+I0000 00:00:1789080582.275588  135110 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789080582.275597  135110 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.918467s
+I0000 00:00:1789080582.275657  135110 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789080582.275660  135110 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789080582.275673  135110 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789080582.275685  135110 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789080582.276277  135110 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789080652.668086  135252 random_forest.cc:881] Train tree 1/240  [index:29 total:1m10.39s tree:1m10.39s]
+I0000 00:00:1789080723.513471  135252 random_forest.cc:881] Train tree 49/240  [index:48 total:2m21.24s tree:1m10.84s]
+I0000 00:00:1789080794.209294  135239 random_forest.cc:881] Train tree 97/240  [index:99 total:3m31.93s tree:1m10.03s]
+I0000 00:00:1789080866.001347  135248 random_forest.cc:881] Train tree 145/240  [index:150 total:4m43.73s tree:1m10.04s]
+I0000 00:00:1789080938.041966  135248 random_forest.cc:881] Train tree 193/240  [index:192 total:5m55.77s tree:1m12.04s]
+I0000 00:00:1789080949.536270  135110 random_forest.cc:899] random_forest.cc Training block took: 367.261 s
+W0000 00:00:1789080949.536306  135110 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=16000 median=367.261s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=16000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789080955.863108  136730 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789080956.199040  136730 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789080956.199106  136730 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789080956.199116  136730 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789080956.199117  136730 train_oblique_forest.cc:1313] dynamic_split_threshold = 16000 (from flag)
+I0000 00:00:1789080956.199119  136730 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789080956.199128  136730 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.336046s
+I0000 00:00:1789080956.199184  136730 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789080956.199186  136730 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789080956.199196  136730 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789080956.199207  136730 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789080956.199778  136730 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789080980.324850  136882 random_forest.cc:881] Train tree 1/240  [index:41 total:24.13s tree:24.12s]
+I0000 00:00:1789081004.966488  136869 random_forest.cc:881] Train tree 49/240  [index:52 total:48.77s tree:24.41s]
+I0000 00:00:1789081030.171688  136895 random_forest.cc:881] Train tree 97/240  [index:101 total:1m13.97s tree:24.44s]
+I0000 00:00:1789081055.094838  136883 random_forest.cc:881] Train tree 145/240  [index:146 total:1m38.90s tree:24.41s]
+I0000 00:00:1789081080.259153  136895 random_forest.cc:881] Train tree 193/240  [index:193 total:2m4.06s tree:24.80s]
+I0000 00:00:1789081083.990058  136730 random_forest.cc:899] random_forest.cc Training block took: 127.791 s
+W0000 00:00:1789081083.990093  136730 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=16000 median=127.791s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=16000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789081086.612015  137411 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789081088.354212  137411 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789081088.354283  137411 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789081088.354293  137411 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789081088.354295  137411 train_oblique_forest.cc:1313] dynamic_split_threshold = 16000 (from flag)
+I0000 00:00:1789081088.354297  137411 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789081088.354305  137411 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.74232s
+I0000 00:00:1789081088.354473  137411 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789081088.354480  137411 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789081088.354821  137411 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789081088.354885  137411 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789081088.355607  137411 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789081099.753854  137573 random_forest.cc:881] Train tree 1/240  [index:13 total:11.40s tree:11.39s]
+I0000 00:00:1789081122.849577  137572 random_forest.cc:881] Train tree 97/240  [index:98 total:34.49s tree:11.50s]
+I0000 00:00:1789081145.943850  137575 random_forest.cc:881] Train tree 193/240  [index:194 total:57.59s tree:11.45s]
+I0000 00:00:1789081147.155773  137411 random_forest.cc:899] random_forest.cc Training block took: 58.8015 s
+W0000 00:00:1789081147.155821  137411 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=16000 median=58.8015s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=16000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789081147.438099  137854 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789081148.823919  137854 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789081148.823953  137854 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789081148.823956  137854 train_oblique_forest.cc:1313] dynamic_split_threshold = 16000 (from flag)
+I0000 00:00:1789081148.823959  137854 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789081148.823972  137854 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.3859s
+I0000 00:00:1789081148.824285  137854 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789081148.824290  137854 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789081148.824888  137854 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789081148.825020  137854 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789081148.825868  137854 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789081212.403791  137947 random_forest.cc:881] Train tree 1/240  [index:43 total:1m3.58s tree:1m3.57s]
+I0000 00:00:1789081277.051312  137918 random_forest.cc:881] Train tree 49/240  [index:70 total:2m8.23s tree:1m2.48s]
+I0000 00:00:1789081342.792659  137918 random_forest.cc:881] Train tree 97/240  [index:96 total:3m13.97s tree:1m5.74s]
+I0000 00:00:1789081408.452745  137945 random_forest.cc:881] Train tree 145/240  [index:182 total:4m19.63s tree:1m1.70s]
+I0000 00:00:1789081474.190038  137925 random_forest.cc:881] Train tree 193/240  [index:202 total:5m25.36s tree:1m3.94s]
+I0000 00:00:1789081479.598272  137854 random_forest.cc:899] random_forest.cc Training block took: 330.774 s
+W0000 00:00:1789081479.598315  137854 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=16000 median=330.774s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=16000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789081480.665610  139232 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789081481.949665  139232 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789081481.949700  139232 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789081481.949702  139232 train_oblique_forest.cc:1313] dynamic_split_threshold = 16000 (from flag)
+I0000 00:00:1789081481.949706  139232 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789081481.949717  139232 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.28413s
+I0000 00:00:1789081481.952519  139232 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789081481.952554  139232 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789081481.959582  139232 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789081481.960837  139232 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789081481.964397  139232 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789081499.096052  139285 random_forest.cc:881] Train tree 1/240  [index:5 total:17.13s tree:17.13s]
+I0000 00:00:1789081519.134756  139327 random_forest.cc:881] Train tree 89/240  [index:88 total:37.17s tree:18.53s]
+I0000 00:00:1789081553.199129  139299 random_forest.cc:881] Train tree 145/240  [index:144 total:1m11.23s tree:18.11s]
+I0000 00:00:1789081573.221230  139313 random_forest.cc:881] Train tree 217/240  [index:216 total:1m31.26s tree:18.05s]
+I0000 00:00:1789081575.051427  139232 random_forest.cc:899] random_forest.cc Training block took: 93.1017 s
+W0000 00:00:1789081575.051467  139232 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=16000 median=93.1017s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=16000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789081575.704546  139704 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789081577.134715  139704 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789081577.134748  139704 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789081577.134751  139704 train_oblique_forest.cc:1313] dynamic_split_threshold = 16000 (from flag)
+I0000 00:00:1789081577.134755  139704 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789081577.134765  139704 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.43024s
+I0000 00:00:1789081577.160567  139704 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789081577.160835  139704 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789081577.224953  139704 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789081577.235198  139704 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789081577.259912  139704 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789081581.835385  139799 random_forest.cc:881] Train tree 1/240  [index:1 total:4.58s tree:4.57s]
+I0000 00:00:1789081601.836164  139802 random_forest.cc:881] Train tree 215/240  [index:206 total:24.58s tree:5.04s]
+I0000 00:00:1789081603.039500  139704 random_forest.cc:899] random_forest.cc Training block took: 25.9047 s
+W0000 00:00:1789081603.039539  139704 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=16000 median=25.9047s stddev=N/As n=1
+
+
+======== Threshold 17000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=17000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789081603.668373  139935 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789081604.588154  139935 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789081604.588232  139935 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789081604.588242  139935 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789081604.588244  139935 train_oblique_forest.cc:1313] dynamic_split_threshold = 17000 (from flag)
+I0000 00:00:1789081604.588246  139935 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789081604.588255  139935 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.91991s
+I0000 00:00:1789081604.588316  139935 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789081604.588318  139935 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789081604.588331  139935 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789081604.588342  139935 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789081604.588926  139935 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789081674.733037  140075 random_forest.cc:881] Train tree 1/240  [index:27 total:1m10.14s tree:1m10.14s]
+I0000 00:00:1789081745.774858  140089 random_forest.cc:881] Train tree 49/240  [index:53 total:2m21.19s tree:1m10.34s]
+I0000 00:00:1789081816.938584  140079 random_forest.cc:881] Train tree 97/240  [index:98 total:3m32.35s tree:1m10.96s]
+I0000 00:00:1789081888.242048  140072 random_forest.cc:881] Train tree 145/240  [index:151 total:4m43.65s tree:1m10.14s]
+I0000 00:00:1789081960.310849  140072 random_forest.cc:881] Train tree 193/240  [index:192 total:5m55.72s tree:1m12.07s]
+I0000 00:00:1789081970.406695  139935 random_forest.cc:899] random_forest.cc Training block took: 365.818 s
+W0000 00:00:1789081970.406724  139935 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=17000 median=365.818s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=17000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789081976.752519  141543 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789081977.080774  141543 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789081977.080845  141543 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789081977.080855  141543 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789081977.080857  141543 train_oblique_forest.cc:1313] dynamic_split_threshold = 17000 (from flag)
+I0000 00:00:1789081977.080859  141543 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789081977.080867  141543 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.328374s
+I0000 00:00:1789081977.080926  141543 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789081977.080928  141543 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789081977.080938  141543 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789081977.080951  141543 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789081977.081532  141543 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789082001.507104  141698 random_forest.cc:881] Train tree 1/240  [index:8 total:24.43s tree:24.42s]
+I0000 00:00:1789082025.986335  141673 random_forest.cc:881] Train tree 49/240  [index:49 total:48.90s tree:24.43s]
+I0000 00:00:1789082051.073531  141698 random_forest.cc:881] Train tree 97/240  [index:97 total:1m13.99s tree:25.07s]
+I0000 00:00:1789082075.664165  141673 random_forest.cc:881] Train tree 145/240  [index:146 total:1m38.58s tree:24.55s]
+I0000 00:00:1789082101.142893  141698 random_forest.cc:881] Train tree 193/240  [index:193 total:2m4.06s tree:25.16s]
+I0000 00:00:1789082104.861355  141543 random_forest.cc:899] random_forest.cc Training block took: 127.78 s
+W0000 00:00:1789082104.861390  141543 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=17000 median=127.78s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=17000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789082107.490952  142220 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789082109.238827  142220 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789082109.238897  142220 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789082109.238906  142220 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789082109.238908  142220 train_oblique_forest.cc:1313] dynamic_split_threshold = 17000 (from flag)
+I0000 00:00:1789082109.238910  142220 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789082109.238919  142220 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.74799s
+I0000 00:00:1789082109.239087  142220 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789082109.239094  142220 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789082109.239430  142220 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789082109.239493  142220 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789082109.240217  142220 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789082120.668722  142377 random_forest.cc:881] Train tree 1/240  [index:18 total:11.43s tree:11.42s]
+I0000 00:00:1789082143.735731  142418 random_forest.cc:881] Train tree 97/240  [index:96 total:34.50s tree:11.53s]
+I0000 00:00:1789082166.750063  142418 random_forest.cc:881] Train tree 193/240  [index:192 total:57.51s tree:11.56s]
+I0000 00:00:1789082168.389727  142220 random_forest.cc:899] random_forest.cc Training block took: 59.1508 s
+W0000 00:00:1789082168.389768  142220 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=17000 median=59.1508s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=17000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789082168.671140  142663 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789082170.026253  142663 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789082170.026288  142663 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789082170.026291  142663 train_oblique_forest.cc:1313] dynamic_split_threshold = 17000 (from flag)
+I0000 00:00:1789082170.026295  142663 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789082170.026305  142663 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.35519s
+I0000 00:00:1789082170.026657  142663 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789082170.026663  142663 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789082170.027346  142663 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789082170.027486  142663 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789082170.028442  142663 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789082234.234361  142739 random_forest.cc:881] Train tree 1/240  [index:31 total:1m4.21s tree:1m4.20s]
+I0000 00:00:1789082297.595487  142742 random_forest.cc:881] Train tree 49/240  [index:70 total:2m7.57s tree:1m1.99s]
+I0000 00:00:1789082364.055722  142730 random_forest.cc:881] Train tree 97/240  [index:98 total:3m14.03s tree:1m4.90s]
+I0000 00:00:1789082429.287530  142758 random_forest.cc:881] Train tree 145/240  [index:146 total:4m19.26s tree:1m4.95s]
+I0000 00:00:1789082493.714671  142758 random_forest.cc:881] Train tree 193/240  [index:192 total:5m23.69s tree:1m4.43s]
+I0000 00:00:1789082501.031460  142663 random_forest.cc:899] random_forest.cc Training block took: 331.005 s
+W0000 00:00:1789082501.031498  142663 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=17000 median=331.005s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=17000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789082502.101458  144043 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789082503.433668  144043 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789082503.433701  144043 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789082503.433703  144043 train_oblique_forest.cc:1313] dynamic_split_threshold = 17000 (from flag)
+I0000 00:00:1789082503.433706  144043 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789082503.433716  144043 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.33228s
+I0000 00:00:1789082503.436114  144043 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789082503.436146  144043 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789082503.442287  144043 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789082503.443355  144043 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789082503.446328  144043 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789082520.679420  144127 random_forest.cc:881] Train tree 1/240  [index:26 total:17.23s tree:17.23s]
+I0000 00:00:1789082540.838711  144132 random_forest.cc:881] Train tree 94/240  [index:79 total:37.39s tree:19.18s]
+I0000 00:00:1789082575.056773  144137 random_forest.cc:881] Train tree 145/240  [index:144 total:1m11.61s tree:18.15s]
+I0000 00:00:1789082595.058818  144130 random_forest.cc:881] Train tree 224/240  [index:230 total:1m31.61s tree:17.75s]
+I0000 00:00:1789082596.472620  144043 random_forest.cc:899] random_forest.cc Training block took: 93.0389 s
+W0000 00:00:1789082596.472659  144043 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=17000 median=93.0389s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=17000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789082597.121345  144520 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789082598.530681  144520 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789082598.530716  144520 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789082598.530718  144520 train_oblique_forest.cc:1313] dynamic_split_threshold = 17000 (from flag)
+I0000 00:00:1789082598.530722  144520 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789082598.530732  144520 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.40942s
+I0000 00:00:1789082598.557862  144520 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789082598.558160  144520 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789082598.622717  144520 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789082598.633128  144520 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789082598.657804  144520 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789082603.292316  144595 random_forest.cc:881] Train tree 1/240  [index:38 total:4.63s tree:4.63s]
+I0000 00:00:1789082623.324386  144587 random_forest.cc:881] Train tree 218/240  [index:214 total:24.67s tree:4.95s]
+I0000 00:00:1789082624.452998  144520 random_forest.cc:899] random_forest.cc Training block took: 25.9222 s
+W0000 00:00:1789082624.453033  144520 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=17000 median=25.9222s stddev=N/As n=1
+
+
+======== Threshold 18000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=18000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789082625.083998  144743 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789082626.016637  144743 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789082626.016711  144743 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789082626.016721  144743 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789082626.016722  144743 train_oblique_forest.cc:1313] dynamic_split_threshold = 18000 (from flag)
+I0000 00:00:1789082626.016724  144743 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789082626.016733  144743 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.932767s
+I0000 00:00:1789082626.016793  144743 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789082626.016795  144743 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789082626.016807  144743 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789082626.016819  144743 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789082626.017402  144743 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789082695.964005  144887 random_forest.cc:881] Train tree 1/240  [index:29 total:1m9.95s tree:1m9.94s]
+I0000 00:00:1789082767.759134  144881 random_forest.cc:881] Train tree 49/240  [index:58 total:2m21.74s tree:1m10.74s]
+I0000 00:00:1789082838.634830  144911 random_forest.cc:881] Train tree 97/240  [index:99 total:3m32.62s tree:1m10.47s]
+I0000 00:00:1789082909.768388  144911 random_forest.cc:881] Train tree 145/240  [index:144 total:4m43.75s tree:1m11.13s]
+I0000 00:00:1789082982.477041  144892 random_forest.cc:881] Train tree 193/240  [index:198 total:5m56.46s tree:1m11.12s]
+I0000 00:00:1789082991.512632  144743 random_forest.cc:899] random_forest.cc Training block took: 365.496 s
+W0000 00:00:1789082991.512668  144743 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=18000 median=365.496s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=18000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789082997.759212  146372 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789082998.097060  146372 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789082998.097129  146372 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789082998.097138  146372 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789082998.097140  146372 train_oblique_forest.cc:1313] dynamic_split_threshold = 18000 (from flag)
+I0000 00:00:1789082998.097142  146372 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789082998.097150  146372 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.337966s
+I0000 00:00:1789082998.097211  146372 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789082998.097213  146372 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789082998.097223  146372 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789082998.097234  146372 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789082998.097803  146372 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789083022.443064  146522 random_forest.cc:881] Train tree 1/240  [index:26 total:24.35s tree:24.34s]
+I0000 00:00:1789083046.499248  146522 random_forest.cc:881] Train tree 49/240  [index:48 total:48.40s tree:24.06s]
+I0000 00:00:1789083071.962314  146522 random_forest.cc:881] Train tree 97/240  [index:96 total:1m13.86s tree:25.46s]
+I0000 00:00:1789083096.699605  146522 random_forest.cc:881] Train tree 145/240  [index:144 total:1m38.60s tree:24.74s]
+I0000 00:00:1789083121.372094  146488 random_forest.cc:881] Train tree 193/240  [index:193 total:2m3.27s tree:24.32s]
+I0000 00:00:1789083125.992868  146372 random_forest.cc:899] random_forest.cc Training block took: 127.896 s
+W0000 00:00:1789083125.992904  146372 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=18000 median=127.896s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=18000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789083128.621166  147048 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789083130.338574  147048 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789083130.338639  147048 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789083130.338648  147048 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789083130.338650  147048 train_oblique_forest.cc:1313] dynamic_split_threshold = 18000 (from flag)
+I0000 00:00:1789083130.338652  147048 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789083130.338661  147048 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.71752s
+I0000 00:00:1789083130.338829  147048 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789083130.338836  147048 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789083130.339175  147048 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789083130.339238  147048 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789083130.339956  147048 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789083141.696726  147207 random_forest.cc:881] Train tree 1/240  [index:21 total:11.36s tree:11.36s]
+I0000 00:00:1789083164.660256  147207 random_forest.cc:881] Train tree 97/240  [index:97 total:34.32s tree:11.42s]
+I0000 00:00:1789083187.697899  147207 random_forest.cc:881] Train tree 193/240  [index:192 total:57.36s tree:11.53s]
+I0000 00:00:1789083189.188091  147048 random_forest.cc:899] random_forest.cc Training block took: 58.8494 s
+W0000 00:00:1789083189.188134  147048 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=18000 median=58.8494s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=18000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789083189.469499  147492 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789083190.822603  147492 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789083190.822639  147492 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789083190.822641  147492 train_oblique_forest.cc:1313] dynamic_split_threshold = 18000 (from flag)
+I0000 00:00:1789083190.822645  147492 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789083190.822655  147492 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.35318s
+I0000 00:00:1789083190.823026  147492 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789083190.823033  147492 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789083190.823709  147492 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789083190.823851  147492 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789083190.824821  147492 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789083253.995681  147589 random_forest.cc:881] Train tree 1/240  [index:43 total:1m3.17s tree:1m3.17s]
+I0000 00:00:1789083318.093423  147588 random_forest.cc:881] Train tree 49/240  [index:70 total:2m7.27s tree:1m1.70s]
+I0000 00:00:1789083384.486015  147588 random_forest.cc:881] Train tree 97/240  [index:96 total:3m13.66s tree:1m6.39s]
+I0000 00:00:1789083449.199441  147594 random_forest.cc:881] Train tree 145/240  [index:154 total:4m18.37s tree:1m3.21s]
+I0000 00:00:1789083515.141731  147594 random_forest.cc:881] Train tree 193/240  [index:192 total:5m24.32s tree:1m5.94s]
+I0000 00:00:1789083523.231344  147492 random_forest.cc:899] random_forest.cc Training block took: 332.409 s
+W0000 00:00:1789083523.231385  147492 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=18000 median=332.409s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=18000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789083524.297374  148884 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789083525.578549  148884 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789083525.578583  148884 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789083525.578585  148884 train_oblique_forest.cc:1313] dynamic_split_threshold = 18000 (from flag)
+I0000 00:00:1789083525.578589  148884 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789083525.578599  148884 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.28125s
+I0000 00:00:1789083525.581400  148884 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789083525.581434  148884 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789083525.588427  148884 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789083525.589688  148884 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789083525.593194  148884 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789083542.382363  148957 random_forest.cc:881] Train tree 1/240  [index:26 total:16.79s tree:16.78s]
+I0000 00:00:1789083562.545992  148967 random_forest.cc:881] Train tree 87/240  [index:55 total:36.95s tree:19.15s]
+I0000 00:00:1789083596.809319  148957 random_forest.cc:881] Train tree 145/240  [index:144 total:1m11.22s tree:18.15s]
+I0000 00:00:1789083616.814513  148958 random_forest.cc:881] Train tree 219/240  [index:219 total:1m31.22s tree:18.11s]
+I0000 00:00:1789083618.640810  148884 random_forest.cc:899] random_forest.cc Training block took: 93.0622 s
+W0000 00:00:1789083618.640851  148884 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=18000 median=93.0622s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=18000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789083619.289579  149355 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789083620.774528  149355 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789083620.774561  149355 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789083620.774563  149355 train_oblique_forest.cc:1313] dynamic_split_threshold = 18000 (from flag)
+I0000 00:00:1789083620.774567  149355 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789083620.774576  149355 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.48502s
+I0000 00:00:1789083620.797513  149355 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789083620.797783  149355 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789083620.861730  149355 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789083620.872104  149355 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789083620.896824  149355 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789083625.489188  149459 random_forest.cc:881] Train tree 1/240  [index:1 total:4.59s tree:4.59s]
+I0000 00:00:1789083645.496255  149413 random_forest.cc:881] Train tree 218/240  [index:204 total:24.60s tree:5.19s]
+I0000 00:00:1789083646.662891  149355 random_forest.cc:899] random_forest.cc Training block took: 25.8883 s
+W0000 00:00:1789083646.662929  149355 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=18000 median=25.8883s stddev=N/As n=1
+
+
+======== Threshold 19000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=19000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789083647.292835  149586 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789083648.212824  149586 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789083648.212897  149586 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789083648.212907  149586 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789083648.212909  149586 train_oblique_forest.cc:1313] dynamic_split_threshold = 19000 (from flag)
+I0000 00:00:1789083648.212911  149586 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789083648.212920  149586 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.920111s
+I0000 00:00:1789083648.212983  149586 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789083648.212985  149586 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789083648.212997  149586 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789083648.213009  149586 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789083648.213589  149586 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789083717.961791  149716 random_forest.cc:881] Train tree 1/240  [index:17 total:1m9.75s tree:1m9.74s]
+I0000 00:00:1789083788.862254  149716 random_forest.cc:881] Train tree 49/240  [index:48 total:2m20.65s tree:1m10.90s]
+I0000 00:00:1789083858.905456  149716 random_forest.cc:881] Train tree 97/240  [index:96 total:3m30.69s tree:1m10.04s]
+I0000 00:00:1789083930.376140  149716 random_forest.cc:881] Train tree 145/240  [index:144 total:4m42.16s tree:1m11.47s]
+I0000 00:00:1789084002.058126  149716 random_forest.cc:881] Train tree 193/240  [index:192 total:5m53.84s tree:1m11.68s]
+I0000 00:00:1789084013.825705  149586 random_forest.cc:899] random_forest.cc Training block took: 365.613 s
+W0000 00:00:1789084013.825737  149586 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=19000 median=365.613s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=19000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789084020.240038  151188 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789084020.578380  151188 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789084020.578446  151188 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789084020.578455  151188 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789084020.578457  151188 train_oblique_forest.cc:1313] dynamic_split_threshold = 19000 (from flag)
+I0000 00:00:1789084020.578459  151188 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789084020.578467  151188 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.338459s
+I0000 00:00:1789084020.578525  151188 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789084020.578528  151188 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789084020.578537  151188 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789084020.578549  151188 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789084020.579131  151188 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789084044.642563  151335 random_forest.cc:881] Train tree 1/240  [index:19 total:24.06s tree:24.06s]
+I0000 00:00:1789084068.859978  151335 random_forest.cc:881] Train tree 49/240  [index:48 total:48.28s tree:24.22s]
+I0000 00:00:1789084094.187565  151335 random_forest.cc:881] Train tree 97/240  [index:96 total:1m13.61s tree:25.33s]
+I0000 00:00:1789084118.885394  151335 random_forest.cc:881] Train tree 145/240  [index:144 total:1m38.31s tree:24.70s]
+I0000 00:00:1789084143.333015  151338 random_forest.cc:881] Train tree 193/240  [index:193 total:2m2.75s tree:24.41s]
+I0000 00:00:1789084147.630806  151188 random_forest.cc:899] random_forest.cc Training block took: 127.052 s
+W0000 00:00:1789084147.630837  151188 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=19000 median=127.052s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=19000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789084150.284897  151865 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789084151.998707  151865 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789084151.998771  151865 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789084151.998780  151865 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789084151.998782  151865 train_oblique_forest.cc:1313] dynamic_split_threshold = 19000 (from flag)
+I0000 00:00:1789084151.998784  151865 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789084151.998792  151865 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.71392s
+I0000 00:00:1789084151.998966  151865 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789084151.998976  151865 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789084151.999315  151865 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789084151.999378  151865 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789084152.000113  151865 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789084163.415554  152030 random_forest.cc:881] Train tree 1/240  [index:27 total:11.42s tree:11.41s]
+I0000 00:00:1789084186.278469  152052 random_forest.cc:881] Train tree 97/240  [index:96 total:34.28s tree:11.40s]
+I0000 00:00:1789084209.111618  152052 random_forest.cc:881] Train tree 193/240  [index:192 total:57.11s tree:11.45s]
+I0000 00:00:1789084210.715537  151865 random_forest.cc:899] random_forest.cc Training block took: 58.7167 s
+W0000 00:00:1789084210.715584  151865 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=19000 median=58.7167s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=19000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789084210.997150  152304 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789084212.408626  152304 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789084212.408661  152304 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789084212.408663  152304 train_oblique_forest.cc:1313] dynamic_split_threshold = 19000 (from flag)
+I0000 00:00:1789084212.408666  152304 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789084212.408677  152304 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.41155s
+I0000 00:00:1789084212.408978  152304 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789084212.408983  152304 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789084212.409581  152304 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789084212.409702  152304 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789084212.410547  152304 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789084275.865625  152387 random_forest.cc:881] Train tree 1/240  [index:31 total:1m3.46s tree:1m3.45s]
+I0000 00:00:1789084339.983700  152377 random_forest.cc:881] Train tree 49/240  [index:70 total:2m7.57s tree:1m2.13s]
+I0000 00:00:1789084406.099512  152377 random_forest.cc:881] Train tree 97/240  [index:96 total:3m13.69s tree:1m6.12s]
+I0000 00:00:1789084471.613368  152377 random_forest.cc:881] Train tree 145/240  [index:144 total:4m19.20s tree:1m5.51s]
+I0000 00:00:1789084536.234411  152388 random_forest.cc:881] Train tree 193/240  [index:198 total:5m23.82s tree:1m3.73s]
+I0000 00:00:1789084542.591480  152304 random_forest.cc:899] random_forest.cc Training block took: 330.183 s
+W0000 00:00:1789084542.591518  152304 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=19000 median=330.183s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=19000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789084543.658302  153680 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789084544.988248  153680 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789084544.988280  153680 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789084544.988283  153680 train_oblique_forest.cc:1313] dynamic_split_threshold = 19000 (from flag)
+I0000 00:00:1789084544.988286  153680 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789084544.988296  153680 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.33002s
+I0000 00:00:1789084544.990667  153680 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789084544.990699  153680 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789084544.996802  153680 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789084544.997835  153680 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789084545.000772  153680 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789084561.870509  153778 random_forest.cc:881] Train tree 1/240  [index:26 total:16.87s tree:16.87s]
+I0000 00:00:1789084581.927951  153738 random_forest.cc:881] Train tree 86/240  [index:85 total:36.93s tree:18.55s]
+I0000 00:00:1789084616.419687  153764 random_forest.cc:881] Train tree 145/240  [index:146 total:1m11.42s tree:17.89s]
+I0000 00:00:1789084636.441479  153763 random_forest.cc:881] Train tree 225/240  [index:225 total:1m31.44s tree:18.01s]
+I0000 00:00:1789084638.037417  153680 random_forest.cc:899] random_forest.cc Training block took: 93.0491 s
+W0000 00:00:1789084638.037459  153680 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=19000 median=93.0491s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=19000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789084638.687183  154155 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789084640.143538  154155 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789084640.143570  154155 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789084640.143572  154155 train_oblique_forest.cc:1313] dynamic_split_threshold = 19000 (from flag)
+I0000 00:00:1789084640.143575  154155 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789084640.143584  154155 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.45643s
+I0000 00:00:1789084640.166433  154155 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789084640.166701  154155 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789084640.230437  154155 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789084640.240732  154155 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789084640.265183  154155 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789084644.912534  154236 random_forest.cc:881] Train tree 1/240  [index:38 total:4.65s tree:4.64s]
+I0000 00:00:1789084664.925543  154252 random_forest.cc:881] Train tree 221/240  [index:216 total:24.66s tree:4.98s]
+I0000 00:00:1789084666.106956  154155 random_forest.cc:899] random_forest.cc Training block took: 25.9634 s
+W0000 00:00:1789084666.106998  154155 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=19000 median=25.9634s stddev=N/As n=1
+
+
+======== Threshold 20000 ========
+
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/HIGGS_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=20000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789084666.738887  154378 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/HIGGS_with_header.csv
+I0000 00:00:1789084667.664236  154378 train_oblique_forest.cc:1108] Single-pass CSV load complete: 11000000 rows, 29 columns.
+I0000 00:00:1789084667.664314  154378 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789084667.664325  154378 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789084667.664327  154378 train_oblique_forest.cc:1313] dynamic_split_threshold = 20000 (from flag)
+I0000 00:00:1789084667.664329  154378 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789084667.664338  154378 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.925478s
+I0000 00:00:1789084667.664400  154378 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789084667.664402  154378 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789084667.664415  154378 random_forest.cc:534] Training random forest on 11000000 example(s) and 28 feature(s).
+I0000 00:00:1789084667.664427  154378 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789084667.665018  154378 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789084737.257707  154531 random_forest.cc:881] Train tree 1/240  [index:27 total:1m9.59s tree:1m9.59s]
+I0000 00:00:1789084808.771799  154536 random_forest.cc:881] Train tree 49/240  [index:61 total:2m21.11s tree:1m9.95s]
+I0000 00:00:1789084878.352860  154536 random_forest.cc:881] Train tree 97/240  [index:96 total:3m30.69s tree:1m9.58s]
+I0000 00:00:1789084949.319763  154536 random_forest.cc:881] Train tree 145/240  [index:144 total:4m41.65s tree:1m10.97s]
+I0000 00:00:1789085021.827713  154510 random_forest.cc:881] Train tree 193/240  [index:193 total:5m54.16s tree:1m12.46s]
+I0000 00:00:1789085031.188879  154378 random_forest.cc:899] random_forest.cc Training block took: 363.525 s
+W0000 00:00:1789085031.188916  154378 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=HIGGS_with_header threshold=20000 median=363.525s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/SUSY_with_header.csv" --label_col "class" --num_trees=240 --dynamic_split_threshold=20000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789085037.509915  156016 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/SUSY_with_header.csv
+I0000 00:00:1789085037.840490  156016 train_oblique_forest.cc:1108] Single-pass CSV load complete: 5000000 rows, 19 columns.
+I0000 00:00:1789085037.840564  156016 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789085037.840574  156016 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789085037.840576  156016 train_oblique_forest.cc:1313] dynamic_split_threshold = 20000 (from flag)
+I0000 00:00:1789085037.840578  156016 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789085037.840586  156016 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 0.330697s
+I0000 00:00:1789085037.840648  156016 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789085037.840650  156016 abstract_learner.cc:185] The label "class" was removed from the input feature set.
+I0000 00:00:1789085037.840661  156016 random_forest.cc:534] Training random forest on 5000000 example(s) and 18 feature(s).
+I0000 00:00:1789085037.840673  156016 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789085037.841256  156016 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789085062.078651  156173 random_forest.cc:881] Train tree 1/240  [index:15 total:24.24s tree:24.24s]
+I0000 00:00:1789085086.228828  156173 random_forest.cc:881] Train tree 49/240  [index:48 total:48.39s tree:24.15s]
+I0000 00:00:1789085111.536365  156162 random_forest.cc:881] Train tree 97/240  [index:98 total:1m13.70s tree:24.63s]
+I0000 00:00:1789085136.389983  156173 random_forest.cc:881] Train tree 145/240  [index:145 total:1m38.55s tree:24.83s]
+I0000 00:00:1789085161.135582  156174 random_forest.cc:881] Train tree 193/240  [index:193 total:2m3.29s tree:24.60s]
+I0000 00:00:1789085164.486099  156016 random_forest.cc:899] random_forest.cc Training block took: 126.645 s
+W0000 00:00:1789085164.486133  156016 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=SUSY_with_header threshold=20000 median=126.645s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode csv --train_csv "benchmarks/data/epsilon_normalized_train.csv" --label_col "label" --num_trees=240 --dynamic_split_threshold=20000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789085167.137503  156693 train_oblique_forest.cc:1101] Loading CSV in a single pass: benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1789085168.895878  156693 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1789085168.895947  156693 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789085168.895956  156693 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789085168.895958  156693 train_oblique_forest.cc:1313] dynamic_split_threshold = 20000 (from flag)
+I0000 00:00:1789085168.895960  156693 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789085168.895972  156693 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.7585s
+I0000 00:00:1789085168.896134  156693 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789085168.896141  156693 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1789085168.896477  156693 random_forest.cc:534] Training random forest on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1789085168.896542  156693 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789085168.897276  156693 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789085180.276358  156877 random_forest.cc:881] Train tree 1/240  [index:31 total:11.38s tree:11.37s]
+I0000 00:00:1789085203.181685  156889 random_forest.cc:881] Train tree 97/240  [index:96 total:34.28s tree:11.43s]
+I0000 00:00:1789085226.057995  156889 random_forest.cc:881] Train tree 193/240  [index:192 total:57.16s tree:11.42s]
+I0000 00:00:1789085227.972070  156693 random_forest.cc:899] random_forest.cc Training block took: 59.0761 s
+W0000 00:00:1789085227.972115  156693 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=epsilon_normalized_train threshold=20000 median=59.0761s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 1500000 --cols 4096 --num_trees=240 --dynamic_split_threshold=20000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789085228.254378  157148 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=1500000, cols=4096, layout=column
+I0000 00:00:1789085229.609619  157148 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789085229.609654  157148 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789085229.609657  157148 train_oblique_forest.cc:1313] dynamic_split_threshold = 20000 (from flag)
+I0000 00:00:1789085229.609661  157148 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789085229.609670  157148 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.35532s
+I0000 00:00:1789085229.610021  157148 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789085229.610027  157148 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789085229.610711  157148 random_forest.cc:534] Training random forest on 1500000 example(s) and 4096 feature(s).
+I0000 00:00:1789085229.610854  157148 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789085229.611835  157148 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789085292.825836  157226 random_forest.cc:881] Train tree 1/240  [index:30 total:1m3.21s tree:1m3.21s]
+I0000 00:00:1789085357.547245  157201 random_forest.cc:881] Train tree 49/240  [index:70 total:2m7.94s tree:1m2.59s]
+I0000 00:00:1789085422.862613  157201 random_forest.cc:881] Train tree 97/240  [index:96 total:3m13.25s tree:1m5.32s]
+I0000 00:00:1789085488.290543  157201 random_forest.cc:881] Train tree 145/240  [index:144 total:4m18.68s tree:1m5.43s]
+I0000 00:00:1789085554.106846  157201 random_forest.cc:881] Train tree 193/240  [index:192 total:5m24.50s tree:1m5.82s]
+I0000 00:00:1789085559.225785  157148 random_forest.cc:899] random_forest.cc Training block took: 329.616 s
+W0000 00:00:1789085559.225823  157148 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_1500000_x_4096 threshold=20000 median=329.616s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 150000 --cols 40000 --num_trees=240 --dynamic_split_threshold=20000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789085560.296999  158516 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=150000, cols=40000, layout=column
+I0000 00:00:1789085561.628556  158516 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789085561.628589  158516 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789085561.628591  158516 train_oblique_forest.cc:1313] dynamic_split_threshold = 20000 (from flag)
+I0000 00:00:1789085561.628594  158516 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789085561.628604  158516 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.33164s
+I0000 00:00:1789085561.630961  158516 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789085561.630995  158516 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789085561.637160  158516 random_forest.cc:534] Training random forest on 150000 example(s) and 40000 feature(s).
+I0000 00:00:1789085561.638198  158516 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789085561.641144  158516 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789085578.383730  158590 random_forest.cc:881] Train tree 1/240  [index:26 total:16.74s tree:16.74s]
+I0000 00:00:1789085598.478909  158618 random_forest.cc:881] Train tree 89/240  [index:94 total:36.84s tree:17.88s]
+I0000 00:00:1789085632.693974  158590 random_forest.cc:881] Train tree 145/240  [index:144 total:1m11.05s tree:18.14s]
+I0000 00:00:1789085652.702887  158579 random_forest.cc:881] Train tree 223/240  [index:226 total:1m31.06s tree:17.70s]
+I0000 00:00:1789085654.791221  158516 random_forest.cc:899] random_forest.cc Training block took: 93.1626 s
+W0000 00:00:1789085654.791256  158516 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_150000_x_40000 threshold=20000 median=93.1626s stddev=N/As n=1
+./bazel-bin/examples/train_oblique_forest --input_mode trunk --rows 15000 --cols 400000 --num_trees=240 --dynamic_split_threshold=20000 --feature_split_type Oblique --numerical_split_type "Dynamic Random Histogram" --histogram_num_bins 64
+----- Run 1/1 -----
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1789085655.436648  158992 train_oblique_forest.cc:1133] Generating trunk synthetic dataset: rows=15000, cols=400000, layout=column
+I0000 00:00:1789085656.838869  158992 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1789085656.838903  158992 train_oblique_forest.cc:1304] Configuring oblique splits
+I0000 00:00:1789085656.838906  158992 train_oblique_forest.cc:1313] dynamic_split_threshold = 20000 (from flag)
+I0000 00:00:1789085656.838910  158992 train_oblique_forest.cc:1398] Using Dynamic Random Histogram with 64 samples
+I0000 00:00:1789085656.838920  158992 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.4023s
+I0000 00:00:1789085656.865616  158992 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1789085656.865909  158992 abstract_learner.cc:185] The label "y" was removed from the input feature set.
+I0000 00:00:1789085656.930181  158992 random_forest.cc:534] Training random forest on 15000 example(s) and 400000 feature(s).
+I0000 00:00:1789085656.940695  158992 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1789085656.965014  158992 random_forest.cc:663] num_threads being used: 48
+I0000 00:00:1789085661.547061  159049 random_forest.cc:881] Train tree 1/240  [index:1 total:4.58s tree:4.58s]
+I0000 00:00:1789085681.547112  159059 random_forest.cc:881] Train tree 219/240  [index:205 total:24.58s tree:5.15s]
+I0000 00:00:1789085682.678344  158992 random_forest.cc:899] random_forest.cc Training block took: 25.8394 s
+W0000 00:00:1789085682.678376  158992 random_forest.cc:1216] EXITING EARLY TO SPEED UP EXPERIMENTS!
+RESULT dataset=trunk_15000_x_400000 threshold=20000 median=25.8394s stddev=N/As n=1
