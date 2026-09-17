@@ -90,7 +90,7 @@ def series_for(arm_prefix: str, split: str, ds_label: str, max_depth=None):
     return out
 
 
-def draw(panels, out, stem_out, tag_panel=False):
+def draw(panels, out, stem_out, tag_panel=False, grid=True, share_y=False):
     """One row of panels sharing a single legend; panels = [(title, series)].
 
     tag_panel adds a `panel` column -- needed only when panels share a dataset."""
@@ -108,7 +108,12 @@ def draw(panels, out, stem_out, tag_panel=False):
             ax.plot(d["depth"], d["node_train_s"], STYLES[k], color=COLORS[k], lw=1.6, label=label)
         ax.set_title(title, fontsize=10, loc="left")
         ax.set_xlabel("Tree depth"); ax.set_ylim(bottom=0); ax.set_xlim(left=1)
-        ax.grid(axis="y", color="#e6e5e0", lw=0.6); ax.set_axisbelow(True)
+        if grid:
+            ax.grid(axis="y", color="#e6e5e0", lw=0.6); ax.set_axisbelow(True)
+    if share_y:
+        top = max(ax.get_ylim()[1] for ax in axes[0])
+        for ax in axes[0]:
+            ax.set_ylim(0, top)
     axes[0][0].set_ylabel("Train time per depth (s)")
     h, l = axes[0][0].get_legend_handles_labels()
     ncol = 4 if len(panels) > 1 else 2
@@ -126,18 +131,20 @@ def main():
     ap.add_argument("--split", choices=list(STEM_OUT), default="Oblique")
     ap.add_argument("--datasets", default=None, help="comma list of " + ",".join(DATASET_DIRS))
     ap.add_argument("--ensemble", choices=["Bagging", "Boosting"], default="Bagging")
-    ap.add_argument("--max_depth", type=int, default=None, help="crop the x axis (e.g. 10 for GBT)")
+    ap.add_argument("--max_depth", type=int, default=None,
+                    help="crop the x axis (default 50 with --fig1)")
     ap.add_argument("--fig1", action="store_true",
                     help="paper Figure 1: one HIGGS panel per model family, shared legend")
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
 
     if a.fig1:
-        panels = [(t, series_for(pre, sp, "HIGGS", a.max_depth)) for t, pre, sp in FIG1_PANELS]
+        max_depth = 50 if a.max_depth is None else a.max_depth
+        panels = [(t, series_for(pre, sp, "HIGGS", max_depth)) for t, pre, sp in FIG1_PANELS]
         panels = [p for p in panels if p[1]]
         if len(panels) != len(FIG1_PANELS):
             sys.exit("fig1: a model family has no data")
-        draw(panels, out, STEM_OUT_FIG1, tag_panel=True)
+        draw(panels, out, STEM_OUT_FIG1, tag_panel=True, grid=False, share_y=True)
         return
 
     gbt = a.ensemble == "Boosting"
