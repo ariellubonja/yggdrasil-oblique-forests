@@ -26,6 +26,12 @@ below directly; the user should never have to relay between them.
   ("Vec Adaptive - Results", "Vec Adaptive - Writing", "Distributed GBT", "SPO Future
   Work") and act on the highest tier in scope. When an item lands, republish with it
   marked Done or add the follow-up item. "Jobs", "PhD" and Daily are personal — leave them.
+  **Read-only snapshot, no live watch (user directive 2026-09-17, reaffirmed 2026-09-18):**
+  read it once with the Artifact tool's `action: "read"` and never call
+  `ArtifactComments action: "watch"` on it. A publish to it arms a watch, and `--resume`
+  restores the watch on the most recently used artifact, so right after any read or publish
+  of the board run `ArtifactComments action: "watch"` (no url) and, if the board is listed,
+  stop it with `on: false`. Republish-notifications from the board must never start a turn.
 - **Google Drive** (connector acts as the user; no sharing changes needed). Project folder
   id `15WAf1xfDQhGxyqt6whJvfoGoaJjrGl7_`. "Oblique RF Work Journal" doc
   `1hxgMZm3lmtWtLB_h6WLLSwgw6kohxnumLNUhjM2Nb_I` holds meeting agendas, ideas and YDF
