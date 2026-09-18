@@ -116,7 +116,8 @@ configs. Details in `build_measure.md`.
 - Fine AP: `Dw1PreSize, Dw1Sweep, Dw1SweepBig, Dw1SweepGeneric, Dw1SweepColWalk,
   Dw1SharedBag, Dw1ColWalkGroupByNode, Dw1ColWalkBagScatter, SymBuildBag, SymSortBag,
   SymSweep`.
-- Fine EP: `HistoPath (HistogramSetup, MinMaxNumerical, AssignSamplesToHistogram,
+- Fine EP: `HistoPath (HistogramSetup, MinMaxNumerical, AssignSamplesToHistogram [per-sample
+  binning only], HistogramSuffixSum [O(bins) suffix-sum, split out 2026-09-17],
   SelectBestThresholdHistogram, EntropyTableSetup), CartPath (CartSetup, SortInitBuckets,
   SortFillBuckets, SortFeatures, SortScanSplits, ScanPresorted)`.
 - Nodewise adds **no scopes**: a second sink on the same clock read inside `Evaluate`, one CSV

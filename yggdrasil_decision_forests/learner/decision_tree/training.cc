@@ -2459,9 +2459,13 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
     it_split.num_positive_examples_without_weights++;
     it_split.pos_label_distribution.Add(label, weight);
   }
+  }
 
   // Suffix-sum the per-bin counts into cumulative ">= threshold" counts.
-  // Part of histogram accumulation, hence inside kAssignSamplesToHistogram.
+  // O(bins) per projection, independent of n: its own scope so the per-sample
+  // binning above and the per-bin work can be told apart.
+  {
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kHistogramSuffixSum);
   for (int split_idx = candidate_splits.size() - 2; split_idx >= 0;
        split_idx--) {
     const auto& src = candidate_splits[split_idx + 1];
@@ -2888,9 +2892,13 @@ FindSplitLabelRegressionFeatureNumericalHistogram(
       it_split.pos_label_dist.Add(label);
     }
   }
+  }
 
   // Suffix-sum the per-bin counts into cumulative ">= threshold" counts.
-  // Part of histogram accumulation, hence inside kAssignSamplesToHistogram.
+  // O(bins) per projection, independent of n: its own scope so the per-sample
+  // binning above and the per-bin work can be told apart.
+  {
+    CHRONO_SCOPE_EP(::yggdrasil_decision_forests::chrono_prof::kHistogramSuffixSum);
   for (int split_idx = candidate_splits.size() - 2; split_idx >= 0;
        split_idx--) {
     const auto& src = candidate_splits[split_idx + 1];

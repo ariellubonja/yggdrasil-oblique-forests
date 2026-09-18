@@ -1852,6 +1852,8 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
                 << " HistogramSetup " << total_calls[kHistogramSetup]
                 << " AssignSamplesToHist "
                 << total_calls[kAssignSamplesToHistogram]
+                << " HistogramSuffixSum "
+                << total_calls[kHistogramSuffixSum]
                 << " SelectBestThresholdHistogram "
                 << total_calls[kSelectBestThresholdHistogram];
     }
@@ -2005,6 +2007,8 @@ GradientBoostedTreesLearner::TrainWithStatusImpl(
                     << " kMinMaxNumerical " << arr[kMinMaxNumerical] * 1e-9 << "s"
                     << " kAssignSamplesToHistogram "
                     << arr[kAssignSamplesToHistogram] * 1e-9 << "s"
+                    << " kHistogramSuffixSum "
+                    << arr[kHistogramSuffixSum] * 1e-9 << "s"
                     << " kSelectBestThresholdHistogram "
                     << arr[kSelectBestThresholdHistogram] * 1e-9 << "s"
                     // Exact / sort-based splitter scopes. Normally zero on a

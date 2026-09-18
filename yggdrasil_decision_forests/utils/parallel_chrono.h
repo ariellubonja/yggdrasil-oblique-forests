@@ -37,7 +37,8 @@ enum FuncId {
 
   kHistogramSetup,
   kMinMaxNumerical,
-  kAssignSamplesToHistogram,
+  kAssignSamplesToHistogram,   // per-sample binning loop only
+  kHistogramSuffixSum,         // O(bins) suffix-sum over candidate_splits
   kSelectBestThresholdHistogram,
   kGetCandidateAttributes,
   kGetCandidateAttributesAssign,

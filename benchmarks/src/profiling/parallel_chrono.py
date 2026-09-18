@@ -124,6 +124,7 @@ _LOG_TOKEN_TO_COL = {
     "kHistogramSetup":               "HistogramSetup",
     "kMinMaxNumerical":              "MinMaxNumerical",
     "kAssignSamplesToHistogram":     "AssignSamplesToHist",
+    "kHistogramSuffixSum":           "HistogramSuffixSum",
     "kSelectBestThresholdHistogram": "SelectBestThresholdHistogram",
     "kSortFillExampleBucketSet":     "SortFillExampleBucketSet",
     "kSortScanSplits":               "SortScanSplits",
@@ -159,7 +160,7 @@ _TIMING_COLS = (
     "ProjectionEvaluate", "GetCandidateAttributes",
     "GetCandidateAttributesAssign", "GetCandidateAttributesShuffle", "GetCandidateAttributesNumToTest",
     "ColumnWithCast",
-    "HistogramSetup", "MinMaxNumerical", "AssignSamplesToHist",
+    "HistogramSetup", "MinMaxNumerical", "AssignSamplesToHist", "HistogramSuffixSum",
     "SelectBestThresholdHistogram",
     "SortFillExampleBucketSet", "SortScanSplits", "SortInitBuckets",
     "SortFillBuckets", "SortFinalizeBuckets", "SortFeatures", "SortLabels",
@@ -363,6 +364,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "EntropyTableSetup":            "------EntropyTableSetup",
             "HistogramSetup":               "------HistogramSetup",
             "AssignSamplesToHist":          "------AssignSamplesToHist",
+            "HistogramSuffixSum":           "------HistogramSuffixSum",
             "SelectBestThresholdHistogram": "------SelectBestThresholdHistogram",
             # depth 7 — under HistogramSetup (excluded from the CSV below).
             "MinMaxNumerical":              "-------MinMaxNumerical",
@@ -459,6 +461,7 @@ def parse_parallel_chrono(raw_log: str) -> pd.DataFrame:
             "------EntropyTableSetup",
             "------HistogramSetup",
             "------AssignSamplesToHist",
+            "------HistogramSuffixSum",
             "------SelectBestThresholdHistogram",
             # depth 3 — axis-aligned splitter tail (timing noise under oblique).
             "---AxisAlignedSplitSearch",

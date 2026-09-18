@@ -137,6 +137,8 @@ FindSplitLabelClassificationFeatureNumericalHistogram(
         it_split.pos_label_distribution.Add(label, weight);
       }
     }
+  }
+  {  // kHistogramSuffixSum — O(bins), independent of n (own scope since 2026-09-17)
     // Suffix-sum the per-bin counts into cumulative ">= threshold" counts.
     for (int split_idx = candidate_splits.size() - 2; split_idx >= 0; split_idx--) {
       const auto& src = candidate_splits[split_idx + 1];
