@@ -43,12 +43,19 @@ DEFAULT_DATASETS = {"Oblique": "HIGGS,SUSY,Epsilon", "Axis Aligned": "HIGGS"}
 STEM_OUT = {"Oblique": "per_depth_methods", "Axis Aligned": "per_depth_methods_aa"}
 STEM_OUT_GBT = "per_depth_methods_gbt"
 STEM_OUT_FIG1 = "per_depth_methods_fig1"
-# Paper Figure 1: (panel title, arm dir prefix, split) -- HIGGS, one panel per model family.
-FIG1_PANELS = [("SPO-GBT", "Boosting | Oblique", "Oblique"),
-               ("Sparse oblique RF", "Oblique", "Oblique"),
-               ("Axis-aligned RF", "Axis Aligned", "Axis Aligned")]
+# Paper Figure 1: (panel title, arm dir prefix, split, x-axis crop) -- HIGGS, one panel
+# per model family. GBT is cropped to its typical shallow depth, the RFs to 50.
+FIG1_PANELS = [("Sparse Oblique GBT", "Boosting | Oblique", "Oblique", 6),
+               ("Sparse Oblique RF", "Oblique", "Oblique", 50),
+               ("Axis-Aligned RF", "Axis Aligned", "Axis Aligned", 50)]
 COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]   # dataviz reference palette, slots 1-4
 STYLES = ["-", "-", "--", "--"]
+# --hwy_avx: the paper's Fig. "per-depth-dynamic" style (serif, filled areas, top legend),
+# HIGGS oblique RF, Exact HWY vs AVX-2 (64-bin) vs AVX-512 (256-bin) random histograms.
+HWY_AVX_ARMS = [("Exact (HWY VQSort)",       "Oblique | Exact",            "hwy",                       "#4285f4"),
+                ("Random Hist. (AVX-2)",      "Oblique | Random",           "vectorized-64",             "#fbbc04"),
+                ("Random Hist. (AVX-512)",    "Oblique | Random | AVX512",  "vectorized-avx512-20260917", "#ea0000")]
+STEM_OUT_HWY_AVX = "per_depth_higgs_hwy_avx"
 
 
 def load(path: Path) -> pd.DataFrame:
@@ -125,6 +132,37 @@ def draw(panels, out, stem_out, tag_panel=False, grid=True, share_y=False):
     print("wrote", out / (stem_out + ".{pdf,png,csv}"))
 
 
+def draw_hwy_avx(out: Path, max_depth=None):
+    """Single HIGGS panel in the Per-Depth-Dynamic figure style (fill_between areas)."""
+    from matplotlib.patches import Patch
+    series = []
+    for label, arm, stem, color in HWY_AVX_ARMS:
+        p = BASE / arm / DATASET_DIRS["HIGGS"] / "raw" / f"{stem}.csv"
+        if not p.exists():
+            sys.exit(f"missing: {p.relative_to(ROOT)}")
+        d = load(p)
+        if max_depth is not None:
+            d = d[d["depth"] <= max_depth]
+        d.insert(0, "method", label); d.insert(0, "dataset", "HIGGS")
+        series.append((label, color, d))
+    pd.concat([d for _, _, d in series]).to_csv(out / f"{STEM_OUT_HWY_AVX}.csv", index=False)
+    plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+                         "font.size": 12, "axes.spines.top": False, "axes.spines.right": False})
+    fig, ax = plt.subplots(figsize=(5.6, 3.3))
+    for label, color, d in series:
+        ax.fill_between(d["depth"], 0, d["node_train_s"], color=color, alpha=0.45, lw=0)
+        ax.plot(d["depth"], d["node_train_s"], color=color, lw=2.0)
+    ax.set_xlabel("Tree Depth"); ax.set_ylabel("Time (s)")
+    ax.set_ylim(bottom=0); ax.set_xlim(left=1)
+    ax.legend(handles=[Patch(color=c, label=l) for l, c, _ in series], loc="lower center",
+              bbox_to_anchor=(0.5, 1.0), ncol=3, frameon=False, handlelength=0.9,
+              columnspacing=1.0, fontsize=10.5)
+    fig.tight_layout()
+    for ext in ("pdf", "png"):
+        fig.savefig(out / f"{STEM_OUT_HWY_AVX}.{ext}", dpi=200, bbox_inches="tight")
+    print("wrote", out / (STEM_OUT_HWY_AVX + ".{pdf,png,csv}"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / "benchmarks/results/figures"))
@@ -132,15 +170,22 @@ def main():
     ap.add_argument("--datasets", default=None, help="comma list of " + ",".join(DATASET_DIRS))
     ap.add_argument("--ensemble", choices=["Bagging", "Boosting"], default="Bagging")
     ap.add_argument("--max_depth", type=int, default=None,
-                    help="crop the x axis (default 50 with --fig1)")
+                    help="crop the x axis (--fig1: overrides the per-panel crops)")
     ap.add_argument("--fig1", action="store_true",
                     help="paper Figure 1: one HIGGS panel per model family, shared legend")
+    ap.add_argument("--hwy_avx", action="store_true",
+                    help="HIGGS oblique RF: Exact HWY vs AVX-2 vs AVX-512 histogram, Fig.18 style "
+                         "(x cropped to 50 unless --max_depth)")
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
 
+    if a.hwy_avx:
+        draw_hwy_avx(out, a.max_depth or 50)
+        return
+
     if a.fig1:
-        max_depth = 50 if a.max_depth is None else a.max_depth
-        panels = [(t, series_for(pre, sp, "HIGGS", max_depth)) for t, pre, sp in FIG1_PANELS]
+        panels = [(t, series_for(pre, sp, "HIGGS", a.max_depth or dmax))
+                  for t, pre, sp, dmax in FIG1_PANELS]
         panels = [p for p in panels if p[1]]
         if len(panels) != len(FIG1_PANELS):
             sys.exit("fig1: a model family has no data")

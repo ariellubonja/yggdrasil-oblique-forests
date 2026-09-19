@@ -154,3 +154,9 @@ refresh is a manual re-upload — not worth repeating per data correction.
 ## Vectorized histogram ISA (user directive, 2026-09-08)
 
 - **64 bins → AVX-2; 256 bins → AVX-512.** Use that pairing for vectorized histogram runs.
+
+## No machine specs in figure captions (user directive, 2026-09-18)
+
+**Never put hardware/run specs (CPU model, thread count, tree count, instance type) in Overleaf
+figure captions.** The paper has a dedicated experimental-setup section for them. Captions state
+what the panel shows and the axes; the generator scripts must not emit spec text into captions.

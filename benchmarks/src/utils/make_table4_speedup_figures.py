@@ -71,7 +71,7 @@ FIGS = [  # (baseline arm, out file, label, y-axis label, caption)
      "Speedup over Exact (HWY)",
      "Speedup over exact splitting (Highway VQSort) per dataset and tree depth, the cells of "
      "Table~\\ref{tab:overall}; marks left to right = depths 6, 10, 16, 24, purity; dashed line = "
-     "parity. 240 trees, 48 threads, m7i.metal-24xl, %s."),
+     "parity; %s."),
     ("spo_rf_rand_scalar", "table4_speedup_vs_rand64.tex", "fig:t4-speedup-rand64",
      "Speedup over Random 64, scalar",
      "Speedup over random histograms, 64 bins, scalar binner; layout as Figure~\\ref{fig:t4-speedup-exact}."),
