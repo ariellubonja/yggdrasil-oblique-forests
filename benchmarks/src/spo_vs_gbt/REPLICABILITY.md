@@ -221,3 +221,39 @@ on an idle box; expect train_s within a few % (timing repeats on this box are <1
   `results/_tests/dyn_scalar_thr250_{speedup_map,large_results,suite_results}.csv`
   (`strip_dyn_scalar_thr250.py`); `run_b7_dynscalar.sh` re-ran large, `cells_b7_dynscalar.json`
   (19 entries × 5 depths) and suite under the lock. Row `cmd` shows the threshold used.
+
+## 10. Rebuilding the whole environment on a fresh box (done 2026-09-18)
+
+The box was replaced (ip-172-31-35-89 → ip-172-31-19-4, same m7i.metal-24xl type):
+`/home/ubuntu/spo_vs_gbt`, `/home/ubuntu/gbt_venv`, `benchmarks/data/{tabarena,tabred}_binary_csv`,
+the fold CSVs and the HIGGS/SUSY splits were gone. Everything below was regenerated and
+checked against `MANIFEST/inputs.sha256` / `MANIFEST/large_inputs.sha256` (copied into the
+repo under `benchmarks/results/runtime/speedup_map_by_dataset/MANIFEST/`, and back to
+`/home/ubuntu/spo_vs_gbt/MANIFEST/`):
+
+| Input | Recipe | Hash vs manifest |
+|---|---|---|
+| venv | `uv venv --python 3.12 /home/ubuntu/gbt_venv`; `uv pip install -r` the `pkg==ver` lines of `MANIFEST/pip_freeze.txt` (drop its header line) → pandas 3.0.5, sklearn 1.9.0, numpy 2.5.2, xgboost 3.4.1, lightgbm 4.7.0, catboost 1.2.10 | n/a |
+| `bin/default` | `bazel build -c opt //examples:train_oblique_forest` (`.bazelrc`: icx, `-O3 -march=native`) at the current HEAD; `bin/default.gitsha` = `git rev-parse --short=8 HEAD` | new build (different sha by design) |
+| TabArena CSVs | `python3 benchmarks/data/download_tabarena_datasets.py` (OpenML → `benchmarks/data/tabarena/<name>/data.parquet`), then for each `status: ok` entry of `benchmarks/data/tabarena_binary_manifest.json`: `tabular_suite_prep.write_dataset(out, name, df.drop(columns=[target]), df[target])` (both files restored from branch `origin/pr356-replication`) | 30/30 `train.csv` OK; `meta.json` differ (the original one-off driver added extra keys that were never committed; `run_suite` reads only `label_col` from it, and `discover_datasets` tolerates the difference) |
+| TabReD 40k mirror | HF `danil-e/harbor-datasets-tabred`, file `datasets/tabred-real/<name>/environment/data/train_full.csv` → `benchmarks/data/tabred_raw_mirror/<name>_train_full.csv`; drop `id,timestamp,target`, `write_dataset(out, name, X, raw["target"])` | 3/3 `train.csv` OK; `meta.json` differ (as above) |
+| `train_nan.csv` | `gbt_venv/bin/python benchmarks/src/spo_vs_gbt/make_train_nan.py` | 13/13 OK |
+| folds | `run_suite.make_folds(name, train_csv, label_col, 5, 0, "/home/ubuntu/spo_vs_gbt/folds", chrono=name in {ecom-offers, homecredit-default, homesite-insurance}, holdout_frac=0.2)` for every dataset of both suite dirs | 306/306 OK |
+| HIGGS / SUSY train | `head -n 10500001 HIGGS_with_header.csv`, `head -n 4500001 SUSY_with_header.csv` | OK |
+| HIGGS / SUSY test | header + `tail -n 500000` of `*_with_header.csv`, label column rewritten to integer tokens: `sed -E 's/^1\.0+e\+00,/1,/; s/^0\.0+e\+00,/0,/'` (the label-token bug in `benchmarks/results/accuracy/README.md`) | OK |
+| EPSILON train | `benchmarks/data/epsilon_normalized_train.csv` (already present) | OK |
+| EPSILON test | HF `jxie/epsilon-normalized`, parquet `refs/convert/parquet/default/test/000{0..4}.parquet`, flattened exactly like `download_epsilon.py` (`f0..f1999,label`, 100 000 rows, labels 0/1) → `/home/ubuntu/spo_vs_gbt/data/epsilon_test_100k.csv` | **differs** — the original file's recipe was never recorded; accuracy identity of the EPSILON rows is the arbiter |
+
+Disk: the root volume is 77 GB with ~10 GB free after the above, so
+`run_256_replication.sh` materialises `HIGGS_train_10500k.csv` (8 GB) and
+`SUSY_train_4500k.csv` only for their rows and deletes them afterwards.
+
+**Outcome (2026-09-18, `run_256_replication.sh`, binary `d4afd245`, box ip-172-31-19-4):** all
+**468/468** recorded rows of `spo_rf_rand256_vec`, `spo_rf_dyn256_vec`, `spo_gbt_dyn256_vec`
+(459 suite + 9 large) re-ran with the rebuilt argv equal to the recorded `cmd` and
+**test_acc / test_auc / test_logloss bit-identical** (`--acc-tol 0`), including the three
+EPSILON rows on the regenerated test CSV. Timing on this instance vs the study's: median
++0.8 %, range −5.9 … +7.0 % over the 52 rows with train_s ≥ 2 s (cross-instance offset, not
+comparable — REPLICABILITY.md §7). Result CSV:
+`benchmarks/results/runtime/speedup_map_by_dataset/replication/replication_avx512_256.csv`
+(+ `run.log`); per-run harness logs in `/home/ubuntu/spo_vs_gbt/logs/replication/`.
