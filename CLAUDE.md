@@ -72,10 +72,20 @@ workers exhaust the account's session limit within an afternoon; Opus is the def
 ## Dataset policy (decided 2026-09-04)
 
 Only **fully numeric, NaN-free** feature data is allowed in experiments — the fp32 hot path
-(§1 of the context) assumes it. Before running on a dataset, check it; if it fails, do not
-silently skip it: tell the user whether it can be massaged to fit (drop the offending
-columns, drop the rows with NaNs, impute with the column mean) and how much data that loses,
-then let them decide.
+(§1 of the context) assumes it. Datasets that fail this are massaged to fit, never dropped
+or row-filtered; report what was changed (columns encoded, cells imputed) with the run.
+
+**Preprocessing rule (user directive, 2026-09-21):**
+- **NaNs → mean-impute before training.** Replace each NaN feature cell with the
+  **training-fold** column mean (test fold reuses it; all-NaN column → 0.0). Do not rely on
+  YDF's in-training per-lookup substitution, and do not drop rows or columns.
+- **Categoricals → ordinal codes.** Distinct values sorted alphabetically → 0, 1, 2, …;
+  bool → 0/1; datetime → epoch seconds. All arms (incl. XGBoost/LightGBM/CatBoost) get the
+  same codes; native categorical handling is never used.
+- Reference implementation: `benchmarks/data/tabular_suite_prep.py` (encoding) +
+  `benchmarks/src/spo_vs_gbt/run_suite.py::make_folds` (per-fold imputation); documented
+  in `benchmarks/results/runtime/speedup_map_by_dataset/README.md`. The CC18 accuracy study
+  (`benchmarks/results/accuracy/`) predates this rule and fed raw CSVs to the harness.
 
 Audited local sets (`benchmarks/data`, 2026-09-04):
 - **Clean as-is (26):** HIGGS, haberman, processed_wise1_data; CC18 banknote-authentication,
@@ -84,10 +94,10 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   spambase, Bioresponse, wdbc, phoneme, qsar-biodeg, madelon, nomao, ozone-level-8hr.
   PhishingWebsites and Internet-Advertisements are integer-coded categoricals/indicators —
   numeric on paper, not continuous.
-- **Numeric but with NaNs (massage = drop rows or mean-impute):** breast-w (160 cells, 1 col),
+- **Numeric but with NaNs (massage = train-fold mean-impute):** breast-w (160 cells, 1 col),
   jm1 (250 cells, 5 cols).
-- **Non-numeric columns (massage = drop those cols):** ilpd (1/10), bank-marketing (9/16),
-  credit-g (13/20); kr-vs-kp and tic-tac-toe are all-categorical — unusable.
+- **Non-numeric columns (massage = ordinal-encode):** ilpd (1/10), bank-marketing (9/16),
+  credit-g (13/20); kr-vs-kp and tic-tac-toe are all-categorical — ordinal codes only, flag it in the report.
 - **Both problems:** dresses-sales, cylinder-bands, credit-approval, adult.
 - **Missing locally:** sick (no CSV; TBG column 100% NaN), TabArena (metadata only), TabReD,
   epsilon, `processed/` — the suites live on the m7i.
