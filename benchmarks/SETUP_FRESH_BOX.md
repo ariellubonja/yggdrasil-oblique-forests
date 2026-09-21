@@ -37,6 +37,7 @@ HIGGS / SUSY                             | done (7.5G, 2.3G)
 CC18                                     | done (34 tasks)
 TabArena + all-numeric CSVs              | done (30/30 train.csv)
 EPSILON                                  | done (15G)
+YouTube-8M                               | done (56G, 16G; added 2026-09-21, ~5 min on m7i.metal, not in the 35 min)
 TabReD                                   | skipped (no ~/.kaggle/kaggle.json: needs a Kaggle token + accepted competition rules)
 ```
 
@@ -74,6 +75,20 @@ TabReD                                   | skipped (no ~/.kaggle/kaggle.json: ne
      `tabarena_binary_manifest.json` → `tabarena_binary_csv/<name>/train.csv` (the all-numeric
      CSVs the harness reads; preprocessing rule in the repo `CLAUDE.md`).
    - `download_epsilon.py` → `epsilon_normalized_train.csv`.
+   - `download_youtube8m.py` → `youtube8m/youtube8m_video_{train,validate}.csv` (YouTube-8M 2018
+     video-level features, https://research.google.com/youtube8m/download.html, CC BY 4.0):
+     3,844 TFRecord shards per partition (18 GB train, 4 GB validate) pulled in parallel
+     from `us.data.yt8m.org` with the official plan JSON's MD5 per shard, then decoded
+     with a built-in protobuf reader (no TensorFlow) into `class,rgb_0..rgb_1023,
+     audio_0..audio_127` (fp32 written `%.9g`, exact round-trip; train 3,888,919 rows × 1152 =
+     56 GB, validate 1,112,356 × 1152 = 16 GB). Binary target per the majority-vs-rest rule
+     (CLAUDE.md dataset policy): `class=1` iff entity id 0 — the most frequent label, "Game",
+     20.3 % of videos in both partitions (entity 1 is next at 13.9 %) — is among the video's
+     labels; the full multi-label list is kept in `youtube8m/youtube8m_video_<part>_labels.csv`
+     (`id,labels`, same row order) so other targets can be derived without re-downloading
+     (`--target_label N`). Everything lives under `benchmarks/data/youtube8m/` (gitignored);
+     shards stay in `youtube8m/tfrecord_temp/` (22 GB; re-runs skip verified ones). On the m7i.metal: ~40 s download + ~100 s conversion per partition. `test` has no labels and is not downloaded. The vocabulary CSV linked on
+     the download page returns AccessDenied (2026-09-21), so entity names are not resolved.
    - `download_tabred_datasets.py` → `tabred/` — **only if `~/.kaggle/kaggle.json` exists**
      (needs a Kaggle token and accepted competition rules; drop the token in and re-run the
      script for this step).

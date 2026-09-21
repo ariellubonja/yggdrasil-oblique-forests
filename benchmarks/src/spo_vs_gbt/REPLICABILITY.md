@@ -73,6 +73,11 @@ downstream is comparable*.
   encoded by `benchmarks/data/tabular_suite_prep.py` (numeric as-is, bool→0/1,
   datetime→epoch s, categorical→ordinal codes over sorted uniques, label→0/1 with
   majority=0). `train_nan.csv` beside it keeps the NaNs so imputation can be per-fold.
+  Multi-class labels are not trained directly (the methods are binary-only): they are
+  reduced to **majority-vs-rest** — `1` iff the row's class is the most frequent class,
+  else `0` (`encode_binary_label`, rule set 2026-09-21; none of the 33 study datasets
+  needed it, all are two-class). YouTube-8M (multi-label) applies the same rule at
+  download time: `class=1` iff entity 0, the most frequent label, is present.
 - TabReD (ecom-offers, homecredit-default, homesite-insurance): 40k-row HF mirror,
   which is a **chronological prefix** ⇒ one chronological 80/20 holdout
   (`--chrono-holdout`), first 80 % of rows in file order = train.

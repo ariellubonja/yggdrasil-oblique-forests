@@ -34,7 +34,7 @@ log() { printf '\n[%s] === %s\n' "$(date +%H:%M:%S)" "$*"; }
 
 # Status table, printed on exit (also on failure). mark <step> <status> [detail]
 STEPS=("tmux, apt, bazelisk" "Intel oneAPI (icx, VTune, Advisor)" "SMT off" "bazel build harness"
-       "uv + .venv" "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "TabReD")
+       "uv + .venv" "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "YouTube-8M" "TabReD")
 declare -A STATUS
 CURRENT_STEP=""
 mark()  { STATUS[$1]=$2${3:+ ($3)}; }
@@ -139,7 +139,7 @@ mark "uv + .venv" done "$("$VENV_PY" --version)"
 
 # ---------------------------------------------------------------- 6. datasets
 if [[ "${SKIP_DATASETS:-0}" == 1 ]]; then
-  for st in "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "TabReD"; do mark "$st" skipped "SKIP_DATASETS=1"; done
+  for st in "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "YouTube-8M" "TabReD"; do mark "$st" skipped "SKIP_DATASETS=1"; done
   exit 0
 fi
 
@@ -198,6 +198,14 @@ else
   "$VENV_PY" benchmarks/data/download_epsilon.py
 fi
 mark "EPSILON" done "$(du -sh benchmarks/data/epsilon_normalized_train.csv | cut -f1)"
+
+begin "YouTube-8M"
+if [[ -s benchmarks/data/youtube8m/youtube8m_video_train.csv && -s benchmarks/data/youtube8m/youtube8m_video_validate.csv ]]; then
+  echo "youtube8m/youtube8m_video_{train,validate}.csv present"
+else
+  "$VENV_PY" benchmarks/data/download_youtube8m.py   # video-level train + validate, 22 GB of shards -> 72 GB of CSV
+fi
+mark "YouTube-8M" done "$(du -shc benchmarks/data/youtube8m/youtube8m_video_train.csv benchmarks/data/youtube8m/youtube8m_video_validate.csv | tail -1 | cut -f1)"
 
 begin "TabReD"
 if [[ -r "$HOME/.kaggle/kaggle.json" ]]; then

@@ -26,6 +26,11 @@ attributable to the compiled kernel, never to the data):
   label     two classes    -> integer tokens 0/1, most frequent class = 0.
                               FormatLabelKey renders these as "0"/"1"; string
                               labels would drop the fast loader.
+            >2 classes     -> majority-vs-rest: 1 iff the row's class is the
+                              most frequent class, else 0 (ties: smaller value
+                              as a string). The methods are binary-only, so
+                              multi-class is never trained directly (CLAUDE.md
+                              dataset policy, 2026-09-21).
 
 Ordinal-encoding a categorical is not a statistically meaningful encoding — it is
 a *shape* choice: it preserves the suite's column count and row count so the
@@ -84,21 +89,39 @@ def encode_features(X: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
 
 def encode_binary_label(y: pd.Series) -> tuple[pd.Series, dict]:
-    """Map a two-class label to integer tokens 0/1 (most frequent class -> 0)."""
+    """Map a label to integer tokens 0/1.
+
+    Two classes: most frequent class -> 0, the other -> 1 (the historical
+    convention; the hashed suite inputs depend on it).
+    More than two classes: majority-vs-rest, 1 iff the class is the most
+    frequent one, else 0. Frequency ties are broken by the class value as a
+    string, so the choice is reproducible.
+    """
+    if y.isna().any():
+        raise ValueError("label contains missing values")
     s = y.astype("string") if not pd.api.types.is_numeric_dtype(y) else y
     counts = s.value_counts(dropna=True)
-    if len(counts) != 2:
-        raise ValueError(f"expected exactly 2 label classes, got {len(counts)}: "
-                         f"{list(counts.index)[:5]}")
-    order = list(counts.index)  # frequency-descending
-    mapping = {order[0]: 0, order[1]: 1}
-    tokens = s.map(mapping)
-    if tokens.isna().any():
-        raise ValueError("label contains missing values")
-    return tokens.astype("int8"), {
-        "classes": [str(order[0]), str(order[1])],
-        "counts": [int(counts.iloc[0]), int(counts.iloc[1])],
-        "positive_rate": float(counts.iloc[1] / counts.sum()),
+    if len(counts) < 2:
+        raise ValueError(f"expected >= 2 label classes, got {len(counts)}")
+    # frequency-descending, ties by the string form of the value
+    order = sorted(counts.index, key=lambda v: (-int(counts[v]), str(v)))
+    if len(order) == 2:
+        tokens = s.map({order[0]: 0, order[1]: 1})
+        return tokens.astype("int8"), {
+            "classes": [str(order[0]), str(order[1])],
+            "counts": [int(counts[order[0]]), int(counts[order[1]])],
+            "positive_rate": float(counts[order[1]] / counts.sum()),
+        }
+    majority = order[0]
+    tokens = (s == majority).astype("int8")
+    n_pos = int(counts[majority])
+    return tokens, {
+        "classes": [f"not {majority}", str(majority)],
+        "counts": [int(counts.sum()) - n_pos, n_pos],
+        "positive_rate": float(n_pos / counts.sum()),
+        "multiclass": {"rule": "majority_vs_rest", "n_classes": int(len(order)),
+                       "positive_class": str(majority),
+                       "class_counts": {str(k): int(counts[k]) for k in order}},
     }
 
 

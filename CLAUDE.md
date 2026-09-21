@@ -82,6 +82,15 @@ or row-filtered; report what was changed (columns encoded, cells imputed) with t
 - **Categoricals → ordinal codes.** Distinct values sorted alphabetically → 0, 1, 2, …;
   bool → 0/1; datetime → epoch seconds. All arms (incl. XGBoost/LightGBM/CatBoost) get the
   same codes; native categorical handling is never used.
+- **Multi-class / multi-label → majority-vs-rest binary (user directive, 2026-09-21).** The
+  methods are binary-only (§1 of the context); a dataset with more than two classes is
+  reduced to one-vs-all with the **most frequent class as the positive class**: label
+  `1` iff the row's class is the majority class (for multi-label: iff the majority label is
+  among the row's labels), else `0`. Ties on frequency → the smaller class value (sorted as
+  strings). Never train multi-class directly and never pick a non-majority class without
+  saying so in the run report. Two-class data keeps the existing 0/1 token rule (majority
+  → 0). Implementation: `tabular_suite_prep.encode_binary_label`; YouTube-8M applies it
+  at download time (`download_youtube8m.py`, entity 0 = "Game").
 - Reference implementation: `benchmarks/data/tabular_suite_prep.py` (encoding) +
   `benchmarks/src/spo_vs_gbt/run_suite.py::make_folds` (per-fold imputation); documented
   in `benchmarks/results/runtime/speedup_map_by_dataset/README.md`. The CC18 accuracy study
@@ -99,6 +108,11 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
 - **Non-numeric columns (massage = ordinal-encode):** ilpd (1/10), bank-marketing (9/16),
   credit-g (13/20); kr-vs-kp and tic-tac-toe are all-categorical — ordinal codes only, flag it in the report.
 - **Both problems:** dresses-sales, cylinder-bands, credit-approval, adult.
+- **YouTube-8M video-level (added 2026-09-21, `download_youtube8m.py`):** `youtube8m/youtube8m_video_{train,validate}.csv`,
+  1152 fp32 features (1024 rgb + 128 audio, PCA-whitened, clipped to ±2), NaN-free, clean as-is;
+  binary target = majority-vs-rest, entity id 0 ("Game", 20.3 % positive), full label lists in
+  the `_labels.csv` sidecar next to it.
+  Details in `benchmarks/SETUP_FRESH_BOX.md` step 8.
 - **Missing locally:** sick (no CSV; TBG column 100% NaN), TabArena (metadata only), TabReD,
   epsilon, `processed/` — the suites live on the m7i.
 
