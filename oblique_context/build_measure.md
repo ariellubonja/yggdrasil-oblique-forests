@@ -185,6 +185,7 @@ Standard shapes: HIGGS 11M×29 (tall-narrow), trunk 3M×4096 (~49 GB), 1.5M×409
 - Median of 3 trees via `--num_trees=3` in ONE process (never 3 process invocations).
 - Machines: dev Mac (arm64; plain `bazel build -c opt`, icx pin ignored) — **Mac numbers don't
   count**; measurement boxes: AWS m7i (Xeon 8488C, 48 vCPU) and the i9-185H laptop (E-cores
-  off for timing — `benchmarks/src/utils/set_cpu_e_features.sh`; scripts handle it). perf yes;
+  off for timing — `benchmarks/src/utils/set_cpu_e_features.sh`; scripts handle it). Fresh AWS
+  box from scratch (toolchain, icx, SMT off, datasets): `benchmarks/SETUP_FRESH_BOX.md`. perf yes;
   VTune/Advisor memory-access profiles never (freezes the box). Significance gate:
   **<15 % e2e = failed experiment** (log it anyway); ★ at ≥20 %.

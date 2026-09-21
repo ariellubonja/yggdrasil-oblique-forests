@@ -224,6 +224,9 @@ on an idle box; expect train_s within a few % (timing repeats on this box are <1
 
 ## 10. Rebuilding the whole environment on a fresh box (done 2026-09-18)
 
+OS/toolchain/build steps for a brand-new box are in `benchmarks/SETUP_FRESH_BOX.md`; this
+section covers only the study inputs.
+
 The box was replaced (ip-172-31-35-89 → ip-172-31-19-4, same m7i.metal-24xl type):
 `/home/ubuntu/spo_vs_gbt`, `/home/ubuntu/gbt_venv`, `benchmarks/data/{tabarena,tabred}_binary_csv`,
 the fold CSVs and the HIGGS/SUSY splits were gone. Everything below was regenerated and
