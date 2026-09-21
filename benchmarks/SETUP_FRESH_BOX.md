@@ -1,116 +1,79 @@
 # Fresh AWS box setup (Ubuntu, m7i / m7i.metal)
 
-Environment from scratch: shell, toolchain, repo build, datasets. Copied from the
-"AWS setup" Google Doc on 2026-09-21 and kept here as the source of truth.
+Environment from scratch: shell, toolchain, repo build, datasets. Originally copied from the
+"AWS setup" Google Doc on 2026-09-21; turned into an unattended script the same day.
 Companion docs: `oblique_context/build_measure.md` (bazel configs, harness flags),
 `benchmarks/src/spo_vs_gbt/REPLICABILITY.md` §10 (regenerating the study inputs).
 
-## 1. tmux (auto-attach on SSH)
+## Run it
 
-```bash
-echo "set -g mouse on" > ~/.tmux.conf
-tmux
-
-cat >> ~/.bashrc <<'EOF'
-
-# Auto-attach to tmux on interactive SSH logins
-if command -v tmux &>/dev/null && [ -n "$PS1" ] && [ -z "$TMUX" ] && [ -n "$SSH_CONNECTION" ]; then
-  tmux attach -t main 2>/dev/null || tmux new -s main
-fi
-EOF
-```
-
-## 2. Toolchain
-
-```bash
-sudo apt update
-sudo apt-get install -y build-essential libc6-dev linux-libc-dev unzip
-
-# bazelisk: bazel picks the version from .bazelversion
-wget https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
-sudo mv bazelisk-linux-amd64 /usr/local/bin/bazel
-sudo chmod +x /usr/local/bin/bazel
-
-# Intel oneAPI (icx/icpx). .bazelrc pins CC=icx on linux; gcc is 30-40 % slower on the hot path.
-wget https://registrationcenter-download.intel.com/akdlm/IRC_NAS/3b7a16b3-a7b0-460f-be16-de0d64fa6b1e/intel-oneapi-base-toolkit-2025.2.1.44_offline.sh
-sudo sh ./intel-oneapi-base-toolkit-2025.2.1.44_offline.sh -a --cli --eula accept
-```
-
-## 3. Repo and build
+The only manual step is getting the repo onto the box; everything else is
+`benchmarks/setup_fresh_box.sh`, which runs without prompts:
 
 ```bash
 git clone https://github.com/ariellubonja/yggdrasil-oblique-forests/
 cd yggdrasil-oblique-forests
-bazel build -c opt //examples:train_oblique_forest
+bash benchmarks/setup_fresh_box.sh 2>&1 | tee ~/setup_fresh_box.log
 ```
 
-If icx is not on PATH for bazel, pass it explicitly:
-`--repo_env=CC=/opt/intel/oneapi/compiler/latest/bin/icx --repo_env=CXX=/opt/intel/oneapi/compiler/latest/bin/icpx`
-(and the same two as `--action_env`).
+Then open a new shell (or `source ~/.bashrc`) to pick up oneAPI, uv and tmux.
+The script is idempotent — re-running it skips whatever is already in place (a re-run on a
+finished box takes ~10 s) — and takes these knobs: `SKIP_DATASETS=1` (toolchain + build only),
+`SKIP_BUILD=1`, `SKIP_SMT=1`, `ONEAPI_URL=...`.
 
-## 4. Disable hyperthreading (48 cores, not 96)
+It ends with a status table, printed on every exit including failures (the failing step is
+marked `FAILED`, later ones `not run`). A full first run on an m7i.metal-24xl (2026-09-21)
+took ~35 min, dominated by the EPSILON merge and the oneAPI download:
 
-- Non-metal instances: Stop instance → Instance Settings → CPU Options → Threads per core = 1.
-- Metal instances:
-
-```bash
-sudo tee /etc/default/grub.d/99-disable-smt.cfg >/dev/null <<'EOF'
-GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX nosmt"
-EOF
-sudo update-grub
-sudo reboot
+```text
+Step                                     | Status
+---------------------------------------- | ----------------------------------------
+tmux, apt, bazelisk                      | done (bazel 7.7.0)
+Intel oneAPI (icx, VTune, Advisor)       | done (2025.2.1)
+SMT off                                  | done (48 CPUs online, grub persisted)
+bazel build harness                      | done (bazel-bin/examples/train_oblique_forest)
+uv + .venv                               | done (Python 3.12.14)
+HIGGS / SUSY                             | done (7.5G, 2.3G)
+CC18                                     | done (34 tasks)
+TabArena + all-numeric CSVs              | done (30/30 train.csv)
+EPSILON                                  | done (15G)
+TabReD                                   | skipped (no ~/.kaggle/kaggle.json: needs a Kaggle token + accepted competition rules)
 ```
 
-Verify with `htop`, then `bazel shutdown` so the bazel server re-reads the core count.
+## What it does, in order
 
-## 5. Python env (uv)
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.local/bin/env      # or restart the shell
-
-cd ~/yggdrasil-oblique-forests
-uv venv .venv
-source .venv/bin/activate
-uv pip install -r benchmarks/data/requirements.txt
-uv pip install certifi pyarrow    # download_epsilon.py
-```
-
-## 6. Datasets
-
-### 6a. HIGGS / SUSY (manual, UCI)
-
-```bash
-cd benchmarks/data
-wget https://archive.ics.uci.edu/static/public/280/higgs.zip && unzip higgs.zip && gzip -d HIGGS.csv.gz
-wget https://archive.ics.uci.edu/static/public/279/susy.zip  && unzip susy.zip  && gzip -d SUSY.csv.gz
-
-# add headers
-echo "class,$(printf 'feature%d,' {1..28} | sed 's/,$//')" > header.csv
-cat header.csv HIGGS.csv > HIGGS_with_header.csv
-echo "class,$(printf 'feature%d,' {1..18} | sed 's/,$//')" > header.csv
-cat header.csv SUSY.csv > SUSY_with_header.csv
-rm header.csv
-```
-
-HIGGS is only ever used at full size. The 10.5M/500k and 4.5M/500k train/test splits
-used by the SPO-vs-GBT study are derived from these files as described in
-`benchmarks/src/spo_vs_gbt/REPLICABILITY.md` §10 (note the label-token `sed` for the test split).
-
-### 6b. Everything else: the download scripts under `benchmarks/data`
-
-Run from the repo root with the venv active. Each script documents its output layout
-in its docstring.
-
-```bash
-python3 benchmarks/data/download_cc18_datasets.py       # OpenML CC18 binary tasks → cc18_binary_csv/ (pinned by cc18_manifest.json)
-python3 benchmarks/data/download_tabarena_datasets.py   # TabArena-v0.1 (51 OpenML tasks) → tabarena/<name>/data.parquet
-python3 benchmarks/data/download_epsilon.py             # HF jxie/epsilon-normalized → epsilon_normalized_train.csv
-python3 benchmarks/data/download_tabred_datasets.py     # TabReD → tabred/ ; needs ~/.kaggle/kaggle.json + accepted competition rules
-```
-
-After TabArena downloads, materialise the all-numeric CSVs the harness reads
-(`tabarena_binary_csv/<name>/train.csv`) with `benchmarks/data/tabular_suite_prep.py`
-(`write_dataset`), driven by `tabarena_binary_manifest.json`; see REPLICABILITY.md §10 for the
-exact call. Preprocessing rule (categoricals → ordinal codes, NaNs → train-fold mean) is in
-the repo `CLAUDE.md`.
+1. **tmux** — `set -g mouse on` in `~/.tmux.conf`, auto-attach to session `main` on SSH
+   logins (appended to `~/.bashrc`). tmux is configured, not started.
+2. **apt** — `build-essential libc6-dev linux-libc-dev unzip wget curl git tmux htop`,
+   non-interactive.
+3. **bazelisk** → `/usr/local/bin/bazel` (bazel picks the version from `.bazelversion`).
+4. **Intel oneAPI** (icx/icpx; `.bazelrc` pins `CC=icx` on Linux, gcc is 30-40 % slower on
+   the hot path). Offline installer 2025.2.1.44, `--silent --eula accept`, components
+   `dpcpp-cpp-compiler`, `vtune`, `advisor` only (the `--config=profiler` and roofline tooling
+   use the latter two) instead of the full ~20 GB toolkit.
+   `source /opt/intel/oneapi/setvars.sh` is appended to `~/.bashrc`; the repo's bench scripts
+   source it themselves. If icx is ever not on PATH for bazel, pass it explicitly:
+   `--repo_env=CC=/opt/intel/oneapi/compiler/latest/bin/icx --repo_env=CXX=.../icpx`.
+5. **Hyperthreading off** (48 cores, not 96) — written to
+   `/sys/devices/system/cpu/smt/control` immediately *and* persisted as `nosmt` in
+   `/etc/default/grub.d/99-disable-smt.cfg`, so no reboot is needed and it survives one.
+   Works on metal and non-metal instances alike (no console visit). `bazel shutdown` follows
+   so the server re-reads the core count.
+6. **Build** — `bazel build -c opt //examples:train_oblique_forest`.
+7. **Python env** — uv, `.venv` on Python 3.12, `benchmarks/data/requirements.txt`
+   + `certifi pyarrow` (for `download_epsilon.py`).
+8. **Datasets** (all into `benchmarks/data/`):
+   - HIGGS / SUSY from UCI (`higgs.zip` id 280, `susy.zip` id 279) → `HIGGS_with_header.csv`,
+     `SUSY_with_header.csv` (header `class,feature1..featureN`). HIGGS is only ever used at
+     full size; the 10.5M/500k and 4.5M/500k train/test splits used by the SPO-vs-GBT study
+     are derived from these files as in REPLICABILITY.md §10 (note the label-token `sed` for
+     the test split).
+   - `download_cc18_datasets.py` → `cc18_binary_csv/` (pinned by `cc18_manifest.json`).
+   - `download_tabarena_datasets.py` → `tabarena/<name>/data.parquet`, then
+     `tabular_suite_prep.write_dataset` for every `status: ok` entry of
+     `tabarena_binary_manifest.json` → `tabarena_binary_csv/<name>/train.csv` (the all-numeric
+     CSVs the harness reads; preprocessing rule in the repo `CLAUDE.md`).
+   - `download_epsilon.py` → `epsilon_normalized_train.csv`.
+   - `download_tabred_datasets.py` → `tabred/` — **only if `~/.kaggle/kaggle.json` exists**
+     (needs a Kaggle token and accepted competition rules; drop the token in and re-run the
+     script for this step).
