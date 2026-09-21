@@ -68,7 +68,7 @@ EOF
 
 # ---------------------------------------------------------------- 2. toolchain
 sudo -E apt-get update -qq
-sudo -E apt-get install -y -qq build-essential libc6-dev linux-libc-dev unzip wget curl git tmux htop
+sudo -E apt-get install -y -qq build-essential libc6-dev linux-libc-dev unzip wget curl git gh tmux htop
 
 if [[ ! -x /usr/local/bin/bazel ]]; then
   wget -q -O "$DL_DIR/bazelisk-linux-amd64" \

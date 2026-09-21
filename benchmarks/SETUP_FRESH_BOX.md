@@ -44,7 +44,7 @@ TabReD                                   | skipped (no ~/.kaggle/kaggle.json: ne
 
 1. **tmux** — `set -g mouse on` in `~/.tmux.conf`, auto-attach to session `main` on SSH
    logins (appended to `~/.bashrc`). tmux is configured, not started.
-2. **apt** — `build-essential libc6-dev linux-libc-dev unzip wget curl git tmux htop`,
+2. **apt** — `build-essential libc6-dev linux-libc-dev unzip wget curl git gh tmux htop`,
    non-interactive.
 3. **bazelisk** → `/usr/local/bin/bazel` (bazel picks the version from `.bazelversion`).
 4. **Intel oneAPI** (icx/icpx; `.bazelrc` pins `CC=icx` on Linux, gcc is 30-40 % slower on
