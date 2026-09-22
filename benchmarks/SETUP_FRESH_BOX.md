@@ -38,6 +38,7 @@ CC18                                     | done (34 tasks)
 TabArena + all-numeric CSVs              | done (30/30 train.csv)
 EPSILON                                  | done (15G)
 YouTube-8M                               | done (56G, 16G; added 2026-09-21, ~5 min on m7i.metal, not in the 35 min)
+Criteo / NYC taxi / Airline / Numerai    | done (37G+0.6G, 6.7G+1.5G, 6.5G+0.3G, 13G+20G; added 2026-09-21, ~25 min total, not in the 35 min)
 TabReD                                   | skipped (no ~/.kaggle/kaggle.json: needs a Kaggle token + accepted competition rules)
 ```
 
@@ -89,6 +90,33 @@ TabReD                                   | skipped (no ~/.kaggle/kaggle.json: ne
      (`--target_label N`). Everything lives under `benchmarks/data/youtube8m/` (gitignored);
      shards stay in `youtube8m/tfrecord_temp/` (22 GB; re-runs skip verified ones). On the m7i.metal: ~40 s download + ~100 s conversion per partition. `test` has no labels and is not downloaded. The vocabulary CSV linked on
      the download page returns AccessDenied (2026-09-21), so entity names are not resolved.
+   - Large tabular sets added 2026-09-21 (each script is idempotent, writes only into
+     `benchmarks/data/<name>/` (gitignored), keeps the raw download in a subfolder, applies the
+     CLAUDE.md preprocessing rule — NaN → train column mean, strings → alphabetical ordinal codes,
+     datetime → epoch seconds — and writes `<name>_train.csv`, `<name>_test.csv` (`class` first,
+     all fp32-exact numeric, rows chronological so `head -n K` is an earliest-K prefix) plus
+     `<name>_meta.json` with counts, positive rates, dropped columns, encodings and means):
+     - `download_criteo.py` → `criteo/criteo_{train,test}.csv` — Criteo 1TB click logs from
+       HF `criteo/CriteoClickLogs` (parquet, 24 days, 276 GB). Default: train = day 2015-02-15
+       (195,841,983 × 39 features, 37 GB, 3.21 % clicks), test = first 4 parts of 2015-02-16
+       (3,117,730 rows). 13 int features + 26 hashed categoricals (cardinalities up to 22M —
+       codes above 2^24 collide in fp32, listed in the meta). ~10 min on the m7i.metal.
+     - `download_nyc_taxi.py` → `nyc_taxi/nyc_taxi_{train,test}.csv` — TLC yellow-taxi monthly
+       parquet (CloudFront). Default: train 2022-01..2024-06 (98,298,417 × 18, 6.7 GB), test
+       2024-07..2024-12 (20,837,627). Regression target `trip_duration_s` binarised at the
+       **train median (749 s)**: `class = 1` iff longer. Dropoff time dropped, pickup → epoch
+       seconds (fp32 ⇒ 128 s quantisation). ~1 min once the parquet is down.
+     - `download_airline.py` → `airline/airline_{train,test}.csv` — BTS Reporting Carrier
+       On-Time Performance monthly zips (`transtats.bts.gov/PREZIP`, ~2.4 MB/s). Default: train
+       2018-01..2023-12 (37,892,905 × 43, 6.5 GB, 18.3 % positive), test 2024-10..2024-12
+       (1,765,279). `class = ArrDel15` (arrival delay ≥ 15 min); cancelled/diverted rows have
+       no label and are dropped (2.6 %); arrival-side / diversion / delay-cause columns are
+       dropped as leakage (67 of 110, listed in the meta); departure-side fields are kept.
+     - `download_numerai.py` → `numerai/numerai_{train,test}.csv` — Numerai v5.0 "Atlas" via
+       `numerapi` (public). train.parquet → train (2,746,268 × 2,376, 13 GB), validation.parquet
+       → test (4,114,072 rows; 34,713 null-target rows dropped). `target` has 5 values
+       {0,.25,.5,.75,1}; majority-vs-rest ⇒ `class = 1` iff `target == 0.5` (50.0 %). No NaNs
+       in v5.0. ~6 min.
    - `download_tabred_datasets.py` → `tabred/` — **only if `~/.kaggle/kaggle.json` exists**
      (needs a Kaggle token and accepted competition rules; drop the token in and re-run the
      script for this step).

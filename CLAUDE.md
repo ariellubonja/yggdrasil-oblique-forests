@@ -113,6 +113,17 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   binary target = majority-vs-rest, entity id 0 ("Game", 20.3 % positive), full label lists in
   the `_labels.csv` sidecar next to it.
   Details in `benchmarks/SETUP_FRESH_BOX.md` step 8.
+- **Large tabular (added 2026-09-21, `download_{criteo,nyc_taxi,airline,numerai}.py`, all clean after
+  the script's massage; rows chronological, so `head -n K` = earliest-K prefix; `<name>_meta.json` lists
+  every dropped column, ordinal map and imputation mean):** `criteo/` day 2015-02-15, 195.8M × 39
+  (13 int + 26 hashed cats as ordinal codes; clicks 3.2 %); `nyc_taxi/` 2022-01..2024-06, 98.3M × 18
+  (target = trip duration > train median 749 s); `airline/` 2018-2023, 37.9M × 43 (target = ArrDel15,
+  arrival-side/diversion columns dropped as leakage, cancelled/diverted rows dropped for lack of label);
+  `numerai/` v5.0 train 2.75M × 2376 (target 0.5 vs rest, majority-vs-rest). Regression targets were
+  binarised as stated (median for taxi, the dataset's own ≥15 min flag for airline) — user has not
+  ruled on regression targets yet. 240-tree fit limits on the 377 GB m7i: see `ariel_notes/journal.md`
+  2026-09-21 (RAM is dominated by the trained model: trees grow to purity, ≈25 kB per training row
+  on noisy tall data — HIGGS 10.5M rows peaks at 267 GB).
 - **Missing locally:** sick (no CSV; TBG column 100% NaN), TabArena (metadata only), TabReD,
   epsilon, `processed/` — the suites live on the m7i.
 

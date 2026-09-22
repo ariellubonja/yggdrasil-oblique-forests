@@ -34,7 +34,7 @@ log() { printf '\n[%s] === %s\n' "$(date +%H:%M:%S)" "$*"; }
 
 # Status table, printed on exit (also on failure). mark <step> <status> [detail]
 STEPS=("tmux, apt, bazelisk" "Intel oneAPI (icx, VTune, Advisor)" "SMT off" "bazel build harness"
-       "uv + .venv" "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "YouTube-8M" "TabReD")
+       "uv + .venv" "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "YouTube-8M" "Large tabular" "TabReD")
 declare -A STATUS
 CURRENT_STEP=""
 mark()  { STATUS[$1]=$2${3:+ ($3)}; }
@@ -133,13 +133,13 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 cd "$REPO_ROOT"
 [[ -x .venv/bin/python ]] || uv venv -q --python 3.12 .venv
-uv pip install -q --python .venv/bin/python -r benchmarks/data/requirements.txt certifi pyarrow
+uv pip install -q --python .venv/bin/python -r benchmarks/data/requirements.txt certifi pyarrow   # requirements.txt also pulls huggingface_hub + numerapi (Criteo / Numerai)
 VENV_PY="$REPO_ROOT/.venv/bin/python"
 mark "uv + .venv" done "$("$VENV_PY" --version)"
 
 # ---------------------------------------------------------------- 6. datasets
 if [[ "${SKIP_DATASETS:-0}" == 1 ]]; then
-  for st in "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "YouTube-8M" "TabReD"; do mark "$st" skipped "SKIP_DATASETS=1"; done
+  for st in "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "YouTube-8M" "Large tabular" "TabReD"; do mark "$st" skipped "SKIP_DATASETS=1"; done
   exit 0
 fi
 
@@ -206,6 +206,16 @@ else
   "$VENV_PY" benchmarks/data/download_youtube8m.py   # video-level train + validate, 22 GB of shards -> 72 GB of CSV
 fi
 mark "YouTube-8M" done "$(du -shc benchmarks/data/youtube8m/youtube8m_video_train.csv benchmarks/data/youtube8m/youtube8m_video_validate.csv | tail -1 | cut -f1)"
+
+begin "Large tabular"   # Criteo day 1, NYC yellow taxi 2022-2024, BTS airline 2018-2024, Numerai v5.0 (2026-09-21)
+for ds in criteo nyc_taxi airline numerai; do
+  if [[ -s benchmarks/data/$ds/${ds}_train.csv && -s benchmarks/data/$ds/${ds}_test.csv ]]; then
+    echo "$ds/${ds}_{train,test}.csv present"
+  else
+    "$VENV_PY" benchmarks/data/download_$ds.py
+  fi
+done
+mark "Large tabular" done "$(du -shc benchmarks/data/{criteo,nyc_taxi,airline,numerai}/*_train.csv | tail -1 | cut -f1)"
 
 begin "TabReD"
 if [[ -r "$HOME/.kaggle/kaggle.json" ]]; then
