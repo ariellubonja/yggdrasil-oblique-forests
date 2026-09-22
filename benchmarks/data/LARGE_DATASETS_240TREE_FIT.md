@@ -25,6 +25,14 @@ Peak RSS = `/usr/bin/time -v` maximum resident set size. Training block = the
 Largest that fits: Numerai full, airline full, NYC taxi 1/2 (49.1M rows), Criteo 1/8 (24.5M rows;
 the 1/4 run died late, so the true Criteo limit lies between 24.5M and 49M).
 
+The exact row prefixes that fit are kept next to their datasets (gitignored, regenerate with
+`head -n <rows+1> <train.csv>`): `nyc_taxi/nyc_taxi_train_49149208.csv`,
+`criteo/criteo_train_24480247.csv`. Numerai and airline used the full train CSVs. The runs
+themselves used identical `head` prefixes in the session scratchpad (`/tmp`, a tmpfs on this box):
+failed prefixes were deleted after their run and the rest went with the scratchpad, hence the copies.
+Note that a prefix on tmpfs occupies RAM during its own run (up to 18 GB for Criteo 1/2), so the
+effective budget of the killed runs was that much lower than 377 GB.
+
 Why RAM, not the data, is the limit: the forest holds ≈ one node per distinct bootstrap row per
 tree × 240 trees (Bagging trains to purity), i.e. 5–25 kB of model per training row depending on
 how separable the data is. Calibration: HIGGS 10.5M × 28 (1.2 GB of data) peaks at 267 GB
