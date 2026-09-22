@@ -34,7 +34,7 @@ log() { printf '\n[%s] === %s\n' "$(date +%H:%M:%S)" "$*"; }
 
 # Status table, printed on exit (also on failure). mark <step> <status> [detail]
 STEPS=("tmux, apt, bazelisk" "Intel oneAPI (icx, VTune, Advisor)" "SMT off" "bazel build harness"
-       "uv + .venv" "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "YouTube-8M" "Large tabular" "TabReD")
+       "uv + .venv" "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "Large tabular" "TabReD")
 declare -A STATUS
 CURRENT_STEP=""
 mark()  { STATUS[$1]=$2${3:+ ($3)}; }
@@ -139,7 +139,7 @@ mark "uv + .venv" done "$("$VENV_PY" --version)"
 
 # ---------------------------------------------------------------- 6. datasets
 if [[ "${SKIP_DATASETS:-0}" == 1 ]]; then
-  for st in "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "YouTube-8M" "Large tabular" "TabReD"; do mark "$st" skipped "SKIP_DATASETS=1"; done
+  for st in "HIGGS / SUSY" "CC18" "TabArena + all-numeric CSVs" "EPSILON" "Large tabular" "TabReD"; do mark "$st" skipped "SKIP_DATASETS=1"; done
   exit 0
 fi
 
@@ -199,15 +199,12 @@ else
 fi
 mark "EPSILON" done "$(du -sh benchmarks/data/epsilon_normalized_train.csv | cut -f1)"
 
-begin "YouTube-8M"
+begin "Large tabular"   # YouTube-8M video-level, Criteo day 1, NYC yellow taxi 2022-2024, BTS airline 2018-2024, Numerai v5.0 (2026-09-21/22)
 if [[ -s benchmarks/data/youtube8m/youtube8m_video_train.csv && -s benchmarks/data/youtube8m/youtube8m_video_validate.csv ]]; then
   echo "youtube8m/youtube8m_video_{train,validate}.csv present"
 else
   "$VENV_PY" benchmarks/data/download_youtube8m.py   # video-level train + validate, 22 GB of shards -> 72 GB of CSV
 fi
-mark "YouTube-8M" done "$(du -shc benchmarks/data/youtube8m/youtube8m_video_train.csv benchmarks/data/youtube8m/youtube8m_video_validate.csv | tail -1 | cut -f1)"
-
-begin "Large tabular"   # Criteo day 1, NYC yellow taxi 2022-2024, BTS airline 2018-2024, Numerai v5.0 (2026-09-21)
 for ds in criteo nyc_taxi airline numerai; do
   if [[ -s benchmarks/data/$ds/${ds}_train.csv && -s benchmarks/data/$ds/${ds}_test.csv ]]; then
     echo "$ds/${ds}_{train,test}.csv present"
@@ -218,7 +215,7 @@ done
 # Earliest-K prefixes that fit the default 240-tree run on the 377 GB m7i (benchmarks/data/LARGE_DATASETS_240TREE_FIT.md)
 [[ -s benchmarks/data/nyc_taxi/nyc_taxi_train_49149208.csv ]] || head -n 49149209 benchmarks/data/nyc_taxi/nyc_taxi_train.csv > benchmarks/data/nyc_taxi/nyc_taxi_train_49149208.csv
 [[ -s benchmarks/data/criteo/criteo_train_24480247.csv ]]     || head -n 24480248 benchmarks/data/criteo/criteo_train.csv     > benchmarks/data/criteo/criteo_train_24480247.csv
-mark "Large tabular" done "$(du -shc benchmarks/data/{criteo,nyc_taxi,airline,numerai}/*_train.csv | tail -1 | cut -f1)"
+mark "Large tabular" done "$(du -shc benchmarks/data/youtube8m/youtube8m_video_train.csv benchmarks/data/{criteo,nyc_taxi,airline,numerai}/*_train.csv | tail -1 | cut -f1)"
 
 begin "TabReD"
 if [[ -r "$HOME/.kaggle/kaggle.json" ]]; then

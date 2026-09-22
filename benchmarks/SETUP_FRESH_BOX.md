@@ -37,8 +37,7 @@ HIGGS / SUSY                             | done (7.5G, 2.3G)
 CC18                                     | done (34 tasks)
 TabArena + all-numeric CSVs              | done (30/30 train.csv)
 EPSILON                                  | done (15G)
-YouTube-8M                               | done (56G, 16G; added 2026-09-21, ~5 min on m7i.metal, not in the 35 min)
-Criteo / NYC taxi / Airline / Numerai    | done (37G+0.6G, 6.7G+1.5G, 6.5G+0.3G, 13G+20G; added 2026-09-21, ~25 min total, not in the 35 min)
+Large tabular                            | done (YouTube-8M 56G+16G, Criteo 37G+0.6G, NYC taxi 6.7G+1.5G, Airline 6.5G+0.3G, Numerai 13G+20G; added 2026-09-21, YouTube-8M folded into this step 2026-09-22, ~30 min total, not in the 35 min)
 TabReD                                   | skipped (no ~/.kaggle/kaggle.json: needs a Kaggle token + accepted competition rules)
 ```
 
