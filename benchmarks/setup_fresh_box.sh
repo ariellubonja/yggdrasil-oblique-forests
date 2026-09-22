@@ -215,6 +215,9 @@ for ds in criteo nyc_taxi airline numerai; do
     "$VENV_PY" benchmarks/data/download_$ds.py
   fi
 done
+# Earliest-K prefixes that fit the default 240-tree run on the 377 GB m7i (benchmarks/data/LARGE_DATASETS_240TREE_FIT.md)
+[[ -s benchmarks/data/nyc_taxi/nyc_taxi_train_49149208.csv ]] || head -n 49149209 benchmarks/data/nyc_taxi/nyc_taxi_train.csv > benchmarks/data/nyc_taxi/nyc_taxi_train_49149208.csv
+[[ -s benchmarks/data/criteo/criteo_train_24480247.csv ]]     || head -n 24480248 benchmarks/data/criteo/criteo_train.csv     > benchmarks/data/criteo/criteo_train_24480247.csv
 mark "Large tabular" done "$(du -shc benchmarks/data/{criteo,nyc_taxi,airline,numerai}/*_train.csv | tail -1 | cut -f1)"
 
 begin "TabReD"

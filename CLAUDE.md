@@ -121,7 +121,9 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   arrival-side/diversion columns dropped as leakage, cancelled/diverted rows dropped for lack of label);
   `numerai/` v5.0 train 2.75M × 2376 (target 0.5 vs rest, majority-vs-rest). Regression targets were
   binarised as stated (median for taxi, the dataset's own ≥15 min flag for airline) — user has not
-  ruled on regression targets yet. 240-tree fit limits on the 377 GB m7i: see `ariel_notes/journal.md`
+  ruled on regression targets yet. 240-tree fit limits on the 377 GB m7i and the exact
+  `head` prefixes that fit (`nyc_taxi_train_49149208.csv`, `criteo_train_24480247.csv`): see
+  `benchmarks/data/LARGE_DATASETS_240TREE_FIT.md`; details in `ariel_notes/journal.md`
   2026-09-21 (RAM is dominated by the trained model: trees grow to purity, ≈25 kB per training row
   on noisy tall data — HIGGS 10.5M rows peaks at 267 GB).
 - **Missing locally:** sick (no CSV; TBG column 100% NaN), TabArena (metadata only), TabReD,

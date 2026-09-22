@@ -25,13 +25,31 @@ Peak RSS = `/usr/bin/time -v` maximum resident set size. Training block = the
 Largest that fits: Numerai full, airline full, NYC taxi 1/2 (49.1M rows), Criteo 1/8 (24.5M rows;
 the 1/4 run died late, so the true Criteo limit lies between 24.5M and 49M).
 
-The exact row prefixes that fit are kept next to their datasets (gitignored, regenerate with
-`head -n <rows+1> <train.csv>`): `nyc_taxi/nyc_taxi_train_49149208.csv`,
-`criteo/criteo_train_24480247.csv`. Numerai and airline used the full train CSVs. The runs
-themselves used identical `head` prefixes in the session scratchpad (`/tmp`, a tmpfs on this box):
-failed prefixes were deleted after their run and the rest went with the scratchpad, hence the copies.
+## Recreating the exact training inputs
+
+Numerai and airline trained on the full train CSVs. Taxi and Criteo trained on earliest-K
+prefixes of the chronological train CSV; these are the exact commands (K+1 lines = header + K rows):
+
+```bash
+cd benchmarks/data
+head -n 49149209 nyc_taxi/nyc_taxi_train.csv > nyc_taxi/nyc_taxi_train_49149208.csv   # taxi 1/2, 3.2 GB
+head -n 24480248 criteo/criteo_train.csv     > criteo/criteo_train_24480247.csv        # Criteo 1/8, 4.4 GB
+```
+
+Both files are gitignored (the whole `benchmarks/data/<name>/` folders are) and are also
+produced by `benchmarks/setup_fresh_box.sh` (step "Large tabular"). The runs themselves used
+byte-identical `head` prefixes in the session scratchpad (`/tmp`, a tmpfs on this box): failed
+prefixes were deleted after their run and the rest went with the scratchpad, hence these copies.
 Note that a prefix on tmpfs occupies RAM during its own run (up to 18 GB for Criteo 1/2), so the
 effective budget of the killed runs was that much lower than 377 GB.
+
+The run command per row (harness defaults; add `--test_csv=<name>/<name>_test.csv` only when
+accuracy is wanted, which also switches on YDF's post-processing):
+
+```bash
+./bazel-bin/examples/train_oblique_forest --input_mode=csv --label_col=class \
+    --train_csv=benchmarks/data/nyc_taxi/nyc_taxi_train_49149208.csv
+```
 
 Why RAM, not the data, is the limit: the forest holds ≈ one node per distinct bootstrap row per
 tree × 240 trees (Bagging trains to purity), i.e. 5–25 kB of model per training row depending on

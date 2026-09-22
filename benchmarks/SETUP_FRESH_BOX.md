@@ -117,6 +117,9 @@ TabReD                                   | skipped (no ~/.kaggle/kaggle.json: ne
        → test (4,114,072 rows; 34,713 null-target rows dropped). `target` has 5 values
        {0,.25,.5,.75,1}; majority-vs-rest ⇒ `class = 1` iff `target == 0.5` (50.0 %). No NaNs
        in v5.0. ~6 min.
+     - Fit limits for the default 240-tree run on the 377 GB m7i, and the exact `head` prefixes
+       that fit (`nyc_taxi/nyc_taxi_train_49149208.csv`, `criteo/criteo_train_24480247.csv`,
+       created by the setup script): `benchmarks/data/LARGE_DATASETS_240TREE_FIT.md`.
    - `download_tabred_datasets.py` → `tabred/` — **only if `~/.kaggle/kaggle.json` exists**
      (needs a Kaggle token and accepted competition rules; drop the token in and re-run the
      script for this step).
