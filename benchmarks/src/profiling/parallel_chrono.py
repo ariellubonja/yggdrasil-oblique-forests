@@ -23,6 +23,11 @@ def get_args():
     p = argparse.ArgumentParser(parents=[parent_parser])
     
     # Add script-specific arguments
+    p.add_argument("--dynamic_split_threshold", type=int, default=None,
+                   help="Passed to the harness for Dynamic Random Histogram: "
+                        "nodes below it use the exact finder. Default None = "
+                        "the harness build default (-2). Breakeven (2026-09-22): "
+                        "250 for AVX2 64-bin, 1000 for AVX-512 256-bin.")
     p.add_argument("--histogram_num_bins", type=int, default=None,
                    help="Histogram bin count. Default follows "
                         "--vectorized (avx2 -> 64, avx512 -> 256).")
@@ -573,6 +578,8 @@ if __name__ == "__main__":
            "--compute_oob_performances=false",
            f"--histogram_num_bins={a.histogram_num_bins}"]
     
+    if a.dynamic_split_threshold is not None:
+        cmd.append(f"--dynamic_split_threshold={a.dynamic_split_threshold}")
     if a.max_num_projections is not None:
         cmd.append(f"--max_num_projections={a.max_num_projections}")
     if a.projection_density_factor is not None:

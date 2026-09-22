@@ -155,14 +155,18 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   BOTH timers but inside wall time: address-space teardown at the early `exit(0)` ≈ 0.105 s
   per 1e9 cells (6.3 s on the 240 GB shapes).
 
-## Dynamic-histogram switch threshold (user directive, 2026-09-09)
+## Dynamic-histogram switch threshold (user directive, 2026-09-09; AVX-512 value 2026-09-22)
 
 `--dynamic_split_threshold` (nodes below it use the exact finder) depends on the binner and
-the exact sort in the build. **Vectorized binner (default, AVX2 64-bin / AVX-512 256-bin):
-250.** **Scalar binner (`--config=disable_std_upper_bound_vectorization`): 4600 with the
-Highway VQSort exact finder, 1350 with `--config=exact_std_sort`.** The harness default
-(`-2`) resolves these from the build macros; `arms.py` passes them explicitly
-(`_DYN64` = 250, `_DYN64_SCALAR` = 4600). In the SPO-vs-GBT study only, the `spo_rf_dyn_scalar`
+the exact sort in the build. **Breakeven points: AVX2 64-bin binner (default): 250. AVX-512
+256-bin binner: 1000** (256-bin sweep in `benchmarks/results/runtime/dynamic_histogram_breakeven/`
+is flat 600–1100, minimum 800–1000). **Scalar binner
+(`--config=disable_std_upper_bound_vectorization`): 4600 with the Highway VQSort exact finder,
+1350 with `--config=exact_std_sort`.** Always pass the threshold explicitly for AVX-512 runs:
+the harness default (`-2`) resolves from build macros only and gives 250 for both vectorized
+binners; `arms.py` `_DYN256` also still says 250 (not yet updated). `arms.py` passes
+`_DYN64` = 250, `_DYN64_SCALAR` = 4600; `parallel_chrono.py --dynamic_split_threshold` passes it
+through for per-function runs (Dyn AVX-2 → 250, Dyn AVX-512 → 1000). In the SPO-vs-GBT study only, the `spo_rf_dyn_scalar`
 rows recorded before 2026-09-09 used 250 and were re-run (they measured a mis-set threshold,
 not the method); earlier Dynamic-scalar results outside that study are not affected.
 Until those re-run numbers land, every dyn_scalar cell renders as `--` (rows moved to
