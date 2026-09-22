@@ -93,8 +93,10 @@ def main():
         y = (x + noise).astype(np.float32)
         # Order between levels is preserved: rounding back to the step grid recovers x
         # wherever fp32 can represent the offset. Checked on the sample.
-        back = np.round((y[sidx] - x[sidx]) / step)
-        assert np.all(np.abs(back) <= 0.5 + 1e-3) or np.max(np.abs(x[sidx])) >= 2**23, name
+        # Allow fp32 rounding: at large magnitudes one ulp can exceed step/2 (taxi trip_distance
+        # outliers, epoch seconds); the value then stays on its fp32 grid, which is fine.
+        xs = x[sidx]; tol = np.float32(step / 2) + 2 * np.spacing(np.abs(xs).astype(np.float32))
+        assert np.all(np.abs(y[sidx] - xs) <= tol), name
         steps[name] = step
         report[name] = {"step": step, "sample_distinct_before": n_distinct, "sample_distinct_after": int(len(np.unique(y[sidx]))),
                         "excluded": exclude, "integer_valued_distinct": n_int}

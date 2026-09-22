@@ -126,6 +126,12 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   `benchmarks/data/LARGE_DATASETS_240TREE_FIT.md`; details in `ariel_notes/journal.md`
   2026-09-21 (RAM is dominated by the trained model: trees grow to purity, ≈25 kB per training row
   on noisy tall data — HIGGS 10.5M rows peaks at 267 GB).
+  **Cardinality caveat (2026-09-22):** Numerai (5 levels per feature), Criteo (counts + ordinal codes) and
+  taxi (IDs, counts, 2-decimal amounts) have few distinct values per column, so Highway VQSort's equal-key
+  shortcut makes the Exact finder 2–3× cheaper per row than on continuous data (HIGGS/SUSY/Epsilon/YouTube)
+  while the histogram binner's cost is value-independent — Exact ties or beats Dynamic there. For
+  HIGGS-like comparisons use the `*_dequant.csv` copies made by `benchmarks/data/dequantize_dataset.py`
+  (uniform noise inside each column's quantisation step, seeded); see `ariel_notes/journal.md` 2026-09-22.
 - **Missing locally:** sick (no CSV; TBG column 100% NaN), TabArena (metadata only), TabReD,
   epsilon, `processed/` — the suites live on the m7i.
 
