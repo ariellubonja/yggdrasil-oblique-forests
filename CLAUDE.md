@@ -191,6 +191,13 @@ refresh is a manual re-upload — not worth repeating per data correction.
 - **HIGGS is only ever used at its full size (10.5M-row train / 500k test).** Do not create or run row
   subsamples/prefixes of HIGGS (100k, 300k, 1M, 3M ...) for any experiment, speedup map included.
 - **Single seed.** Do not run extra-seed repeats of benchmark arms (no `--seed 2` sweeps); timing repeats are fine.
+- **Sweeps loop datasets OUTER, parameters inner (user directive, 2026-09-22).** Each
+  `train_oblique_forest` invocation re-parses its CSV; the only cache is the OS page cache, and
+  it is warm only while the same file is re-read back to back (parse ≈2.5 ns/cell warm vs
+  EBS-bound cold; a big model RSS can evict another dataset's pages). So finish every
+  threshold/config for one dataset before moving to the next — never dataset-inner.
+  `dynamic_histogram_threshold_sweep.sh` takes `CSV_DATASETS_OVERRIDE` / `TRUNK_DATASETS_OVERRIDE`
+  for one-dataset invocations.
 
 ## Vectorized histogram ISA (user directive, 2026-09-08)
 

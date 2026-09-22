@@ -89,6 +89,14 @@ TRUNK_DATASETS=(
   "150000|40000"
   "15000|400000"
 )
+# Optional overrides of the dataset lists above (same entry syntax, space-separated).
+# TRUNK_DATASETS_OVERRIDE="" (set but empty) means "no trunk datasets".
+if [[ -n "${CSV_DATASETS_OVERRIDE:-}" ]]; then
+  read -ra CSV_DATASETS <<<"$CSV_DATASETS_OVERRIDE"
+fi
+if [[ -n "${TRUNK_DATASETS_OVERRIDE+x}" ]]; then
+  read -ra TRUNK_DATASETS <<<"$TRUNK_DATASETS_OVERRIDE"
+fi
 
 # =========================
 # Main Script
@@ -154,6 +162,7 @@ BASE_ARGS="--num_trees=$NUM_TREES"
 bench_provenance_block \
   "NUM_TREES: $NUM_TREES  NUM_RUNS: $NUM_RUNS" \
   "DYNAMIC_SPLIT_THRESHOLDS: ${DYNAMIC_SPLIT_THRESHOLDS[*]}" \
+  "CSV_DATASETS: ${CSV_DATASETS[*]:-<none>}  TRUNK_DATASETS: ${TRUNK_DATASETS[*]:-<none>}" \
   | tee -a "$logfile" > "$csvfile"
 echo "dataset,dynamic_split_threshold,num_trees,median_s,stddev_s,n_samples,all_samples_s" >> "$csvfile"
 
@@ -170,7 +179,8 @@ for threshold in "${DYNAMIC_SPLIT_THRESHOLDS[@]}"; do
       "$BINARY --input_mode csv --train_csv \"$path\" --label_col \"$label\" $BASE_ARGS $threshold_arg $EXTRA_TRAIN_ARGS"
   done
 
-  for entry in "${TRUNK_DATASETS[@]}"; do
+  for entry in "${TRUNK_DATASETS[@]:-}"; do
+    [[ -n "$entry" ]] || continue
     IFS='|' read -r rows cols <<<"$entry"
     run_cmd "trunk_${rows}_x_${cols}" "$threshold" \
       "$BINARY --input_mode trunk --rows $rows --cols $cols $BASE_ARGS $threshold_arg $EXTRA_TRAIN_ARGS"
