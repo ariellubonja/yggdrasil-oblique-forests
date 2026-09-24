@@ -4,7 +4,7 @@ Dyn-Vec (AVX2, 64 bins, threshold 250) over Exact (Highway VQSort), one panel
 each for max_depth 6, 16 and unlimited (purity). 240 trees, 48 threads, m7i.
 
 Sources (committed under benchmarks/results/runtime/):
-  speedup_map_by_dataset/speedup_map*.csv      trunk grid + HIGGS/SUSY/Epsilon,
+  speedup_map_by_dataset/speedup_map*.csv      trunk grid + HIGGS/SUSY/Epsilon/YouTube-8M,
                                                median over reps per (cell, arm)
 Speedup = median(train_s exact_hwy) / median(train_s dyn_vec). Circles: Trunk
 synthetic datasets; squares: natural datasets. Writes fig_rowcol_map_depths.{pdf,png}
@@ -33,7 +33,8 @@ PAPER_FIG = ROOT / "paper" / "spaa27" / "figures" / "results"
 
 EXACT, DYN = "spo_rf_exact_hwy", "spo_rf_dyn_vec"
 DEPTHS = [(6, "Depth 6"), (16, "Depth 16"), (-1, "Unlimited Depth")]
-NATURAL = {"higgs_10500000": "HIGGS", "SUSY": "SUSY", "EPSILON": "Epsilon"}
+NATURAL = {"higgs_10500000": "HIGGS", "SUSY": "SUSY", "EPSILON": "Epsilon",
+           "YOUTUBE8M": "YouTube-8M"}
 CMAP = "Spectral_r"  # blue (low) -> yellow -> red (high); user pick 2026-09-24
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman", "Times", "Nimbus Roman"],
                      "mathtext.fontset": "stix"})
@@ -53,7 +54,7 @@ def load_points() -> pd.DataFrame:
     med["kind"] = med["dataset"].map(lambda d: "trunk" if d.startswith("trunk_") else "natural")
     med["dataset"] = med["dataset"].replace(NATURAL)
 
-    # YouTube-8M (breakeven sweeps, purity only) dropped 2026-09-24: it exists in one panel only.
+    # YouTube-8M: depth-table runs (all depths) since 2026-09-24.
     tab = med.copy()
     tab["speedup"] = tab[EXACT] / tab[DYN]
     return tab.sort_values(["max_depth", "rows", "features"]).reset_index(drop=True)
