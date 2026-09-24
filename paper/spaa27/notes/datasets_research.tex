@@ -88,6 +88,13 @@ Dataset & Size & Features & Missing & ML task & Subset that fits & Peak RAM & Tr
 \label{tab:cart-datasets}
 \end{table}
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{notes/figures/slow-natural-big.png}
+    \caption{HWY is surprisingly fast on the largest datasets - \textit{AL: why?} Bcs. those datasets have ties (not continuous). HWY has a fast-path/short-circuit for ties. }
+    \label{fig:hwy-on-discretized-numeric}
+\end{figure}
+
 \subsection{Ranking - LambdaMART}
 
 Istella22~\cite{dato_istella22_2022} - 12m web documents, 220 hand-crafted features. Raw docs available
@@ -156,6 +163,21 @@ We need to manually create embeddings for these:
     \item Good but small: [Google Scholar] MulTABench \cite{arazi_multabench_2026}: Multimodal Tabular Benchmark - great but small: max 114,000 rows x 245 features, AutoML Bag of Tricks~\cite{tang_bag_2024} (20k rows), AutoGluon–TimeSeries~\cite{shchur_autogluon-timeseries_2023} (100k).
     \item {\color{gray}\href{https://www.kaggle.com/competitions/otto-recommender-system}{OTTO} - discarded, event clicks of "aid" (int), "ts" (float), "type" (str). nonsense for humans }
 \end{itemize}
+
+
+\section{Issues with Discretized Datasets}
+
+Criteo, NYC taxi, Numerai have lots of ties (ordinal categories set as numbers), and Highway is unusually fast due to some clever skipping of ties. See Fig.~\ref{fig:hwy-on-discretized-numeric}.
+
+
+Went searching for more fully-numeric data:
+
+\begin{itemize}
+    \item ClimSim~\cite{yu2023climsim}[low-res], 744GB raw. Task: multi-output regression (weather prediction). Let's regress on only a single one of the Targets
+    \item \href{https://www.kaggle.com/competitions/jane-street-real-time-market-data-forecasting/data}{Jane Street Kaggle 2024}
+    \item \href{https://research.yandex.com/shifts/weather}{Yandex Weather Prediction} - 10m records, 111 features. Regression: Air Temp. at point
+\end{itemize}
+
 
 
 \appendix

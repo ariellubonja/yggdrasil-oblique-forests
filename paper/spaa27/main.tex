@@ -225,10 +225,16 @@ They feature in cost-aware ensembles because they run on CPUs and use a fraction
 Yggdrasil Decision Forests (YDF)~\cite{}, Google's open-source implementation of decision forests, offers both GBDT and RF learners. 
 YDF is performance competitive in both runtime and accuracy with XGBoost, LightGBM, and CatBoost when running the same algorithm with the same parameters~\cite{}.
 % must figure this out from Richard.
-In 2023, YDF was serving tens of millions of predictions per second at Google. It was integrated into Google's AutoML systems and a YDF algorithm was selected for ``a quarter of real-world use cases''. AutoML results select sparse-oblique GDBT most often and select sparse-oblique RF second most often. Sparse oblique (SPO) splits generally trade training time for better accuracy. SPO methods incur no additional cost during classification and regression. Sparse-oblique is the default method when choosing RF in YDF. 
+In 2023, YDF was serving tens of millions of predictions per second at Google. It was integrated into Google's AutoML systems and a YDF algorithm was selected for ``a quarter of real-world use cases''. AutoML select sparse-oblique GDBT most often and select sparse-oblique RF second most often. Sparse oblique (SPO) splits generally trade training time for better accuracy. SPO methods incur no additional cost during classification and regression. Sparse-oblique is the default method when choosing RF in YDF. 
 
 Given the importance of SPO methods in YDF, we study how to reduce or eliminate training time overhead. %Sparse oblique splits present unique computational challenges. 
 Unlike a regular, feature axis-aligned decision tree, where the feature set remains constant throughout training, oblique random projections must be performed at runtime. At each node, projection features are randomly sampled, their linear combination is calculated, and the resulting new ``feature'' is scanned for the best split. There are combinatorially many such splits in the number of features. This precludes strategies such as pre-sorting features for exact splits~\cite{ydf,wright2017ranger}, histogram subtraction~\cite{chen2016xgboost,ke2017lightgbm}, or symmetric trees~\cite{prokhorenkova2018catboost}.
+
+A deep performance study of SO-RDF and SO-GDBT revealed bottlenecks during training. The process led to many improvments in YDF, including the adoption of vectorized sorting~\cite{} and modifying sampling methods for SO-projections. This set a new baseline for SO-YDF that we use in this paper that is 2-5x faster than the open-source version with which we started. In this new baseline, the majority of runtime is spent .
+
+and adopting vectorized sorting~\cite{}
+when building. This raiseed the baseline of for this paper by a factor of 2x-5x training time for larger datasets. 
+The first was the construction of linear combinations, which is a vector sum of a sparese scan
 
 %Para 3: nature of SO methods.
 %they create a tradeoff.  no class/regression inference time penalty. better accuracy and more robust. downside has been training time
@@ -421,7 +427,7 @@ although some provide both~\cite{pedregosa2011scikit,chen2016xgboost,wenthunderg
 
 Oblique decision trees replace axis-aligned thresholds with linear combinations of sparse subsets of features, increasing expressivity and leading to shallower trees. Bivariate Decision Trees are a special case of SPO~\cite{kairgeldin_bivariate_2024}.
 
-As datasets increase in complexity, tree ensembles focus on scaling tree ensembles to wide data with many features and large data with many samples. Ranger~\cite{wright2017ranger} implemented parallel, multi-threaded training and combined pre-sorted data for high-cardinality nodes with in-node sorting for small nodes. YDF~\cite{ydf} extends this method to data that exceeds memory capacity.
+With the advent of big data it became important to have tree ensembles that scale well in terms of number of features or dimension. Towards this end, Ranger~\cite{wright2017ranger} implemented parallel, multi-threaded training and combined pre-sorted data for high-cardinality nodes with in-node sorting for small nodes. YDF~\cite{ydf} extends this method to data that exceeds memory capacity.
 
     % Spark RF~\cite{} focused on columnar storage. A: Can't find a citation for this
 
@@ -442,8 +448,8 @@ TODO quick overview.
 \subsection{Instrumenting Sparse-Oblique}
 
 We identified bottlenecks and optimization opportunities in sparse oblique YDF (SO-YDF) by implementing full timing instrumentation. We did this for histograms and exact splits and measured at all nodes in the tree.
-The computation at each node involves trying many linear combinations of features to identify the best splitting features. The first step is to build a projections matrix:
-a sparse list that samples with replacement $3 \sqrt{d}$ non-zero offsets from a  matrix of $d$ features by $1.5 \sqrt{d}$ rows and randomly assigns weights. Then for each row in the projection matrix, we evaluate the quality of the combination (Figure \ref{fig:computenode}):
+The computation at each node involves trying many linear combinations of features to identify the best splitting features. The first step is to build a projection matrix:
+a sparse list that samples uniformly with replacement $3 \sqrt{d}$ non-zero offsets from a  matrix of $d$ features by $1.5 \sqrt{d}$ rows and randomly assigns weights. Then for each row in the projection matrix, we evaluate the quality of the combination (Figure \ref{fig:computenode}):
 \begin{enumerate}
 \item Build the feature by combining the active samples of the data column for the non-zero offsets and apply weights. This is a sparse vector-sum of, on average, $1.5 \sqrt{d}$ $n$-row columns that returns a dense vector.
 \item Build a histogram of the projected feature that assigns samples to bins and counts the class instances in each bin.
@@ -543,9 +549,9 @@ Dynamic histograms produce different trees and potentially different learning ou
 
 \section{Results}
 
-1. Vectorization on GBTs 
-
 \subsection{Depth 6 - GBTs}
+
+Vectorization-only
 
 \subsection{Depth 16 - RF, Adaptive}
 
@@ -563,11 +569,15 @@ For accuracy experiments, we include data from the OpenML CC18 benchmarks~\cite{
 
 \subsection{Scalability}
 
-\textbf{\textit{RB: Scalability by n. cores? RF trees are trivially parallelizable}}
-
-% Body generated by benchmarks/evaluation/spo_vs_gbt/make_dyn_vs_size_figure.py from
-% large_results.csv + speedup_map.csv + ablation_vectorized_dynamic/ -- regenerate, don't edit.
-\input{figures/results/table4_speedup_vs_exact_hwy}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1\linewidth]{figures/results/E2E_speedup_vs_Exact.pdf}
+    % \vspace{-15px}
+    \caption{End-to-end training time on select datasets, normalized to the performance of SO-YDF with exact splits. \TODO{Group into Exact-Rand64-Rand256 vs. Vec64-Vec256-DynVec}}
+    % \vspace{-15px}
+    \Description{End-to-end evaluation reveals the benefit of our methods - up to 35\% reduction in runtime with only Dynamic, and up to 50\% with Vectorized Dynamic. It also reveals the similarity in performance of RF Exact to SO Exact.}
+    \label{fig:overall}
+\end{figure}
 
 Examining speedup reveals that SO-YDF training is compute bound on the CPU. Figure \ref{fig:speedup} shows near perfect scaling for vectorized dynamic histograms. This is somewhat surprising given that deep trees perform sparse memory access to feature columns. The results at 32 threads on 16 cores show no additional speedup and actually lose a little performance, likely from threads interfering in processor caches. There is no scaling when the number of threads exceed the number of CPU cores. % actually there's a small 20% benefit from hyperthreading. not included in results
 
@@ -576,9 +586,8 @@ Examining speedup reveals that SO-YDF training is compute bound on the CPU. Figu
 \subsection{Ablation - Dynamic Vectorized Histograms}
 \label{sec:dyn}
 
-replace w trunk dataset study
-
-\textit{\textbf{Results interpretation: Dynamic should matter a lot more on mid-size datasets.} If data is too big or too small (at fixed depth), you never use dynamic (threshold isn’t hit/dynamic runs for very few nodes)}
+\textbf{\textit{replace w trunk dataset study}}
+% \textit{\textbf{Results interpretation: Dynamic should matter a lot more on mid-size datasets.} If data is too big or too small (at fixed depth), you never use dynamic (threshold isn’t hit/dynamic runs for very few nodes)}
 
 
  Experiments were run on a AWS m7i.metal-24xl instance with 48 physical cores 384 GiB of memory running Ubuntu 24.04. YDF is compiled with ICX version 2025.2.1 with AVX-512 support. Experiments run a thread pool of 48 workers threads and train 240 trees - 5 trees per worker. Results are a median of 3 trials.
@@ -608,44 +617,32 @@ AVX-512 Vectorized is slower not because of the vector instructions taking more 
 \subsection{Dynamic Threshold Sensitivity Study}
 \label{app:dynamic-breakeven-all}
 
-% Body generated by benchmarks/src/utils/make_breakeven_figure.py -- regenerate, don't edit.
-\begin{figure}[h]
+% Bodies generated by benchmarks/src/utils/make_breakeven_figure.py -- regenerate, don't edit.
+\begin{figure*}[b]
     \centering
-    \input{figures/results/dynamic_breakeven_all}
+    \begin{minipage}[t]{0.49\linewidth}
+        \centering
+        \input{figures/results/dynamic_breakeven_all_zoom}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{0.49\linewidth}
+        \centering
+        \input{figures/results/dynamic_breakeven_all}
+    \end{minipage}
     \caption{Full-depth train speedup over Exact by a linesearch over Dynamic Thresholds. Above the threshold, Random-Vectorized is used, and below, Exact. Shaded bands: the range of the AVX-512 minima (light, 800--1200 rows) and of the AVX2 minima (dark, 200--400 rows).}
-    \Description{Line chart of training time relative to all-exact against the switch threshold for four datasets and two vectorized binners, with a reference line at 1 and two shaded bands marking the AVX-512 and AVX2 minima ranges.}
+    \Description{Two line charts of training time relative to all-exact against the switch threshold for four datasets and two vectorized binners, with a reference line at 1 and two shaded bands marking the AVX-512 and AVX2 minima ranges; the left panel is restricted to thresholds below 2000 and a y-axis capped at 0.95.}
     \label{fig:dynamic-breakeven}
-\end{figure}
-
-% Body generated by benchmarks/src/utils/make_breakeven_figure.py -- regenerate, don't edit.
-\begin{figure}[h]
-    \centering
-    \input{figures/results/dynamic_breakeven_all_zoom}
-    \caption{Figure~\ref{fig:dynamic-breakeven} zoomed to thresholds 0--2000. Shaded bands as in Figure~\ref{fig:dynamic-breakeven}.}
-    \Description{The same line chart as the previous figure restricted to thresholds below 2000 and a y-axis capped at 0.95, with two shaded bands marking the AVX-512 and AVX2 minima ranges.}
-    \label{fig:dynamic-breakeven-zoom}
-\end{figure}
+\end{figure*}
 
 \subsection{\TODO{Roofline} Pre-Vec v. Vec (std::sort \& Random v. HWY \& Vec Random}
 
 AL add. Optionally add Roofline of May 2025
 
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=1\linewidth]{figures/results/E2E_speedup_vs_Exact.pdf}
-    % \vspace{-15px}
-    \caption{End-to-end training time on select datasets, normalized to the performance of SO-YDF with exact splits.}
-    % \vspace{-15px}
-    \Description{End-to-end evaluation reveals the benefit of our methods - up to 35\% reduction in runtime with only Dynamic, and up to 50\% with Vectorized Dynamic. It also reveals the similarity in performance of RF Exact to SO Exact.}
-    \label{fig:overall}
-\end{figure}
-
 % tab:spo-vs-gbt-timing is input from spo_vs_gbt_results.tex, next to the
 % Training time discussion; these two are accuracy only.
 % Dropped 2026-09-09 (user request): mean accuracy/AUC + mean-rank suite table.
 %\input{tables/table_spo_vs_gbt_summary_both}
-\input{tables/table_spo_vs_gbt_huge_both}
+% \input{tables/table_spo_vs_gbt_huge_both}
 
 % \FloatBarrier
 \section{Accuracy}
@@ -677,10 +674,10 @@ We present vectorized adaptive histograms to accelerate sparse oblique random fo
 
 % Speedup views of Table~\ref{tab:overall}, one per baseline arm.
 % Generated by benchmarks/src/utils/make_table4_speedup_figures.py -- regenerate, don't edit.
-\input{figures/results/table4_speedup_vs_rand64}
-\input{figures/results/table4_speedup_vs_rand256}
+% \input{figures/results/table4_speedup_vs_rand64}
+% \input{figures/results/table4_speedup_vs_rand256}
 
-\FloatBarrier
+% \FloatBarrier
 
 \subsection{Extensive Accuracy Results}
 \input{tables/table_spo_vs_gbt_per_dataset_both}
