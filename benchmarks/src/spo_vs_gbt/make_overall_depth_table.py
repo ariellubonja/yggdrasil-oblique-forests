@@ -6,7 +6,8 @@ GiveMeSomeCredit, trunk 1M x {32,512,2048} and the row-column shapes with rows >
 or cols > 100k (D8-rev2; 15k x 4096 and 15k x 40k are run but not tabulated).
 Columns: 7 split finders -- Exact (Highway VQSort),
 Random histogram (scalar; 64 and 256 bins), Vectorized random histogram (AVX2 64 bins,
-AVX-512 256 bins), Vectorized dynamic (AVX2, 64 bins). Dynamic (scalar) and Exact (std::sort) are commented out.
+AVX-512 256 bins), Vectorized dynamic (AVX2 64 bins, threshold 250; AVX-512 256 bins,
+threshold 1000). Dynamic (scalar) and Exact (std::sort) are commented out.
 Speedups beside Our Methods are over Exact (HWY).
 Depths: 6, 10, 16, 24, full (purity). 240 trees, min_examples 1, 48 threads, seed 1.
 
@@ -35,13 +36,15 @@ ARMS = [  # (arm, header line 1, header line 2)
     ("spo_rf_rand256_vec", "Vec. Random Hist.", "AVX-512, 256 bins"),
     # ("spo_rf_dyn_scalar", "Dynamic Hist.", "scalar, 64 bins \\& HWY"),  # dropped 2026-09-14
     ("spo_rf_dyn_vec", "Vec. Dynamic Hist.", "AVX2, 64 bins \\& HWY"),
+    ("spo_rf_dyn256_vec", "Vec. Dynamic Hist.", "AVX-512, 256 bins \\& HWY"),
 ]
-GROUPS = [("Baselines", 3), ("Our Methods", 3)]  # column blocks, in ARMS order
+GROUPS = [("Baselines", 3), ("Our Methods", 4)]  # column blocks, in ARMS order
 # Speedup shown beside a cell = (best of these reference arms) / cell; missing refs are skipped.
 SPEEDUP_REF = {
     "spo_rf_rand_vec": ["spo_rf_exact_hwy"],
     "spo_rf_rand256_vec": ["spo_rf_exact_hwy"],
     "spo_rf_dyn_vec": ["spo_rf_exact_hwy"],
+    "spo_rf_dyn256_vec": ["spo_rf_exact_hwy"],
 }
 DATASETS = [  # (key in speedup_map.csv, display name)
     ("higgs_10500000", "HIGGS 10.5M$\\times$28"),
@@ -67,7 +70,7 @@ DEPTH_LABEL = {-1: "Full depth (purity)"}
 # One table* float per group; the whole table does not fit on one page.
 DEPTH_PAGES = [[6, 10, 16], [24, -1]]
 # Author notes kept in a page's caption across regenerations: (before, after) the generated text.
-CAPTION_NOTES = {0: (r"\TODO{Add speedup over both HWY and Random hist. Add Dynamic AVX-512. Run AVX on m8i} ",
+CAPTION_NOTES = {0: (r"\TODO{Add speedup over both HWY and Random hist. Run AVX on m8i} ",
                      r" \TODO{Add avx-512. Make Trunk in a different section: "
                      r"exploring the row-col space.}")}
 
@@ -127,7 +130,7 @@ def emit_tex(df: pd.DataFrame, nrep: int) -> str:
         "48 threads, m7i.metal-24xl, " + reps + ". Exact = presorted scan with "
         "Highway VQSort. Histogram finders use 64 or 256 bins; vectorized variants use the AVX2 "
         "upper\\_bound kernel at 64 bins and the two-level AVX-512 search at 256 bins; the "
-        "dynamic arm uses 64 bins and switches to exact below 250 examples. Parenthesized: "
+        "dynamic arms switch to exact below 250 (64 bins) or 1000 (256 bins) examples. Parenthesized: "
         "speedup over Exact (HWY). Trunk = synthetic "
         "$R\\times C$ dataset. -- = not run.")
     npage = len(DEPTH_PAGES)
