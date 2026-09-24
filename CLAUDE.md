@@ -201,6 +201,12 @@ and never report a Random-only arm on regression without the Dynamic arm next to
 results in `ariel_notes/journal.md` 2026-09-24; dataset scripts write `<name>_{train,test}_reg.csv`
 with `--also_regression`.
 
+## Times in chat: US Eastern (user directive, 2026-09-24)
+
+When telling the user a clock time (start, ETA, finish), give it in US Eastern time
+(`TZ=America/New_York date`; EDT = UTC-4 in summer, EST = UTC-5 in winter), labelled EDT/EST.
+Logs and CSV timestamps stay UTC; convert only in what the user reads.
+
 ## Do not write paper prose (user directive, 2026-09-09)
 
 **Never add or rewrite LaTeX body text with your own descriptions or interpretations of
