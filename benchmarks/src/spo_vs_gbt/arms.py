@@ -275,3 +275,31 @@ ARMS_SMOKE_ONLY: dict[str, dict] = {
     },
 }
 ARMS.update(ARMS_SMOKE_ONLY)  # after ARM_ORDER is frozen
+
+# SPO-GBT histogram arms (added 2026-09-24, user directive: YouTube-8M depth-6 GBT
+# table = Exact, Random-64/256 scalar, Random-64 AVX2, Random-256 AVX-512; no dynamic,
+# no python arms). Kept out of ARM_ORDER so default runs are unchanged; opt in via
+# run_suite.py --arms.
+ARMS_GBT_HIST: dict[str, dict] = {
+    "spo_gbt_rand_scalar": {
+        "family": "gbt", "engine": "ydf_fork", "binary": "scalar",
+        "ydf_flags": _OBLIQUE + _RANDOM64 + _BOOSTING,
+        "trees": 300, "tree_depth": 6, "min_examples": None, "py_ctor": None,
+    },
+    "spo_gbt_rand256_scalar": {
+        "family": "gbt", "engine": "ydf_fork", "binary": "scalar",
+        "ydf_flags": _OBLIQUE + _RANDOM256 + _BOOSTING,
+        "trees": 300, "tree_depth": 6, "min_examples": None, "py_ctor": None,
+    },
+    "spo_gbt_rand_vec": {
+        "family": "gbt", "engine": "ydf_fork", "binary": "default",
+        "ydf_flags": _OBLIQUE + _RANDOM64 + _BOOSTING,
+        "trees": 300, "tree_depth": 6, "min_examples": None, "py_ctor": None,
+    },
+    "spo_gbt_rand256_vec": {
+        "family": "gbt", "engine": "ydf_fork", "binary": "default",
+        "ydf_flags": _OBLIQUE + _RANDOM256 + _BOOSTING,
+        "trees": 300, "tree_depth": 6, "min_examples": None, "py_ctor": None,
+    },
+}
+ARMS.update(ARMS_GBT_HIST)
