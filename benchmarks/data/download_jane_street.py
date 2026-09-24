@@ -30,7 +30,12 @@ def ensure_data(out_dir):
         return
     z = os.path.join(out_dir, COMP + ".zip")
     if not os.path.exists(z):
-        log("downloading via kaggle"); subprocess.check_call([sys.executable.replace("python", "kaggle"), "competitions", "download", "-c", COMP, "-p", out_dir])
+        env = dict(os.environ)
+        tok = os.path.expanduser("~/.kaggle/access_token")
+        if "KAGGLE_API_TOKEN" not in env and os.path.exists(tok):
+            env["KAGGLE_API_TOKEN"] = open(tok).read().strip()
+        cli = os.path.join(os.path.dirname(sys.executable), "kaggle")
+        log("downloading via kaggle"); subprocess.check_call([cli, "competitions", "download", "-c", COMP, "-p", out_dir], env=env)
     log("unzipping"); zipfile.ZipFile(z).extractall(out_dir)
 
 

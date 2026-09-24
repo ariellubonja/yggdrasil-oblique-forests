@@ -199,23 +199,34 @@ else
 fi
 mark "EPSILON" done "$(du -sh benchmarks/data/epsilon_normalized_train.csv | cut -f1)"
 
-begin "Large tabular"   # YouTube-8M video-level, Criteo day 1, NYC yellow taxi 2022-2024, BTS airline 2018-2024, Numerai v5.0 (2026-09-21/22)
+begin "Large tabular"   # YouTube-8M video-level, Criteo day 1, NYC yellow taxi 2022-2024, BTS airline 2018-2024, Numerai v5.0 (2026-09-21/22); Shifts weather, ClimSim, Jane Street (2026-09-24)
 if [[ -s benchmarks/data/youtube8m/youtube8m_video_train.csv && -s benchmarks/data/youtube8m/youtube8m_video_validate.csv ]]; then
   echo "youtube8m/youtube8m_video_{train,validate}.csv present"
 else
   "$VENV_PY" benchmarks/data/download_youtube8m.py   # video-level train + validate, 22 GB of shards -> 72 GB of CSV
 fi
-for ds in criteo nyc_taxi airline numerai; do
+for ds in criteo nyc_taxi airline numerai shifts_weather climsim; do   # shifts_weather + climsim added 2026-09-24
   if [[ -s benchmarks/data/$ds/${ds}_train.csv && -s benchmarks/data/$ds/${ds}_test.csv ]]; then
     echo "$ds/${ds}_{train,test}.csv present"
   else
     "$VENV_PY" benchmarks/data/download_$ds.py
   fi
 done
+# Jane Street 2024 (Kaggle competition data, 2026-09-24): needs a Kaggle token in ~/.kaggle/access_token
+# (new "KGAT_..." API token) or ~/.kaggle/kaggle.json, and the competition rules accepted on kaggle.com.
+if [[ -s benchmarks/data/jane_street/jane_street_train.csv && -s benchmarks/data/jane_street/jane_street_test.csv ]]; then
+  echo "jane_street/jane_street_{train,test}.csv present"
+elif [[ -r "$HOME/.kaggle/access_token" || -r "$HOME/.kaggle/kaggle.json" ]]; then
+  uv pip install -q --python .venv/bin/python kaggle
+  "$VENV_PY" benchmarks/data/download_jane_street.py
+else
+  echo "jane_street skipped: no ~/.kaggle/access_token or kaggle.json (Kaggle token + accepted competition rules)"
+fi
 # Earliest-K prefixes that fit the default 240-tree run on the 377 GB m7i (benchmarks/data/LARGE_DATASETS_240TREE_FIT.md)
 [[ -s benchmarks/data/nyc_taxi/nyc_taxi_train_49149208.csv ]] || head -n 49149209 benchmarks/data/nyc_taxi/nyc_taxi_train.csv > benchmarks/data/nyc_taxi/nyc_taxi_train_49149208.csv
 [[ -s benchmarks/data/criteo/criteo_train_24480247.csv ]]     || head -n 24480248 benchmarks/data/criteo/criteo_train.csv     > benchmarks/data/criteo/criteo_train_24480247.csv
-mark "Large tabular" done "$(du -shc benchmarks/data/youtube8m/youtube8m_video_train.csv benchmarks/data/{criteo,nyc_taxi,airline,numerai}/*_train.csv | tail -1 | cut -f1)"
+[[ -s benchmarks/data/jane_street/jane_street_train.csv && ! -s benchmarks/data/jane_street/jane_street_train_10213190.csv ]] && head -n 10213191 benchmarks/data/jane_street/jane_street_train.csv > benchmarks/data/jane_street/jane_street_train_10213190.csv
+mark "Large tabular" done "$(du -shc benchmarks/data/youtube8m/youtube8m_video_train.csv benchmarks/data/{criteo,nyc_taxi,airline,numerai,shifts_weather,climsim,jane_street}/*_train.csv 2>/dev/null | tail -1 | cut -f1)"
 
 begin "TabReD"
 if [[ -r "$HOME/.kaggle/kaggle.json" ]]; then

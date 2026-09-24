@@ -37,7 +37,7 @@ HIGGS / SUSY                             | done (7.5G, 2.3G)
 CC18                                     | done (34 tasks)
 TabArena + all-numeric CSVs              | done (30/30 train.csv)
 EPSILON                                  | done (15G)
-Large tabular                            | done (YouTube-8M 56G+16G, Criteo 37G+0.6G, NYC taxi 6.7G+1.5G, Airline 6.5G+0.3G, Numerai 13G+20G; added 2026-09-21, YouTube-8M folded into this step 2026-09-22, ~30 min total, not in the 35 min)
+Large tabular                            | done (YouTube-8M 56G+16G, Criteo 37G+0.6G, NYC taxi 6.7G+1.5G, Airline 6.5G+0.3G, Numerai 13G+20G; added 2026-09-21, YouTube-8M folded into this step 2026-09-22; Shifts weather 3.1G+1.1G, ClimSim 4.4G+0.6G, Jane Street 34G+5.4G added 2026-09-24 (Jane Street needs a Kaggle token); ~45 min total, not in the 35 min)
 TabReD                                   | skipped (no ~/.kaggle/kaggle.json: needs a Kaggle token + accepted competition rules)
 ```
 
@@ -119,6 +119,33 @@ TabReD                                   | skipped (no ~/.kaggle/kaggle.json: ne
      - Fit limits for the default 240-tree run on the 377 GB m7i, and the exact `head` prefixes
        that fit (`nyc_taxi/nyc_taxi_train_49149208.csv`, `criteo/criteo_train_24480247.csv`,
        created by the setup script): `benchmarks/data/LARGE_DATASETS_240TREE_FIT.md`.
+     - Added 2026-09-24 (same conventions; shared helpers in `large_csv_utils.py`; regression targets
+       binarised at the **train median**, `class = 1` iff above it, the median is in the meta JSON):
+       - `download_shifts_weather.py` → `shifts_weather/shifts_weather_{train,test}.csv` — Yandex Shifts
+         weather-prediction canonical partition (7.5 GB tar from `storage.yandexcloud.net/yandex-research/
+         shifts/weather/canonical-partitioned-dataset.tar`, extracted to `shifts_weather/canonical-paritioned-
+         dataset/`). train = `shifts_canonical_train.csv` sorted by `fact_time` (3,129,592 × 127, 3.1 GB,
+         48.4 % positive), test = eval_in + eval_out (1,137,731). Target `fact_temperature`; dropped
+         `fact_cwsm_class` (a second observed label); `climate` → 5 ordinal codes; 2.1M NaN cells imputed.
+         ~2 min after the download.
+       - `download_climsim.py` → `climsim/climsim_{train,test}.csv` — ClimSim low-res, the paper's subsampled
+         and pre-normalised split from HF `LEAP/subsampled_low_res` (`train_input/train_target/val_input/
+         val_target.parquet`, 11 GB, CC-BY-4.0; the raw 744 GB netCDF set is not needed). train 10,091,520 ×
+         124 (4.4 GB), test = val 1,441,920. The task is 128-output regression; we keep ONE target,
+         `cam_out_FLWDS` (index 121, downward longwave flux — continuous, no zero inflation; `--target_index`
+         to change). Column names come from the ClimSim ordering (state_t_0..59, state_q0001_0..59,
+         state_ps, pbuf_SOLIN, pbuf_LHFLX, pbuf_SHFLX). No NaNs. ~1 min after the download.
+       - `download_jane_street.py` → `jane_street/jane_street_{train,test}.csv` — Kaggle "Jane Street
+         Real-Time Market Data Forecasting" (2024) competition data (11.5 GB zip). **Needs a Kaggle token**:
+         `mkdir -p ~/.kaggle && echo KGAT_... > ~/.kaggle/access_token && chmod 600 ~/.kaggle/access_token`
+         (the new API token format; the CLI 2.x reads it, or `~/.kaggle/kaggle.json`), the competition
+         rules accepted on kaggle.com, and `uv pip install --python .venv/bin/python kaggle` (the setup
+         script does the install). train = partitions 0–8 (40,852,762 × 82: date_id, time_id, symbol_id,
+         feature_00..78; 33.8 GB), test = partition 9 (6,274,576). Target `responder_6`; dropped `weight`
+         and the other responders; 74.4M NaN cells (2.2 %) imputed. ~6 min after the download.
+       - 240-tree fit (`LARGE_DATASETS_240TREE_FIT.md`): weather and ClimSim fit at full size; Jane Street
+         only as the 10,213,190-row prefix `jane_street/jane_street_train_10213190.csv` (created by the
+         setup script).
    - `download_tabred_datasets.py` → `tabred/` — **only if `~/.kaggle/kaggle.json` exists**
      (needs a Kaggle token and accepted competition rules; drop the token in and re-run the
      script for this step).
