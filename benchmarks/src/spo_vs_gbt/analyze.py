@@ -1477,10 +1477,13 @@ _HUGE_TABLE_FOOTNOTE = (
 WIDE_TABLE_WIDTH = "0.92\\linewidth"
 
 _TIMING_TABLE_FOOTNOTE = (
-    "YDF's post-training finalization "
-    "(structural variable importances and leaf indexing, a single-threaded walk with no "
-    "counterpart in the python libraries' lazily-computed feature importances) is excluded "
-    "from every time reported here.")
+    "$^\\dagger$ RF implementations of this method are not directly comparable. XGBoost 3.4.1 "
+    "warns that \\texttt{XGBRFClassifier} is deprecated and ``does not implement a conventional "
+    "random forest'', and LightGBM only parallelizes within a tree, not across trees, similar "
+    "to YDF-GBT.")
+# RF-mode arms whose times carry the footnote's dagger; CatBoost has no RF mode (row of dashes).
+_TIMING_TABLE_DAGGER = {"xgboost_rf", "lightgbm_rf"}
+_TIMING_TABLE_NO_RF_ROW = "CatBoost RF mode"
 
 
 def _best_fmt(v: float, best: float | None, fmt: str, suffix: str = "") -> str:
@@ -1737,8 +1740,9 @@ def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
                 cells.append(_latex_escape(st))
                 continue
             tr = _cell(ds, m, "time_s_median")
+            dag = "$^\\dagger$" if m in _TIMING_TABLE_DAGGER else ""
             cells.append("--" if tr is None else
-                         _best_fmt(tr, best_train.get((ds, fam)), "{:.1f}"))
+                         _best_fmt(tr, best_train.get((ds, fam)), "{:.1f}") + dag)
         return " & ".join(cells) + r" \\"
 
     # tabular* + \extracolsep{\fill}: with only a handful of columns the
@@ -1760,6 +1764,8 @@ def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
             lines.append("\\midrule")
         prev_fam = fam
         lines.append(_row(m))
+        if m == "lightgbm_rf":
+            lines.append(" & ".join([_TIMING_TABLE_NO_RF_ROW] + ["---"] * len(datasets)) + r" \\")
 
     footnote = _TIMING_TABLE_FOOTNOTE
     return (
