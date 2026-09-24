@@ -131,8 +131,18 @@
 
 \begin{abstract}
 
-Sparse Oblique (SPO) splits are a powerful decision tree learner. They typically achieve higher accuracy than axis-aligned forests, limit overfitting, and maintain interpretability. 
-However, spares-oblique methods sample feature combinations at runtime, precluding pre-sorting or pre-computing histograms.. This makes them more data and compute intensive than other tree ensembles. Real use-cases of gradient-boosted trees and random forests fall into 3 regimes: shallow (depths 6-8, typical of GBTs), mid-depth (16-20, for random Forests), and full-depth (training to purity). We engineer the performance of each of these regimes: vectorized histogramming for shallow depth, adaptive exact-histogram switching for mid-depth, and demonstrate that training from depth 20 to purity is surprisingly inexpensive because active data are in processor caches. Evaluating this on large datasets, our optimizations speed up training by 1.7-2.5$\times$ compared to the best existing oblique forests and 1.5-2$\times$ compared to axis-aligned random forests. %We also provide a GPU and hybrid CPU-GPU implementation.
+Sparse Oblique (SPO) splits that select linear combinations of multiple features are a powerful decision tree learner. Compared with axis-aligned forests that split single features, they typically achieve higher accuracy, limit overfitting, and maintain interpretability. 
+Because sparse-oblique methods sample feature combinations at runtime, they preclude pre-sorting features or pre-computing histograms. This makes them more data and compute intensive.
+We optimize the performance of sparse-oblique gradient boosted decision trees (GDBT) and random forests (RF).
+For shallow trees of depth 6-8 (typical of GDBT), we vectorized histogram construction,
+For mid-depth tree of 16-20 levels, we adaptively choose between histograms and exact tree construction. 
+%We also reveal that training trees to purity, beyond depth 20, is 
+%inexpensive because active data are in processor caches.
+On a suite of larger datasets, our optimizations speed up training by 1.7-2.5$\times$ compared to existing sparse-oblique forests and 1.5-2$\times$ compared to axis-aligned random forests.
+
+% Real use-cases of gradient-boosted trees and random forests fall into 3 regimes: shallow (depths 6-8, typical of GBTs), mid-depth (16-20, for random Forests), and full-depth (training to purity). We engineer the performance of each of these regimes: vectorized histogramming for shallow depth, adaptive exact-histogram switching for mid-depth, and demonstrate that training from depth 20 to purity is surprisingly . 
+
+ %We also provide a GPU and hybrid CPU-GPU implementation.
 
 \end{abstract}
 
@@ -171,7 +181,7 @@ However, spares-oblique methods sample feature combinations at runtime, precludi
 
 Experiments (primarily experimental contributions)
 
-\begin{itemize]
+\begin{itemize}
 \item Interplay between algorithmic parallelism, programming, and architecture
 \item Parallelism in machine learning
 \item Memory or I/O-efficient algorithms
@@ -179,39 +189,83 @@ Experiments (primarily experimental contributions)
 
 \newpage
 
-\section{Introduction}
 
 \textbf{\textit{\href{https://spaa.acm.org/submission-guidelines/}{Submission Guidelines}: The first page of a regular-paper submission is a designated title page and does not count toward the page limit. It must include the paper title, abstract, and an optional section titled “Self-Assessment of Relevance” (single-column, up to 20 lines, using the same template). This section acts as a “pre-rebuttal” to help reviewers understand the paper’s main contributions. It is particularly encouraged for topics that do not traditionally appear in SPAA, papers with mixed theoretical and practical contributions, or submissions that benefit from clarifying their key novelties relative to prior or concurrent work—especially details that do not directly fit into the main body of the paper.}}
 
 \textbf{\textit{Up to 10 pages, excluding title, refs, appdx}}
 
 
-Gradient Boosted Decision Trees (GBDT) and Random Forests (RF) remain critical components in modern machine learning systems. For tabular data, foundation models outperform tuned tree ensembles on standardized benchmarks~\cite{hollmann_accurate_2025,qu2026tabiclv2,grinsztajn2026tabpfn,tabarena}. However, these benefits are limited to datasets of more than 50k rows and 2000 features as of February 2006 \cite{}.
+\newpage
+
+\section{Introduction}
+
+
+% Para 1: Both RF and GBT are important even in the modem LLM world.
+
+Gradient Boosted Decision Trees (GBDT) and Random Forests (RF) remain critical components in machine learning ensembles. Tabular foundation models ~\cite{hollmann_accurate_2025,qu2026tabiclv2,grinsztajn2026tabpfn,tabarena} models outperform tuned tree ensembles when datasets are smaller than 50k rows and 2000 features as of February 2026 \cite{}.
 % https://arxiv.org/html/2511.08667v2
-GDBTs perform best on high-dimensional datasets with millions to billons of rows.
+GDBTs perform best on high-dimensional datasets with millions to billions of rows.
 % https://arxiv.org/html/2502.17361v2#S7.F6
-Also, tree ensembles handle irregular functions and are robust to uninformative features~\cite{}, which can degrade tabular foundation models. 
+Also, GDBTs handle irregular functions and are robust to uninformative features~\cite{}, which can degrade tabular foundation models. 
 % https://arxiv.org/abs/2207.08815
-RF offer the benefits of being the lowest-variance predictor 
+RF offers several benefits to GDBTs at the expense of inference time latency. They are the lowest variance predictor so that accuracy is robust to hyperparameter selection~\cite{}.  
+%https://jmlr.org/papers/volume20/18-444/18-444.pdf
+RF is also a statistical estimator that produces valid confidence intervals~\cite{}
+%https://arxiv.org/html/1510.04342v4
+and provide uncertainty and validation without holding out data~\cite{}.
+This makes RF suitable for causal methods~\cite{}
+% https://www.jmlr.org/papers/volume7/meinshausen06a/meinshausen06a.pdf
+and controlling for error types and sensitivity~\cite{}.
+% cite might
+GDBT and RF coexist with foundation models in modern ensembles. Their bias reduction complements the variance reduction of tabular foundation models~\cite{}.
+% https://arxiv.org/html/2512.05469v1
+They feature in cost-aware ensembles because they run on CPUs and use a fraction of the compute and power~\cite().
+% https://arxiv.org/html/2603.10582
 
-. 
-% .TabPFN-2.5.https://arxiv.org/html/2511.08667v2
+Yggdrasil Decision Forests (YDF)~\cite{}, Google's open-source implementation of decision forests, offers both GBDT and RF learners. 
+YDF is performance competitive in both runtime and accuracy with XGBoost, LightGBM, and CatBoost when running the same algorithm with the same parameters~\cite{}.
+% must figure this out from Richard.
+In 2023, YDF was serving tens of millions of predictions per second at Google. It was integrated into Google's AutoML systems and a YDF algorithm was selected for ``a quarter of real-world use cases''. AutoML results select sparse-oblique GDBT most often and select sparse-oblique RF second most often. Sparse oblique (SPO) splits generally trade training time for better accuracy. SPO methods incur no additional cost during classification and regression. Sparse-oblique is the default method when choosing RF in YDF. 
 
+Given the importance of SPO methods in YDF, we study how to reduce or eliminate training time overhead. %Sparse oblique splits present unique computational challenges. 
+Unlike a regular, feature axis-aligned decision tree, where the feature set remains constant throughout training, oblique random projections must be performed at runtime. At each node, projection features are randomly sampled, their linear combination is calculated, and the resulting new ``feature'' is scanned for the best split. There are combinatorially many such splits in the number of features. This precludes strategies such as pre-sorting features for exact splits~\cite{ydf,wright2017ranger}, histogram subtraction~\cite{chen2016xgboost,ke2017lightgbm}, or symmetric trees~\cite{prokhorenkova2018catboost}.
 
-Tabular fonudation model GDBTs are the preferred method for tabular data for datasets with more thatn 50K rows and 2000 features as a TabPFN-2.5.
+%Para 3: nature of SO methods.
+%they create a tradeoff.  no class/regression inference time penalty. better accuracy and more robust. downside has been training time
 
-Para 1: Both RF and GBT are important even in the modem LLM world.
+\textcolor{red}{Transition to contributions}. Summarize methods and findings. Use one figure in intro: show vectorization and dynamic. 
 
-Para 2: SO YDF is used by 1000s of projects at Google and SO is the result produced by AutoML. 
-SO-GBT is the most selected mode.  SO is the default learning methods when using random forests.
+Things about the figure:
+\begin{itemize}
+\item vectorizaiton faster
+\item dynamic switch over point
+\item area under curve - per node selection not level
+\item HWY is an improvment, not this paper.
+\end{itemize}
 
-Para 3: nature of SO methods.
-they create a tradeoff.  no class/regression inference time penalty. better accuracy and more robust. downside has been training time
+%Gradient Boosted Trees (GBT) and Random Forests (RF) remain highly popular for tabular, especially biomedical, data, and were long regarded as state-of-the-art~\cite{grinsztajn2022tree,shwartz2022tabular,mcelfresh2023neural}. Although tabular foundation models now outperform tuned tree ensembles on standardized benchmarks~\cite{hollmann_accurate_2025,qu2026tabiclv2,grinsztajn2026tabpfn,tabarena}, tree ensembles remain competitive at scale, are far cheaper to train and deploy, yield more reliable uncertainty estimates~\cite{costa_high_2026}, and are more interpretable, which keeps them the default in biomedical practice.
 
+\begin{enumerate}
 
-Gradient Boosted Trees (GBT) and Random Forests (RF) remain highly popular for tabular, especially biomedical, data, and were long regarded as state-of-the-art~\cite{grinsztajn2022tree,shwartz2022tabular,mcelfresh2023neural}. Although tabular foundation models now outperform tuned tree ensembles on standardized benchmarks~\cite{hollmann_accurate_2025,qu2026tabiclv2,grinsztajn2026tabpfn,tabarena}, tree ensembles remain competitive at scale, are far cheaper to train and deploy, yield more reliable uncertainty estimates~\cite{costa_high_2026}, and are more interpretable, which keeps them the default in biomedical practice.
+    \item \textit{Vectorization of histogram construction}. Discretizing projections into histograms updates the bucket count associated with each data sample. YDF routes each point based on a binary search of the (default 255) bucket boundaries.\footnote{Bin boundaries are sampled at random-width intervals to handle non-uniformity in the data.} We replaced the binary search with two SIMD vector compares using 7 total instructions, producing a 2$\times$ improvement in histogram construction and 1.5 $\times$ overall.
+   % The latter step is expensive, as it requires a Binary search along the histogram bins. This is $O(n \log k)$ complexity where $k$ is the number of histogram bins. Since $k << n$ in large datasets, this still gives major benefit as seen in (1), but is still expensive. We convert this Binary Search into 2 SIMD vector compare operations, achieving 2x speedup.
 
+    % \item \textit{Hybrid GPU/CPU:} We dynamically dispatch processing to a GPU on a node-by-node basis. GPUs are faster for the largest nodes but have a small-fixed cost for kernel invocation. They complement CPUs that better evaluate small, deep nodes. Benefits vary by dataset and are up to 40\% improvement.
+    
+     \item \textit{Runtime-adaptive histograms}. The recursive invocation of node-splitting in YDF is processed by sorting or a histogram depending upon node cardinality. A simple microbenchmark
+    %RB: Change to End-to-end evaluation?}
+    % RB we want to keep because we say it is run every time.
+    evaluates the crossover point on the local architecture and is run once before training the entire forest. This results in a 1.2$\times$-1.5$\times$  speedup during training.
+    %Sorting is most expensive when there are many active samples, due to its $O(n\log n)$ complexity. This occurs at the top levels of the tree. However, the need for an exact split decreases with the number of active samples: one can use approximate histogram splitting at the top of the tree, and sorting in deeper levels, while maintaining similar accuracy. This is likely due to overfitting in a fully-sorted tree (\cite{JoVo}). Our method dynamically toggles between Sorting and histogramming based on the number of active samples, achieving a 1.5 - 5x speedup.
+\end{enumerate}
+\noindent Combined, this results in a more than 1.67-2.5$\times$ speedup on CPU.
+% alone and slightly more with  GPU acceleration. 
+Furthermore, the performance gain of our method increases with both more features and samples. Our optimizations are also realized when the method is restricted to the more traditional axis aligned RT.  As mentioned previously such a restriction is more performant at cost of expressivity, thus our method compounds its performance advantage too. An open-source implementation is available at (anonymized).
 
+\section*{Not integrate}
+
+%% TODO RB -- where does this go?
+\textcolor{red}{This is too much detail for intro. Put in background?} Training to depth motivation in there.
 Sparse oblique further improves this class of models' expressivity and accuracy~\cite{tomita2020sparse}: while RF~\cite{breiman} selects a random $\sqrt{d}$ subset of features at each node, sparse oblique forests sample $\sqrt{d}$ random projections, each a sparse linear combination of features. Sparse oblique (SO) splitting further improves the expressivity and accuracy~\cite{tomita2020sparse}. \textbf{\textit{sparse oblique is the preferred method in YDF (AutoML selects in X cases. 
 %let's not be too defensive.
 See Evidence of performance in dataset accuracy study in Tables ~\ref{tab:accuracy-rf}, and~\ref{tab:accuracy-gbt}.)}}. While RF~\cite{breiman} selects a random $\sqrt{d}$ subset of features at each node and evaluates which feature best separates the data, sparse oblique forests sample $\sqrt{d}$ random projections, consisting of a sparse linear combination of features ~\cite{tomita2020sparse}. The stochasticity and greater expressivity of the projections makes sparse oblique trees robust to noise and on average leads to more balanced trees~\cite{tomita2020sparse}.
@@ -219,6 +273,8 @@ See Evidence of performance in dataset accuracy study in Tables ~\ref{tab:accura
 However, sparse oblique splits present unique computational challenges. Unlike a regular, feature axis-aligned decision tree, where the feature set remains constant throughout training, oblique random projections must be performed at runtime: at each node, projection features are randomly sampled, their linear combination is calculated, and the resulting new ``feature'' is scanned for the best split. There are combinatorially many such splits in the number of features. This precludes strategies such as pre-sorting features for exact splits~\cite{ydf,wright2017ranger}, histogram subtraction~\cite{chen2016xgboost,ke2017lightgbm}, or symmetric trees~\cite{prokhorenkova2018catboost}.
 
 Highway~\cite{wassenberg_vectorized_2022} is a C++ library that provides a set of abstracted SIMD operations, maps them to its supported target architectures (x86, ARM, RISC-V), and chooses the appropriate set at runtime. Therefore, one needn't write architecture-specific or vector-length-specific vector instructions. \texttt{VQsort} (Vectorized Quicksort)~\cite{wassenberg_vectorized_2022} is a SIMD-optimized sorting algorithm used by YDF, delivering 2-3x speedup over \texttt{std::sort} in our experiments.
+
+% Para: GBT and RF have similar computational properties. They only differ in parallelization. GBT has enough work up to depth 6 to keep CPU busy
 
 \textbf{\textit{Theme: performance engineering YDF. Separate into Interesting: Dynamic, Vectorization \& other work: HWY, which we adopted \& fixes. Focus on Sparse Oblique. Will say these apply to AA (no presort)}} Our research goal was to accelerate sparse oblique forests for classification of biomedical data~\cite{might1,might2} (see Background~\ref{sec:bg}). These techniques train trees to purity--each leaf node represents a single class. This creates deeper trees than most random forest or gradient boosted tree applications, which stop tree construction at a specified depth or at a minimum node cardinality~\cite{chen2016xgboost,prokhorenkova2018catboost}. Thus, sparse oblique forests process many small nodes with low cardinality, yet surprisingly, these deep nodes use only a small fraction of the total runtime when trained with exact splits (Figure ~\ref{fig:dynamic-motivation}).
 
@@ -253,7 +309,7 @@ Highway~\cite{wassenberg_vectorized_2022} is a C++ library that provides a set o
   \caption{AA-RF}
   \label{fig:motivation-aarf}
 \end{subfigure}
-\caption{\texttt{EvaluateProjection} time by tree depth on YouTube-8M, one panel per model family: SPO-GBT, SPO-RF and axis-aligned RF (AA-RF). Each panel compares the existing Exact-Highway and Random-256 Scalar splitting with our Vectorized and Dynamic-Vectorized methods. \TODO{AL Add Random Scalar-64, -256 + AVX-2-64bin}}
+\caption{\texttt{EvaluateProjection} time by tree depth on YouTube-8M, one panel per model family: SPO-GBT, SPO-RF and axis-aligned RF (AA-RF). Each panel compares the existing Exact-Highway and Random-256 Scalar splitting with our Vectorized and Dynamic-Vectorized methods. \TODO{AL Add Random Scalar-64, -256 + AVX-2-64bin. Try old colors} }
 \Description{Three line charts of \texttt{EvaluateProjection} time, one per model family, plotting per-depth training time against tree depth for four splitting methods.}
 \label{fig:dynamic-motivation}
 \end{figure*}
@@ -286,7 +342,7 @@ Highway~\cite{wassenberg_vectorized_2022} is a C++ library that provides a set o
   \caption{AA-RF}
   \label{fig:motivation-nodetrain-aarf}
 \end{subfigure}
-\caption{Training time by tree depth on YouTube-8M, one panel per model family: SPO-GBT, SPO-RF and axis-aligned RF (AA-RF). Each panel compares the existing Exact-Highway and Random-256 Scalar splitting with our Vectorized and Dynamic-Vectorized methods. \TODO{RB: which one? Up: EvaluateProjection time only (Sort or Histogram). Bottom: Depth total time (SampleProjection + ApplyProjection + EvaluateProjection)}}
+\caption{Training time by tree depth on YouTube-8M, one panel per model family: SPO-GBT, SPO-RF and axis-aligned RF (AA-RF). Each panel compares the existing Exact-Highway and Random-256 Scalar splitting with our Vectorized and Dynamic-Vectorized methods. \TODO{include both: NodeTrain varies by dataset, n. projections, dataset row-col balance: shows speedup but is sensitive. EvalProj shows optimization and is mostly consistent across datasets \& params}}
 \Description{Three line charts of \texttt{NodeTrain} time, one per model family, plotting per-depth training time against tree depth for four splitting methods.}
 \label{fig:dynamic-motivation-nodetrain}
 \end{figure*}
@@ -307,7 +363,7 @@ YouTube-8M~\cite{abu2016youtube}         & mul$^*$   & 3,888,919            & 11
 NYC-TLC-Trips~\cite{nyc_tlc_trip_records} & reg$^*$  & 49,149,208$^\dagger$ & 18 \\
 Numerai v5~\cite{numerai_v5}             & mul$^*$   & 2,746,268            & 2376
 \end{tabular}
-\caption{Natural Datasets Description + proportion used on m7i. Full datasets description in Table \ref{tab:full-datasets}}
+\caption{Natural Datasets Description + proportion used on m7i. Full datasets description in Table. \TODO{AL: find more big embedding datasets} \ref{tab:full-datasets}}
 \label{tab:natural-datasets}
 \end{table}
 
@@ -334,21 +390,6 @@ We discovered a large number of inefficiencies in YDF that we addressed in 9 pul
 
 \textbf{\textit{Strong Write: Vectorized attacks shallow trees: GBTs, RF. Dynamic attacks mid-level. Training to Purity is cheap}}
 
-\begin{enumerate}
-    \item \textit{Runtime-adaptive histograms}. The recursive invocation of node-splitting in YDF is processed by sorting or a histogram depending upon node cardinality. A simple microbenchmark
-    %RB: Change to End-to-end evaluation?}
-    % RB we want to keep because we say it is run every time.
-    evaluates the crossover point on the local architecture and is run once before training the entire forest. This results in a 1.2$\times$-1.5$\times$  speedup during training.
-    %Sorting is most expensive when there are many active samples, due to its $O(n\log n)$ complexity. This occurs at the top levels of the tree. However, the need for an exact split decreases with the number of active samples: one can use approximate histogram splitting at the top of the tree, and sorting in deeper levels, while maintaining similar accuracy. This is likely due to overfitting in a fully-sorted tree (\cite{JoVo}). Our method dynamically toggles between Sorting and histogramming based on the number of active samples, achieving a 1.5 - 5x speedup.
-
-    \item \textit{Vectorization of histogram construction}. Discretizing projections into histograms updates the bucket count associated with each data sample. YDF routes each point based on a binary search of the (default 255) bucket boundaries.\footnote{Bin boundaries are sampled at random-width intervals to handle non-uniformity in the data.} We replaced the binary search with two SIMD vector compares using 7 total instructions, producing a 2$\times$ improvement in histogram construction and 1.5 $\times$ overall.
-   % The latter step is expensive, as it requires a Binary search along the histogram bins. This is $O(n \log k)$ complexity where $k$ is the number of histogram bins. Since $k << n$ in large datasets, this still gives major benefit as seen in (1), but is still expensive. We convert this Binary Search into 2 SIMD vector compare operations, achieving 2x speedup.
-
-    % \item \textit{Hybrid GPU/CPU:} We dynamically dispatch processing to a GPU on a node-by-node basis. GPUs are faster for the largest nodes but have a small-fixed cost for kernel invocation. They complement CPUs that better evaluate small, deep nodes. Benefits vary by dataset and are up to 40\% improvement.
-\end{enumerate}
-\noindent Overall, this results in a more than 1.67-2.5$\times$ speedup on CPU.
-% alone and slightly more with  GPU acceleration. 
-Speedups improve as data gets wider (more features) and larger (more samples). We also find that our improved sparse oblique YDF implementation is faster than YDF's axis-aligned RF, which is limited to exact splits. An open-source implementation is available at (anonymized).
 
 \section{Background}\label{sec:bg}
 
@@ -396,6 +437,10 @@ Vectorization of histogram binning is a known technique, especially in the datab
 
 \section{Method}
 
+TODO quick overview.
+
+\subsection{Instrumenting Sparse-Oblique}
+
 We identified bottlenecks and optimization opportunities in sparse oblique YDF (SO-YDF) by implementing full timing instrumentation. We did this for histograms and exact splits and measured at all nodes in the tree.
 The computation at each node involves trying many linear combinations of features to identify the best splitting features. The first step is to build a projections matrix:
 a sparse list that samples with replacement $3 \sqrt{d}$ non-zero offsets from a  matrix of $d$ features by $1.5 \sqrt{d}$ rows and randomly assigns weights. Then for each row in the projection matrix, we evaluate the quality of the combination (Figure \ref{fig:computenode}):
@@ -405,18 +450,26 @@ a sparse list that samples with replacement $3 \sqrt{d}$ non-zero offsets from a
 \item Evaluate a splitting criteria (entropy in YDF) at each split and return the boundary that best separates the data.
 \end{enumerate}
 
-\noindent The sparsity of data access in the workload evolves down the tree and is present in both features (columns) and active samples (rows). The latter is a key concept. At the root tree node, this is the bootstrapped training subset, representing 50-80\% of the original samples. Each node splits these samples to maximize class purity. SO-YDF uses a columnar representation of data, i.e. individual features are stored sequentially. YDF does not reorganize the table or materialize data in each node.
-
-
-\subsection{Vectorization of Histogram Filling} \label{method:vectorization}
-
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth]{figures/results/proportion_of_histogram_time.pdf}
-    \caption{Comparative runtime of the different components of computation for histogram splitting. The dataset has 1M samples and 4096 features. \TODO{AL Replace w/ Natural Dataset. Chrono data exists}}
-    \Description{Share of histogram runtime (in dynamic mode) attributable to each of 4 subfunctions. Plot reveals Build Histograms requires the majority of the time, necessitating Vectorization.}
+    \caption{Comparative runtime of the different components of computation for histogram splitting. The dataset has 1M samples and 4096 features.}
+    \Description{Share of histogram runtime (in dynamic mode) attributable to each of 4 subfunctions. Plot reveals Build Histograms requires the majority of the time, necessitating Vectorization. }
     \label{fig:decompose}
 \end{figure}
+
+\noindent The sparsity of data access in the workload evolves down the tree and is present in both features (columns) and active samples (rows). The latter is a key concept. At the root tree node, this is the bootstrapped training subset, representing 50-80\% of the original samples. Each node splits these samples to maximize class purity. SO-YDF uses a columnar representation of data, i.e. individual features are stored sequentially. YDF does not reorganize the table or materialize data in each node.
+
+Explain that there are an increasing number of nodes with increasing levels.  So split evaluation and build project feature scale with the number of nodes and have increasing cost at depth.
+
+Make it clear that this is pre-vectorization.
+
+\textcolor{red}{Finish section with breakdown of runtime.}
+Our detailed measurements show that histogram constructiion dominates the runtime cost of training. Note that is comprises X\% below level 6 (the default for YDF GBT, XGBoost and Catboost). 
+
+For high cardinality nodes, filling histograms is the most expensive step. This is the only computation that is linear in the input size. Figure \ref{fig:decompose} shows the relative cost of the different components of the computation at tree nodes that build histograms. Histogram construction dominates computation. Although sparse memory access takes more time deeper in the tree and may be another opportunity for optimization.
+
+\subsection{Vectorization of Histogram Filling} \label{method:vectorization}
 
 \begin{figure*}[!t]
 \centering
@@ -429,7 +482,7 @@ a sparse list that samples with replacement $3 \sqrt{d}$ non-zero offsets from a
 \includegraphics[width=\linewidth]{figures/method/vectorization/vectorized_binary_search_illustration.pdf}
 % \caption{Illustration of conversion of Binary Search into AVX-2 SIMD instructions.}
 \end{subfigure}
-\caption{\TODO{AL Make prettier, esp. left}. Mapping sample points to histograms using binary search (default, left) and our vectorized implementation (right).}
+\caption{\TODO{AL Make prettier, esp. left}. Mapping sample points to histograms using binary search (default, left) and our vectorized AVX-2 implementation (right).}
 \label{fig:vectorization-illustration}
 \Description{Illustration of mapping sample points to histograms using binary search (default, left) and our vectorized implementation (right).}
 \end{figure*}
@@ -437,17 +490,24 @@ a sparse list that samples with replacement $3 \sqrt{d}$ non-zero offsets from a
 
 \textbf{\textit{this applies to everything: RF, SPORF and GBT}}
 
-
-For high cardinality nodes, filling histograms is the most expensive step. This is the only computation that is linear in the input size. Figure \ref{fig:decompose} shows the relative cost of the different components of the computation at tree nodes that build histograms. Histogram construction dominates computation. Although sparse memory access takes more time deeper in the tree and may be another opportunity for optimization.
-
 YDF's implementation of histograms uses C++ {\tt std:upper()} to conduct binary search among the bin boundaries to identify a bin in to which to update a count for a class. In addition to taking steps logarithmic in the number of bins, the branches in binary search are taken with equal probability, have low predictability, and result in pipeline stalls. An alternative is to scan the bins, which has higher predictability, but performs more work. Scanning is better for small histograms up to 16 or 32 bins.
 
 Tree ensembles choose a modest number of bins that balance computation and space versus overfitting the data. Inaccuracies from fewer bins can be resolved deeper in the tree or in other trees. Default values are as low as 20 (H2O) or 32 (Spark MLLib), but are most often 64 or 256 (YDF, CatBoost, XGBoost).
 
+%Para describe general principle (two vector compares). State this is 64 for AX2 and 256 for AVX512.
 
-We observe that a data point can be routed into one of 256 bins using two 16-word wide SIMD vector compares. The concept is to break the boundaries into 16 groups of 16. We do a coarse-grained compare to select the group and a fine-grained compare to locate the bin. The data structure resembles a two-level deterministic skip list. Once per histogram, we construct a coarse-grained vector that describes the boundary of every $16^{\rm th}$ bin. For each point, we broadcast the search value to a 16-wide vector and perform a parallel compare of all elements.
+% Para: Describe algorithms with pseudocode and figure 6.
 
-We also provide a 64 bin, 8-bit wide AVX-2 implementation. Figure~\ref{fig:vectorization-illustration} compares the AVX-implementation with binary search over 64 bins. The binary search uses 7 instructions with one branch per node for a minimum of 42 serial instructions and likely several missed branch predictions. AVX-2 broadcasts the search value to a vector. Does a parallel compare and resolves the coarse grained bin using a mask and count intrinsic. It repeats this at a finer grain for a total of 16 instructions.
+% Para: Properties -- # instructions, no branches, branch miss rate of std:upper.
+
+% Para: relative merits of 64 abd 512.
+We present results for both.  Tradeoffs: 512 has more work algorithmic. Accuracy tends to match. 64/AVX2 seems preferable and we will recommend 64 bins as default.
+
+Comparative to Fig. 5. 
+
+\TODO{Expand. Describe fig. 6. AVX-2 pseudocode} We observe that a data point can be routed into one of 256 bins using two 16-word wide SIMD vector compares. The concept is to break the boundaries into 16 groups of 16. We do a coarse-grained compare to select the group and a fine-grained compare to locate the bin. The data structure resembles a two-level deterministic skip list. Once per histogram, we construct a coarse-grained vector that describes the boundary of every $16^{\rm th}$ bin. For each point, we broadcast the search value to a 16-wide vector and perform a parallel compare of all elements.
+
+We also provide a 64 bin, 8-bit wide AVX-2 implementation. Figure~\ref{fig:vectorization-illustration} compares the AVX-implementation with binary search over 64 bins. The binary search uses 7 instructions with one branch per node for a minimum of 42 serial instructions and not branch prediction-friendly. Miss rate of the binary search depends on the skewness of the child nodes: skewed subtrees have higher prediction, while even splits approach ~50\% miss rate. AVX-2 broadcasts the search value to a vector. Does a parallel compare and resolves the coarse grained bin using a mask and count intrinsic. It repeats this at a finer grain for a total of 16 instructions.
 
 
 
@@ -456,7 +516,7 @@ We also provide a 64 bin, 8-bit wide AVX-2 implementation. Figure~\ref{fig:vecto
 \begin{figure}[h!]
     \centering
     \includegraphics[width=1\linewidth]{figures/method/dynamic_histogram/dynamic_histogram_tree_illustration.pdf}
-    \caption{Illustration of the selection of exact splitting and histogram splitting as a function of the number of active samples in a tree node with a breakeven point of 1300.}
+    \caption{Illustration of the selection of exact splitting and histogram splitting as a function of the number of active samples in a tree node with a breakeven point of 1300. \TODO{make pretty}}
     \Description{Illustration of the selection of exact splitting and histogram splitting in an example decision tree.}
     \label{fig:levels}
 \end{figure}
@@ -465,7 +525,11 @@ We also provide a 64 bin, 8-bit wide AVX-2 implementation. Figure~\ref{fig:vecto
 
 Our study revealed performance concerns when training SO-YDF trees to purity. When the number of active samples is small, histogram construction dominates runtime. There are fixed costs to set up a histogram and these are incurred at each node. Referring back to Figure \ref{fig:dynamic-motivation}, histograms operate relatively much faster at the top levels of the tree when the number of samples are large. These benefits endure through the first 12-13 levels of the tree on a 1M-row balanced dataset. Below this level, there are many active nodes, each of which requires a histogram. Here, sorting few samples can be much faster than building a histogram. %Implementations of {\sf std::sort()} have many optimizations to sort few elements, including unguarded insertions.
 
-The  breakeven point depends on the number of active samples and the  hardware. Tree depth is just our proxy for visualizing the total runtime. Figure \ref{fig:dynamic-breakeven} show the relative cost of exact splits versus histograms on server CPU, showing a breakeven point of just over 1200 points. We also include the GPU results that show when it is beneficial to offload a computation to a GPU when available. The break-even point is determined by a microbenchmark that runs at the start of training. This takes less than 100ms to perform a binary search over reasonable parameters.
+The  breakeven point depends on the number of active samples and the  hardware. Tree depth is just our proxy for visualizing the total runtime. Figure \ref{fig:dynamic-breakeven} show the relative cost of exact splits versus histograms on server CPU, showing a breakeven point of just over 1200 points. 
+% We also include the GPU results that show when it is beneficial to offload a computation to a GPU when available. 
+The break-even point is determined by a microbenchmark that runs at the start of training. This takes less than 100ms to perform a binary search over reasonable parameters.
+
+% Our results will show that perforamnce is robust over a range on this parameter, i.e. not hard to tune.  
 
 During tree-construction, we dynamically choose between a histogram and sorting on a node-by-node basis. Two nodes at the same tree depth may use different techniques (Figure \ref{fig:levels}). From a performance standpoint, this solves the problem with creating deep trees.  We avoid the overhead of sorting at high cardinality nodes and of histograms for low cardinality nodes. There is only a small performance penalty for training to purity.  Nodes beyond depth 20 use less 5\% of the runtime (Figure \ref{fig:dynamic-breakeven}).
 
@@ -478,6 +542,14 @@ Dynamic histograms produce different trees and potentially different learning ou
 
 
 \section{Results}
+
+1. Vectorization on GBTs 
+
+\subsection{Depth 6 - GBTs}
+
+\subsection{Depth 16 - RF, Adaptive}
+
+\subsection{Training to Purity}
 
 We conduct experiments to quantify the performance improvement of dynamic histograms and vectorization at scale on a multicore CPU machine.
 % We also examine GPU acceleration.
@@ -503,6 +575,8 @@ Examining speedup reveals that SO-YDF training is compute bound on the CPU. Figu
 
 \subsection{Ablation - Dynamic Vectorized Histograms}
 \label{sec:dyn}
+
+replace w trunk dataset study
 
 \textit{\textbf{Results interpretation: Dynamic should matter a lot more on mid-size datasets.} If data is too big or too small (at fixed depth), you never use dynamic (threshold isn’t hit/dynamic runs for very few nodes)}
 
@@ -534,14 +608,22 @@ AVX-512 Vectorized is slower not because of the vector instructions taking more 
 \subsection{Dynamic Threshold Sensitivity Study}
 \label{app:dynamic-breakeven-all}
 
-
 % Body generated by benchmarks/src/utils/make_breakeven_figure.py -- regenerate, don't edit.
 \begin{figure}[h]
     \centering
     \input{figures/results/dynamic_breakeven_all}
-    \caption{Dynamic Breakeven extended to every dataset and the full swept range: training time relative to exact splits at every node (dashed line at 1) against the dynamic switch threshold. Large markers: the minimum of each curve; shaded band: the range of the 256-bin minima, 800--1800 rows. \TODO{AL Hide Trunk (don't delete), Add HIGGS, SUSY, EPSILON, Youtube-8m (6m train) , Citerio, NYC}}
-    \Description{Line chart of training time relative to all-exact against the switch threshold for five datasets and two vectorized binners, with a reference line at 1 and a shaded band around the minima.}
+    \caption{Full-depth train speedup over Exact by a linesearch over Dynamic Thresholds. Above the threshold, Random-Vectorized is used, and below, Exact. Shaded bands: the range of the AVX-512 minima (light, 800--1200 rows) and of the AVX2 minima (dark, 200--400 rows).}
+    \Description{Line chart of training time relative to all-exact against the switch threshold for four datasets and two vectorized binners, with a reference line at 1 and two shaded bands marking the AVX-512 and AVX2 minima ranges.}
     \label{fig:dynamic-breakeven}
+\end{figure}
+
+% Body generated by benchmarks/src/utils/make_breakeven_figure.py -- regenerate, don't edit.
+\begin{figure}[h]
+    \centering
+    \input{figures/results/dynamic_breakeven_all_zoom}
+    \caption{Figure~\ref{fig:dynamic-breakeven} zoomed to thresholds 0--2000. Shaded bands as in Figure~\ref{fig:dynamic-breakeven}.}
+    \Description{The same line chart as the previous figure restricted to thresholds below 2000 and a y-axis capped at 0.95, with two shaded bands marking the AVX-512 and AVX2 minima ranges.}
+    \label{fig:dynamic-breakeven-zoom}
 \end{figure}
 
 \subsection{\TODO{Roofline} Pre-Vec v. Vec (std::sort \& Random v. HWY \& Vec Random}
@@ -742,7 +824,7 @@ All timing experiments run on an AWS m7i.metal-24xl instance (Intel Xeon Platinu
 % \subsection{Dynamic Un-Vectorized}
 % \label{app:dynamic-breakeven-scalar}
 
-% With the advent of HWY, it no longer makes sense to run Dynamic individually: see fig
+% With the advent of HWY, it no longer makes sense to run Dynamic individually: see fig. Scalar-Random only is faster than highway on 100k+-row nodes
 % \includegraphics[width=\linewidth]{figures/intro/dynamic/HIGGS - not much improvement over HWY/per_depth_methods_fig1.pdf}
 
 % Dynamic can be used in the original scalar Random - Exact method, but with the advent of Highway Sort, there is no regime where this is beneficial. Here we show Dynamic for Exact (std::sort) vs. Scalar Random. This was the original motivation of the paper, where Dynamic saves a big portion of runtime.
