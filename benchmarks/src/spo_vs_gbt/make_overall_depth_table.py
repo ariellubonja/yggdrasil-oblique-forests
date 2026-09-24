@@ -50,6 +50,7 @@ DATASETS = [  # (key in speedup_map.csv, display name)
     ("SUSY", "SUSY 4.5M$\\times$18"),
     ("EPSILON", "Epsilon 400k$\\times$2000"),
     ("GiveMeSomeCredit", "GiveMeSomeCredit 150k$\\times$10"),
+    ("YOUTUBE8M", "YouTube-8M 3.9M$\\times$1152"),
     ("trunk_1000000_x_32", "Trunk 1M$\\times$32"),
     ("trunk_1000000_x_512", "Trunk 1M$\\times$512"),
     ("trunk_1000000_x_2048", "Trunk 1M$\\times$2048"),
