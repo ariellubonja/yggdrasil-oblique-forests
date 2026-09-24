@@ -148,8 +148,11 @@ _BOOSTING = ["--ensemble_method", "Boosting"]
 # 256-threshold upper_bound kernel at runtime (training.cc HistogramBinner:
 # thr.size()==256 && avx512f); "scalar" disables it. 64 bins use the AVX2 kernel.
 _RANDOM256 = ["--numerical_split_type", "Random", "--histogram_num_bins", "256"]
+# 256-bin AVX-512 threshold 1000 (user directive 2026-09-24): breakeven sweep vs the
+# Highway exact finder (dynamic_histogram_breakeven/*avx512_random256*) is flat
+# 600-1200, +1% at 2000, +2% at 3000, +7-15% at 100. Was 250 (never run on the map).
 _DYN256 = ["--numerical_split_type", "Dynamic Random Histogram",
-           "--histogram_num_bins", "256", "--dynamic_split_threshold", "250"]
+           "--histogram_num_bins", "256", "--dynamic_split_threshold", "1000"]
 
 ARMS: dict[str, dict] = {
     # ---- RF family: 240 trees, unlimited depth, min_examples 1 (purity) ----
