@@ -192,6 +192,16 @@ results.** Structural edits are fine: figure/table environments, includes, label
 cross-references, captions that state what a panel shows. Prose that explains, interprets or
 argues from the numbers is the user's to write, and only when they explicitly ask.
 
+## Replacing a figure: start from the Overleaf caption (user directive, 2026-09-24)
+
+**Before touching any figure environment, read its current caption from Overleaf** (MCP
+`read_file` on the .tex that holds it, or the MCP clone `/private/tmp/overleaf-<id>`) and edit
+*that* text. Never rebuild the caption from the repo snapshot `paper/<venue>/`, from memory or
+from an earlier session: the user edits captions directly in Overleaf and those edits have been
+overwritten several times. Keep the user's wording and only change what the new figure requires
+(panel list, dataset list, axes, generator note); when the user asks for new caption text, add
+it to their version rather than replacing it. Same rule for `\Description` and `\label`.
+
 ## Figures wait for final tables (user directive, 2026-09-09)
 
 **Do not update paper figures while table results are still in flux.** Regenerate and push

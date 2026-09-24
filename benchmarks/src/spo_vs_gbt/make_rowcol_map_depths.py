@@ -6,9 +6,6 @@ each for max_depth 6, 16 and unlimited (purity). 240 trees, 48 threads, m7i.
 Sources (committed under benchmarks/results/runtime/):
   speedup_map_by_dataset/speedup_map*.csv      trunk grid + HIGGS/SUSY/Epsilon,
                                                median over reps per (cell, arm)
-  dynamic_histogram_breakeven/dynamic_threshold_sweep_natural_youtube8m_{exact,avx2_64}.csv
-                                               YouTube-8M, purity only (harness
-                                               defaults = unlimited depth, min_examples 1)
 Speedup = median(train_s exact_hwy) / median(train_s dyn_vec). Circles: Trunk
 synthetic datasets; squares: natural datasets. Writes fig_rowcol_map_depths.{pdf,png}
 (background = inverse-distance interpolation of the speedup over the 3 nearest points
@@ -19,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import io
 import shutil
 from pathlib import Path
 
@@ -33,23 +29,14 @@ from scipy.spatial import cKDTree
 ROOT = Path(__file__).resolve().parents[3]
 RES = ROOT / "benchmarks" / "results" / "runtime"
 SPM = RES / "speedup_map_by_dataset"
-BREAKEVEN = RES / "dynamic_histogram_breakeven"
 PAPER_FIG = ROOT / "paper" / "spaa27" / "figures" / "results"
 
 EXACT, DYN = "spo_rf_exact_hwy", "spo_rf_dyn_vec"
 DEPTHS = [(6, "Depth 6"), (16, "Depth 16"), (-1, "Unlimited Depth")]
 NATURAL = {"higgs_10500000": "HIGGS", "SUSY": "SUSY", "EPSILON": "Epsilon"}
-DYN_THRESHOLD = 250  # AVX2 64-bin breakeven; the YouTube sweep brackets it at 200/300
-YT_ROWS, YT_FEATS = 3_888_919, 1152
 CMAP = "Spectral_r"  # blue (low) -> yellow -> red (high); user pick 2026-09-24
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman", "Times", "Nimbus Roman"],
                      "mathtext.fontset": "stix"})
-
-
-def read_sweep(path: Path) -> pd.DataFrame:
-    text = path.read_text()
-    body = text[text.index("dataset,dynamic_split_threshold"):]
-    return pd.read_csv(io.StringIO(body))
 
 
 def load_points() -> pd.DataFrame:
@@ -66,16 +53,8 @@ def load_points() -> pd.DataFrame:
     med["kind"] = med["dataset"].map(lambda d: "trunk" if d.startswith("trunk_") else "natural")
     med["dataset"] = med["dataset"].replace(NATURAL)
 
-    # YouTube-8M purity cell from the threshold sweeps (same harness defaults as the map).
-    ex = read_sweep(BREAKEVEN / "dynamic_threshold_sweep_natural_youtube8m_exact.csv")
-    dyn = read_sweep(BREAKEVEN / "dynamic_threshold_sweep_natural_youtube8m_avx2_64.csv")
-    lo = dyn[dyn["dynamic_split_threshold"] <= DYN_THRESHOLD]["dynamic_split_threshold"].max()
-    hi = dyn[dyn["dynamic_split_threshold"] >= DYN_THRESHOLD]["dynamic_split_threshold"].min()
-    dyn_s = dyn[dyn["dynamic_split_threshold"].isin([lo, hi])]["median_s"].mean()
-    yt = pd.DataFrame([{"dataset": "YouTube-8M", "rows": YT_ROWS, "features": YT_FEATS,
-                        "max_depth": -1, EXACT: float(ex["median_s"].iloc[0]), DYN: dyn_s,
-                        "min_reps": 1, "kind": "natural"}])
-    tab = pd.concat([med, yt], ignore_index=True)
+    # YouTube-8M (breakeven sweeps, purity only) dropped 2026-09-24: it exists in one panel only.
+    tab = med.copy()
     tab["speedup"] = tab[EXACT] / tab[DYN]
     return tab.sort_values(["max_depth", "rows", "features"]).reset_index(drop=True)
 
