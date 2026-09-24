@@ -229,6 +229,19 @@ refresh is a manual re-upload — not worth repeating per data correction.
   bumps 2–5 % with flat neighbours, check `journalctl --since <run start>` for apt before
   blaming the code, and re-run the cell.
 
+## Adding a dataset to the overall depth table (recipe, 2026-09-24)
+
+One command runs the paper's depth-table suite (6 SPO-RF arms x depths {6,10,16,24,purity},
+240 trees, min_examples 1, 48 threads, 1 run) on a new CSV and appends to `speedup_map.csv`:
+`bash benchmarks/src/spo_vs_gbt/run_b7_dataset.sh <NAME> <train.csv> <label_col>` (run it inside
+tmux; `COMMIT=1` commits + pushes after each stage; holds `run_all.lock`, so queue behind any
+other training). The CSV must satisfy the dataset policy above (numeric, NaN-free, 0/1 label);
+the download scripts in `benchmarks/data/` show the massage. Afterwards add the dataset to
+`DATASETS` in `make_overall_depth_table.py` and regenerate the table. YouTube-8M (2026-09-24)
+was run exactly this way (`cells_b7_youtube8m_*.json`). Prereqs per box: SETUP_FRESH_BOX.md
+(bins in `/home/ubuntu/spo_vs_gbt/bin/{default,scalar}`, venv `/home/ubuntu/gbt_venv`), apt
+timers masked. In chat, report each arm as speedup = exact_hwy / arm.
+
 ## Vectorized histogram ISA (user directive, 2026-09-08)
 
 - **64 bins → AVX-2; 256 bins → AVX-512.** Use that pairing for vectorized histogram runs.
