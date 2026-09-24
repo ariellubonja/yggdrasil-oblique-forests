@@ -56,32 +56,53 @@ Dataset & Size & Features & Missing & ML task & Subset that fits & Peak RAM & Tr
 \midrule
 \href{https://huggingface.co/datasets/criteo/CriteoClickLogs}{Criteo 1B}
  & $\sim$1B $\times$ 39; 276\,GB raw$^{\ast}$
- & 13 of 39 numeric
+ & 13 of 39 numeric \textcolor{red}{discretized! HWY is faster than should be. See~\ref{sec:discretized-datasets-issue}}
  & ---
  & ---
  & Day 1 only: 24.5M $\times$ 39 ($\frac{1}{8}$ of rows)
  & 193\,GB & 747\,s \\
 \href{https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page}{NYC Taxi Trips}
  & 170M $\times$ 20 per year
- & 19 numerical
+ & 19 numerical \textcolor{red}{discretized!}
  & ---
  & \texttt{trip\_duration} (regression)
  & 49.1M $\times$ 18 ($\frac{1}{2}$ fits)
  & 276\,GB & 1070\,s$^{\dagger}$ \\
 \href{https://numer.ai/data}{Numerai} v5
  & 5M $\times$ 2{,}376
- & int8, hand-built financial (not embeddings)
+ & int8, hand-built financial (not embeddings) \textcolor{red}{discretized!}
  & 0.5--1.29\%
  & \texttt{Target} (regression)
  & full dataset
  & 116\,GB & 561\,s \\
 \href{https://transtats.bts.gov/Fields.asp?gnoyr_VQ=FGJ}{Airline on-time}
  & 200M $\times$ 13--70
- & 70 float64, 21 int64, 19 string
+ & 70 float64, 21 int64, 19 string \textcolor{red}{discretized!}
  & $\sim$3\%, few cols
  & \texttt{arrival\_delay} (regression)
  & 2018--2023: 37.9M $\times$ 43
  & 342\,GB & 1007\,s \\
+ \href{}{Shifts Weather} (Yandex)
+ & 3.13M $\times$ 129 train; 1.14M test; 7\,GB tar
+ & 127, 123 numeric
+ & 0.5\% train, 3.2\% test
+ & \texttt{fact\_temperature} (regression)
+ & full dataset: 3.13M $\times$ 127
+ & 17\,GB & 72\,s \\
+\href{}{ClimSim} low-res (subsampled)
+ & 10.09M $\times$ 124 train; 1.44M val; 11\,GB parquet
+ & 124 float
+ & ---
+ & 128 outputs; we use \texttt{cam\_out\_FLWDS} (regression)
+ & full dataset: 10.09M $\times$ 124
+ & 39\,GB & 204\,s \\
+\href{}{Jane Street} 2024 (Kaggle)
+ & 47.1M $\times$ 92; 12\,GB parquet
+ & 79 anonymised float + \texttt{date\_id}, \texttt{time\_id}, \texttt{symbol\_id}
+ & 2.2\%, 47 of 79 cols (up to 20\% in 4 cols)
+ & \texttt{responder\_6} (regression)
+ & partitions 0--8, first 10.2M $\times$ 82 ($\frac{1}{4}$ fits)
+ & 260\,GB & 467\,s \\
 \bottomrule
 \end{tabular}
 \caption{Train Time is Dynamic Vectorized AVX-2 (64-bins)}
@@ -166,6 +187,7 @@ We need to manually create embeddings for these:
 
 
 \section{Issues with Discretized Datasets}
+\label{sec:discretized-datasets-issue}
 
 Criteo, NYC taxi, Numerai have lots of ties (ordinal categories set as numbers), and Highway is unusually fast due to some clever skipping of ties. See Fig.~\ref{fig:hwy-on-discretized-numeric}.
 
@@ -175,9 +197,20 @@ Went searching for more fully-numeric data:
 \begin{itemize}
     \item ClimSim~\cite{yu2023climsim}[low-res], 744GB raw. Task: multi-output regression (weather prediction). Let's regress on only a single one of the Targets
     \item \href{https://www.kaggle.com/competitions/jane-street-real-time-market-data-forecasting/data}{Jane Street Kaggle 2024}
-    \item \href{https://research.yandex.com/shifts/weather}{Yandex Weather Prediction} - 10m records, 111 features. Regression: Air Temp. at point
+    \item \href{https://research.yandex.com/shifts/weather}{Yandex Shifts Weather} - 10m records, 111 features. Regression: Air Temp. at point. Turned to classification $>$ median.
 \end{itemize}
 
+
+\section{Regression}
+
+Regression tasks take longer - up to 3x vs. classification. Haven't looked into this
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{notes/figures/regression-is-3x-slower.png}
+    \caption{Regression breaks our analysis}
+    \label{fig:placeholder}
+\end{figure}
 
 
 \appendix

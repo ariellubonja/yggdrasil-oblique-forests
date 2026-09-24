@@ -285,40 +285,7 @@ Highway~\cite{wassenberg_vectorized_2022} is a C++ library that provides a set o
 \textbf{\textit{Theme: performance engineering YDF. Separate into Interesting: Dynamic, Vectorization \& other work: HWY, which we adopted \& fixes. Focus on Sparse Oblique. Will say these apply to AA (no presort)}} Our research goal was to accelerate sparse oblique forests for classification of biomedical data~\cite{might1,might2} (see Background~\ref{sec:bg}). These techniques train trees to purity--each leaf node represents a single class. This creates deeper trees than most random forest or gradient boosted tree applications, which stop tree construction at a specified depth or at a minimum node cardinality~\cite{chen2016xgboost,prokhorenkova2018catboost}. Thus, sparse oblique forests process many small nodes with low cardinality, yet surprisingly, these deep nodes use only a small fraction of the total runtime when trained with exact splits (Figure ~\ref{fig:dynamic-motivation}).
 
 
-\begin{figure*}[t]
-\centering
-% PLACEHOLDER PANELS: drop the three PDFs in figures/intro/dynamic/ and swap each
-% \placeholderpanel for the matching \includegraphics line below it.
-\newcommand{\placeholderpanel}[1]{%
-  \fbox{\begin{minipage}[b][0.62\linewidth][c]{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
-    \centering\ttfamily\small #1
-  \end{minipage}}}
-\begin{subfigure}[b]{0.32\textwidth}
-  \centering
-  \placeholderpanel{EvaluateProjection: SPO-GBT}
-  % \includegraphics[width=\linewidth]{figures/intro/dynamic/per_depth_evalproj_spo_gbt.pdf}
-  \caption{SPO-GBT}
-  \label{fig:motivation-gbt}
-\end{subfigure}
-\hfill
-\begin{subfigure}[b]{0.32\textwidth}
-  \centering
-  \includegraphics[width=\linewidth]{figures/intro/dynamic/Youtube-8m-sporf.pdf}
-  \caption{SPO-RF}
-  \label{fig:motivation-rf}
-\end{subfigure}
-\hfill
-\begin{subfigure}[b]{0.32\textwidth}
-  \centering
-  \placeholderpanel{EvaluateProjection: AA-RF}
-  % \includegraphics[width=\linewidth]{figures/intro/dynamic/per_depth_evalproj_aa_rf.pdf}
-  \caption{AA-RF}
-  \label{fig:motivation-aarf}
-\end{subfigure}
-\caption{\texttt{EvaluateProjection} time by tree depth on YouTube-8M, one panel per model family: SPO-GBT, SPO-RF and axis-aligned RF (AA-RF). Each panel compares the existing Exact-Highway and Random-256 Scalar splitting with our Vectorized and Dynamic-Vectorized methods. \TODO{AL Add Random Scalar-64, -256 + AVX-2-64bin. Try old colors} }
-\Description{Three line charts of \texttt{EvaluateProjection} time, one per model family, plotting per-depth training time against tree depth for four splitting methods.}
-\label{fig:dynamic-motivation}
-\end{figure*}
+% Dynamic charts look better on EvalProjection only, but there's no way to fairly compare EvalProj to Axis-Aligned, since AA pays the read cost inside EP - it doesn't have a separate ApplyProjection()
 
 \begin{figure*}[t]
 \centering
@@ -328,8 +295,8 @@ Highway~\cite{wassenberg_vectorized_2022} is a C++ library that provides a set o
   \end{minipage}}}
 \begin{subfigure}[b]{0.32\textwidth}
   \centering
-  \placeholderpanel{NodeTrain: SPO-GBT}
-  % \includegraphics[width=\linewidth]{figures/intro/dynamic/per_depth_nodetrain_spo_gbt.pdf}
+  % \placeholderpanel{NodeTrain: SPO-GBT}
+  \includegraphics[width=\linewidth]{figures/intro/dynamic/Youtube-8m-spogbt-NodeTrain.pdf}
   \caption{SPO-GBT}
   \label{fig:motivation-nodetrain-gbt}
 \end{subfigure}
@@ -343,12 +310,12 @@ Highway~\cite{wassenberg_vectorized_2022} is a C++ library that provides a set o
 \hfill
 \begin{subfigure}[b]{0.32\textwidth}
   \centering
-  \placeholderpanel{NodeTrain: AA-RF}
-  % \includegraphics[width=\linewidth]{figures/intro/dynamic/per_depth_nodetrain_aa_rf.pdf}
+  % \placeholderpanel{NodeTrain: AA-RF}
+  \includegraphics[width=\linewidth]{figures/intro/dynamic/Youtube-8m-aa-NodeTrain.pdf}
   \caption{AA-RF}
   \label{fig:motivation-nodetrain-aarf}
 \end{subfigure}
-\caption{Training time by tree depth on YouTube-8M, one panel per model family: SPO-GBT, SPO-RF and axis-aligned RF (AA-RF). Each panel compares the existing Exact-Highway and Random-256 Scalar splitting with our Vectorized and Dynamic-Vectorized methods. \TODO{include both: NodeTrain varies by dataset, n. projections, dataset row-col balance: shows speedup but is sensitive. EvalProj shows optimization and is mostly consistent across datasets \& params}}
+\caption{Training time by tree depth on YouTube-8M, one panel per model family: SPO-GBT, SPO-RF and axis-aligned RF (AA-RF). Each panel compares the existing Exact and Random Histogram (256-bins) splitting with our Vectorized and Dynamic-Vectorized (256-bin) methods.}
 \Description{Three line charts of \texttt{NodeTrain} time, one per model family, plotting per-depth training time against tree depth for four splitting methods.}
 \label{fig:dynamic-motivation-nodetrain}
 \end{figure*}
@@ -364,12 +331,12 @@ Dataset & Task & Rows & Feat. \\
 HIGGS~\cite{higgs_280} & bin & 11,000,000 & 28 \\
 SUSY~\cite{susy_279} & bin & 5,000,000 & 18 \\
 Epsilon~\cite{chang2011libsvm} & bin & 400,000 & 2,000 \\
-Criteo~\cite{criteo1tb}                  & bin       & 24,480,247$^\dagger$ & 39   \\
 YouTube-8M~\cite{abu2016youtube}         & mul$^*$   & 3,888,919            & 1152 \\
-NYC-TLC-Trips~\cite{nyc_tlc_trip_records} & reg$^*$  & 49,149,208$^\dagger$ & 18 \\
-Numerai v5~\cite{numerai_v5}             & mul$^*$   & 2,746,268            & 2376
+Shifts Weather~\cite{malinin2021shifts}   & reg$^*$   & 3,129,592            & 127 \\
+ClimSim~\cite{yu2023climsim}              & reg$^*$   & 10,091,520           & 124 \\
+Jane Street~\cite{jane-street-real-time-market-data-forecasting}       & reg$^*$   & 10,213,190$^\dagger$ & 82
 \end{tabular}
-\caption{Natural Datasets Description + proportion used on m7i. Full datasets description in Table. \TODO{AL: find more big embedding datasets} \ref{tab:full-datasets}}
+\caption{Natural Datasets Description + proportion used on m7i. Full datasets description in Table. * - treated as \texttt{bin}. $\dagger$ - subset used. See \ref{tab:full-datasets}.}
 \label{tab:natural-datasets}
 \end{table}
 
@@ -527,7 +494,8 @@ We also provide a 64 bin, 8-bit wide AVX-2 implementation. Figure~\ref{fig:vecto
     \label{fig:levels}
 \end{figure}
 
-\textit{\textbf{Applies on Axis-aligned RF too} (if no PRESORT). Not GBTs tho bcs. they use depth 6-8}
+\textit{\textbf{Applies on Axis-aligned RF too} (if no PRESORT)} %. Not GBTs tho bcs. they use depth 6-8
+
 
 Our study revealed performance concerns when training SO-YDF trees to purity. When the number of active samples is small, histogram construction dominates runtime. There are fixed costs to set up a histogram and these are incurred at each node. Referring back to Figure \ref{fig:dynamic-motivation}, histograms operate relatively much faster at the top levels of the tree when the number of samples are large. These benefits endure through the first 12-13 levels of the tree on a 1M-row balanced dataset. Below this level, there are many active nodes, each of which requires a histogram. Here, sorting few samples can be much faster than building a histogram. %Implementations of {\sf std::sort()} have many optimizations to sort few elements, including unguarded insertions.
 
@@ -617,21 +585,13 @@ AVX-512 Vectorized is slower not because of the vector instructions taking more 
 \subsection{Dynamic Threshold Sensitivity Study}
 \label{app:dynamic-breakeven-all}
 
-% Bodies generated by benchmarks/src/utils/make_breakeven_figure.py -- regenerate, don't edit.
-\begin{figure*}[b]
+\begin{figure}
     \centering
-    \begin{minipage}[t]{0.49\linewidth}
-        \centering
-        \input{figures/results/dynamic_breakeven_all_zoom}
-    \end{minipage}\hfill
-    \begin{minipage}[t]{0.49\linewidth}
-        \centering
-        \input{figures/results/dynamic_breakeven_all}
-    \end{minipage}
-    \caption{Full-depth train speedup over Exact by a linesearch over Dynamic Thresholds. Above the threshold, Random-Vectorized is used, and below, Exact. Shaded bands: the range of the AVX-512 minima (light, 800--1200 rows) and of the AVX2 minima (dark, 200--400 rows).}
+    \input{figures/results/dynamic_breakeven_all_zoom}
+    \caption{Full-depth train speedup over Exact by a linesearch over Dynamic Thresholds. Above the threshold, Random-Vectorized is used, and below, Exact. Shaded bands: the range of the AVX-512 minima (light, 800--1200 rows) and of the AVX2 minima (dark, 200--400 rows). \TODO{Add back log fig. drop fig to 10000. Add X for min point}}
     \Description{Two line charts of training time relative to all-exact against the switch threshold for four datasets and two vectorized binners, with a reference line at 1 and two shaded bands marking the AVX-512 and AVX2 minima ranges; the left panel is restricted to thresholds below 2000 and a y-axis capped at 0.95.}
-    \label{fig:dynamic-breakeven}
-\end{figure*}
+    \label{fig:placeholder}
+\end{figure}
 
 \subsection{\TODO{Roofline} Pre-Vec v. Vec (std::sort \& Random v. HWY \& Vec Random}
 
