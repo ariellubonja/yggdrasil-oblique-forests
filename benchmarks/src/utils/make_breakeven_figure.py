@@ -97,9 +97,9 @@ PANELS = {
         "ref_label": "anchor=north west] at (axis cs:800,1)",
     },
 }
-# Zoom of "all" on the breakeven region: thresholds 0..2000, y capped at 0.95 (reference line off-range).
-PANELS["all_zoom"] = dict(PANELS["all"], out="dynamic_breakeven_all_zoom.tex", xmin=0, xmax=2000,
-                          xtick="{0,500,1000,1500,2000}", ymax=0.95)
+# Zoom of "all" on the breakeven region: thresholds 0..3000, y capped at 0.95 (reference line off-range).
+PANELS["all_zoom"] = dict(PANELS["all"], out="dynamic_breakeven_all_zoom.tex", xmin=0, xmax=3000,
+                          xtick="{0,500,1000,1500,2000,2500,3000}", ymax=0.95)
 
 
 def load_sweep(pattern: str) -> dict[str, dict[int, float]]:
