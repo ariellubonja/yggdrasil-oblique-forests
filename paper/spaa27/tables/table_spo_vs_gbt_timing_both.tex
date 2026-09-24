@@ -2,35 +2,35 @@
 \begin{table*}[t]
 \centering
 \small
-\caption{Training time comparison vs. non-SPO and non-YDF methods. Geometric-mean speedup vs.\ our arm over the suite datasets, and wall-clock seconds on the three huge datasets (single held-out split). Bold: fastest per column within each family. "XGBoost 3.4.1 prints that XGBRFClassifier is deprecated and "does not implement a conventional random forest" (it is a wrapper over the boosting path, trees built sequentially)."}
+\caption{Training time comparison vs. non-SPO and non-YDF methods. Wall-clock seconds on the three huge datasets (single held-out split). Bold: fastest per column within each family. "XGBoost 3.4.1 prints that XGBRFClassifier is deprecated and "does not implement a conventional random forest" (it is a wrapper over the boosting path, trees built sequentially)."}
 % Important Ariel Sept-24-2026. Confirmed these numbers. XGboost says "XGBRFClassifier is deprecated and "does not implement a conventional random forest"
 % LGBM runs single-threaded, parallelizes within a tree
 \label{tab:spo-vs-gbt-timing}
-\begin{tabular*}{0.92\linewidth}{@{\extracolsep{\fill}}lrccc}
+\begin{tabular*}{0.92\linewidth}{@{\extracolsep{\fill}}lccc}
 \toprule
-\multicolumn{1}{l}{} & \multicolumn{1}{c}{Suite} & \multicolumn{3}{c}{Train (s)} \\
-\cmidrule(lr){2-2} \cmidrule(lr){3-5}
-Method & Speedup vs.\ ours & HIGGS & SUSY & EPSILON \\
+\multicolumn{1}{l}{} & \multicolumn{3}{c}{Train (s)} \\
+\cmidrule(lr){2-4}
+Method & HIGGS & SUSY & EPSILON \\
 \midrule
-SPO-RF Exact & 1.12$\times$ & 363.0 & 119.6 & 59.1 \\
-SPO-RF Random Hist. (64 bins) & 0.63$\times$ & 524.2 & 171.3 & 95.1 \\
-SPO-RF AVX-2 R. Hist. (64 bins, ours) & 0.81$\times$ & 382.3 & 119.4 & 68.6 \\
-SPO-RF AVX-512 R. Hist. (256 bins, ours) & 0.54$\times$ & 560.1 & 175.6 & 109.8 \\
-SPO-RF Dyn AVX-2 R. Hist. (64 bins, ours) & 1.00$\times$ & 296.2 & 91.8 & \textbf{50.5} \\
-SPO-RF Dyn AVX-512 R. Hist. (256 bins, ours) & 0.99$\times$ & \textbf{287.5} & \textbf{90.2} & 50.7 \\
-AA-RF Exact & \textbf{1.32$\times$} & 292.4 & 104.3 & 52.1 \\
-XGBoost RF mode & 0.11$\times$ & 3000.9 & 1048.6 & OOM \\
-LightGBM RF mode & 0.01$\times$ & 2598.8 & 2281.1 & OOM \\
+SPO-RF Exact & 363.0 & 119.6 & 59.1 \\
+SPO-RF Random Hist. (64 bins) & 524.2 & 171.3 & 95.1 \\
+SPO-RF AVX-2 R. Hist. (64 bins, ours) & 382.3 & 119.4 & 68.6 \\
+SPO-RF AVX-512 R. Hist. (256 bins, ours) & 560.1 & 175.6 & 109.8 \\
+SPO-RF Dyn AVX-2 R. Hist. (64 bins, ours) & 296.2 & 91.8 & \textbf{50.5} \\
+SPO-RF Dyn AVX-512 R. Hist. (256 bins, ours) & \textbf{287.5} & \textbf{90.2} & 50.7 \\
+AA-RF Exact & 292.4 & 104.3 & 52.1 \\
+XGBoost RF mode & 3000.9 & 1048.6 & OOM \\
+LightGBM RF mode & 2598.8 & 2281.1 & OOM \\
 \midrule
-SPO-GBT Exact & 1.04$\times$ & 1617.9 & 638.2 & 96.6 \\
-SPO-GBT Dyn-Vec [ours] & 1.00$\times$ & 1242.3 & 460.7 & 75.2 \\
-SPO-GBT Dyn-256 (AVX-512) & 0.98$\times$ & 1225.8 & 437.9 & 74.8 \\
-AA-GBT Exact & 1.87$\times$ & 746.6 & 267.6 & 490.0 \\
-XGBoost & \textbf{25.96$\times$} & 21.8 & 7.1 & 56.1 \\
-LightGBM & 11.66$\times$ & \textbf{18.2} & \textbf{6.1} & 52.7 \\
-CatBoost & 10.97$\times$ & 35.9 & 14.7 & \textbf{24.0} \\
+SPO-GBT Exact & 1617.9 & 638.2 & 96.6 \\
+SPO-GBT Dyn-Vec [ours] & 1242.3 & 460.7 & 75.2 \\
+SPO-GBT Dyn-256 (AVX-512) & 1225.8 & 437.9 & 74.8 \\
+AA-GBT Exact & 746.6 & 267.6 & 490.0 \\
+XGBoost & 21.8 & 7.1 & 56.1 \\
+LightGBM & \textbf{18.2} & \textbf{6.1} & 52.7 \\
+CatBoost & 35.9 & 14.7 & \textbf{24.0} \\
 \bottomrule
 \end{tabular*}
 \\[2pt]
-\parbox{0.92\linewidth}{\footnotesize Suite column: geometric mean over the suite datasets with more than 100,000 rows or more than 100,000 features (smaller ones train in seconds and are dominated by fixed setup cost); $>1\times$ means the arm is faster than ours. YDF's post-training finalization (structural variable importances and leaf indexing, a single-threaded walk with no counterpart in the python libraries' lazily-computed feature importances) is excluded from every time reported here. Accuracy for the same runs is in Tables~\ref{tab:spo-vs-gbt-summary} and~\ref{tab:spo-vs-gbt-huge}.}
+\parbox{0.92\linewidth}{\footnotesize YDF's post-training finalization (structural variable importances and leaf indexing, a single-threaded walk with no counterpart in the python libraries' lazily-computed feature importances) is excluded from every time reported here. Accuracy for the same runs is in Tables~\ref{tab:spo-vs-gbt-summary} and~\ref{tab:spo-vs-gbt-huge}.}
 \end{table*}
