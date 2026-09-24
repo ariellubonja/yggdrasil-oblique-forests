@@ -4,9 +4,9 @@
 Rows: the pinned speedup-map selection (B7, 2026-09-08): HIGGS, SUSY, Epsilon,
 GiveMeSomeCredit, trunk 1M x {32,512,2048} and the row-column shapes with rows > 100k
 or cols > 100k (D8-rev2; 15k x 4096 and 15k x 40k are run but not tabulated).
-Columns: 8 split finders -- Exact (std::sort), Exact (Highway VQSort),
+Columns: 7 split finders -- Exact (Highway VQSort),
 Random histogram (scalar; 64 and 256 bins), Vectorized random histogram (AVX2 64 bins,
-AVX-512 256 bins), Vectorized dynamic (AVX2, 64 bins). Dynamic (scalar) is commented out.
+AVX-512 256 bins), Vectorized dynamic (AVX2, 64 bins). Dynamic (scalar) and Exact (std::sort) are commented out.
 Speedups beside Our Methods are over Exact (HWY).
 Depths: 6, 10, 16, 24, full (purity). 240 trees, min_examples 1, 48 threads, seed 1.
 
@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[3]
 RES = ROOT / "benchmarks" / "results" / "runtime" / "speedup_map_by_dataset"
 
 ARMS = [  # (arm, header line 1, header line 2)
-    ("spo_rf_exact_stdsort", "Exact", "std::sort"),
+    # ("spo_rf_exact_stdsort", "Exact", "std::sort"),  # dropped 2026-09-23
     ("spo_rf_exact_hwy", "Exact", "HWY"),
     ("spo_rf_rand_scalar", "Random Hist.", "scalar, 64 bins"),
     ("spo_rf_rand256_scalar", "Random Hist.", "scalar, 256 bins"),
@@ -36,7 +36,7 @@ ARMS = [  # (arm, header line 1, header line 2)
     # ("spo_rf_dyn_scalar", "Dynamic Hist.", "scalar, 64 bins \\& HWY"),  # dropped 2026-09-14
     ("spo_rf_dyn_vec", "Vec. Dynamic Hist.", "AVX2, 64 bins \\& HWY"),
 ]
-GROUPS = [("Baselines", 4), ("Our Methods", 3)]  # column blocks, in ARMS order
+GROUPS = [("Baselines", 3), ("Our Methods", 3)]  # column blocks, in ARMS order
 # Speedup shown beside a cell = (best of these reference arms) / cell; missing refs are skipped.
 SPEEDUP_REF = {
     "spo_rf_rand_vec": ["spo_rf_exact_hwy"],
@@ -72,9 +72,11 @@ CAPTION_NOTES = {0: (r"\TODO{Add speedup over both HWY and Random hist. Add Dyna
                      r"exploring the row-col space.}")}
 
 
-def load_cells() -> tuple[pd.DataFrame, int]:
+def load_cells(max_reps: int = 0) -> tuple[pd.DataFrame, int]:
     """(dataset, arm, depth) -> median / std of train_s over reps; returns (df, max reps seen)."""
     files = [RES / "speedup_map.csv"] + sorted(RES.glob("speedup_map_rep*.csv"))
+    if max_reps > 0:  # --reps N: use only reps 1..N
+        files = files[:max_reps]
     parts = []
     for k, f in enumerate(files, 1):
         d = pd.read_csv(f)
@@ -122,7 +124,7 @@ def emit_tex(df: pd.DataFrame, nrep: int) -> str:
     reps = "single run" if nrep <= 1 else f"median $\\pm$ sample std over {nrep} runs"
     caption = (
         "End-to-end SPO-RF training time (s) by tree depth: 240 trees, min\\_examples 1, "
-        "48 threads, m7i.metal-24xl, " + reps + ". Exact = presorted scan with std::sort or "
+        "48 threads, m7i.metal-24xl, " + reps + ". Exact = presorted scan with "
         "Highway VQSort. Histogram finders use 64 or 256 bins; vectorized variants use the AVX2 "
         "upper\\_bound kernel at 64 bins and the two-level AVX-512 search at 256 bins; the "
         "dynamic arm uses 64 bins and switches to exact below 250 examples. Parenthesized: "
@@ -184,8 +186,9 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / "paper" / "spaa27" / "table_overall_depth.tex"))
     ap.add_argument("--text-only", action="store_true")
+    ap.add_argument("--reps", type=int, default=0, help="use only reps 1..N (0 = all)")
     a = ap.parse_args()
-    df, nrep = load_cells()
+    df, nrep = load_cells(a.reps)
     print(emit_text(df))
     if not a.text_only:
         Path(a.out).write_text(emit_tex(df, nrep))
