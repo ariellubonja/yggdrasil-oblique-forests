@@ -6,7 +6,7 @@ set -euo pipefail
 A="${1:?analysis dir (output of analyze.py --out-dir)}"
 P="${2:-/home/ubuntu/yggdrasil-oblique-forests/paper/spaa27}"
 F="$P/figures/results"
-mkdir -p "$F"
+mkdir -p "$F" "$P/tables"
 
 # tables: rename file + label/ref (never hand-edit the generated bodies). The
 # tables cross-reference each other, so rewrite \ref{} as well as \label{}.
@@ -15,13 +15,13 @@ RELABEL='s/{tab:main-summary-all}/{tab:spo-vs-gbt-summary}/g;
          s/{tab:timing}/{tab:spo-vs-gbt-timing}/g;
          s/{tab:per-dataset-appendix/{tab:spo-vs-gbt-per-dataset/g'
 sed "$RELABEL" "$A/tables/table_main_summary_all_datasets_both.tex" \
-    > "$P/table_spo_vs_gbt_summary_both.tex"
+    > "$P/tables/table_spo_vs_gbt_summary_both.tex"
 sed "$RELABEL" "$A/tables/table_huge_datasets_both.tex" \
-    > "$P/table_spo_vs_gbt_huge_both.tex"
+    > "$P/tables/table_spo_vs_gbt_huge_both.tex"
 sed "$RELABEL" "$A/tables/table_timing_both.tex" \
-    > "$P/table_spo_vs_gbt_timing_both.tex"
+    > "$P/tables/table_spo_vs_gbt_timing_both.tex"
 sed "$RELABEL" "$A/tables/table_per_dataset_appendix_both.tex" \
-    > "$P/table_spo_vs_gbt_per_dataset_both.tex"
+    > "$P/tables/table_spo_vs_gbt_per_dataset_both.tex"
 
 # figures
 declare -A MAP=(
@@ -39,4 +39,4 @@ for src in "${!MAP[@]}"; do
   cp -f "$A/figures/$src.pdf" "$F/${MAP[$src]}.pdf"
 done
 echo "exported to $P:"
-ls -1 "$P"/table_spo_vs_gbt_*.tex "$F"/spo_vs_gbt_*.pdf
+ls -1 "$P"/tables/table_spo_vs_gbt_*.tex "$F"/spo_vs_gbt_*.pdf
