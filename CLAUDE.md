@@ -204,6 +204,13 @@ refresh is a manual re-upload — not worth repeating per data correction.
   threshold/config for one dataset before moving to the next — never dataset-inner.
   `dynamic_histogram_threshold_sweep.sh` takes `CSV_DATASETS_OVERRIDE` / `TRUNK_DATASETS_OVERRIDE`
   for one-dataset invocations.
+- **Mask the apt timers on every benchmark box (user directive, 2026-09-24).** Ubuntu's
+  `apt-daily-upgrade.service` (unattended-upgrade: dpkg + service restarts, ~2 min at a random
+  daily time) ran inside one epsilon sweep cell and inflated it by 4 % (52.0 s vs 50.8 s re-run).
+  Before any timing run: `sudo systemctl mask --now apt-daily.timer apt-daily-upgrade.timer`
+  (done on the m7i on 2026-09-24; `setup_fresh_box.sh` does not do it yet). When a lone cell
+  bumps 2–5 % with flat neighbours, check `journalctl --since <run start>` for apt before
+  blaming the code, and re-run the cell.
 
 ## Vectorized histogram ISA (user directive, 2026-09-08)
 
