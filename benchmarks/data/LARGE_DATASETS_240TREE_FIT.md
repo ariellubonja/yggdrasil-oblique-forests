@@ -64,3 +64,28 @@ accuracy 0.5950, AUC 0.6341, logloss 0.6665); YouTube-8M 810 s; HIGGS 356 s.
 Dataset construction (targets, dropped columns, encodings) is documented in each
 `benchmarks/data/download_<name>.py` docstring and the `<name>_meta.json` it writes; see also
 `benchmarks/SETUP_FRESH_BOX.md` step 8.
+
+## 2026-09-24 — Shifts weather, ClimSim, Jane Street
+
+Same box, same protocol and harness defaults (plain `-c opt` build, no chrono; memwatch kill at
+MemAvailable < 8 GB; peak RSS from `/usr/bin/time -v`). Dataset construction: `download_shifts_weather.py`,
+`download_climsim.py`, `download_jane_street.py` (targets binarised at the train median; see each docstring
+and `<name>_meta.json`).
+
+| dataset (train CSV) | features | rows tried | share of full | peak RSS | training block | outcome |
+|---|---|---|---|---|---|---|
+| Shifts weather `shifts_weather/shifts_weather_train.csv` | 127 | 3,129,592 | 1 (full) | 17 GB | 72 s | **fits** |
+| ClimSim subsampled low-res `climsim/climsim_train.csv` | 124 | 10,091,520 | 1 (full) | 39 GB | 204 s | **fits** |
+| Jane Street 2024 `jane_street/jane_street_train.csv` | 82 | 40,852,762 | 1 (full) | 364 GB | killed at 12 min | OOM |
+| Jane Street | 82 | 20,426,381 | 1/2 | 365 GB | killed at 14 min | OOM |
+| Jane Street | 82 | 10,213,190 | 1/4 | 260 GB | 467 s | **fits** |
+
+Weather and ClimSim are cheap because their labels (temperature > median; downward longwave flux > median)
+are almost determined by a few features (forecast temperatures; surface-level state_t), so trees reach purity
+early and the forests stay small. Jane Street's label (responder_6 > median) is near-noise, so trees grow to
+full purity: ≈25 kB per training row, the HIGGS regime.
+
+```bash
+cd benchmarks/data
+head -n 10213191 jane_street/jane_street_train.csv > jane_street/jane_street_train_10213190.csv   # Jane Street 1/4, 8.4 GB
+```
