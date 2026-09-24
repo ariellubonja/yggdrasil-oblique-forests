@@ -132,6 +132,13 @@ Audited local sets (`benchmarks/data`, 2026-09-04):
   while the histogram binner's cost is value-independent — Exact ties or beats Dynamic there. For
   HIGGS-like comparisons use the `*_dequant.csv` copies made by `benchmarks/data/dequantize_dataset.py`
   (uniform noise inside each column's quantisation step, seeded); see `ariel_notes/journal.md` 2026-09-22.
+- **Shifts weather / ClimSim / Jane Street (added 2026-09-24, `download_{shifts_weather,climsim,jane_street}.py`,
+  targets binarised at the train median: `fact_temperature`, `cam_out_FLWDS` (one of ClimSim's 128 outputs),
+  `responder_6`):** `shifts_weather/` 3.13M × 127 (mixed, mostly continuous), `climsim/` 10.09M × 124 (fully
+  continuous, the paper's subsampled pre-normalised low-res split from HF `LEAP/subsampled_low_res`),
+  `jane_street/` 40.9M × 82 (Kaggle token in `~/.kaggle/access_token`; 240 trees fit only the 10,213,190-row
+  prefix `jane_street_train_10213190.csv`). All three are continuous enough that the VQSort tie shortcut does
+  not apply; fit limits in `LARGE_DATASETS_240TREE_FIT.md`, chrono results in `ariel_notes/journal.md` 2026-09-24.
 - **Missing locally:** sick (no CSV; TBG column 100% NaN), TabArena (metadata only), TabReD,
   epsilon, `processed/` — the suites live on the m7i.
 
