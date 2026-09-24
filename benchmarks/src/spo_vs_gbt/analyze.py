@@ -1685,6 +1685,8 @@ _TIMING_TABLE_LABELS: dict[str, str] = {
     "spo_rf_rand256_vec": "SPO-RF AVX-512 R. Hist. (256 bins, ours)",
     "spo_rf_dyn_vec": "SPO-RF Dyn AVX-2 R. Hist. (64 bins, ours)",
     "spo_rf_dyn256_vec": "SPO-RF Dyn AVX-512 R. Hist. (256 bins, ours)",
+    "spo_gbt_dyn_vec": "SPO-GBT AVX-2 R. Hist. (64 bins, ours)",
+    "spo_gbt_dyn256_vec": "SPO-GBT AVX-512 R. Hist. (256 bins, ours)",
 }
 _TIMING_TABLE_DROPPED = {"spo_rf_exact_stdsort", "spo_rf_dyn_scalar"}
 
