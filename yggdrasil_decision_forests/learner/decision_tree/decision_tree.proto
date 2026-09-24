@@ -524,6 +524,12 @@ message NumericalSplit {
   // HISTOGRAM_RANDOM => 1
   // HISTOGRAM_EQUAL_WIDTH => 255
   optional int32 num_candidates = 2;
+
+  // Axis-aligned splits with a DYNAMIC_* type: nodes with fewer examples than
+  // this use the EXACT (sort-based) finder, larger nodes the histogram. Set to
+  // -1 to disable the switch. Unset => SparseObliqueSplit.dynamic_split_threshold
+  // (the oblique path keeps reading that field).
+  optional int32 dynamic_split_threshold = 3;
 }
 
 message GreedyForwardCategoricalSet {

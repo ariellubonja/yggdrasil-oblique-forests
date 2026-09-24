@@ -1395,12 +1395,20 @@ int main(int argc, char** argv) {
     numerical_split->set_type(
     model::decision_tree::proto::NumericalSplit::DYNAMIC_RANDOM_HISTOGRAM);
     numerical_split->set_num_candidates(absl::GetFlag(FLAGS_histogram_num_bins));
+    numerical_split->set_dynamic_split_threshold(ResolveDynamicSplitThreshold());
+    LOG(INFO) << "numerical_split.dynamic_split_threshold = "
+              << numerical_split->dynamic_split_threshold()
+              << " (axis-aligned per-node EXACT fallback)";
     LOG(INFO) << "Using " << hist_type << " with "
               << absl::GetFlag(FLAGS_histogram_num_bins) << " samples";
   } else if (hist_type == "Dynamic Equal Width Histogram") {
     numerical_split->set_type(
         model::decision_tree::proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM);
     numerical_split->set_num_candidates(absl::GetFlag(FLAGS_histogram_num_bins));
+    numerical_split->set_dynamic_split_threshold(ResolveDynamicSplitThreshold());
+    LOG(INFO) << "numerical_split.dynamic_split_threshold = "
+              << numerical_split->dynamic_split_threshold()
+              << " (axis-aligned per-node EXACT fallback)";
     LOG(INFO) << "Using " << hist_type << " with "
               << absl::GetFlag(FLAGS_histogram_num_bins) << " samples";
   }

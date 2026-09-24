@@ -179,7 +179,7 @@ is flat 600–1100, minimum 800–1000). **Scalar binner
 the harness default (`-2`) resolves from build macros only and gives 250 for both vectorized
 binners. `arms.py` passes
 `_DYN64` = 250, `_DYN256` = 1000 (set 2026-09-24), `_DYN64_SCALAR` = 4600; `parallel_chrono.py --dynamic_split_threshold` passes it
-through for per-function runs (Dyn AVX-2 → 250, Dyn AVX-512 → 1000). In the SPO-vs-GBT study only, the `spo_rf_dyn_scalar`
+through for per-function runs (Dyn AVX-2 → 250, Dyn AVX-512 → 1000). **Axis-aligned splits honour the same threshold since 2026-09-24** (`NumericalSplit.dynamic_split_threshold`, set by the harness for both split types; per-node EXACT fallback in `training.cc` `UseExactNumericalFinder`) — before that date every AA "Dynamic" run was plain Random. In the SPO-vs-GBT study only, the `spo_rf_dyn_scalar`
 rows recorded before 2026-09-09 used 250 and were re-run (they measured a mis-set threshold,
 not the method); earlier Dynamic-scalar results outside that study are not affected.
 Until those re-run numbers land, every dyn_scalar cell renders as `--` (rows moved to

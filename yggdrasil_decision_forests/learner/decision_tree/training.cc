@@ -469,6 +469,27 @@ proto::DecisionTreeTrainingConfig::Internal::SortingStrategy EffectiveStrategy(
   };
 }
 
+
+// Axis-aligned counterpart of the per-node dynamic downgrade in
+// FindBestConditionSparseObliqueTemplate (oblique.cc): for the DYNAMIC_* split
+// types, nodes with fewer than dynamic_split_threshold examples use the EXACT
+// (sort-based) finder and larger nodes the histogram finder. Plain EXACT always
+// sorts; the non-dynamic histogram types never do.
+bool UseExactNumericalFinder(const proto::DecisionTreeTrainingConfig& dt_config,
+                             const size_t num_examples) {
+  const auto type = dt_config.numerical_split().type();
+  if (type == proto::NumericalSplit::EXACT) return true;
+  if (type != proto::NumericalSplit::DYNAMIC_RANDOM_HISTOGRAM &&
+      type != proto::NumericalSplit::DYNAMIC_EQUAL_WIDTH_HISTOGRAM) {
+    return false;
+  }
+  const int threshold =
+      dt_config.numerical_split().has_dynamic_split_threshold()
+          ? dt_config.numerical_split().dynamic_split_threshold()
+          : dt_config.sparse_oblique_split().dynamic_split_threshold();
+  return threshold >= 0 && num_examples < static_cast<size_t>(threshold);
+}
+
 }  // namespace
 
 // Specialization in the case of classification.
@@ -515,7 +536,7 @@ absl::StatusOr<SplitSearchResult> FindBestConditionClassification(
           column_with_cast,
           ::yggdrasil_decision_forests::chrono_prof::kColumnWithCast);
 
-      if (dt_config.numerical_split().type() == proto::NumericalSplit::EXACT) {
+      if (UseExactNumericalFinder(dt_config, selected_examples.size())) {
         ASSIGN_OR_RETURN(
             result, FindSplitLabelClassificationFeatureNumericalCart(
                         selected_examples, weights, attribute_data->values(),
@@ -704,7 +725,7 @@ absl::StatusOr<SplitSearchResult> FindBestConditionRegressionHessianGain(
               dataset::VerticalDataset::NumericalColumn>(attribute_idx));
 
       const auto na_replacement = attribute_column_spec.numerical().mean();
-      if (dt_config.numerical_split().type() == proto::NumericalSplit::EXACT) {
+      if (UseExactNumericalFinder(dt_config, selected_examples.size())) {
         if (weights.empty()) {
           ASSIGN_OR_RETURN(
               result,
@@ -937,7 +958,7 @@ absl::StatusOr<SplitSearchResult> FindBestConditionRegression(
               .value()
               ->values();
       const auto na_replacement = attribute_column_spec.numerical().mean();
-      if (dt_config.numerical_split().type() == proto::NumericalSplit::EXACT) {
+      if (UseExactNumericalFinder(dt_config, selected_examples.size())) {
         if (weights.empty()) {
           ASSIGN_OR_RETURN(
               result,
