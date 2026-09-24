@@ -131,7 +131,7 @@ TabReD                                   | skipped (no ~/.kaggle/kaggle.json: ne
        - `download_climsim.py` → `climsim/climsim_{train,test}.csv` — ClimSim low-res, the paper's subsampled
          and pre-normalised split from HF `LEAP/subsampled_low_res` (`train_input/train_target/val_input/
          val_target.parquet`, 11 GB, CC-BY-4.0; the raw 744 GB netCDF set is not needed). train 10,091,520 ×
-         124 (4.4 GB), test = val 1,441,920. The task is 128-output regression; we keep ONE target,
+         124 (14.7 GB), test = val 1,441,920. The task is 128-output regression; we keep ONE target,
          `cam_out_FLWDS` (index 121, downward longwave flux — continuous, no zero inflation; `--target_index`
          to change). Column names come from the ClimSim ordering (state_t_0..59, state_q0001_0..59,
          state_ps, pbuf_SOLIN, pbuf_LHFLX, pbuf_SHFLX). No NaNs. ~1 min after the download.

@@ -76,6 +76,11 @@ ABSL_FLAG(std::string, test_csv, "",
 ABSL_FLAG(std::string, ds_path, "",
           "Path (without extension) to TF-Record file (for tfrecord mode).");
 // Common flags
+ABSL_FLAG(std::string, task, "classification",
+          "classification (default; label -> binary CATEGORICAL) or regression "
+          "(label stays NUMERICAL, Task::REGRESSION, RMSE on --test_csv). Both "
+          "tasks share the oblique split finders (histogram / VQSort exact / "
+          "dynamic); only the label accumulator differs (2026-09-24).");
 ABSL_FLAG(std::string, label_col, "class",
           "Name of label column (used in all modes).");
 ABSL_FLAG(std::string, model_out_dir, "",
@@ -896,7 +901,8 @@ absl::StatusOr<std::vector<std::string>> ReadHeader(const std::string& path) {
 }
 
 absl::StatusOr<std::unique_ptr<dataset::VerticalDataset>> Load(
-    const std::string& csv_path, const std::string& label_col) {
+    const std::string& csv_path, const std::string& label_col,
+    const bool regression_label = false) {
   auto header_or = ReadHeader(csv_path);
   if (!header_or.ok()) return header_or.status();
   const std::vector<std::string>& header = header_or.value();
@@ -938,6 +944,8 @@ absl::StatusOr<std::unique_ptr<dataset::VerticalDataset>> Load(
   if (nrow <= 0) return absl::InvalidArgumentError("CSV has no data rows");
 
   // (4) Convert the label column NUMERICAL -> CATEGORICAL from full data.
+  //     (--task=regression keeps it NUMERICAL and only recomputes its stats.)
+  if (!regression_label) {
   auto label_num_or = ds->numerical_column(label_idx);
   if (!label_num_or.ok()) return label_num_or.status();
   // Copy the values: ReplaceColumn destroys the underlying numerical column.
@@ -1006,10 +1014,11 @@ absl::StatusOr<std::unique_ptr<dataset::VerticalDataset>> Load(
       cat_col->Set(r, value_to_index[v]);
     }
   }
+  }  // !regression_label
 
   // (3) Recompute exact numerical statistics for feature columns from RAM.
   for (int col_idx = 0; col_idx < ds->data_spec().columns_size(); ++col_idx) {
-    if (col_idx == label_idx) continue;
+    if (col_idx == label_idx && !regression_label) continue;
     auto* col_spec = ds->mutable_data_spec()->mutable_columns(col_idx);
     if (col_spec->type() != dataset::proto::ColumnType::NUMERICAL) continue;
     auto num_or = ds->numerical_column(col_idx);
@@ -1099,7 +1108,8 @@ int main(int argc, char** argv) {
     bool single_pass_ok = false;
     if (absl::GetFlag(FLAGS_csv_single_pass_load)) {
       LOG(INFO) << "Loading CSV in a single pass: " << csv_path;
-      auto ds_or = single_pass_csv::Load(csv_path, label_col);
+      auto ds_or = single_pass_csv::Load(
+          csv_path, label_col, absl::GetFlag(FLAGS_task) == "regression");
       if (ds_or.ok()) {
         tf_ds = std::move(ds_or.value());
         ds_ptr = tf_ds.get();
@@ -1119,7 +1129,9 @@ int main(int argc, char** argv) {
       dataset::proto::DataSpecificationGuide guide;
       auto* col_guide = guide.add_column_guides();
       col_guide->set_column_name_pattern(label_col);
-      col_guide->set_type(dataset::proto::ColumnType::CATEGORICAL);
+      col_guide->set_type(absl::GetFlag(FLAGS_task) == "regression"
+                              ? dataset::proto::ColumnType::NUMERICAL
+                              : dataset::proto::ColumnType::CATEGORICAL);
 
       dataset::CreateDataSpec(
           "csv:" + csv_path,
@@ -1206,7 +1218,9 @@ int main(int argc, char** argv) {
 
   // 2) Configure learner
   model::proto::TrainingConfig train_config;
-  train_config.set_task(model::proto::Task::CLASSIFICATION);
+  const bool regression_task = absl::GetFlag(FLAGS_task) == "regression";
+  train_config.set_task(regression_task ? model::proto::Task::REGRESSION
+                                        : model::proto::Task::CLASSIFICATION);
   train_config.set_label(label_col);
 
   model::proto::DeploymentConfig deploy_config;
@@ -1537,13 +1551,22 @@ int main(int argc, char** argv) {
                    << "': " << load_status.message();
       } else {
         metric::proto::EvaluationOptions eval_options;
-        eval_options.set_task(model::proto::Task::CLASSIFICATION);
+        eval_options.set_task(regression_task ? model::proto::Task::REGRESSION
+                                              : model::proto::Task::CLASSIFICATION);
         utils::RandomEngine rnd(absl::GetFlag(FLAGS_seed));
         auto eval_or =
             model_ptr->EvaluateWithStatus(test_ds, eval_options, &rnd);
         if (!eval_or.ok()) {
           LOG(ERROR) << "Test-set evaluation failed: "
                      << eval_or.status().message();
+        } else if (regression_task) {
+          LOG(INFO) << "Test-set evaluation on " << test_csv << " ("
+                    << test_ds.nrow() << " rows): test-rmse:"
+                    << metric::RMSE(eval_or.value());
+          auto report_or = metric::TextReport(eval_or.value());
+          if (report_or.ok()) {
+            LOG(INFO) << "Test-set report:\n" << report_or.value();
+          }
         } else {
           const float test_acc = metric::Accuracy(eval_or.value());
           // Binary classification: both one-vs-rest ROCs carry the same

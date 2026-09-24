@@ -38,6 +38,17 @@ def impute_and_binarize(X: pa.Table, target: np.ndarray, means: dict, threshold:
     return pa.table(cols, names=names)
 
 
+def impute_with_target(X: pa.Table, target: np.ndarray, means: dict, target_name="target"):
+    """Regression variant: same imputed features, first column = the raw float target."""
+    cols, names = [pa.array(target.astype(np.float32))], [target_name]
+    for n in X.column_names:
+        c = pc.cast(X.column(n), pa.float32(), safe=False)
+        if c.null_count > 0:
+            c = pc.fill_null(c, pa.scalar(float(means[n]), pa.float32()))
+        cols.append(c); names.append(n)
+    return pa.table(cols, names=names)
+
+
 def column_means(X: pa.Table):
     return {n: float(pc.mean(pc.cast(X.column(n), pa.float64())).as_py() or 0.0) for n in X.column_names}
 

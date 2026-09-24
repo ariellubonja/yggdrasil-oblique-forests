@@ -37,6 +37,8 @@ def load(path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out_dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "shifts_weather"))
+    ap.add_argument("--also_regression", action="store_true", help="also write <name>_{train,test}_reg.csv: raw float target as first column 'target' (for --task=regression runs)")
+    ap.add_argument("--only_regression", action="store_true", help="with --also_regression: do not rewrite the classification CSVs (they may be in use)")
     a = ap.parse_args()
     os.makedirs(a.out_dir, exist_ok=True)
     tar = os.path.join(a.out_dir, "canonical-partitioned-dataset.tar")
@@ -60,7 +62,11 @@ def main():
     means = column_means(Xtr); nans_tr = nan_counts(Xtr); nans_te = nan_counts(Xte)
     out_tr = impute_and_binarize(Xtr, ytr, means, thr); out_te = impute_and_binarize(Xte, yte, means, thr)
     p_tr = os.path.join(a.out_dir, "shifts_weather_train.csv"); p_te = os.path.join(a.out_dir, "shifts_weather_test.csv")
-    write_csv_unquoted(out_tr, p_tr); write_csv_unquoted(out_te, p_te)
+    if not a.only_regression:
+        write_csv_unquoted(out_tr, p_tr); write_csv_unquoted(out_te, p_te)
+    if a.also_regression:
+        for split, X, y in (("train", Xtr, ytr), ("test", Xte, yte)):
+            pr = os.path.join(a.out_dir, f"shifts_weather_{split}_reg.csv"); write_csv_unquoted(impute_with_target(X, y, means), pr); log(f"wrote {pr}")
     log(f"wrote {p_tr} ({os.path.getsize(p_tr)/1e9:.1f} GB) and {p_te} in {time.time()-t0:.0f}s")
     meta = {"name": "shifts_weather", "source": URL, "license": "see LICENSE.md in the archive (Shifts Project)",
             "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -71,7 +77,7 @@ def main():
             "encodings": {"climate": cmap, "fact_time": "epoch seconds stored fp32 (128 s grid)"},
             "imputation": {"rule": "NaN -> TRAIN column mean", "train_means": means, "train_nan_cells": nans_tr, "test_nan_cells": nans_te},
             "columns": out_tr.column_names}
-    write_meta(os.path.join(a.out_dir, "shifts_weather_meta.json"), meta)
+    if not a.only_regression: write_meta(os.path.join(a.out_dir, "shifts_weather_meta.json"), meta)
     log(f"train positives {meta['train']['positive_rate']:.4f}, nan cells train {sum(nans_tr.values())} test {sum(nans_te.values())}")
 
 

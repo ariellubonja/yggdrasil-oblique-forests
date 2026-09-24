@@ -39,6 +39,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out_dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "climsim"))
     ap.add_argument("--target_index", type=int, default=121)
+    ap.add_argument("--also_regression", action="store_true", help="also write <name>_{train,test}_reg.csv: raw float target as first column 'target' (for --task=regression runs)")
+    ap.add_argument("--only_regression", action="store_true", help="with --also_regression: do not rewrite the classification CSVs (they may be in use)")
     a = ap.parse_args()
     os.makedirs(a.out_dir, exist_ok=True)
     tname = TARGETS[a.target_index]
@@ -52,15 +54,18 @@ def main():
     thr = float(np.median(ytr)); means = column_means(Xtr); nans_tr = nan_counts(Xtr); nans_te = nan_counts(Xte)
     paths = {}
     for out, (X, y) in res.items():
-        tab = impute_and_binarize(X, y, means, thr); p = os.path.join(a.out_dir, f"climsim_{out}.csv"); write_csv_unquoted(tab, p); paths[out] = (p, tab.num_rows, float(np.mean(y > thr)))
-        log(f"wrote {p} ({os.path.getsize(p)/1e9:.1f} GB) in {time.time()-t0:.0f}s")
+        tab = impute_and_binarize(X, y, means, thr); p = os.path.join(a.out_dir, f"climsim_{out}.csv"); paths[out] = (p, tab.num_rows, float(np.mean(y > thr)))
+        if not a.only_regression:
+            write_csv_unquoted(tab, p); log(f"wrote {p} ({os.path.getsize(p)/1e9:.1f} GB) in {time.time()-t0:.0f}s")
+        if a.also_regression:
+            pr = os.path.join(a.out_dir, f"climsim_{out}_reg.csv"); write_csv_unquoted(impute_with_target(X, y, means), pr); log(f"wrote {pr}")
     meta = {"name": "climsim", "source": BASE, "license": "CC-BY-4.0", "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
             "target": {"name": tname, "index": a.target_index, "rule": f"class = 1 iff {tname} > train median {thr}", "train_median": thr,
                        "why": "single continuous, non-zero-inflated output; user directive: regress on one target"},
             "train": {"csv": paths["train"][0], "rows": paths["train"][1], "positive_rate": paths["train"][2], "source": "train_input/train_target.parquet"},
             "test": {"csv": paths["test"][0], "rows": paths["test"][1], "positive_rate": paths["test"][2], "source": "val_input/val_target.parquet"},
             "features": INPUTS, "dropped": "the other 127 target columns", "imputation": {"rule": "NaN -> TRAIN column mean", "train_nan_cells": nans_tr, "test_nan_cells": nans_te, "train_means": means}}
-    write_meta(os.path.join(a.out_dir, "climsim_meta.json"), meta)
+    if not a.only_regression: write_meta(os.path.join(a.out_dir, "climsim_meta.json"), meta)
     log(f"train positives {paths['train'][2]:.4f}; nan cells train {sum(nans_tr.values())} test {sum(nans_te.values())}")
 
 

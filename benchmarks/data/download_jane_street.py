@@ -44,6 +44,8 @@ def main():
     ap.add_argument("--out_dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "jane_street"))
     ap.add_argument("--target", default="responder_6")
     ap.add_argument("--test_partitions", default="9")
+    ap.add_argument("--also_regression", action="store_true", help="also write <name>_{train,test}_reg.csv: raw float target as first column 'target' (for --task=regression runs)")
+    ap.add_argument("--only_regression", action="store_true", help="with --also_regression: do not rewrite the classification CSVs (they may be in use)")
     a = ap.parse_args()
     os.makedirs(a.out_dir, exist_ok=True); ensure_data(a.out_dir)
     test_parts = {int(x) for x in a.test_partitions.split(",")}
@@ -63,15 +65,18 @@ def main():
     thr = float(np.median(ytr)); means = column_means(Xtr); nans_tr = nan_counts(Xtr); nans_te = nan_counts(Xte)
     paths = {}
     for k, (X, y) in res.items():
-        tab = impute_and_binarize(X, y, means, thr); p = os.path.join(a.out_dir, f"jane_street_{k}.csv"); write_csv_unquoted(tab, p); paths[k] = (p, tab.num_rows, float(np.mean(y > thr)))
-        log(f"wrote {p} ({os.path.getsize(p)/1e9:.1f} GB) in {time.time()-t0:.0f}s")
+        tab = impute_and_binarize(X, y, means, thr); p = os.path.join(a.out_dir, f"jane_street_{k}.csv"); paths[k] = (p, tab.num_rows, float(np.mean(y > thr)))
+        if not a.only_regression:
+            write_csv_unquoted(tab, p); log(f"wrote {p} ({os.path.getsize(p)/1e9:.1f} GB) in {time.time()-t0:.0f}s")
+        if a.also_regression:
+            pr = os.path.join(a.out_dir, f"jane_street_{k}_reg.csv"); write_csv_unquoted(impute_with_target(X, y, means), pr); log(f"wrote {pr}")
     meta = {"name": "jane_street", "source": "kaggle competition " + COMP, "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
             "target": {"name": a.target, "rule": f"class = 1 iff {a.target} > train median {thr}", "train_median": thr},
             "train": {"csv": paths["train"][0], "rows": paths["train"][1], "positive_rate": paths["train"][2], "partitions": sorted(set(range(10)) - test_parts)},
             "test": {"csv": paths["test"][0], "rows": paths["test"][1], "positive_rate": paths["test"][2], "partitions": sorted(test_parts)},
             "dropped": ["weight"] + [f"responder_{i}" for i in range(9) if f"responder_{i}" != a.target], "features": Xtr.column_names,
             "imputation": {"rule": "NaN -> TRAIN column mean", "train_nan_cells": nans_tr, "test_nan_cells": nans_te, "train_means": means}}
-    write_meta(os.path.join(a.out_dir, "jane_street_meta.json"), meta)
+    if not a.only_regression: write_meta(os.path.join(a.out_dir, "jane_street_meta.json"), meta)
     log(f"train positives {paths['train'][2]:.4f}; nan cells train {sum(nans_tr.values())} test {sum(nans_te.values())}")
 
 
