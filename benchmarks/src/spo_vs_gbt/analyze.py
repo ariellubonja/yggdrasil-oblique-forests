@@ -1480,8 +1480,7 @@ _TIMING_TABLE_FOOTNOTE = (
     "YDF's post-training finalization "
     "(structural variable importances and leaf indexing, a single-threaded walk with no "
     "counterpart in the python libraries' lazily-computed feature importances) is excluded "
-    "from every time reported here. Accuracy for the same "
-    "runs is in Tables~\\ref{tab:main-summary-all} and~\\ref{tab:huge-datasets}.")
+    "from every time reported here.")
 
 
 def _best_fmt(v: float, best: float | None, fmt: str, suffix: str = "") -> str:
