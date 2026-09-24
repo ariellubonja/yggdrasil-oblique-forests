@@ -1479,10 +1479,16 @@ WIDE_TABLE_WIDTH = "0.92\\linewidth"
 _TIMING_TABLE_FOOTNOTE = (
     "$^\\dagger$ RF implementations of this method are not directly comparable. XGBoost 3.4.1 "
     "warns that \\texttt{XGBRFClassifier} is deprecated and ``does not implement a conventional "
-    "random forest'', and LightGBM only parallelizes within a tree, not across trees, similar "
-    "to YDF-GBT.")
-# RF-mode arms whose times carry the footnote's dagger; CatBoost has no RF mode (row of dashes).
-_TIMING_TABLE_DAGGER = {"xgboost_rf", "lightgbm_rf"}
+    "random forest'', and LightGBM only parallelizes within a tree, similar to YDF-GBT, even in "
+    "Random Forest mode. This explains the slow performance of the two methods. CatBoost does "
+    "not support Random Forest (Bagged) mode.\\\\\n"
+    "$^*$ These methods benefit from features being fixed throughout training (no random "
+    "projections), and can use optimizations like pre-sorting. It is unclear to us why YDF's "
+    "AA-GBT does not benefit to a similar extent.")
+# Arms whose times carry the footnote's dagger / star; CatBoost has no RF mode (row of dashes).
+_TIMING_TABLE_MARK = {"xgboost_rf": "$^\\dagger$", "lightgbm_rf": "$^\\dagger$",
+                      "aa_gbt_exact": "$^*$", "xgboost": "$^*$", "lightgbm": "$^*$",
+                      "catboost": "$^*$"}
 _TIMING_TABLE_NO_RF_ROW = "CatBoost RF mode"
 
 
@@ -1740,7 +1746,7 @@ def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
                 cells.append(_latex_escape(st))
                 continue
             tr = _cell(ds, m, "time_s_median")
-            dag = "$^\\dagger$" if m in _TIMING_TABLE_DAGGER else ""
+            dag = _TIMING_TABLE_MARK.get(m, "")
             cells.append("--" if tr is None else
                          _best_fmt(tr, best_train.get((ds, fam)), "{:.1f}") + dag)
         return " & ".join(cells) + r" \\"

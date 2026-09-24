@@ -26,12 +26,13 @@ CatBoost RF mode & --- & --- & --- \\
 SPO-GBT Exact & 1617.9 & 638.2 & 96.6 \\
 SPO-GBT Dyn-Vec [ours] & 1242.3 & 460.7 & 75.2 \\
 SPO-GBT Dyn-256 (AVX-512) & 1225.8 & 437.9 & 74.8 \\
-AA-GBT Exact & 746.6 & 267.6 & 490.0 \\
-XGBoost & 21.8 & 7.1 & 56.1 \\
-LightGBM & \textbf{18.2} & \textbf{6.1} & 52.7 \\
-CatBoost & 35.9 & 14.7 & \textbf{24.0} \\
+AA-GBT Exact & 746.6$^*$ & 267.6$^*$ & 490.0$^*$ \\
+XGBoost & 21.8$^*$ & 7.1$^*$ & 56.1$^*$ \\
+LightGBM & \textbf{18.2}$^*$ & \textbf{6.1}$^*$ & 52.7$^*$ \\
+CatBoost & 35.9$^*$ & 14.7$^*$ & \textbf{24.0}$^*$ \\
 \bottomrule
 \end{tabular*}
 \\[2pt]
-\parbox{0.92\linewidth}{\footnotesize $^\dagger$ RF implementations of this method are not directly comparable. XGBoost 3.4.1 warns that \texttt{XGBRFClassifier} is deprecated and ``does not implement a conventional random forest'', and LightGBM only parallelizes within a tree, not across trees, similar to YDF-GBT.}
+\parbox{0.92\linewidth}{\footnotesize $^\dagger$ RF implementations of this method are not directly comparable. XGBoost 3.4.1 warns that \texttt{XGBRFClassifier} is deprecated and ``does not implement a conventional random forest'', and LightGBM only parallelizes within a tree, similar to YDF-GBT, even in Random Forest mode. This explains the slow performance of the two methods. CatBoost does not support Random Forest (Bagged) mode.\\
+$^*$ These methods benefit from features being fixed throughout training (no random projections), and can use optimizations like pre-sorting. It is unclear to us why YDF's AA-GBT does not benefit to a similar extent.}
 \end{table*}
