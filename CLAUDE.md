@@ -185,6 +185,22 @@ not the method); earlier Dynamic-scalar results outside that study are not affec
 Until those re-run numbers land, every dyn_scalar cell renders as `--` (rows moved to
 `benchmarks/results/runtime/speedup_map_by_dataset/_tests/` by `strip_dyn_scalar_thr250.py`).
 
+## Regression is supported but ~3x slower per tree (measured 2026-09-24)
+
+`examples/train_oblique_forest.cc --task regression` keeps the label NUMERICAL and trains
+`Task::REGRESSION` (test metric `test-rmse`). The optimizations are label-agnostic — regression uses
+the same `HistogramBinner` (`FindSplitLabelRegressionFeatureNumericalHistogram`), the same
+`FindBestSplitFlatHighway`/VQSort exact finder (K32V32) and the same per-node dynamic downgrade — so
+the Dynamic-vs-Exact comparison carries over. But a regression tree grown to purity has 2–4x more
+nodes than the median-binarised classification tree on the same rows (every distinct target value
+is its own leaf), so per-tree time is ~3x higher (weather 1M: 3.5 s cls vs 7.4 s reg; ClimSim 1M:
+2.7 s vs 9.8 s; 1 tree, 1 thread, Exact) and the work shifts into the small-node regime:
+Dyn/Exact drops from 1.2–1.4x (cls) to 1.11–1.13x (reg), and pure Random-histogram is *slower*
+than Exact on regression (0.73–0.79x). Budget regression suites at ~3x the classification time
+and never report a Random-only arm on regression without the Dynamic arm next to it. Smoke
+results in `ariel_notes/journal.md` 2026-09-24; dataset scripts write `<name>_{train,test}_reg.csv`
+with `--also_regression`.
+
 ## Do not write paper prose (user directive, 2026-09-09)
 
 **Never add or rewrite LaTeX body text with your own descriptions or interpretations of
