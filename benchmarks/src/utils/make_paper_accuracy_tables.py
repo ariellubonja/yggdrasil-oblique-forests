@@ -141,8 +141,8 @@ def make_per_dataset(frames):
         "\\begin{table*}",
         "\\centering",
         "\\caption{Per-dataset held-out test accuracy (mean $\\pm$ std over "
-        "3 seeds $\\times$ 10 CV folds; HIGGS/SUSY: one run on a held-out "
-        "500k-row test split). Dyn.\\ = Dynamic Random Histogram (64 bins, "
+        "3 seeds $\\times$ 10 CV folds; \\TODO{HIGGS/SUSY: one run on a held-out "
+        "500k-row test split)}. Dyn.\\ = Dynamic Random Histogram (64 bins, "
         "threshold 250), Rand.\\ = Random Histogram at every node (64 bins). "
         "$^{\\ast}$/$^{\\dagger}$: significantly better/worse than Exact "
         "(per-dataset Wilcoxon over paired folds, Holm-corrected, "

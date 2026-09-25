@@ -230,6 +230,13 @@ overwritten several times. Keep the user's wording and only change what the new 
 (panel list, dataset list, axes, generator note); when the user asks for new caption text, add
 it to their version rather than replacing it. Same rule for `\Description` and `\label`.
 
+**Pull hand-edited captions into the generators first (user directive, 2026-09-25).** Before
+modifying or re-running any caption-emitting generator (`analyze.py`, `make_overall_depth_table.py`,
+`make_paper_accuracy_tables.py`, `make_table4_speedup_figures.py`, …) or pushing a generated
+table/figure, `git pull` the MCP clone, diff every Overleaf `\caption`/`\Description`/`\label`
+against what the generator emits, and copy the user's wording (TODOs included) into the script.
+Only then regenerate — otherwise the push overwrites their edits.
+
 ## Figures wait for final tables (user directive, 2026-09-09)
 
 **Do not update paper figures while table results are still in flux.** Regenerate and push
