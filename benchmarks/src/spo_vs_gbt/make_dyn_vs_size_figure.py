@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""fig:dyn-vs-size -- speedup vs. dataset size (rows x features), one panel per arm.
+"""fig:speedup-vs-size -- speedup vs. dataset size (rows x features), one panel per arm.
 
 Speedup = train_s(SPO-RF Exact, Highway) / train_s(arm), full depth, 240 trees, 48
 threads, m7i.metal-24xl. Sources (all committed under benchmarks/results/):
@@ -149,7 +149,7 @@ def emit_tex(df: pd.DataFrame) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(PAPER / "figures" / "results" / "dyn_vs_size.tex"))
+    ap.add_argument("--out", default=str(PAPER / "figures" / "results" / "speedup_vs_dataset_size.tex"))
     ap.add_argument("--csv", default=str(SPO / "analysis" / "dyn_vs_size_points.csv"))
     a = ap.parse_args()
     df = load_points()

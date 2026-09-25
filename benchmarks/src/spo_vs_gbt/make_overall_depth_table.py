@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tab:overall -- end-to-end SPO-RF training time (s) by dataset, one section per depth.
+"""tab:train-time-by-depth -- end-to-end SPO-RF training time (s) by dataset, one section per depth.
 
 Rows: the pinned speedup-map selection (B7, 2026-09-08): HIGGS, SUSY, Epsilon,
 GiveMeSomeCredit, trunk 1M x {32,512,2048} and the row-column shapes with rows > 100k
@@ -14,11 +14,11 @@ Depths: 6, 10, 16, 24, full (purity). 240 trees, min_examples 1, 48 threads, see
 Source: benchmarks/results/runtime/speedup_map_by_dataset/speedup_map.csv (rep 1) plus any
 speedup_map_rep<k>.csv beside it (reps 2..); a cell shows median +- sample std
 over the reps present (a single run shows just the value). Missing cells print as --.
-Emits table_overall_depth.tex (do not hand-edit) and a plain-text preview.
+Emits table_train_time_by_depth.tex (do not hand-edit) and a plain-text preview.
 --gbt: same layout for the SPO-GBT arms (300 trees, depth 6, min_examples 5; no dynamic
-arm, user directive 2026-09-24) -> table_overall_gbt_d6.tex, label tab:overall-gbt.
+arm, user directive 2026-09-24) -> table_train_time_gbt_depth6.tex, label tab:train-time-gbt-depth6.
 Without --gbt, the GBT table is also appended inside the last SPO-RF float, so Table 5 shares
-Table 4 Part 2's page (2026-09-25); main.tex no longer inputs table_overall_gbt_d6.tex.
+Table 4 Part 2's page (2026-09-25); main.tex no longer inputs table_train_time_gbt_depth6.tex.
 """
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ DEPTH_LABEL = {-1: "Full depth (purity)"}
 DEPTH_PAGES = [[6, 10, 16], [24, -1]]
 # Mirrors the author's Overleaf caption (2026-09-25); edit here, not on Overleaf.
 CAPTION = "End-to-end SPO-RF training time (s) by tree depth."
-LABEL = "tab:overall"
+LABEL = "tab:train-time-by-depth"
 
 # --gbt: SPO-GBT arms, one depth section. Dynamic arms were not run (directive 2026-09-24).
 GBT_ARMS = [
@@ -94,7 +94,7 @@ GBT_SPEEDUP_REF = {"spo_gbt_rand_vec": ["spo_gbt_exact_hwy"],
 GBT_DEPTHS = [6]
 GBT_DEPTH_PAGES = [[6]]
 GBT_CAPTION = "End-to-end SPO-GBT training time (s) at depth 6."
-GBT_LABEL = "tab:overall-gbt"
+GBT_LABEL = "tab:train-time-gbt-depth6"
 
 
 def use_gbt() -> None:
@@ -208,7 +208,7 @@ def emit_text(df: pd.DataFrame) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=None, help="default: paper/spaa27/table_overall_{depth,gbt_d6}.tex")
+    ap.add_argument("--out", default=None, help="default: paper/spaa27/tables/table_train_time_{by_depth,gbt_depth6}.tex")
     ap.add_argument("--text-only", action="store_true")
     ap.add_argument("--reps", type=int, default=0, help="use only reps 1..N (0 = all)")
     ap.add_argument("--gbt", action="store_true", help="SPO-GBT arms, depth 6 only")
@@ -216,7 +216,7 @@ def main() -> None:
     if a.gbt:
         use_gbt()
     if a.out is None:
-        a.out = str(ROOT / "paper" / "spaa27" / ("table_overall_gbt_d6.tex" if a.gbt else "table_overall_depth.tex"))
+        a.out = str(ROOT / "paper" / "spaa27" / "tables" / ("table_train_time_gbt_depth6.tex" if a.gbt else "table_train_time_by_depth.tex"))
     df, nrep = load_cells(a.reps, "gbt" if a.gbt else "rf")
     print(emit_text(df))
     if not a.text_only:

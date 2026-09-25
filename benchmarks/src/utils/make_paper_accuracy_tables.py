@@ -6,8 +6,8 @@ Inputs (produced by accuracy_stats.py):
   <stats_dir>/per_dataset_SPO-{RF,GBT}_accuracy.csv
 
 Outputs (written to <stats_dir>/paper/):
-  table_main_summary_accuracy.tex -- compact aggregate table (main text)
-  table_per_dataset_accuracy.tex  -- 36-dataset x 2-learner x 3-arm table (appendix)
+  table_accuracy_hist_vs_exact_summary.tex -- compact aggregate table (main text)
+  table_accuracy_hist_vs_exact_per_dataset.tex  -- 36-dataset x 2-learner x 3-arm table (appendix)
   preview.md                      -- markdown rendering of both
 
 Usage: make_paper_accuracy_tables.py [stats_dir]
@@ -223,8 +223,8 @@ def main():
     out_dir = os.path.join(stats_dir, "paper")
     os.makedirs(out_dir, exist_ok=True)
     for name, content in [
-            ("table_main_summary_accuracy.tex", make_summary(agg)),
-            ("table_per_dataset_accuracy.tex", make_per_dataset(frames)),
+            ("table_accuracy_hist_vs_exact_summary.tex", make_summary(agg)),
+            ("table_accuracy_hist_vs_exact_per_dataset.tex", make_per_dataset(frames)),
             ("preview.md", md_preview(agg, frames))]:
         with open(os.path.join(out_dir, name), "w") as f:
             f.write(content)

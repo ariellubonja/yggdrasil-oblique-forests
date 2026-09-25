@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""fig:dynamic-breakeven -- SPO-RF train time relative to all-exact vs the dynamic switch threshold.
+"""fig:threshold-sensitivity -- SPO-RF train time relative to all-exact vs the dynamic switch threshold.
 
 y = T(threshold) / T(all nodes exact, Highway VQSort), so y < 1 is where Dynamic beats exact and
 each curve's minimum is the breakeven. Main figure = AVX2 64-bin vs AVX-512 256-bin on the two
@@ -49,7 +49,7 @@ DATASETS = [  # (sweep key, legend, color hex, mark)
 PANELS = {
     # Main text: the two datasets swept under both vectorized binners, common thresholds only.
     "isa": {
-        "out": "dynamic_breakeven.tex",
+        "out": "threshold_sensitivity_higgs_trunk.tex",
         "series": [  # (glob, line style, legend)
             ("dynamic_threshold_sweep_hwysort_avx512_random256_thr*.csv", "solid", "256 bins, AVX-512"),
             ("dynamic_threshold_sweep_hwysort_vectorized_random_3runs_2datasets.csv", "dashed", "64 bins, AVX2"),
@@ -66,7 +66,7 @@ PANELS = {
     # Every natural dataset, both vectorized binners, from the 2026-09-22/23 sweeps
     # (commit cc1277fe; 26-point ladder 100..10000, 1 run), linear axis. Trunks hidden, not deleted.
     "all": {
-        "out": "dynamic_breakeven_all.tex",
+        "out": "threshold_sensitivity_linear.tex",
         "series": [
             ("dynamic_threshold_sweep_natural_*_avx512_256.csv", "solid", "256 bins, AVX-512"),
             ("dynamic_threshold_sweep_natural_*_avx2_64.csv", "dashed", "64 bins, AVX2"),
@@ -77,10 +77,12 @@ PANELS = {
                     "epsilon_normalized_train": "FBBC05", "youtube8m_video_train": "34A853"},
         "marks": False, "dash": "dash pattern=on 2pt off 1.5pt",
         "xmode": "normal", "xmin": 0, "xmax": 10300, "xtick": "{0,2000,4000,6000,8000,10000}",
-        "extra_axis": "scaled x ticks=false, ", "band": True, "mark_min": False,
-        "ref_label": None, "grid": False, "ylabel": "Train Time over Exact", "xlabel": "Dynamic Switch Threshold",
-        # Darker band for the AVX2 minima: fixed 200..400 (user choice 2026-09-23; computed argmin range is 300..500).
-        "band_dashed": (200, 400),
+        "extra_axis": "scaled x ticks=false, ", "band": True, "mark_min": True, "min_mark": "x", "min_color": "black",
+        # y = speedup over all-exact (T_exact / T); the X marks each curve's best threshold.
+        "speedup": True,
+        "ref_label": None, "grid": False, "ylabel": "Speedup over Exact", "xlabel": "Dynamic Switch Threshold",
+        # Darker band = computed range of the AVX2 best thresholds (the X's; user choice 2026-09-25).
+        "band_dashed": True,
         # Legend built after the plots, row-wise over 3 columns: dataset keys or "series:<style>".
         "legend_order": ["HIGGS_with_header", "SUSY_with_header", "series:dashed",
                          "epsilon_normalized_train", "youtube8m_video_train", "series:solid"],
@@ -89,7 +91,7 @@ PANELS = {
                          "series:dashed": "AVX2", "series:solid": "AVX-512"},
     },
     "scalar": {
-        "out": "dynamic_breakeven_scalar.tex",
+        "out": "threshold_sensitivity_scalar.tex",
         "series": [
             ("dynamic_threshold_sweep_hwysort_scalar_thr*.csv", "solid", "64 bins, scalar"),
         ],
@@ -97,9 +99,12 @@ PANELS = {
         "ref_label": "anchor=north west] at (axis cs:800,1)",
     },
 }
-# Zoom of "all" on the breakeven region: thresholds 0..3000, y capped at 0.95 (reference line off-range).
-PANELS["all_zoom"] = dict(PANELS["all"], out="dynamic_breakeven_all_zoom.tex", xmin=0, xmax=3000,
-                          xtick="{0,500,1000,1500,2000,2500,3000}", ymax=0.95)
+# Zoom of "all" on the breakeven region: thresholds 0..3000, y floored at 1.05 (reference line off-range).
+PANELS["all_zoom"] = dict(PANELS["all"], out="threshold_sensitivity_zoom.tex", xmin=0, xmax=3000,
+                          xtick="{0,500,1000,1500,2000,2500,3000}", ymin=1.05)
+# Same data, full 100..10000 ladder on a log x-axis.
+PANELS["all_log"] = dict(PANELS["all"], out="threshold_sensitivity_log.tex", xmode="log", xmin=100, xmax=10000,
+                         xtick="{100,200,500,1000,2000,5000,10000}", extra_axis="", ymin=1.05)
 
 
 def load_sweep(pattern: str) -> dict[str, dict[int, float]]:
@@ -155,11 +160,12 @@ def emit(panel: dict, refs: dict[str, float]) -> tuple[str, list[str]]:
             if panel.get("common_thresholds"):
                 for other, _ in series:
                     thr &= set(other.get(key, {}))
-            pts = sorted((t, v / refs[key]) for t, v in data[key].items() if t in thr)
+            sp = panel.get("speedup", False)
+            pts = sorted((t, refs[key] / v if sp else v / refs[key]) for t, v in data[key].items() if t in thr)
             ys += [y for _, y in pts]
-            tmin, ymin = min(pts, key=lambda p: p[1])
-            flat = [t for t, y in pts if y <= ymin * 1.01]
-            notes.append(f"{name:24s} {style:6s} n={len(pts):2d} min {ymin:.3f} at thr {tmin}"
+            tmin, ymin = (max if sp else min)(pts, key=lambda p: p[1])
+            flat = [t for t, y in pts if (y >= ymin / 1.01 if sp else y <= ymin * 1.01)]
+            notes.append(f"{name:24s} {style:6s} n={len(pts):2d} best {ymin:.3f} at thr {tmin}"
                          f" (within 1%: {min(flat)}..{max(flat)})")
             if style == "solid":
                 mins.append((tmin, ymin))
@@ -178,11 +184,12 @@ def emit(panel: dict, refs: dict[str, float]) -> tuple[str, list[str]]:
                 plots.append(f"\\addlegendentry{{{name}{', ' + legend_name if (style, key) in colors else ''}}}")
                 legend_ds.add(i)
             if panel["mark_min"]:
-                plots.append(f"\\addplot[color={col}, mark={mark}, mark size=2.6pt, only marks, forget plot]"
+                mm, mc = panel.get("min_mark", mark), panel.get("min_color", col)
+                plots.append(f"\\addplot[color={mc}, mark={mm}, mark size=2.6pt, only marks, forget plot]"
                              f" coordinates {{({tmin},{ymin:.4f})}};")
-    ylo, yhi = min(ys) - 0.02, max(max(ys), 1.0) + 0.02
+    ylo, yhi = min(min(ys), 1.0) - 0.02, max(max(ys), 1.0) + 0.02
     ylo, yhi = round(ylo, 2), round(yhi, 2)
-    yhi = panel.get("ymax", yhi)
+    ylo, yhi = panel.get("ymin", ylo), panel.get("ymax", yhi)
     band_lo, band_hi = (min(t for t, _ in mins), max(t for t, _ in mins)) if mins else (0, 0)
     L += [
         "\\begin{tikzpicture}",

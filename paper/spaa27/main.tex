@@ -499,16 +499,16 @@ We also provide a 64 bin, 8-bit wide AVX-2 implementation. Figure~\ref{fig:vecto
 
 Our study revealed performance concerns when training SO-YDF trees to purity. When the number of active samples is small, histogram construction dominates runtime. There are fixed costs to set up a histogram and these are incurred at each node. Referring back to Figure \ref{fig:dynamic-motivation}, histograms operate relatively much faster at the top levels of the tree when the number of samples are large. These benefits endure through the first 12-13 levels of the tree on a 1M-row balanced dataset. Below this level, there are many active nodes, each of which requires a histogram. Here, sorting few samples can be much faster than building a histogram. %Implementations of {\sf std::sort()} have many optimizations to sort few elements, including unguarded insertions.
 
-The  breakeven point depends on the number of active samples and the  hardware. Tree depth is just our proxy for visualizing the total runtime. Figure \ref{fig:dynamic-breakeven} show the relative cost of exact splits versus histograms on server CPU, showing a breakeven point of just over 1200 points. 
+The  breakeven point depends on the number of active samples and the  hardware. Tree depth is just our proxy for visualizing the total runtime. Figure \ref{fig:threshold-sensitivity} show the relative cost of exact splits versus histograms on server CPU, showing a breakeven point of just over 1200 points. 
 % We also include the GPU results that show when it is beneficial to offload a computation to a GPU when available. 
 The break-even point is determined by a microbenchmark that runs at the start of training. This takes less than 100ms to perform a binary search over reasonable parameters.
 
 % Our results will show that perforamnce is robust over a range on this parameter, i.e. not hard to tune.  
 
-During tree-construction, we dynamically choose between a histogram and sorting on a node-by-node basis. Two nodes at the same tree depth may use different techniques (Figure \ref{fig:levels}). From a performance standpoint, this solves the problem with creating deep trees.  We avoid the overhead of sorting at high cardinality nodes and of histograms for low cardinality nodes. There is only a small performance penalty for training to purity.  Nodes beyond depth 20 use less 5\% of the runtime (Figure \ref{fig:dynamic-breakeven}).
+During tree-construction, we dynamically choose between a histogram and sorting on a node-by-node basis. Two nodes at the same tree depth may use different techniques (Figure \ref{fig:levels}). From a performance standpoint, this solves the problem with creating deep trees.  We avoid the overhead of sorting at high cardinality nodes and of histograms for low cardinality nodes. There is only a small performance penalty for training to purity.  Nodes beyond depth 20 use less 5\% of the runtime (Figure \ref{fig:threshold-sensitivity}).
 
 
- %The exact breakeven point depends on the functions being compared and the underlying hardware\footnote{The exact breakeven point depends on the underlying hardware. We provide code to find this breakeven point. In this test,  64 bin histograms were used.}. We experiment to find the inflection point (Figure \ref{fig:dynamic-breakeven}), revealing it to be $\sim 350$ for Random Histograms and $\sim 200$ for Vectorized Random histograms, due to the latter being faster.
+ %The exact breakeven point depends on the functions being compared and the underlying hardware\footnote{The exact breakeven point depends on the underlying hardware. We provide code to find this breakeven point. In this test,  64 bin histograms were used.}. We experiment to find the inflection point (Figure \ref{fig:threshold-sensitivity}), revealing it to be $\sim 350$ for Random Histograms and $\sim 200$ for Vectorized Random histograms, due to the latter being faster.
 
 Dynamic histograms produce different trees and potentially different learning outcomes. The resulting forests are most similar to those constructed by histograms. The high levels of the trees are the same. They differ only in the low cardinality nodes when exact splitting chooses a boundary that separates elements that are in the same bucket. The accuracy of all methods; histograms, exact, and dynamic, are statistically indistinguishable.
 
@@ -560,7 +560,7 @@ Examining speedup reveals that SO-YDF training is compute bound on the CPU. Figu
 
  Experiments were run on a AWS m7i.metal-24xl instance with 48 physical cores 384 GiB of memory running Ubuntu 24.04. YDF is compiled with ICX version 2025.2.1 with AVX-512 support. Experiments run a thread pool of 48 workers threads and train 240 trees - 5 trees per worker. Results are a median of 3 trials.
 
-Our core result shows that dynamic histograms with vectorization consistently reduce end-to-end runtime relative to the SO-YDF exact baseline and that the advantage grows with the number of samples (Table \ref{tab:overall}). We present the same data normalized to the performance of SO-YDF to show the percentage improvement (Figure \ref{fig:overall}). We isolate the performance benefit of dynamic histograms alone from dynamic with vectorization. When training full-depth trees on all 48 cores, dynamic histograms deliver a 20-30\% reduction in runtime versus YDF-SO exact and vectorization adds another 20-30\%. The overall improvement is more than a factor of 2 on the larger datasets (Higgs and SUSY). We also include results comparing with axis-aligned random forests to show that sparse oblique training can be completed as fast or faster. We do not show histograms methods for RF or SO because they are 2-4 times slower than exact when training to purity.
+Our core result shows that dynamic histograms with vectorization consistently reduce end-to-end runtime relative to the SO-YDF exact baseline and that the advantage grows with the number of samples (Table \ref{tab:train-time-by-depth}). We present the same data normalized to the performance of SO-YDF to show the percentage improvement (Figure \ref{fig:overall}). We isolate the performance benefit of dynamic histograms alone from dynamic with vectorization. When training full-depth trees on all 48 cores, dynamic histograms deliver a 20-30\% reduction in runtime versus YDF-SO exact and vectorization adds another 20-30\%. The overall improvement is more than a factor of 2 on the larger datasets (Higgs and SUSY). We also include results comparing with axis-aligned random forests to show that sparse oblique training can be completed as fast or faster. We do not show histograms methods for RF or SO because they are 2-4 times slower than exact when training to purity.
 
 AVX-512 Vectorized is slower not because of the vector instructions taking more time in AVX-512, but because there are non-optimizable startup and scanning costs that scale with the number of bins. These are the RNG calls to generate random bins and scanning for the best threshold along more bins. For this reason, we introduced Dynamic.
 
@@ -583,14 +583,14 @@ AVX-512 Vectorized is slower not because of the vector instructions taking more 
 \end{figure*}
 
 \subsection{Dynamic Threshold Sensitivity Study}
-\label{app:dynamic-breakeven-all}
+\label{app:threshold-sensitivity}
 
 \begin{figure}
     \centering
-    \input{figures/results/dynamic_breakeven_all_zoom}
+    \input{figures/results/threshold_sensitivity_zoom}
     \caption{Full-depth train speedup over Exact by a linesearch over Dynamic Thresholds. Above the threshold, Random-Vectorized is used, and below, Exact. Shaded bands: the range of the AVX-512 minima (light, 800--1200 rows) and of the AVX2 minima (dark, 200--400 rows). \TODO{Add back log fig. drop fig to 10000. Add X for min point}}
     \Description{Two line charts of training time relative to all-exact against the switch threshold for four datasets and two vectorized binners, with a reference line at 1 and two shaded bands marking the AVX-512 and AVX2 minima ranges; the left panel is restricted to thresholds below 2000 and a y-axis capped at 0.95.}
-    \label{fig:placeholder}
+    \label{fig:threshold-sensitivity}
 \end{figure}
 
 \subsection{\TODO{Roofline} Pre-Vec v. Vec (std::sort \& Random v. HWY \& Vec Random}
@@ -598,21 +598,21 @@ AVX-512 Vectorized is slower not because of the vector instructions taking more 
 AL add. Optionally add Roofline of May 2025
 
 
-% tab:spo-vs-gbt-timing is input from spo_vs_gbt_results.tex, next to the
+% tab:train-time-vs-libraries is input from comparison_with_libraries.tex, next to the
 % Training time discussion; these two are accuracy only.
 % Dropped 2026-09-09 (user request): mean accuracy/AUC + mean-rank suite table.
-%\input{tables/table_spo_vs_gbt_summary_both}
-% \input{tables/table_spo_vs_gbt_huge_both}
+%\input{tables/table_auc_vs_libraries_summary}
+% \input{tables/table_auc_vs_libraries_large_datasets}
 
 % \FloatBarrier
 \section{Accuracy}
 
-We quantify the effect of dynamic histograms on the accuracy of classification tasks across our performance datasets and a selection of smaller OpenML datasets (Table \ref{tab:accuracy}). All methods were given the same number of trees.
+We quantify the effect of dynamic histograms on the accuracy of classification tasks across our performance datasets and a selection of smaller OpenML datasets (Table \ref{tab:hist-vs-exact-summary}). All methods were given the same number of trees.
 The accuracy of dynamic histograms tracks histograms in SO-YDF and in most cases performance is indistinguishable. The differences between dynamic and histograms is on the same order as the variance between exact and histograms.
 
-\input{spo_vs_gbt_results}
+\input{comparison_with_libraries}
 
-\input{tables/table_main_summary_accuracy}
+\input{tables/table_accuracy_hist_vs_exact_summary}
 
 % \FloatBarrier
 
@@ -630,9 +630,9 @@ We present vectorized adaptive histograms to accelerate sparse oblique random fo
 
 \subsection{Extensive Runtime Results}
 % Generated by benchmarks/evaluation/spo_vs_gbt/make_overall_depth_table.py -- regenerate, don't edit.
-\input{tables/table_overall_depth}
+\input{tables/table_train_time_by_depth}
 % SPO-GBT arms at depth 6 (same generator, --gbt) -- regenerate, don't edit.
-\input{tables/table_overall_gbt_d6}
+\input{tables/table_train_time_gbt_depth6}
 % Flush Table 4 (both parts) and Table 5 onto consecutive pages.
 \clearpage
 
@@ -641,7 +641,7 @@ We present vectorized adaptive histograms to accelerate sparse oblique random fo
 % Left out GBT Dynamic on purpose - no use of Dynamic in GBT
 \subsection{Extensive Accuracy Results}
 
-\input{tables/table_spo_vs_gbt_per_dataset_both}
+\input{tables/table_auc_vs_libraries_per_dataset}
 
 \subsection{Datasets Used}
 \label{tab:full-datasets}
@@ -763,10 +763,10 @@ weather & reg & 423,795 & 100 \\
 \subsection{Hyperparameters Used}
 \label{app:parameters}
 
-All timing experiments run on an AWS m7i.metal-24xl instance (Intel Xeon Platinum 8488C, 48 physical cores, 384\,GiB) with 48 threads, one tree per thread, and a single seed. Random forests train 240 trees to purity (unlimited depth, \code{min\_examples}=1) with bootstrap sampling with replacement and a bag size equal to the number of rows; gradient-boosted trees train 300 trees at depth 6. Each node samples $\lceil \sqrt{F} \rceil$ projections (at most 1000) with an expected 1.5 non-zero features per projection. Exact splits use Highway VQSort. Random histograms use 64 bins with the AVX2 and scalar binners and 256 bins with the AVX-512 binner; the dynamic switch threshold is 250 for the vectorized binners and 4600 for the scalar binner. Table~\ref{tab:overall} and Figures~\ref{fig:t4-speedup-exact}--\ref{fig:t4-speedup-rand256} are single runs at depths 6, 10, 16, 24 and purity; Figure~\ref{fig:dyn-vs-size} is a single run to purity. In Figures~\ref{fig:dynamic-breakeven} and \ref{fig:dynamic-breakeven-all} each AVX-512 point is one run and each AVX2 point the median of three, normalized to exact splitting at every node. YDF defaults apply where not stated.
+All timing experiments run on an AWS m7i.metal-24xl instance (Intel Xeon Platinum 8488C, 48 physical cores, 384\,GiB) with 48 threads, one tree per thread, and a single seed. Random forests train 240 trees to purity (unlimited depth, \code{min\_examples}=1) with bootstrap sampling with replacement and a bag size equal to the number of rows; gradient-boosted trees train 300 trees at depth 6. Each node samples $\lceil \sqrt{F} \rceil$ projections (at most 1000) with an expected 1.5 non-zero features per projection. Exact splits use Highway VQSort. Random histograms use 64 bins with the AVX2 and scalar binners and 256 bins with the AVX-512 binner; the dynamic switch threshold is 250 for the vectorized binners and 4600 for the scalar binner. Table~\ref{tab:train-time-by-depth} and Figures~\ref{fig:speedup-by-depth-vs-exact}--\ref{fig:speedup-by-depth-vs-random256} are single runs at depths 6, 10, 16, 24 and purity; Figure~\ref{fig:speedup-vs-size} is a single run to purity. In Figures~\ref{fig:threshold-sensitivity} and \ref{fig:threshold-sensitivity} each AVX-512 point is one run and each AVX2 point the median of three, normalized to exact splitting at every node. YDF defaults apply where not stated.
 
 % \subsection{Dynamic Un-Vectorized}
-% \label{app:dynamic-breakeven-scalar}
+% \label{app:threshold-sensitivity-scalar}
 
 % With the advent of HWY, it no longer makes sense to run Dynamic individually: see fig. Scalar-Random only is faster than highway on 100k+-row nodes
 % \includegraphics[width=\linewidth]{figures/intro/dynamic/HIGGS - not much improvement over HWY/per_depth_methods_fig1.pdf}
@@ -788,10 +788,10 @@ All timing experiments run on an AWS m7i.metal-24xl instance (Intel Xeon Platinu
 % % Body generated by benchmarks/src/utils/make_breakeven_figure.py -- regenerate, don't edit.
 % \begin{figure}[h]
 %     \centering
-%     \input{figures/results/dynamic_breakeven_scalar}
-%     \caption{Counterpart of Figure~\ref{fig:dynamic-breakeven-all} for random histograms with 64 bins and the scalar binner: training time relative to exact splits at every node (dashed line at 1), thresholds 1100--20000, one run per point. No curve has an interior minimum within the swept range.}
+%     \input{figures/results/threshold_sensitivity_scalar}
+%     \caption{Counterpart of Figure~\ref{fig:threshold-sensitivity} for random histograms with 64 bins and the scalar binner: training time relative to exact splits at every node (dashed line at 1), thresholds 1100--20000, one run per point. No curve has an interior minimum within the swept range.}
 %     \Description{Line chart of training time relative to all-exact against the switch threshold for five datasets with the scalar binner; all curves descend toward the reference line without an interior minimum.}
-%     \label{fig:dynamic-breakeven-scalar}
+%     \label{fig:threshold-sensitivity-scalar}
 % \end{figure}
 
 % \FloatBarrier

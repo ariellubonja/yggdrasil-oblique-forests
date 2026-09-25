@@ -210,7 +210,7 @@ study lock (`flock` on `run_all.lock`) so no two trainings overlap.
   `results/speedup_map_rep<REP>.csv` with `--no-skip-existing`. Per-depth logs
   `logs/b7_<tag>[_rep<k>].log`, markers `b7_<tag>[_rep<k>]_DONE`. Wall ≫ train_s because
   trunk generation / CSV parse is redone per cell (depth 6: 5.3 h wall for 1.9 h training).
-  Table: `make_overall_depth_table.py` → `overleaf-spaa27/table_overall_depth.tex`, 17 rows
+  Table: `make_overall_depth_table.py` → `overleaf-spaa27/table_train_time_by_depth.tex`, 17 rows
   (D8-rev2 drops trunk 15k×4096 and 15k×40k), median ± sample std over the rep files present.
 - **Headline-speed rule D8-rev2 (2026-09-08):** `analyze.py` counts a dataset for runtime
   only if rows > 100,000 OR features > 100,000 (`MIN_ROWS/MIN_COLS_FOR_HEADLINE_SPEED`).

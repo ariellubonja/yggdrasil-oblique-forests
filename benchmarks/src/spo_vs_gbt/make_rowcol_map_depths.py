@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""fig:rowcol-map at three depths -- row x column map of the SPO-RF speedup of
+"""fig:speedup-heatmap at three depths -- row x column map of the SPO-RF speedup of
 Dyn-Vec (AVX2, 64 bins, threshold 250) over Exact (Highway VQSort), one panel
 each for max_depth 6, 16 and unlimited (purity). 240 trees, 48 threads, m7i.
 
@@ -217,7 +217,7 @@ def main() -> None:
     ap.add_argument("--no_paper_copy", action="store_true")
     ap.add_argument("--cmap", default=CMAP, help="matplotlib colormap name")
     ap.add_argument("--name", default="fig_rowcol_map_depths", help="output basename")
-    ap.add_argument("--pgf", type=Path, default=PAPER_FIG / "rowcol_map_depths.tex",
+    ap.add_argument("--pgf", type=Path, default=PAPER_FIG / "speedup_heatmap_rows_features.tex",
                     help="pgfplots twin for Overleaf (text-only MCP); '' to skip")
     args = ap.parse_args()
     CMAP = args.cmap

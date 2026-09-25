@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the overall-depth-table suite (paper table `table_overall_depth.tex`) on ONE new CSV dataset.
+# Run the overall-depth-table suite (paper table `table_train_time_by_depth.tex`) on ONE new CSV dataset.
 #
 #   bash benchmarks/src/spo_vs_gbt/run_b7_dataset.sh <NAME> <train.csv> <label_col>
 #

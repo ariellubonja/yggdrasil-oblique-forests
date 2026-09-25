@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Speedup figures for tab:overall (Table 4): one figure per baseline arm.
+"""Speedup figures for tab:train-time-by-depth (Table 4): one figure per baseline arm.
 
-x = dataset (the 17 tab:overall rows, in table order), y = speedup = T(baseline)/T(arm),
+x = dataset (the 17 tab:train-time-by-depth rows, in table order), y = speedup = T(baseline)/T(arm),
 one point per depth (6, 10, 16, 24, full) for each of the three vectorized arms; the five
 points of one arm are joined by a thin line so the depth trend is visible. Baselines:
 Exact (Highway VQSort), Random histogram scalar 64 bins, Random histogram scalar 256 bins.
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 RES = ROOT / "benchmarks" / "results" / "runtime" / "speedup_map_by_dataset"
 OUT = ROOT / "paper" / "spaa27" / "figures" / "results"
 
-DATASETS = [  # (key in speedup_map.csv, tick label) -- tab:overall row order
+DATASETS = [  # (key in speedup_map.csv, tick label) -- tab:train-time-by-depth row order
     ("higgs_10500000", "HIGGS 10.5M$\\times$28"),
     ("SUSY", "SUSY 4.5M$\\times$18"),
     ("EPSILON", "Epsilon 400k$\\times$2000"),
@@ -67,17 +67,17 @@ def polygon_mark(name: str, sides: int) -> str:
 MARK_DEFS = [polygon_mark("heptagon*", 7), polygon_mark("octagon*", 8)]
 
 FIGS = [  # (baseline arm, out file, label, y-axis label, caption)
-    ("spo_rf_exact_hwy", "table4_speedup_vs_exact_hwy.tex", "fig:t4-speedup-exact",
+    ("spo_rf_exact_hwy", "speedup_by_depth_vs_exact.tex", "fig:speedup-by-depth-vs-exact",
      "Speedup over Exact (HWY)",
      "Speedup over exact splitting (Highway VQSort) per dataset and tree depth, the cells of "
-     "Table~\\ref{tab:overall}; marks left to right = depths 6, 10, 16, 24, purity; dashed line = "
+     "Table~\\ref{tab:train-time-by-depth}; marks left to right = depths 6, 10, 16, 24, purity; dashed line = "
      "parity; %s."),
-    ("spo_rf_rand_scalar", "table4_speedup_vs_rand64.tex", "fig:t4-speedup-rand64",
+    ("spo_rf_rand_scalar", "speedup_by_depth_vs_random64.tex", "fig:speedup-by-depth-vs-random64",
      "Speedup over Random 64, scalar",
-     "Speedup over random histograms, 64 bins, scalar binner; layout as Figure~\\ref{fig:t4-speedup-exact}."),
-    ("spo_rf_rand256_scalar", "table4_speedup_vs_rand256.tex", "fig:t4-speedup-rand256",
+     "Speedup over random histograms, 64 bins, scalar binner; layout as Figure~\\ref{fig:speedup-by-depth-vs-exact}."),
+    ("spo_rf_rand256_scalar", "speedup_by_depth_vs_random256.tex", "fig:speedup-by-depth-vs-random256",
      "Speedup over Random 256, scalar",
-     "Speedup over random histograms, 256 bins, scalar binner; layout as Figure~\\ref{fig:t4-speedup-exact}."),
+     "Speedup over random histograms, 256 bins, scalar binner; layout as Figure~\\ref{fig:speedup-by-depth-vs-exact}."),
 ]
 
 

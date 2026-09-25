@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copy analyze.py outputs into the Overleaf snapshot under the names/labels that
-# spo_vs_gbt_results.tex and main.tex reference. Usage:
+# comparison_with_libraries.tex and main.tex reference. Usage:
 #   bash export_to_paper.sh <analysis_dir> [<overleaf_snapshot_dir>]
 set -euo pipefail
 A="${1:?analysis dir (output of analyze.py --out-dir)}"
@@ -10,18 +10,17 @@ mkdir -p "$F" "$P/tables"
 
 # tables: rename file + label/ref (never hand-edit the generated bodies). The
 # tables cross-reference each other, so rewrite \ref{} as well as \label{}.
-RELABEL='s/{tab:main-summary-all}/{tab:spo-vs-gbt-summary}/g;
-         s/{tab:huge-datasets}/{tab:spo-vs-gbt-huge}/g;
-         s/{tab:timing}/{tab:spo-vs-gbt-timing}/g;
-         s/{tab:per-dataset-appendix/{tab:spo-vs-gbt-per-dataset/g'
+RELABEL='s/{tab:main-summary-all}/{tab:auc-vs-libraries-summary}/g;
+         s/{tab:huge-datasets}/{tab:auc-vs-libraries-large}/g;
+         s/{tab:per-dataset-appendix/{tab:auc-vs-libraries-per-dataset/g'
 sed "$RELABEL" "$A/tables/table_main_summary_all_datasets_both.tex" \
-    > "$P/tables/table_spo_vs_gbt_summary_both.tex"
+    > "$P/tables/table_auc_vs_libraries_summary.tex"
 sed "$RELABEL" "$A/tables/table_huge_datasets_both.tex" \
-    > "$P/tables/table_spo_vs_gbt_huge_both.tex"
+    > "$P/tables/table_auc_vs_libraries_large_datasets.tex"
 sed "$RELABEL" "$A/tables/table_timing_both.tex" \
-    > "$P/tables/table_spo_vs_gbt_timing_both.tex"
+    > "$P/tables/table_train_time_vs_libraries.tex"
 sed "$RELABEL" "$A/tables/table_per_dataset_appendix_both.tex" \
-    > "$P/tables/table_spo_vs_gbt_per_dataset_both.tex"
+    > "$P/tables/table_auc_vs_libraries_per_dataset.tex"
 
 # figures
 declare -A MAP=(
