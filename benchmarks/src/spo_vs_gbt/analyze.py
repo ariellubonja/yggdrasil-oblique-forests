@@ -1993,7 +1993,8 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
                 + [" & ".join(_spread(c, g_fill_cell)) + " \\\\" for c in g_rows])
         labels = "".join(f"\\label{{{lb}}}\n" for lb in rf_labels + g_labels if lb)
         caption = (f"RF (top) and GBT (bottom) {mk['desc']} on various datasets. "
-                   f"{mk['cells_note']} Bold: best per row.{mk['note']}")
+                   f"{mk['cells_note']} Bold: best per row.{mk['note']}"
+                   " XGBoost, LightGBM, CatBoost used with default parameters.")  # Overleaf wording
         out.insert(1, "\\begin{table*}[p]\n\\centering\n\\scriptsize\n\\setlength{\\tabcolsep}{2pt}\n"
                    f"\\caption{{{caption}}}\n\\label{{tab:per-dataset-appendix-{key}}}\n{labels}"
                    f"\\begin{{tabular}}{{l{'r' * len(rf_arms)}}}\n\\toprule\n"
