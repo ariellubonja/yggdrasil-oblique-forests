@@ -1833,15 +1833,22 @@ _PIVOT_RF_DROPPED = {"spo_rf_exact_stdsort", "spo_rf_dyn_scalar"}  # dyn_scalar:
 _PIVOT_HEAD_WIDTH = "1.0cm"
 # GBT accuracy table shows the pure random-histogram arms, no Dynamic (user, 2026-09-25).
 _PIVOT_GBT_DROPPED = {"spo_gbt_dyn_vec", "spo_gbt_dyn256_vec"}
-_PIVOT_GBT_LABELS = {"spo_gbt_rand_vec": "SPO-GBT AVX-2 R. Hist. (64 bins, ours)",
+_PIVOT_GBT_LABELS = {"spo_gbt_rand_scalar": "SPO-GBT Random Hist. (64 bins)",
+                     "spo_gbt_rand256_scalar": "SPO-GBT Random Hist. (256 bins)",
+                     "spo_gbt_rand_vec": "SPO-GBT AVX-2 R. Hist. (64 bins, ours)",
                      "spo_gbt_rand256_vec": "SPO-GBT AVX-512 R. Hist. (256 bins, ours)",
                      # Suite runs (2026-09-04) used library-default bins (no PY_HIST_BINS yet).
                      "xgboost": "XGBoost (256 bins)", "lightgbm": "LightGBM (255 bins)",
                      "catboost": "CatBoost (254 bins)"}
+# Scalar-binner GBT arms (arms.py ARMS_GBT_HIST, outside ARM_ORDER): shown in the
+# accuracy pivot only, in the same column order as their RF counterparts.
+_PIVOT_GBT_EXTRA = ["spo_gbt_rand_scalar", "spo_gbt_rand256_scalar"]
 # Metrics whose RF and GBT tables share one float and caption (user, 2026-09-25).
 _PIVOT_MERGED = {"auc"}
 # GBT arm -> the RF column it sits under in a merged table.
 _PIVOT_GBT_ALIGN = {"spo_gbt_exact_hwy": "spo_rf_exact_hwy", "spo_gbt_rand_vec": "spo_rf_rand_vec",
+                    "spo_gbt_rand_scalar": "spo_rf_rand_scalar",
+                    "spo_gbt_rand256_scalar": "spo_rf_rand256_scalar",
                     "spo_gbt_rand256_vec": "spo_rf_rand256_vec", "aa_gbt_exact": "aa_rf_exact",
                     "xgboost": "xgboost_rf", "lightgbm": "lightgbm_rf", "catboost": "catboost_rf"}
 _PIVOT_OVERLEAF_EXTRA_LABELS = {("rf", "auc"): "tab:accuracy-rf", ("gbt", "auc"): "tab:accuracy-gbt"}
@@ -1851,8 +1858,10 @@ _PIVOT_GBT_STAR_FOOTNOTE = (
     "$^*$ Dynamic methods only benefit trees if they're trained deeper than the GBTs' depth 6. "
     "Benefit starts to show at depth 12-16, depending on dataset. As such, they've been "
     "excluded from the GBT results.")
-# Columns shown with em dashes: no run exists (user, 2026-09-25).
-_PIVOT_NO_RUN = {"spo_rf_rand256_scalar"}
+# Columns shown with em dashes: no run exists. Empty since 2026-09-25: the three
+# scalar random-histogram arms (spo_rf_rand256_scalar, spo_gbt_rand_scalar,
+# spo_gbt_rand256_scalar) were run on the suite by run_scalar_hist.sh.
+_PIVOT_NO_RUN: set[str] = set()
 _PIVOT_RF_LABELS = {**_TIMING_TABLE_LABELS, "spo_rf_dyn_scalar": "SPO-RF Dyn R. Hist. (64 bins)",
                     "spo_rf_rand256_scalar": "SPO-RF Random Hist. (256 bins)",
                     "catboost_rf": "CatBoost RF mode", "lightgbm_rf": "LightGBM RF mode (255 bins)"}
@@ -1889,6 +1898,8 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
     out = [hdr]
     merged: dict[str, list] = {}
     gbt_arms = [a for a in GBT_ARMS if a not in _PIVOT_GBT_DROPPED]
+    for i, a in enumerate(_PIVOT_GBT_EXTRA):
+        gbt_arms.insert(gbt_arms.index("spo_gbt_exact_hwy") + 1 + i, a)
     for fam, arms in (("rf", rf_arms), ("gbt", gbt_arms)):
         labels = _PIVOT_RF_LABELS if fam == "rf" else _PIVOT_GBT_LABELS
         marks = _PIVOT_RF_MARK if fam == "rf" else {}
