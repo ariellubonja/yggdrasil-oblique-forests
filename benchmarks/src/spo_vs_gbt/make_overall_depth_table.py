@@ -98,7 +98,8 @@ GBT_CAPTION = "End-to-end SPO-GBT training time (s) at depth 6."
 GBT_LABEL = "tab:train-time-gbt-depth6"
 
 # --sort: appendix table, Exact std::sort vs Exact HWY; depths as column pairs.
-SORT_ARMS = [("spo_rf_exact_stdsort", "std::sort"), ("spo_rf_exact_hwy", "HWY")]
+SORT_ARMS = [("spo_rf_exact_stdsort", "Exact (\\texttt{std::sort})"),
+             ("spo_rf_exact_hwy", "Exact (Highway \\cite{wassenberg_vectorized_2022})")]
 SORT_CAPTION = ("End-to-end SPO-RF training time (s) of the Exact split finder with std::sort "
                 "vs.\\ Highway VQSort, by tree depth. Speedup of HWY over std::sort in parentheses.")
 SORT_LABEL = "tab:train-time-exact-sort"
@@ -209,7 +210,9 @@ def emit_sort_tex(df: pd.DataFrame) -> str:
          "        \\multirow{2}{*}{\\textbf{Dataset}} & " + " & ".join(
              f"\\multicolumn{{2}}{{c{'|' if i < len(DEPTHS) - 1 else ''}}}{{\\textbf{{{_depth_label(d)}}}}}"
              for i, d in enumerate(DEPTHS)) + " \\\\",
-         "         & " + " & ".join(f"\\scriptsize {h}" for d in DEPTHS for _, h in SORT_ARMS) + " \\\\",
+         "         & " + " & ".join(  # two-line header: "Exact" over the sort name
+             "\\scriptsize\\begin{tabular}[c]{@{}c@{}}" + h.replace(" (", "\\\\(", 1) + "\\end{tabular}"
+             for d in DEPTHS for _, h in SORT_ARMS) + " \\\\",
          "        \\hline"]
     for key, name in rows:
         cells = []
