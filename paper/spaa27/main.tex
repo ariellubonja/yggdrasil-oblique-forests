@@ -537,15 +537,9 @@ For accuracy experiments, we include data from the OpenML CC18 benchmarks~\cite{
 
 \subsection{Scalability}
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=1\linewidth]{figures/results/E2E_speedup_vs_Exact.pdf}
-    % \vspace{-15px}
-    \caption{End-to-end training time on select datasets, normalized to the performance of SO-YDF with exact splits. \TODO{Group into Exact-Rand64-Rand256 vs. Vec64-Vec256-DynVec}}
-    % \vspace{-15px}
-    \Description{End-to-end evaluation reveals the benefit of our methods - up to 35\% reduction in runtime with only Dynamic, and up to 50\% with Vectorized Dynamic. It also reveals the similarity in performance of RF Exact to SO Exact.}
-    \label{fig:overall}
-\end{figure}
+% fig:overall lives in the generated file (make_e2e_grid_figure.py); caption/label are set there.
+\input{figures/results/e2e_normalized_grid}
+\input{figures/results/e2e_normalized_depth24}
 
 Examining speedup reveals that SO-YDF training is compute bound on the CPU. Figure \ref{fig:speedup} shows near perfect scaling for vectorized dynamic histograms. This is somewhat surprising given that deep trees perform sparse memory access to feature columns. The results at 32 threads on 16 cores show no additional speedup and actually lose a little performance, likely from threads interfering in processor caches. There is no scaling when the number of threads exceed the number of CPU cores. % actually there's a small 20% benefit from hyperthreading. not included in results
 
