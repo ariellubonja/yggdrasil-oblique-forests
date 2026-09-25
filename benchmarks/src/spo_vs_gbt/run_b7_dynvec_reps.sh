@@ -29,7 +29,6 @@ done
 cd "$REPO_DIR" && git add "$RES_DIR/speedup_map_rep2.csv" "$RES_DIR/speedup_map_rep3.csv" \
   && git commit -q -m "[results] spo_rf_dyn_vec (AVX2 64-bin dynamic, threshold 250), B7 map grid, reps 2-3
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01R4q8nNbev2HUa6WD56ciQm" \
   && (git push -q origin rebased-main || (git fetch -q origin && git rebase -q origin/rebased-main && git push -q origin rebased-main))
 echo "[dynvec] $(date -u +%FT%TZ) git push exit $?" | tee -a "$L"

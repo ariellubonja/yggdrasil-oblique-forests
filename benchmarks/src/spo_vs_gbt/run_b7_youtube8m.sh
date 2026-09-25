@@ -19,7 +19,6 @@ commit_push() {
     "$SCRIPT_DIR/cells_b7_youtube8m_slow.json" "$SCRIPT_DIR/run_b7_youtube8m.sh" "$SCRIPT_DIR/arms.py" \
     && git commit -q -m "[results] $1
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01R4q8nNbev2HUa6WD56ciQm" \
     && (git push -q origin rebased-main || (git fetch -q origin && git rebase -q origin/rebased-main && git push -q origin rebased-main))
   echo "[yt8m] $(date -u +%FT%TZ) git push exit $?" | tee -a "$L"
