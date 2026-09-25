@@ -1496,12 +1496,20 @@ _TIMING_TABLE_MARK = {"xgboost_rf": "$^\\dagger$", "lightgbm_rf": "$^\\dagger$",
 _TIMING_TABLE_NO_RF_ROW = "CatBoost RF mode"
 
 
-def _best_fmt(v: float, best: float | None, fmt: str, suffix: str = "") -> str:
+def _drop_lead0(text: str) -> str:
+    # "0.9876" -> ".9876" (paper style for values in [0, 1)).
+    return re.sub(r"(?<![\d.])0\.", ".", text)
+
+
+def _best_fmt(v: float, best: float | None, fmt: str, suffix: str = "",
+              lead0: bool = True) -> str:
     """Format v; bold it when it prints identically to the column's best value
     (ties at display precision are all bolded)."""
     if v != v:
         return "--"
     text = fmt.format(v) + suffix
+    if not lead0:
+        text = _drop_lead0(text)
     if best is not None and best == best and fmt.format(v) == fmt.format(best):
         return f"\\textbf{{{text}}}"
     return text
@@ -1819,11 +1827,31 @@ _PIVOT_SUPPRESSED = {
 
 # RF pivot (paper Table 5): Table 2's labels, std::sort dropped, XGBoost RF
 # blanked and a CatBoost RF column of dashes, both daggered (2026-09-24).
-_PIVOT_RF_DROPPED = {"spo_rf_exact_stdsort"}
+_PIVOT_RF_DROPPED = {"spo_rf_exact_stdsort", "spo_rf_dyn_scalar"}  # dyn_scalar: user, 2026-09-25
 # Hand edits made in Overleaf on Tables 5/6 (pulled 2026-09-25 so regeneration keeps
 # them): a second \label per AUC table; caption wording follows the Overleaf copy.
+_PIVOT_HEAD_WIDTH = "1.0cm"
+# GBT accuracy table shows the pure random-histogram arms, no Dynamic (user, 2026-09-25).
+_PIVOT_GBT_DROPPED = {"spo_gbt_dyn_vec", "spo_gbt_dyn256_vec"}
+_PIVOT_GBT_LABELS = {"spo_gbt_rand_vec": "SPO-GBT AVX-2 R. Hist. (64 bins, ours)",
+                     "spo_gbt_rand256_vec": "SPO-GBT AVX-512 R. Hist. (256 bins, ours)"}
+# Metrics whose RF and GBT tables share one float and caption (user, 2026-09-25).
+_PIVOT_MERGED = {"auc"}
+# GBT arm -> the RF column it sits under in a merged table.
+_PIVOT_GBT_ALIGN = {"spo_gbt_exact_hwy": "spo_rf_exact_hwy", "spo_gbt_rand_vec": "spo_rf_rand_vec",
+                    "spo_gbt_rand256_vec": "spo_rf_rand256_vec", "aa_gbt_exact": "aa_rf_exact",
+                    "xgboost": "xgboost_rf", "lightgbm": "lightgbm_rf", "catboost": "catboost_rf"}
 _PIVOT_OVERLEAF_EXTRA_LABELS = {("rf", "auc"): "tab:accuracy-rf", ("gbt", "auc"): "tab:accuracy-gbt"}
+# GBT columns starred, with the footnote below (user wording, 2026-09-25).
+_PIVOT_GBT_STAR = {"spo_rf_dyn_vec", "spo_rf_dyn256_vec"}
+_PIVOT_GBT_STAR_FOOTNOTE = (
+    "$^*$ Dynamic methods only benefit trees if they're trained deeper than the GBTs' depth 6. "
+    "Benefit starts to show at depth 12-16, depending on dataset. As such, they've been "
+    "excluded from the GBT results.")
+# Columns shown with em dashes: no run exists (user, 2026-09-25).
+_PIVOT_NO_RUN = {"spo_rf_rand256_scalar"}
 _PIVOT_RF_LABELS = {**_TIMING_TABLE_LABELS, "spo_rf_dyn_scalar": "SPO-RF Dyn R. Hist. (64 bins)",
+                    "spo_rf_rand256_scalar": "SPO-RF Random Hist. (256 bins)",
                     "catboost_rf": "CatBoost RF mode"}
 _PIVOT_RF_MARK = {"xgboost_rf": "$^\\dagger$", "catboost_rf": "$^\\dagger$"}
 _PIVOT_RF_FOOTNOTE = (
@@ -1854,28 +1882,43 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
 
     rf_arms = [a for a in RF_ARMS if a not in _PIVOT_RF_DROPPED]
     rf_arms.insert(rf_arms.index("lightgbm_rf") + 1, "catboost_rf")
+    rf_arms.insert(rf_arms.index("spo_rf_rand_scalar") + 1, "spo_rf_rand256_scalar")
     out = [hdr]
-    for fam, arms, fam_name in (("rf", rf_arms, "RF family"), ("gbt", GBT_ARMS, "GBT family")):
-        labels = _PIVOT_RF_LABELS if fam == "rf" else {}
+    merged: dict[str, list] = {}
+    gbt_arms = [a for a in GBT_ARMS if a not in _PIVOT_GBT_DROPPED]
+    for fam, arms in (("rf", rf_arms), ("gbt", gbt_arms)):
+        labels = _PIVOT_RF_LABELS if fam == "rf" else _PIVOT_GBT_LABELS
         marks = _PIVOT_RF_MARK if fam == "rf" else {}
         for col, std_col, key, fmt, desc, fn in _PIVOT_METRICS:
+            # Horizontal, centred, wrapped to the cell width.
             heads = ["Dataset"] + [
-                "\\rotatebox{90}{" + _latex_escape(labels.get(m, ARM_LABELS.get(m, m)))
-                + marks.get(m, "") + "}" for m in arms]
-            lines = []
+                "\\multicolumn{1}{c}{\\parbox[b]{" + _PIVOT_HEAD_WIDTH + "}{\\centering "
+                + _latex_escape(labels.get(m, ARM_LABELS.get(m, m)))
+                + marks.get(m, "") + "}}" for m in arms]
+            lines, row_cells = [], []
             for ds in datasets:
-                vals = [np.nan if m in marks else _val(ds, m, col) for m in arms]
+                vals = [np.nan if m in marks or m in _PIVOT_NO_RUN else _val(ds, m, col)
+                        for m in arms]
                 finite = [v for v in vals if v == v]
                 b = fn(finite) if finite else None
                 cells = [_latex_escape(ds)]
                 for m, v in zip(arms, vals):
-                    if m in marks:
-                        cells.append("---"); continue
+                    if m in marks or m in _PIVOT_NO_RUN:
+                        cells.append("\\multicolumn{1}{c}{---}"); continue
                     sd = _val(ds, m, std_col) if std_col else np.nan
                     # 1-fold holdouts get an invisible subscript so means line up.
                     pm = (f"$_{{\\pm{fmt.format(sd)}}}$" if sd == sd else
                           f"\\phantom{{$_{{\\pm{fmt.format(0)}}}$}}" if std_col else "")
-                    cells.append(_best_fmt(v, b, fmt) + pm)
+                    lead0 = key != "auc"
+                    cell = _best_fmt(v, b, fmt, lead0=lead0)
+                    pm = pm if lead0 else _drop_lead0(pm)
+                    if cell.startswith("\\textbf{") and pm.startswith("$"):
+                        # \boldmath so the math-mode subscript is bold too.
+                        cell = "{\\boldmath\\textbf{" + cell[len("\\textbf{"):-1] + pm + "}}"
+                    else:
+                        cell += pm
+                    cells.append(cell)
+                row_cells.append(cells)
                 lines.append(" & ".join(cells) + r" \\")
             note = ""
             if holdout:
@@ -1884,17 +1927,24 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
                         + " single chronological holdout" + ("" if len(holdout) == 1 else "s") + ".")
             cells_note = ("Cells are the mean" + (" $\\pm$ std" if std_col else "")
                           + " over 5 CV folds.")
-            caption = (f"Per-dataset {desc}, {fam_name}, suite datasets. {cells_note} "
+            # Wording from the Overleaf caption (user edit, 2026-09-25).
+            caption = (f"{fam.upper()} {desc} on various datasets. {cells_note} "
                        f"Bold: best per row.{note}")
             label = f"tab:per-dataset-appendix-{fam}-{key}"
             extra_label = _PIVOT_OVERLEAF_EXTRA_LABELS.get((fam, key))
+            if key in _PIVOT_MERGED:
+                merged.setdefault(key, {"desc": desc, "note": note, "cells_note": cells_note})
+                merged[key][fam] = (arms, heads, row_cells, [label, extra_label], bool(marks))
+                continue
             table = (
                 "\\begin{table*}[t]\n\\centering\n\\scriptsize\n\\setlength{\\tabcolsep}{2pt}\n"
                 f"\\caption{{{caption}}}\n\\label{{{label}}}\n"
                 f"\\begin{{tabular}}{{l{'r' * len(arms)}}}\n\\toprule\n"
                 + " & ".join(heads) + " \\\\\n\\midrule\n" + "\n".join(lines)
-                + "\n\\bottomrule\n\\end{tabular}\n"
-                + (f"\\label{{{extra_label}}}\n" if extra_label else "")
+                + "\n\\bottomrule\n"
+                + (f"\\label{{{extra_label}}}\n" if extra_label and marks else "")
+                + "\\end{tabular}\n"
+                + (f"\\label{{{extra_label}}}\n" if extra_label and not marks else "")
                 + (f"\\\\[2pt]\n\\parbox{{\\linewidth}}{{\\footnotesize {_PIVOT_RF_FOOTNOTE}}}\n"
                    if marks else "")
                 + "\\end{table*}\n")
@@ -1906,6 +1956,37 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
                 table = (f"% {_PIVOT_SUPPRESSED[key]}\n"
                           + "\n".join("% " + ln for ln in table.rstrip("\n").split("\n")) + "\n")
             out.append(table)
+    for key, mk in merged.items():
+        # One tabular: GBT rows reuse the RF columns (user, 2026-09-25).
+        rf_arms, rf_heads, rf_rows, rf_labels, _ = mk["rf"]
+        g_arms, g_heads, g_rows, g_labels, _ = mk["gbt"]
+        pos = [rf_arms.index(_PIVOT_GBT_ALIGN[m]) + 1 for m in g_arms]
+
+        def _spread(cells: list[str], fill: list[str]) -> list[str]:
+            row = [cells[0]] + fill
+            for i, c in zip(pos, cells[1:]):
+                row[i] = c
+            return row
+        # Columns with no GBT run: the RF arm's name as SPO-GBT, cells as em dashes.
+        g_fill_head = [h.replace("SPO-RF", "SPO-GBT")[:-2]
+                       + ("$^*$" if m in _PIVOT_GBT_STAR else "") + "}}"
+                       for m, h in zip(rf_arms, rf_heads[1:])]
+        g_fill_cell = ["\\multicolumn{1}{c}{---}"] * len(rf_arms)
+
+        body = ([" & ".join(rf_heads) + " \\\\", "\\midrule"]
+                + [" & ".join(c) + " \\\\" for c in rf_rows]
+                + ["\\midrule", " & ".join(_spread(g_heads, g_fill_head)) + " \\\\", "\\midrule"]
+                + [" & ".join(_spread(c, g_fill_cell)) + " \\\\" for c in g_rows])
+        labels = "".join(f"\\label{{{lb}}}\n" for lb in rf_labels + g_labels if lb)
+        caption = (f"RF (top) and GBT (bottom) {mk['desc']} on various datasets. "
+                   f"{mk['cells_note']} Bold: best per row.{mk['note']}")
+        out.insert(1, "\\begin{table*}[p]\n\\centering\n\\scriptsize\n\\setlength{\\tabcolsep}{2pt}\n"
+                   f"\\caption{{{caption}}}\n\\label{{tab:per-dataset-appendix-{key}}}\n{labels}"
+                   f"\\begin{{tabular}}{{l{'r' * len(rf_arms)}}}\n\\toprule\n"
+                   + "\n".join(body) + "\n\\bottomrule\n\\end{tabular}\n"
+                   f"\\\\[2pt]\n\\parbox{{\\linewidth}}{{\\footnotesize {_PIVOT_RF_FOOTNOTE}\\\\\n"
+                   f"{_PIVOT_GBT_STAR_FOOTNOTE}}}\n"
+                   "\\end{table*}\n")
     return "\n".join(out)
 
 
