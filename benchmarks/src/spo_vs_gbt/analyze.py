@@ -1809,6 +1809,17 @@ _PIVOT_SUPPRESSED = {
     "time": "These datasets are too small to compare training time meaningfully",
 }
 
+# RF pivot (paper Table 5): Table 2's labels, std::sort dropped, XGBoost RF
+# blanked and a CatBoost RF column of dashes, both daggered (2026-09-24).
+_PIVOT_RF_DROPPED = {"spo_rf_exact_stdsort"}
+_PIVOT_RF_LABELS = {**_TIMING_TABLE_LABELS, "spo_rf_dyn_scalar": "SPO-RF Dyn R. Hist. (64 bins)",
+                    "catboost_rf": "CatBoost RF mode"}
+_PIVOT_RF_MARK = {"xgboost_rf": "$^\\dagger$", "catboost_rf": "$^\\dagger$"}
+_PIVOT_RF_FOOTNOTE = (
+    "$^\\dagger$ RF implementations of this method are not directly comparable. XGBoost 3.4.1 "
+    "warns that \\texttt{XGBRFClassifier} is deprecated and ``does not implement a conventional "
+    "random forest''. CatBoost does not support Random Forest (Bagged) mode.")
+
 
 def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
     """Appendix: one table* per (family, metric), datasets as rows, arms as
@@ -1830,17 +1841,23 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
         v = idx.loc[(ds, m), col]
         return float(v.iloc[0] if isinstance(v, pd.Series) else v)
 
+    rf_arms = [a for a in RF_ARMS if a not in _PIVOT_RF_DROPPED]
+    rf_arms.insert(rf_arms.index("lightgbm_rf") + 1, "catboost_rf")
     out = [hdr]
-    for fam, arms, fam_name in (("rf", RF_ARMS, "RF family"), ("gbt", GBT_ARMS, "GBT family")):
+    for fam, arms, fam_name in (("rf", rf_arms, "RF family"), ("gbt", GBT_ARMS, "GBT family")):
+        labels = _PIVOT_RF_LABELS if fam == "rf" else {}
+        marks = _PIVOT_RF_MARK if fam == "rf" else {}
         for col, key, fmt, desc, fn in _PIVOT_METRICS:
             heads = ["Dataset"] + [
-                "\\rotatebox{90}{" + _latex_escape(ARM_LABELS.get(m, m)) + "}" for m in arms]
+                "\\rotatebox{90}{" + _latex_escape(labels.get(m, ARM_LABELS.get(m, m)))
+                + marks.get(m, "") + "}" for m in arms]
             lines = []
             for ds in datasets:
-                vals = [_val(ds, m, col) for m in arms]
+                vals = [np.nan if m in marks else _val(ds, m, col) for m in arms]
                 finite = [v for v in vals if v == v]
                 b = fn(finite) if finite else None
-                cells = [_latex_escape(ds)] + [_best_fmt(v, b, fmt) for v in vals]
+                cells = [_latex_escape(ds)] + [
+                    "---" if m in marks else _best_fmt(v, b, fmt) for m, v in zip(arms, vals)]
                 lines.append(" & ".join(cells) + r" \\")
             note = ""
             if holdout:
@@ -1855,7 +1872,10 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
                 f"\\caption{{{caption}}}\n\\label{{{label}}}\n"
                 f"\\begin{{tabular}}{{l{'r' * len(arms)}}}\n\\toprule\n"
                 + " & ".join(heads) + " \\\\\n\\midrule\n" + "\n".join(lines)
-                + "\n\\bottomrule\n\\end{tabular}\n\\end{table*}\n")
+                + "\n\\bottomrule\n\\end{tabular}\n"
+                + (f"\\\\[2pt]\n\\parbox{{\\linewidth}}{{\\footnotesize {_PIVOT_RF_FOOTNOTE}}}\n"
+                   if marks else "")
+                + "\\end{table*}\n")
             if key in _PIVOT_SUPPRESSED:
                 # Kept in the file (regenerating it is free) but commented out:
                 # every suite dataset trains in under a minute, so per-dataset
