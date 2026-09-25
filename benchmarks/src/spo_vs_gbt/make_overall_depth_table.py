@@ -216,7 +216,7 @@ def emit_sort_tex(df: pd.DataFrame) -> str:
         for d in DEPTHS:
             r, h = cell.get((key, ref, d)), cell.get((key, hwy, d))
             sp = f" ({r[0] / h[0]:.1f}$\\times$)" if r and h and h[0] > 0 else ""
-            cells += [_fmt(r), _fmt(h) + sp]
+            cells += [_fmt(r and (r[0], float('nan'))), _fmt(h and (h[0], float('nan'))) + sp]  # median only
         L.append(f"        {name} & " + " & ".join(cells) + " \\\\")
     L += ["        \\hline", "    \\end{tabular}", "    \\caption{" + SORT_CAPTION + "}",
           "    \\label{" + SORT_LABEL + "}", "\\end{table*}", ""]
