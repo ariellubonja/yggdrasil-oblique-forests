@@ -76,8 +76,6 @@ DEPTH_LABEL = {-1: "Full depth (purity)"}
 DEPTH_PAGES = [[6, 10, 16], [24, -1]]
 # Mirrors the author's Overleaf caption (2026-09-25); edit here, not on Overleaf.
 CAPTION = "End-to-end SPO-RF training time (s) by tree depth."
-# Author's note on the part-1 caption only (Overleaf, 2026-09-25); kept verbatim.
-CAPTION_P1_NOTE = " \\TODO{Replacing Depth 6 w/ GBT. [YDF-1]}"
 LABEL = "tab:overall"
 
 # --gbt: SPO-GBT arms, one depth section. Dynamic arms were not run (directive 2026-09-24).
@@ -181,10 +179,9 @@ def emit_tex(df: pd.DataFrame, nrep: int) -> str:
                 L.append(f"        {name} & " + " & ".join(cells) + " \\\\")
             L.append("        \\hline")
         part = f"(Part {page + 1} of {npage}: {covers}.) " if npage > 1 else ""
-        note = CAPTION_P1_NOTE if page == 0 else ""
         L += [
             "    \\end{tabular}",
-            "    \\caption{" + part + CAPTION + note + "}",
+            "    \\caption{" + part + CAPTION + "}",
             "    \\label{" + LABEL + ("" if page == 0 else f"-p{page + 1}") + "}",
             "\\end{table*}", "",
         ]

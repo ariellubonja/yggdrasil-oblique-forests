@@ -4,7 +4,8 @@ Dyn-Vec (AVX2, 64 bins, threshold 250) over Exact (Highway VQSort), one panel
 each for max_depth 6, 16 and unlimited (purity). 240 trees, 48 threads, m7i.
 
 Sources (committed under benchmarks/results/runtime/):
-  speedup_map_by_dataset/speedup_map*.csv      trunk grid + HIGGS/SUSY/Epsilon/YouTube-8M,
+  speedup_map_by_dataset/speedup_map*.csv      trunk grid + HIGGS/SUSY/Epsilon/YouTube-8M/
+                                               Shifts weather/ClimSim/Jane Street,
                                                median over reps per (cell, arm)
 Speedup = median(train_s exact_hwy) / median(train_s dyn_vec). Circles: Trunk
 synthetic datasets; squares: natural datasets. Writes fig_rowcol_map_depths.{pdf,png}
@@ -34,7 +35,21 @@ PAPER_FIG = ROOT / "paper" / "spaa27" / "figures" / "results"
 EXACT, DYN = "spo_rf_exact_hwy", "spo_rf_dyn_vec"
 DEPTHS = [(6, "Depth 6"), (16, "Depth 16"), (-1, "Unlimited Depth")]
 NATURAL = {"higgs_10500000": "HIGGS", "SUSY": "SUSY", "EPSILON": "Epsilon",
-           "YOUTUBE8M": "YouTube-8M"}
+           "YOUTUBE8M": "YouTube-8M", "SHIFTS_WEATHER": "Shifts weather",
+           "CLIMSIM": "ClimSim", "JANE_STREET": "Jane Street"}
+# Name placement (pgf anchor, xshift pt, yshift pt); default = centred below the square.
+# HIGGS, Jane Street and ClimSim share y ~= 10M rows and the last two squares overlap: per
+# panel the better speedup is drawn on top (value inside), the covered one's value goes
+# with its name (user directive 2026-09-25).
+NAME_POS = {"HIGGS": ("south", 0, 5), "ClimSim": ("west", 4, 0), "Jane Street": ("north", 0, -5)}
+NAME_DEFAULT = ("north", 0, -5)
+OVERLAP = ("ClimSim", "Jane Street")
+
+
+def covered(t: pd.DataFrame) -> set[str]:
+    """Datasets whose marker is hidden under a better one in this panel."""
+    g = t[t["dataset"].isin(OVERLAP)]
+    return set() if len(g) < 2 else {g.loc[g["speedup"].idxmin(), "dataset"]}
 CMAP = "Spectral_r"  # blue (low) -> yellow -> red (high); user pick 2026-09-24
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Times New Roman", "Times", "Nimbus Roman"],
                      "mathtext.fontset": "stix"})
@@ -80,7 +95,8 @@ def plot(tab: pd.DataFrame, out: Path) -> None:
     xlim = (float(tab["features"].min()) / 4, float(tab["features"].max()) * 4)
     ylim = (float(tab["rows"].min()) / 1.7, float(tab["rows"].max()) * 2.6)
     for ax, (depth, title) in zip(axes, DEPTHS):
-        t = tab[tab["max_depth"] == depth]
+        t = tab[tab["max_depth"] == depth].sort_values("speedup")  # best drawn last = on top
+        hidden = covered(t)
         X, Y, Z = idw_field(t, xlim, ylim)
         ax.pcolormesh(X, Y, Z, cmap=CMAP, vmin=vmin, vmax=vmax, alpha=0.8,
                       shading="nearest", rasterized=True, zorder=1)
@@ -95,13 +111,17 @@ def plot(tab: pd.DataFrame, out: Path) -> None:
                 # Value inside the marker (text colour by marker luminance); name outside.
                 rgb = plt.get_cmap(CMAP)((r["speedup"] - vmin) / max(vmax - vmin, 1e-9))[:3]
                 lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
-                ax.annotate(f"{r['speedup']:.2f}", (r["features"], r["rows"]), ha="center",
-                            va="center", fontsize=5.6, color="black" if lum > 0.55 else "white",
-                            zorder=4)
+                inline = r["dataset"] in hidden
+                if not inline:
+                    ax.annotate(f"{r['speedup']:.2f}", (r["features"], r["rows"]), ha="center",
+                                va="center", fontsize=5.6, color="black" if lum > 0.55 else "white",
+                                zorder=4)
                 if kind == "natural":
-                    dy = 12 if r["dataset"] == "HIGGS" else -12
-                    ax.annotate(r["dataset"], (r["features"], r["rows"]), textcoords="offset points",
-                                xytext=(0, dy), ha="center", va="bottom" if dy > 0 else "top",
+                    anc, dx, dy = NAME_POS.get(r["dataset"], NAME_DEFAULT)
+                    txt = r["dataset"] + (f" {r['speedup']:.2f}" if inline else "")
+                    ax.annotate(txt, (r["features"], r["rows"]), textcoords="offset points",
+                                xytext=(2.4 * dx, 2.4 * dy), ha="left" if "west" in anc else "center",
+                                va="bottom" if "south" in anc else "center" if anc == "west" else "top",
                                 fontsize=7, zorder=4)
         ax.set_xscale("log"); ax.set_yscale("log")
         ax.set_xlim(*xlim); ax.set_ylim(*ylim)
@@ -149,7 +169,8 @@ def write_pgf(tab: pd.DataFrame, out: Path, n: int = 60) -> None:
          "  title style={font=\\small, yshift=-3pt}, tick style={draw=none}, enlargelimits=false, clip=true,",
          "]"]
     for k, (depth, title) in enumerate(DEPTHS):
-        t = tab[tab["max_depth"] == depth]
+        t = tab[tab["max_depth"] == depth].sort_values("speedup")  # best drawn last = on top
+        hidden = covered(t)
         X, Y, Z = idw_field(t, xlim, ylim, n=n)
         cb = (", colorbar, colorbar style={width=0.18cm, tick label style={font=\\scriptsize}, yticklabel={\\pgfmathprintnumber[fixed,fixed zerofill,precision=1]{\\tick}},"
               " ylabel={Speedup over Exact}, ylabel style={font=\\scriptsize}}") if k == 2 else ""
@@ -164,6 +185,7 @@ def write_pgf(tab: pd.DataFrame, out: Path, n: int = 60) -> None:
                 continue
             rows = "\n".join(f"{r.features:.5g} {r.rows:.5g} {r.speedup:.4f}" for r in g.itertuples())
             L.append(f"\\addplot[rcmark, mark={mark}, mark size={ms}] table[x=x, y=y, meta=meta] {{\nx y meta\n{rows}\n}};")
+            g = g[~g["dataset"].isin(hidden)]  # their value goes with the name
             for colour in ("black", "white"):
                 gg = g[[("black" if _lum(cm, r, vmin, vmax) > 0.55 else "white") == colour for r in g["speedup"]]]
                 if gg.empty:
@@ -171,13 +193,14 @@ def write_pgf(tab: pd.DataFrame, out: Path, n: int = 60) -> None:
                 rows = "\n".join(f"{r.features:.5g} {r.rows:.5g} {r.speedup:.4f}" for r in gg.itertuples())
                 L.append(f"\\addplot[rclabel, nodes near coords style={{text={colour}}}] table[x=x, y=y, meta=meta] {{\nx y meta\n{rows}\n}};")
         nat = t[t["kind"] == "natural"]
-        for above in (True, False):  # HIGGS name above its square, every other name below
-            gg = nat[(nat["dataset"] == "HIGGS") == above]
-            if gg.empty:
-                continue
-            rows = "\n".join(f"{r.features:.5g} {r.rows:.5g} {r.dataset}" for r in gg.itertuples())
-            anc, dy = ("south", "5pt") if above else ("north", "-5pt")
-            L.append(f"\\addplot[rcname, nodes near coords style={{anchor={anc}, yshift={dy}}}] table[x=x, y=y] {{\nx y name\n{rows}\n}};")
+        for pos in sorted({NAME_POS.get(d, NAME_DEFAULT) for d in nat["dataset"]}):
+            gg = nat[[NAME_POS.get(d, NAME_DEFAULT) == pos for d in nat["dataset"]]]
+            # pgfplots splits table cells on spaces: tie the words with ~.
+            rows = "\n".join(f"{r.features:.5g} {r.rows:.5g} {r.dataset.replace(' ', '~')}"
+                             + (f"~{r.speedup:.2f}" if r.dataset in hidden else "")
+                             for r in gg.itertuples())
+            anc, dx, dy = pos
+            L.append(f"\\addplot[rcname, nodes near coords style={{anchor={anc}, xshift={dx}pt, yshift={dy}pt}}] table[x=x, y=y] {{\nx y name\n{rows}\n}};")
     L += ["\\end{groupplot}", "\\end{tikzpicture}", ""]
     out.write_text("\n".join(L))
 
