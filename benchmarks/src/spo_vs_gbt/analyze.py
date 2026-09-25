@@ -108,6 +108,8 @@ _FALLBACK_ARMS: dict[str, dict] = {
     "xgboost_rf": {"family": "rf", "engine": "xgboost", "binary": None},
     "lightgbm_rf": {"family": "rf", "engine": "lightgbm", "binary": None},
     "spo_gbt_exact_hwy": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
+    "spo_gbt_rand_vec": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
+    "spo_gbt_rand256_vec": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
     "spo_gbt_dyn_vec": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
     "spo_gbt_dyn256_vec": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
     "aa_gbt_exact": {"family": "gbt", "engine": "ydf_fork", "binary": "default"},
@@ -169,6 +171,8 @@ ARM_LABELS: dict[str, str] = {
     "xgboost_rf": "XGBoost RF mode",
     "lightgbm_rf": "LightGBM RF mode",
     "spo_gbt_exact_hwy": "SPO-GBT Exact",
+    "spo_gbt_rand_vec": "SPO-GBT Random (vec)",
+    "spo_gbt_rand256_vec": "SPO-GBT Random-256 (AVX-512)",
     "spo_gbt_dyn_vec": "SPO-GBT Dyn-Vec [ours]",
     "spo_gbt_dyn256_vec": "SPO-GBT Dyn-256 (AVX-512)",
     "aa_gbt_exact": "AA-GBT Exact",
@@ -1688,7 +1692,9 @@ _TIMING_TABLE_LABELS: dict[str, str] = {
     "spo_gbt_dyn_vec": "SPO-GBT AVX-2 R. Hist. (64 bins, ours)",
     "spo_gbt_dyn256_vec": "SPO-GBT AVX-512 R. Hist. (256 bins, ours)",
 }
-_TIMING_TABLE_DROPPED = {"spo_rf_exact_stdsort", "spo_rf_dyn_scalar"}
+_TIMING_TABLE_DROPPED = {"spo_rf_exact_stdsort", "spo_rf_dyn_scalar",
+                         # suite-only accuracy arms (2026-09-25): no huge-dataset runs
+                         "spo_gbt_rand_vec", "spo_gbt_rand256_vec"}
 
 
 def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
@@ -1814,6 +1820,13 @@ _PIVOT_SUPPRESSED = {
 # RF pivot (paper Table 5): Table 2's labels, std::sort dropped, XGBoost RF
 # blanked and a CatBoost RF column of dashes, both daggered (2026-09-24).
 _PIVOT_RF_DROPPED = {"spo_rf_exact_stdsort"}
+# Hand edits made in Overleaf on Tables 5/6 (pulled 2026-09-25 so regeneration keeps
+# them): a second \label per AUC table and the user's TODO notes in the GBT caption.
+_PIVOT_OVERLEAF_EXTRA_LABELS = {("rf", "auc"): "tab:accuracy-rf", ("gbt", "auc"): "tab:accuracy-gbt"}
+_PIVOT_OVERLEAF_CAPTION_PREFIX = {("gbt", "auc"): (
+    "\\TODO{Say SPO gives good performance vs. Axis-aligned. What does SPO do for categorical? "
+    "Catboost wins bcs. it does X w/ categorical. Can you preprocess w/ catboost \\& then use SPORF}. "
+    "\\TODO{Sort into Categorical datasets vs. non-categorical}. ")}
 _PIVOT_RF_LABELS = {**_TIMING_TABLE_LABELS, "spo_rf_dyn_scalar": "SPO-RF Dyn R. Hist. (64 bins)",
                     "catboost_rf": "CatBoost RF mode"}
 _PIVOT_RF_MARK = {"xgboost_rf": "$^\\dagger$", "catboost_rf": "$^\\dagger$"}
@@ -1875,14 +1888,17 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
                         + " single chronological holdout" + ("" if len(holdout) == 1 else "s")
                         + " (TabReD); every other cell is the mean"
                         + (" $\\pm$ std" if std_col else "") + " over 5 CV folds.")
-            caption = f"Per-dataset {desc}, {fam_name}, suite datasets. Bold: best per row.{note}"
+            caption = (_PIVOT_OVERLEAF_CAPTION_PREFIX.get((fam, key), "")
+                       + f"Per-dataset {desc}, {fam_name}, suite datasets. Bold: best per row.{note}")
             label = f"tab:per-dataset-appendix-{fam}-{key}"
+            extra_label = _PIVOT_OVERLEAF_EXTRA_LABELS.get((fam, key))
             table = (
                 "\\begin{table*}[t]\n\\centering\n\\scriptsize\n\\setlength{\\tabcolsep}{2pt}\n"
                 f"\\caption{{{caption}}}\n\\label{{{label}}}\n"
                 f"\\begin{{tabular}}{{l{'r' * len(arms)}}}\n\\toprule\n"
                 + " & ".join(heads) + " \\\\\n\\midrule\n" + "\n".join(lines)
                 + "\n\\bottomrule\n\\end{tabular}\n"
+                + (f"\\label{{{extra_label}}}\n" if extra_label else "")
                 + (f"\\\\[2pt]\n\\parbox{{\\linewidth}}{{\\footnotesize {_PIVOT_RF_FOOTNOTE}}}\n"
                    if marks else "")
                 + "\\end{table*}\n")

@@ -44,6 +44,7 @@ PROTOCOL.md D12(b)'s second-seed accuracy-variance runs pass --seed 2.
 from __future__ import annotations
 
 import math
+import os
 
 # SPEC.md v1 said "min_child_samples: make it a single constant at the top,
 # default 20", but that left LightGBM's leaf-size floor 4x looser than every
@@ -55,6 +56,21 @@ import math
 # D6-mandated min_child_samples=1 instead -- that arm matches XGBRFClassifier's
 # no-comparable-floor default, not the GBT arms.)
 LIGHTGBM_MIN_CHILD_SAMPLES = 5
+
+
+# Histogram bin count for every python library arm (user directive, 2026-09-24:
+# match the bin count across libraries; run both 64 and 256). Default 64 = the SPO
+# Dyn-Vec arm's 64-bin histogram; 256 = the AVX-512 arm's. PY_HIST_BINS=default restores
+# the library defaults (XGBoost 256, LightGBM 255, CatBoost 254) that every python-arm row
+# recorded before 2026-09-24 used; an integer sets max_bin (XGBoost/LightGBM) and
+# border_count (CatBoost) to that value.
+_PY_HIST_BINS_RAW = os.environ.get("PY_HIST_BINS", "64").strip().lower()
+PY_HIST_BINS: int | None = None if _PY_HIST_BINS_RAW == "default" else int(_PY_HIST_BINS_RAW)
+
+
+def _bins_kw(name: str) -> dict:
+    """{name: PY_HIST_BINS}, or {} when the library default is requested."""
+    return {} if PY_HIST_BINS is None else {name: PY_HIST_BINS}
 
 
 def _rf_feature_fraction(n_features: int) -> float:
@@ -76,6 +92,7 @@ def _xgb_ctor(threads: int, n_features: int, seed: int):
     return XGBClassifier(
         n_estimators=300, max_depth=6, learning_rate=0.1, tree_method="hist",
         n_jobs=threads, objective="binary:logistic", random_state=seed,
+        **_bins_kw("max_bin"),
     )
 
 
@@ -85,7 +102,7 @@ def _lgbm_ctor(threads: int, n_features: int, seed: int):
     return LGBMClassifier(
         n_estimators=300, max_depth=6, num_leaves=63, learning_rate=0.1,
         n_jobs=threads, random_state=seed, verbose=-1,
-        min_child_samples=LIGHTGBM_MIN_CHILD_SAMPLES,
+        min_child_samples=LIGHTGBM_MIN_CHILD_SAMPLES, **_bins_kw("max_bin"),
     )
 
 
@@ -97,7 +114,7 @@ def _catboost_ctor(threads: int, n_features: int, seed: int):
         random_seed=seed, verbose=0, allow_writing_files=False,
         # D5: CatBoost 1.2.10's CPU default bootstrap is MVS (subsample 0.8);
         # "No" makes "no subsampling" actually true for every GBT arm.
-        bootstrap_type="No",
+        bootstrap_type="No", **_bins_kw("border_count"),
     )
 
 
@@ -111,7 +128,7 @@ def _xgb_rf_ctor(threads: int, n_features: int, seed: int):
     return XGBRFClassifier(
         n_estimators=240, max_depth=0, subsample=0.632,
         colsample_bynode=_rf_feature_fraction(n_features), learning_rate=1.0,
-        tree_method="hist", n_jobs=threads, random_state=seed,
+        tree_method="hist", n_jobs=threads, random_state=seed, **_bins_kw("max_bin"),
     )
 
 
@@ -127,7 +144,7 @@ def _lgbm_rf_ctor(threads: int, n_features: int, seed: int):
         boosting_type="rf", n_estimators=240, num_leaves=131071, max_depth=-1,
         min_child_samples=1, bagging_fraction=0.632, bagging_freq=1,
         feature_fraction_bynode=_rf_feature_fraction(n_features),
-        n_jobs=threads, random_state=seed, verbose=-1,
+        n_jobs=threads, random_state=seed, verbose=-1, **_bins_kw("max_bin"),
     )
 
 
@@ -218,6 +235,18 @@ ARMS: dict[str, dict] = {
     "spo_gbt_exact_hwy": {
         "family": "gbt", "engine": "ydf_fork", "binary": "default",
         "ydf_flags": _OBLIQUE + _EXACT + _BOOSTING,
+        "trees": 300, "tree_depth": 6, "min_examples": None, "py_ctor": None,
+    },
+    # Pure random-histogram GBT arms (added 2026-09-25): at depth 6 the paper's
+    # GBT method is plain vectorized Random, not Dynamic; Table 6 needs them.
+    "spo_gbt_rand_vec": {
+        "family": "gbt", "engine": "ydf_fork", "binary": "default",
+        "ydf_flags": _OBLIQUE + _RANDOM64 + _BOOSTING,
+        "trees": 300, "tree_depth": 6, "min_examples": None, "py_ctor": None,
+    },
+    "spo_gbt_rand256_vec": {
+        "family": "gbt", "engine": "ydf_fork", "binary": "default",
+        "ydf_flags": _OBLIQUE + _RANDOM256 + _BOOSTING,
         "trees": 300, "tree_depth": 6, "min_examples": None, "py_ctor": None,
     },
     "spo_gbt_dyn_vec": {
