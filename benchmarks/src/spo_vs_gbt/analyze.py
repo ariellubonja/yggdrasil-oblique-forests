@@ -1799,8 +1799,10 @@ def _timing_table_tex(block: pd.DataFrame, large_summary: pd.DataFrame,
     )
 
 
-_PIVOT_METRICS = (("auc_mean", "auc", "{:.4f}", "test ROC AUC", max),
-                  ("time_s_median", "time", "{:.2f}", "median training time (s)", min))
+# (value col, std col or None, key, fmt, caption text, best-of). The std is
+# the sample std over the 5 CV folds, typeset as a subscript to fit 11 arms.
+_PIVOT_METRICS = (("auc_mean", "auc_std", "auc", "{:.4f}", "test ROC AUC", max),
+                  ("time_s_median", None, "time", "{:.2f}", "median training time (s)", min))
 
 # Per-dataset pivots emitted commented out, with the reason. The suite datasets
 # are too small for their per-dataset training times to mean anything; the
@@ -1847,7 +1849,7 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
     for fam, arms, fam_name in (("rf", rf_arms, "RF family"), ("gbt", GBT_ARMS, "GBT family")):
         labels = _PIVOT_RF_LABELS if fam == "rf" else {}
         marks = _PIVOT_RF_MARK if fam == "rf" else {}
-        for col, key, fmt, desc, fn in _PIVOT_METRICS:
+        for col, std_col, key, fmt, desc, fn in _PIVOT_METRICS:
             heads = ["Dataset"] + [
                 "\\rotatebox{90}{" + _latex_escape(labels.get(m, ARM_LABELS.get(m, m)))
                 + marks.get(m, "") + "}" for m in arms]
@@ -1856,19 +1858,27 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
                 vals = [np.nan if m in marks else _val(ds, m, col) for m in arms]
                 finite = [v for v in vals if v == v]
                 b = fn(finite) if finite else None
-                cells = [_latex_escape(ds)] + [
-                    "---" if m in marks else _best_fmt(v, b, fmt) for m, v in zip(arms, vals)]
+                cells = [_latex_escape(ds)]
+                for m, v in zip(arms, vals):
+                    if m in marks:
+                        cells.append("---"); continue
+                    sd = _val(ds, m, std_col) if std_col else np.nan
+                    # 1-fold holdouts get an invisible subscript so means line up.
+                    pm = (f"$_{{\\pm{fmt.format(sd)}}}$" if sd == sd else
+                          f"\\phantom{{$_{{\\pm{fmt.format(0)}}}$}}" if std_col else "")
+                    cells.append(_best_fmt(v, b, fmt) + pm)
                 lines.append(" & ".join(cells) + r" \\")
             note = ""
             if holdout:
                 note = (" " + ", ".join(_latex_escape(d) for d in holdout)
                         + (" is a" if len(holdout) == 1 else " are")
                         + " single chronological holdout" + ("" if len(holdout) == 1 else "s")
-                        + " (TabReD); every other cell is the mean over 5 CV folds.")
+                        + " (TabReD); every other cell is the mean"
+                        + (" $\\pm$ std" if std_col else "") + " over 5 CV folds.")
             caption = f"Per-dataset {desc}, {fam_name}, suite datasets. Bold: best per row.{note}"
             label = f"tab:per-dataset-appendix-{fam}-{key}"
             table = (
-                "\\begin{table*}[t]\n\\centering\n\\footnotesize\n\\setlength{\\tabcolsep}{3pt}\n"
+                "\\begin{table*}[t]\n\\centering\n\\scriptsize\n\\setlength{\\tabcolsep}{2pt}\n"
                 f"\\caption{{{caption}}}\n\\label{{{label}}}\n"
                 f"\\begin{{tabular}}{{l{'r' * len(arms)}}}\n\\toprule\n"
                 + " & ".join(heads) + " \\\\\n\\midrule\n" + "\n".join(lines)
