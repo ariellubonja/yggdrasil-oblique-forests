@@ -15,6 +15,8 @@ Source: benchmarks/results/runtime/speedup_map_by_dataset/speedup_map.csv (rep 1
 speedup_map_rep<k>.csv beside it (reps 2..); a cell shows median +- sample std
 over the reps present (a single run shows just the value). Missing cells print as --.
 Emits table_overall_depth.tex (do not hand-edit) and a plain-text preview.
+--gbt: same layout for the SPO-GBT arms (300 trees, depth 6, min_examples 5; no dynamic
+arm, user directive 2026-09-24) -> table_overall_gbt_d6.tex, label tab:overall-gbt.
 """
 from __future__ import annotations
 
@@ -72,19 +74,47 @@ DEPTHS = [6, 10, 16, 24, -1]
 DEPTH_LABEL = {-1: "Full depth (purity)"}
 # One table* float per group; the whole table does not fit on one page.
 DEPTH_PAGES = [[6, 10, 16], [24, -1]]
-# Mirrors the author's Overleaf caption (2026-09-24); edit here, not on Overleaf.
+# Mirrors the author's Overleaf caption (2026-09-25); edit here, not on Overleaf.
 CAPTION = "End-to-end SPO-RF training time (s) by tree depth."
+# Author's note on the part-1 caption only (Overleaf, 2026-09-25); kept verbatim.
+CAPTION_P1_NOTE = " \\TODO{Replacing Depth 6 w/ GBT. [YDF-1]}"
+LABEL = "tab:overall"
+
+# --gbt: SPO-GBT arms, one depth section. Dynamic arms were not run (directive 2026-09-24).
+GBT_ARMS = [
+    ("spo_gbt_exact_hwy", "Exact", "HWY"),
+    ("spo_gbt_rand_scalar", "Random Hist.", "scalar, 64 bins"),
+    ("spo_gbt_rand256_scalar", "Random Hist.", "scalar, 256 bins"),
+    ("spo_gbt_rand_vec", "Vec. Random Hist.", "AVX2, 64 bins"),
+    ("spo_gbt_rand256_vec", "Vec. Random Hist.", "AVX-512, 256 bins"),
+]
+GBT_GROUPS = [("Baselines", 3), ("Our Methods", 2)]
+GBT_SPEEDUP_REF = {"spo_gbt_rand_vec": ["spo_gbt_exact_hwy"],
+                   "spo_gbt_rand256_vec": ["spo_gbt_exact_hwy"]}
+GBT_DEPTHS = [6]
+GBT_DEPTH_PAGES = [[6]]
+GBT_CAPTION = "End-to-end SPO-GBT training time (s) at depth 6."
+GBT_LABEL = "tab:overall-gbt"
 
 
-def load_cells(max_reps: int = 0) -> tuple[pd.DataFrame, int]:
+def use_gbt() -> None:
+    """Switch the module-level layout to the SPO-GBT table."""
+    global ARMS, GROUPS, SPEEDUP_REF, DEPTHS, DEPTH_PAGES, CAPTION, CAPTION_P1_NOTE, LABEL
+    ARMS, GROUPS, SPEEDUP_REF = GBT_ARMS, GBT_GROUPS, GBT_SPEEDUP_REF
+    DEPTHS, DEPTH_PAGES, CAPTION, CAPTION_P1_NOTE, LABEL = (
+        GBT_DEPTHS, GBT_DEPTH_PAGES, GBT_CAPTION, "", GBT_LABEL)
+
+
+def load_cells(max_reps: int = 0, family: str = "rf") -> tuple[pd.DataFrame, int]:
     """(dataset, arm, depth) -> median / std of train_s over reps; returns (df, max reps seen)."""
+    min_ex = {"rf": 1, "gbt": 5}[family]  # the study's per-family defaults
     files = [RES / "speedup_map.csv"] + sorted(RES.glob("speedup_map_rep*.csv"))
     if max_reps > 0:  # --reps N: use only reps 1..N
         files = files[:max_reps]
     parts = []
     for k, f in enumerate(files, 1):
         d = pd.read_csv(f)
-        d = d[(d.status == "OK") & (d.min_examples == 1) & (d.family == "rf")]
+        d = d[(d.status == "OK") & (d.min_examples == min_ex) & (d.family == family)]
         d = d.assign(rep=k)
         parts.append(d[["dataset", "arm", "max_depth", "train_s", "rep"]])
     df = pd.concat(parts)
@@ -151,10 +181,11 @@ def emit_tex(df: pd.DataFrame, nrep: int) -> str:
                 L.append(f"        {name} & " + " & ".join(cells) + " \\\\")
             L.append("        \\hline")
         part = f"(Part {page + 1} of {npage}: {covers}.) " if npage > 1 else ""
+        note = CAPTION_P1_NOTE if page == 0 else ""
         L += [
             "    \\end{tabular}",
-            "    \\caption{" + part + CAPTION + "}",
-            "    \\label{tab:overall" + ("" if page == 0 else f"-p{page + 1}") + "}",
+            "    \\caption{" + part + CAPTION + note + "}",
+            "    \\label{" + LABEL + ("" if page == 0 else f"-p{page + 1}") + "}",
             "\\end{table*}", "",
         ]
     return "\n".join(L)
@@ -178,11 +209,16 @@ def emit_text(df: pd.DataFrame) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(ROOT / "paper" / "spaa27" / "table_overall_depth.tex"))
+    ap.add_argument("--out", default=None, help="default: paper/spaa27/table_overall_{depth,gbt_d6}.tex")
     ap.add_argument("--text-only", action="store_true")
     ap.add_argument("--reps", type=int, default=0, help="use only reps 1..N (0 = all)")
+    ap.add_argument("--gbt", action="store_true", help="SPO-GBT arms, depth 6 only")
     a = ap.parse_args()
-    df, nrep = load_cells(a.reps)
+    if a.gbt:
+        use_gbt()
+    if a.out is None:
+        a.out = str(ROOT / "paper" / "spaa27" / ("table_overall_gbt_d6.tex" if a.gbt else "table_overall_depth.tex"))
+    df, nrep = load_cells(a.reps, "gbt" if a.gbt else "rf")
     print(emit_text(df))
     if not a.text_only:
         Path(a.out).write_text(emit_tex(df, nrep))

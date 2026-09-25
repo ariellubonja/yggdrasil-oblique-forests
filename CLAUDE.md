@@ -63,6 +63,12 @@ below directly; the user should never have to relay between them.
   `ariel_notes/journal.md`; before a meeting, draft the agenda from it plus the board as a
   new Doc in the Drive folder.
 
+## No Co-Authored-By trailer in commits (user directive, standing)
+
+**Never add `Co-Authored-By: Claude ...` (or any Claude/Anthropic co-author line) to git
+commits, including commits made by scripts (`run_b7_*.sh` `COMMIT=1` paths).** It breaks the
+CLA process on upstream PRs. This overrides the harness's default commit template.
+
 ## Subagents (decided 2026-09-05)
 
 Start every subagent with `model: opus` (Agent tool `model: "opus"`, `claude -p --model
