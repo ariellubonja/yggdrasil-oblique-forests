@@ -131,17 +131,20 @@
 
 \begin{abstract}
 
-Sparse Oblique (SPO) splits that select linear combinations of multiple features are a powerful decision tree learner. Compared with axis-aligned forests that split single features, they typically achieve higher accuracy, limit overfitting, and maintain interpretability. 
-Because sparse-oblique methods sample feature combinations at runtime, they preclude pre-sorting features or pre-computing histograms. This makes them more data and compute intensive.
-We optimize the performance of sparse-oblique gradient boosted decision trees (GBDT) and random forests (RF).
-For shallow trees of depth 6 (typical of GBDT), we achieve up to 2$\times$ speedup by vectorizing histogram construction,
-For deeper trees of 16 levels up to full depth, typical of RF, we adaptively choose between histograms and exact splits at each node. 
-%We also reveal that training trees to purity, beyond depth 20, is 
-%inexpensive because active data are in processor caches.
-On a suite of larger datasets, our optimizations speed up training by 1.7-2.5$\times$ compared to existing sparse-oblique forests and 1.5-2$\times$ compared to axis-aligned random forests. \TODO{update}
+Sparse oblique (SPO) splits, which threshold a sparse linear combination of features instead of a single feature, improve the accuracy and robustness of Random Forests (RF) and Gradient Boosted Decision Trees (GBDT) while maintaining interpretability, and are part of the top-ranked configuration of Google's Yggdrasil Decision Forests (YDF) for both families. Because projections are sampled at runtime, SPO precludes pre-sorted features, histogram subtraction and oblivious trees, and is significantly slower to train.
+We performance-engineer SPO training in YDF, starting from a baseline 2--5$\times$ faster than the released version, in which vectorized exact sorting dominates. GBDT and RF stress opposite ends of the depth range, and we contribute one optimization for each. (1) Hierarchical vectorized histogram filling for AVX2 and AVX-512, mathematically identical to the scalar version, speeds up shallow trees (depth 6, typical of GBDT) by up to 2$\times$ for SPO-RF and 1.6$\times$ for SPO-GBT. (2) A runtime-adaptive switch between vectorized histograms and exact splits, based on the number of samples at each node, speeds up deep trees (depth 16 to purity, typical of RF) by up to 1.3$\times$ with no detectable effect on accuracy, bringing SPO-RF training time on par with axis-aligned RF. Neither optimization is tied to a depth or a model family, and both apply to axis-aligned splits whenever features are not pre-sorted. We evaluate on natural and synthetic datasets of up to 10.5 million rows and 1.6 million features, from depth 6 to purity, and open-source the implementation.
 
-% Real use-cases of gradient-boosted trees and random forests fall into 3 regimes: shallow (depths 6-8, typical of GBTs), mid-depth (16-20, for random Forests), and full-depth (training to purity). We engineer the performance of each of these regimes: vectorized histogramming for shallow depth, adaptive exact-histogram switching for mid-depth, and demonstrate that training from depth 20 to purity is surprisingly . 
-
+% ---- Previous abstract (kept for comparison, 2026-09-26; swap versions by moving the % signs) ----
+% Sparse Oblique (SPO) splits that select linear combinations of multiple features are a powerful decision tree learner. Compared with axis-aligned forests that split single features, they typically achieve higher accuracy, limit overfitting, and maintain interpretability. 
+% Because sparse-oblique methods sample feature combinations at runtime, they preclude pre-sorting features or pre-computing histograms. This makes them more data and compute intensive.
+% We optimize the performance of sparse-oblique gradient boosted decision trees (GBDT) and random forests (RF).
+% For shallow trees of depth 6 (typical of GBDT), we achieve up to 2$\times$ speedup by vectorizing histogram construction,
+% For deeper trees of 16 levels up to full depth, typical of RF, we adaptively choose between histograms and exact splits at each node. 
+% %We also reveal that training trees to purity, beyond depth 20, is 
+% %inexpensive because active data are in processor caches.
+% On a suite of larger datasets, our optimizations speed up training by 1.7-2.5$\times$ compared to existing sparse-oblique forests and 1.5-2$\times$ compared to axis-aligned random forests. \TODO{update}
+%
+% % Real use-cases of gradient-boosted trees and random forests fall into 3 regimes: shallow (depths 6-8, typical of GBTs), mid-depth (16-20, for random Forests), and full-depth (training to purity). We engineer the performance of each of these regimes: vectorized histogramming for shallow depth, adaptive exact-histogram switching for mid-depth, and demonstrate that training from depth 20 to purity is surprisingly . 
 
 \end{abstract}
 
