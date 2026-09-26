@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""fig:overall (+ fig:overall-depth24) -- end-to-end training time normalized to Exact (HWY), grouped bars.
+"""fig:overall -- end-to-end training time normalized to Exact (HWY), grouped bars.
 
 Variants (--variant, default: all):
-  grid     fig:overall, figure*, 2x2 panels: SPO-GBT depth 6; SPO-RF depth 6, depth 16, full depth.
-           Dynamic bars are omitted at depth 6 (GBT: no dynamic arm, directive 2026-09-24; RF: user
-           2026-09-25) -> e2e_normalized_grid.tex
-  depth24  fig:overall-depth24, single-column figure, one panel: SPO-RF depth 24 -> e2e_normalized_depth24.tex
+  grid     fig:overall, figure*, 2x2 panels: SPO-GBT depth 6; SPO-RF depth 10, depth 20, full depth.
+           Dynamic bars are omitted at depths 6 and 10 (GBT: no dynamic arm, directive 2026-09-24;
+           RF: user 2026-09-25) -> e2e_normalized_grid.tex
 x = the datasets where the dynamic exact fallback gains most over the plain vectorized histogram at
 full depth (ranked 2026-09-25, two trunk shapes at most); y = T(arm) / T(Exact HWY). Bars per dataset
 are grouped Exact-Rand64-Rand256 | Vec64-Vec256 | DynVec64-DynVec256 with gaps between blocks; the
@@ -35,16 +34,17 @@ DATASETS = [  # (key in speedup_map.csv, tick label)
     ("trunk_15000_x_400000", "Trunk 15k$\\times$400k"),
 ]
 # (arm suffix, legend, color hex, slot). Slots 0-2 = baselines, 3-4 = vectorized, 5-6 = dynamic.
+# Legend names follow Figure 1 (fig:dynamic-motivation-nodetrain); one legend row per block.
 # Palette = the previous fig:overall (Google colors) plus shades: 64-bin = lighter, 256-bin = darker;
 # Dynamic 64 = gold, Dynamic 256 = red (user, 2026-09-25).
 ARMS = [
-    ("exact_hwy", "Exact (HWY)", "4285F4", 0),
-    ("rand_scalar", "Random 64 (scalar)", "34A853", 1),
-    ("rand256_scalar", "Random 256 (scalar)", "0B6B3A", 2),
-    ("rand_vec", "Vec.\\ Random 64 (AVX2)", "B57BFF", 3),
-    ("rand256_vec", "Vec.\\ Random 256 (AVX-512)", "6A1B9A", 4),
-    ("dyn_vec", "Vec.\\ Dynamic 64 (AVX2 \\& HWY)", "FBBC04", 5),
-    ("dyn256_vec", "Vec.\\ Dynamic 256 (AVX-512 \\& HWY)", "EA4335", 6),
+    ("exact_hwy", "Exact", "4285F4", 0),
+    ("rand_scalar", "Random Hist. (64 bins)", "34A853", 1),
+    ("rand256_scalar", "Random Hist. (256 bins)", "0B6B3A", 2),
+    ("rand_vec", "AVX2 R. Hist. (ours)", "B57BFF", 3),
+    ("rand256_vec", "AVX-512 R. Hist. (ours)", "6A1B9A", 4),
+    ("dyn_vec", "Dyn. AVX2 R. Hist. (ours)", "FBBC04", 5),
+    ("dyn256_vec", "Dyn. AVX-512 R. Hist. (ours)", "EA4335", 6),
 ]
 BAR_W = 0.1  # x units; cluster = 7 bars + two gaps of 0.5 bar (after slots 2 and 4)
 GAP = 0.5
@@ -52,10 +52,10 @@ YMAX = 1.5  # fixed y-range in every panel; taller bars are cut off and marked w
 
 # Mirrors the author's Overleaf caption / Description (2026-09-25); edit here, not on Overleaf.
 CAPTION = ("End-to-end training time on select datasets, normalized to the performance of "
-           "SO-YDF with exact splits. Panels: SPO-GBT at depth 6; SPO-RF at depth 6, depth 16 "
+           "SO-YDF with exact splits. Panels: SPO-GBT at depth 6; SPO-RF at depth 10, depth 20 "
            "and full depth (purity). Blocks of each cluster, left to right: Exact and scalar random "
            "histograms; our vectorized histograms; our dynamic-vectorized histograms (not run at "
-           "depth 6). Bars above 1.5 are cut off (white break mark).")
+           "depths 6 and 10). Bars above 1.5 are cut off (white break mark).")
 DESCRIPTION = ("End-to-end evaluation reveals the benefit of our methods - up to 35\\% reduction "
                "in runtime with only Dynamic, and up to 50\\% with Vectorized Dynamic. It also "
                "reveals the similarity in performance of RF Exact to SO Exact.")
@@ -64,13 +64,8 @@ VARIANTS = {
     "grid": dict(
         out="e2e_normalized_grid.tex", label="fig:overall", caption=CAPTION, description=DESCRIPTION,
         wide=True, legend_name="e2elegendgrid",
-        panels=[("gbt", 6, "SPO-GBT, depth 6", False), ("rf", 6, "SPO-RF, depth 6", False),
-                ("rf", 16, "SPO-RF, depth 16", True), ("rf", -1, "SPO-RF, full depth (purity)", True)]),
-    "depth24": dict(
-        out="e2e_normalized_depth24.tex", label="fig:overall-depth24",
-        caption="SPO-RF at depth 24; datasets, bars and axes as in Figure~\\ref{fig:overall}.",
-        description="", wide=False, legend_name="e2elegendd24",
-        panels=[("rf", 24, "SPO-RF, depth 24", True)]),
+        panels=[("gbt", 6, "SPO-GBT, depth 6", False), ("rf", 10, "SPO-RF, depth 10", False),
+                ("rf", 20, "SPO-RF, depth 20", True), ("rf", -1, "SPO-RF, full depth (purity)", True)]),
 }
 
 
@@ -105,6 +100,8 @@ def panel_plots(cells: dict, fam: str, depth: int, with_dyn: bool, legend: bool,
         plots.append(f"\\addplot[bar{slot}, /pgf/bar shift={slot_shift(slot):.4f}] coordinates {{{coords}}};")
         if legend:
             plots.append(f"\\addlegendentry{{{name}}}")
+            if slot == 4:  # pad row 2 so the dynamic block starts row 3
+                plots += ["\\addlegendimage{empty legend}", "\\addlegendentry{}"]
     plots.append(f"\\draw[gray!70, dashed, line width=0.5pt] (axis cs:0.45,1) -- (axis cs:{n + 0.55},1);")
     # Cut-off marker: two white slashes across the bar top, like an axis break.
     for xc in cut:

@@ -237,6 +237,13 @@ table/figure, `git pull` the MCP clone, diff every Overleaf `\caption`/`\Descrip
 against what the generator emits, and copy the user's wording (TODOs included) into the script.
 Only then regenerate — otherwise the push overwrites their edits.
 
+## Don't commit paper figure/table edits to this repo (user directive, 2026-09-25)
+
+**After pushing a figure or table change to Overleaf, do not `git commit` the matching local
+changes** (generator script, `paper/<venue>/` snapshot). The user often asks for several versions
+of the same figure and picks one later. Leave the changes uncommitted and tell the user what
+changed; commit only when they ask.
+
 ## Figures wait for final tables (user directive, 2026-09-09)
 
 **Do not update paper figures while table results are still in flux.** Regenerate and push
