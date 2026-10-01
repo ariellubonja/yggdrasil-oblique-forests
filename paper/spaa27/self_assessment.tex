@@ -1,0 +1,18 @@
+% Self-Assessment of Relevance (SPAA title page; single-column, <= 20 lines).
+% Drop-in replacement for the placeholder \section*{Self-Assessment of Relevance} block in main.tex.
+% Must sit inside \begin{strip}...\end{strip} (package cuted) to render single-column on the two-column title page.
+\section*{Self-Assessment of Relevance}
+
+Experiments (primarily experimental contributions)
+
+\begin{itemize}
+\item Interplay between algorithmic parallelism, programming, and architecture
+\item Parallelism in machine learning
+\item Memory or I/O-efficient algorithms
+\end{itemize}
+
+\emph{Why SPAA.} The parallel content is not the tree-level thread pool but the per-node kernel under it: a memory-bound gather, then a split search whose cost is set by the vector ISA, not by asymptotics. Sparse oblique splits forbid the preprocessing every axis-aligned learner relies on (presorting, global quantization, histogram subtraction), so the algorithm-versus-architecture trade-off recurs at every node, from millions of rows to a handful.
+
+\emph{Novelty.} SIMD $k$-ary search is known; we apply it where the bin lookup cannot leave the hot loop and show it is what makes histograms competitive with vectorized sorting (Highway VQSort). No tree learner we know of chooses between exact and histogram splitting per node; the crossover moves with the kernel (250 rows on AVX2, 1000 on AVX-512), yet one value per kernel is within 1\% of optimal on every dataset.
+
+\emph{Scope of claims.} Speedups (1.3--2$\times$ at depth 6, 1.2--1.6$\times$ to purity) are against a baseline we first made 2--5$\times$ faster and upstreamed to YDF, not the released code. We claim no new bounds and no accuracy gains: vectorization is mathematically identical, the switch accuracy-neutral on 36 datasets. Runtimes against XGBoost, LightGBM and CatBoost are indicative only: they train presorted or pre-quantized axis-aligned models, which oblique splits preclude.

@@ -157,7 +157,7 @@ def emit(cells: dict, v: dict) -> tuple[str, list[str]]:
         "    \\end{tikzpicture}",
         "",
         "    \\vspace{2pt}",
-        f"    \\ref{{{v['legend_name']}}}",
+        f"    \\pgfplotslegendfromname{{{v['legend_name']}}}",
         f"    \\caption{{{v['caption']}}}",
         *([f"    \\Description{{{v['description']}}}"] if v["description"] else []),
         f"    \\label{{{v['label']}}}",

@@ -82,17 +82,16 @@ def make_summary(agg):
         "% paired per-(seed,fold) deltas; margins = smallest margin passing at alpha=0.05.",
         "\\begin{table}",
         "\\centering",
+        # Caption wording is the user's (pulled from Overleaf 2026-09-27); keep it.
         "\\caption{Held-out test accuracy of random-histogram split finding vs.\\ "
         "exact splits, aggregated over 36 datasets (34 OpenML CC18 binary tasks, "
-        "10-fold CV $\\times$ 3 seeds; HIGGS and SUSY held-out, single run). "
-        "$\\Delta$ = arm $-$ Exact in units of $10^{-3}$ accuracy; CIs are "
-        "per-dataset paired $t$ intervals. W/T/L counts datasets "
+        "10-fold CV $\\times$ 3 seeds + HIGGS and SUSY). "
+        "$\\Delta$ = method $-$ Exact in units of $10^{-3}$ accuracy; CIs are "
+        "per-dataset paired $t$ intervals. W/T/L counts Wins/Ties/Losses "
         "($|\\Delta| \\le 10^{-3}$ is a tie). LOO $\\Delta$ = leave-one-out, "
-        "dropping the most influential dataset (cylinder-bands in every arm; "
-        "Exact degenerates on its missing values). Margin = smallest one-sided "
+        "dropping the most influential dataset. Margin = smallest one-sided "
         "non-inferiority margin passing at $\\alpha{=}0.05$; Sig.\\ = datasets "
-        "with a Holm-corrected per-dataset Wilcoxon difference. Bin-count "
-        "ablations: seed 1, CC18 only ($n{=}34$).}",
+        "with a Holm-corrected per-dataset Wilcoxon difference.}",
         "\\label{tab:hist-vs-exact-summary}",
         "\\begin{tabular}{llrccccc}",
         "\\toprule",
