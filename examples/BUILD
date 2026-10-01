@@ -92,6 +92,43 @@ cc_binary(
     ],
 )
 
+# Prints which serving engine runs for a forest (QuickScorer Highway vs Legacy).
+cc_binary(
+    name = "infer_oblique_forest",
+    srcs = ["infer_oblique_forest.cc"],
+    deps = [
+        "//yggdrasil_decision_forests/dataset:csv_example_reader",
+        "//yggdrasil_decision_forests/dataset:data_spec",
+        "//yggdrasil_decision_forests/dataset:data_spec_cc_proto",
+        "//yggdrasil_decision_forests/dataset:data_spec_inference",
+        "//yggdrasil_decision_forests/dataset:vertical_dataset",
+        "//yggdrasil_decision_forests/dataset:vertical_dataset_io",
+        "//yggdrasil_decision_forests/learner:learner_library",
+        "//yggdrasil_decision_forests/learner/gradient_boosted_trees",
+        "//yggdrasil_decision_forests/learner/random_forest",
+        "//yggdrasil_decision_forests/model:model_library",
+        "//yggdrasil_decision_forests/model/decision_tree",
+        "//yggdrasil_decision_forests/model/decision_tree:decision_forest_interface",
+        "//yggdrasil_decision_forests/model/gradient_boosted_trees",
+        "//yggdrasil_decision_forests/model/random_forest",
+        "//yggdrasil_decision_forests/serving:example_set",
+        "//yggdrasil_decision_forests/serving:fast_engine",
+        "//yggdrasil_decision_forests/serving/decision_forest:quick_scorer_extended",
+        "//yggdrasil_decision_forests/serving/decision_forest:register_engines",
+        "//yggdrasil_decision_forests/utils:logging",
+        "@com_google_absl//absl/base:config",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/flags:parse",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_highway//:hwy",
+    ],
+)
+
 # Single-process demo of distributed GBT training (in-process workers).
 #
 #   bazel build -c opt //examples:distributed_gbt_demo
