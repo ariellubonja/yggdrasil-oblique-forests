@@ -25,8 +25,8 @@
 //   learner/distributed_decision_tree/training.cc         (TreeBuilder)
 //
 // Usage:
-//   bazel build -c opt //examples:distributed_gbt_demo
-//   bazel-bin/examples/distributed_gbt_demo --alsologtostderr \
+//   bazel build -c opt //examples:train_distributed_gbt
+//   bazel-bin/examples/train_distributed_gbt --alsologtostderr \
 //     --num_workers=4 --num_trees=20
 //
 #include <cstdint>
@@ -38,6 +38,8 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "google/protobuf/text_format.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
@@ -51,6 +53,8 @@
 #include "yggdrasil_decision_forests/metric/metric.pb.h"
 #include "yggdrasil_decision_forests/metric/report.h"
 #include "yggdrasil_decision_forests/model/abstract_model.h"
+#include "yggdrasil_decision_forests/model/decision_tree/decision_tree.h"
+#include "yggdrasil_decision_forests/model/gradient_boosted_trees/gradient_boosted_trees.h"
 #include "yggdrasil_decision_forests/utils/filesystem.h"
 #include "yggdrasil_decision_forests/utils/logging.h"
 #include "yggdrasil_decision_forests/utils/random.h"
@@ -75,6 +79,23 @@ ABSL_FLAG(bool, fresh_train, true,
           "Delete previous checkpoints from work_dir before training so every "
           "run replays training from iteration 0. The dataset cache is kept "
           "and reused (the expensive part on HIGGS).");
+ABSL_FLAG(int, num_threads, 6, "Threads per worker (split search).");
+ABSL_FLAG(int, max_depth, 6, "Maximum tree depth.");
+ABSL_FLAG(std::string, split_axis, "AXIS_ALIGNED",
+          "AXIS_ALIGNED or SPARSE_OBLIQUE. SPARSE_OBLIQUE = in-worker oblique "
+          "splits: each worker samples projections of the columns it owns.");
+ABSL_FLAG(double, sparse_oblique_num_projections_exponent, 0.5,
+          "Projections per node = ceil(F^exponent); 0.5 = sqrt(F).");
+ABSL_FLAG(double, sparse_oblique_projection_density_factor, 2.0,
+          "Expected number of non-zero weights per projection.");
+ABSL_FLAG(std::string, sparse_oblique_weights, "BINARY",
+          "BINARY or CONTINUOUS projection weights.");
+ABSL_FLAG(bool, sparse_oblique_local_projection_count, false,
+          "If true, F in ceil(F^exponent) is the worker's own numerical "
+          "candidate count instead of the dataset's numerical feature count.");
+ABSL_FLAG(int64_t, max_unique_values_for_discretized_numerical, -1,
+          "If >= 1, overrides the cache's discretization threshold (1 keeps "
+          "every non-constant column exact). Needs a fresh cache dir.");
 
 namespace ydf = yggdrasil_decision_forests;
 
@@ -110,12 +131,36 @@ int main(int argc, char** argv) {
   dgbt->set_worker_logs(absl::GetFlag(FLAGS_worker_logs));
   dgbt->set_checkpoint_interval_trees(1000);  // No checkpointing in the demo.
   dgbt->mutable_gbt()->set_num_trees(absl::GetFlag(FLAGS_num_trees));
+  auto* dt = dgbt->mutable_gbt()->mutable_decision_tree();
+  dt->set_max_depth(absl::GetFlag(FLAGS_max_depth));
+  if (absl::GetFlag(FLAGS_max_unique_values_for_discretized_numerical) >= 1) {
+    dgbt->mutable_create_cache()->set_max_unique_values_for_discretized_numerical(
+        absl::GetFlag(FLAGS_max_unique_values_for_discretized_numerical));
+  }
+  const std::string split_axis = absl::GetFlag(FLAGS_split_axis);
+  if (split_axis == "SPARSE_OBLIQUE") {
+    auto* oblique = dt->mutable_sparse_oblique_split();
+    oblique->set_num_projections_exponent(
+        absl::GetFlag(FLAGS_sparse_oblique_num_projections_exponent));
+    oblique->set_projection_density_factor(
+        absl::GetFlag(FLAGS_sparse_oblique_projection_density_factor));
+    if (absl::GetFlag(FLAGS_sparse_oblique_weights) == "CONTINUOUS") {
+      oblique->mutable_continuous();
+    } else {
+      oblique->mutable_binary();
+    }
+    dgbt->mutable_in_worker_oblique()->set_num_projections_from_local_features(
+        absl::GetFlag(FLAGS_sparse_oblique_local_projection_count));
+  } else {
+    QCHECK_EQ(split_axis, "AXIS_ALIGNED") << "Unknown --split_axis";
+  }
 
   // 3. Deployment configuration: where the workers live. "MULTI_THREAD" runs
   // them as threads of this process; swapping in "GRPC" (see
   // examples/distributed_training.sh) is the only change needed for real
   // multi-machine training.
   ydf::model::proto::DeploymentConfig deployment;
+  deployment.set_num_threads(absl::GetFlag(FLAGS_num_threads));
   deployment.set_cache_path(file::JoinPath(work_dir, "cache"));
   // try_resume_training=true keeps the working directory stable across runs:
   // with false, the learner appends a random+timestamp subdir to cache_path
@@ -147,7 +192,10 @@ int main(int argc, char** argv) {
       ydf::model::GetLearner(train_config, deployment,
                              file::JoinPath(work_dir, "train_logs"))
           .value();
+  const auto begin_train = absl::Now();
   const auto model = learner->TrainWithStatus(train_path, data_spec).value();
+  LOG(INFO) << "Training (incl. cache creation) took "
+            << absl::Now() - begin_train << " split_axis=" << split_axis;
 
   // 5. Evaluate + describe.
   ydf::dataset::VerticalDataset test_dataset;
@@ -160,5 +208,28 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Evaluation:\n"
             << ydf::metric::TextReport(evaluation).value();
   LOG(INFO) << "Model:\n" << model->DescriptionAndStatistics(false);
+
+  // Split-type census: how many conditions are oblique, and how many of
+  // those combine more than one column.
+  const auto* gbt = dynamic_cast<
+      const ydf::model::gradient_boosted_trees::GradientBoostedTreesModel*>(
+      model.get());
+  QCHECK(gbt != nullptr);
+  int num_conditions = 0, num_oblique = 0, num_multi_column = 0;
+  for (const auto& tree : gbt->decision_trees()) {
+    tree->IterateOnNodes([&](const ydf::model::decision_tree::NodeWithChildren&
+                                 node,
+                             const int depth) {
+      if (node.IsLeaf()) return;
+      num_conditions++;
+      const auto& condition = node.node().condition().condition();
+      if (condition.has_oblique_condition()) {
+        num_oblique++;
+        num_multi_column += condition.oblique_condition().attributes_size() > 1;
+      }
+    });
+  }
+  LOG(INFO) << "Conditions: " << num_conditions << " total, " << num_oblique
+            << " oblique, " << num_multi_column << " with >1 column";
   return 0;
 }

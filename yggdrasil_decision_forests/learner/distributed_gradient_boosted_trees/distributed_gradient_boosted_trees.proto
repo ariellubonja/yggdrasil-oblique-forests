@@ -65,6 +65,21 @@ message DistributedGradientBoostedTreesTrainingConfig {
 
   optional Internal internal = 7;
 
+  // In-worker sparse oblique splits (active when gbt.decision_tree has
+  // sparse_oblique_split). Each worker samples projections from the columns it
+  // owns only, so split evaluation and sharing need no extra communication.
+  // Dynamic load balancing is disabled in this mode.
+  optional InWorkerOblique in_worker_oblique = 10;
+
+  message InWorkerOblique {
+    // Number of projections a worker tests per open node:
+    //   false: GetNumProjections(number of numerical features in the dataset),
+    //          i.e. ceil(F^exponent) = sqrt(F) with exponent 0.5.
+    //   true:  GetNumProjections(number of numerical candidates the worker
+    //          holds for that node).
+    optional bool num_projections_from_local_features = 1 [default = false];
+  }
+
   message Internal {
     // If true, the workers will simulate failures to test the checkpoint during
     // training. The training will eventually complete.

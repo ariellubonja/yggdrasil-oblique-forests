@@ -70,6 +70,7 @@ cc_library_ydf(
         "//yggdrasil_decision_forests/dataset:vertical_dataset_io",
         "//yggdrasil_decision_forests/dataset:weight",
         "//yggdrasil_decision_forests/learner:abstract_learner",
+        "//yggdrasil_decision_forests/learner/distributed_decision_tree:oblique",
         "//yggdrasil_decision_forests/learner/distributed_decision_tree:training",
         "//yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache:column_cache",
         "//yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache:dataset_cache_reader",
@@ -180,6 +181,32 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+# In-worker sparse oblique splits (distributed_decision_tree/oblique.h).
+cc_test(
+    name = "distributed_gradient_boosted_trees_oblique_test",
+    size = "large",
+    srcs = ["distributed_gradient_boosted_trees_oblique_test.cc"],
+    data = ["//yggdrasil_decision_forests/test_data"],
+    deps = [
+        ":dgbt",
+        ":dgbt_cc_proto",
+        ":worker",
+        "//yggdrasil_decision_forests/learner:abstract_learner_cc_proto",
+        "//yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache:dataset_cache_worker",
+        "//yggdrasil_decision_forests/metric",
+        "//yggdrasil_decision_forests/model:abstract_model",
+        "//yggdrasil_decision_forests/model/decision_tree",
+        "//yggdrasil_decision_forests/model/gradient_boosted_trees",
+        "//yggdrasil_decision_forests/utils:filesystem",
+        "//yggdrasil_decision_forests/utils:test",
+        "//yggdrasil_decision_forests/utils:test_utils",
+        "//yggdrasil_decision_forests/utils/distribute/implementations/multi_thread",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )

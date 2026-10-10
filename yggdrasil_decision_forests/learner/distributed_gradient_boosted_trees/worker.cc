@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -41,6 +42,7 @@
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache/column_cache.h"
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache/dataset_cache_reader.h"
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/label_accessor.h"
+#include "yggdrasil_decision_forests/learner/distributed_decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/splitter.h"
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/training.h"
 #include "yggdrasil_decision_forests/learner/distributed_gradient_boosted_trees/common.h"
@@ -68,6 +70,24 @@ namespace model {
 namespace distributed_gradient_boosted_trees {
 
 using ::yggdrasil_decision_forests::model::gradient_boosted_trees::LossResults;
+
+namespace {
+
+// splitmix64 mixing of the layer's projection seed with the worker and weak
+// model indices, so every (worker, weak model) draws an independent stream;
+// each open node mixes its own index in on top.
+uint64_t MixProjectionSeed(const uint64_t seed, const int worker_idx,
+                           const int weak_model_idx) {
+  uint64_t z = seed +
+               0x9E3779B97F4A7C15ull * (static_cast<uint64_t>(worker_idx) + 1) +
+               0xBF58476D1CE4E5B9ull *
+                   (static_cast<uint64_t>(weak_model_idx) + 1);
+  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+  z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+  return z ^ (z >> 31);
+}
+
+}  // namespace
 
 DistributedGradientBoostedTreesWorker::
     ~DistributedGradientBoostedTreesWorker() {
@@ -102,6 +122,14 @@ int DistributedGradientBoostedTreesWorker::EvaluationWorkerIdx() const {
 
 int DistributedGradientBoostedTreesWorker::NumEvaluationWorkers() const {
   return NumWorkers() - welcome_.num_train_workers();
+}
+
+bool DistributedGradientBoostedTreesWorker::UseInWorkerObliqueSplits() const {
+  return welcome_.train_config()
+      .GetExtension(proto::distributed_gradient_boosted_trees_config)
+      .gbt()
+      .decision_tree()
+      .has_sparse_oblique_split();
 }
 
 absl::Status DistributedGradientBoostedTreesWorker::Setup(
@@ -149,6 +177,24 @@ absl::Status DistributedGradientBoostedTreesWorker::Setup(
                                               dataset_->ranking_groups()));
 
       RETURN_IF_ERROR(dataset_->release_ranking_groups());
+    }
+
+    if (UseInWorkerObliqueSplits()) {
+      oblique_columns_ =
+          std::make_unique<distributed_decision_tree::DenseNumericalColumns>(
+              dataset_.get());
+      for (const int feature : welcome_.train_config_linking().features()) {
+        if (welcome_.dataspec().columns(feature).type() ==
+            dataset::proto::ColumnType::NUMERICAL) {
+          num_global_numerical_features_++;
+        }
+      }
+      if (worker_logs_) {
+        LOG(INFO) << "In-worker sparse oblique splits: worker owns "
+                  << dataset_->features().size() << " features; "
+                  << num_global_numerical_features_
+                  << " numerical features in the dataset";
+      }
     }
 
   } else if (GetWorkerType() == WorkerType::kEVALUATOR) {
@@ -220,6 +266,7 @@ DistributedGradientBoostedTreesWorker::RunRequest(
     if (stop_) {
       if (num_running_requests_ == 0) {
         LOG(INFO) << "Clear the worker memory";
+        oblique_columns_.reset();
         dataset_.reset();
         loss_.reset();
         predictions_.clear();
@@ -647,14 +694,24 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
 
   answer->mutable_split_per_weak_model()->Reserve(weak_models_.size());
 
+  const auto& spe_config = welcome_.train_config().GetExtension(
+      proto::distributed_gradient_boosted_trees_config);
+  const auto& dt_config = spe_config.gbt().decision_tree();
+  const bool oblique = UseInWorkerObliqueSplits();
+
   // Collect the active features i.e. the features on which to find splits.
   size_t num_unique_active_features_across_weak_models = 0;
-  // Model idx -> node idx -> list of features.
+  // Model idx -> node idx -> list of features (axis-aligned splitter).
   std::vector<std::vector<std::vector<int>>> active_features_per_weak_models(
       weak_models_.size());
   // Model idx -> list of features.
   std::vector<std::vector<int>> unique_active_features_per_weak_models(
       weak_models_.size());
+  // Oblique mode: model idx -> node idx -> numerical features. They are
+  // sampled in-worker into projections instead of being scored one by one.
+  std::vector<std::vector<std::vector<int>>> oblique_features_per_weak_models(
+      weak_models_.size());
+  absl::flat_hash_set<int> oblique_features_to_prepare;
 
   for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
        weak_model_idx++) {
@@ -675,6 +732,23 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
       return absl::InternalError("Unexpected number of requested nodes");
     }
 
+    if (oblique) {
+      auto& oblique_features = oblique_features_per_weak_models[weak_model_idx];
+      oblique_features.resize(active_features.size());
+      for (int node_idx = 0; node_idx < active_features.size(); node_idx++) {
+        auto& features = active_features[node_idx];
+        const auto numerical_begin = std::stable_partition(
+            features.begin(), features.end(), [this](const int feature) {
+              return welcome_.dataspec().columns(feature).type() !=
+                     dataset::proto::ColumnType::NUMERICAL;
+            });
+        oblique_features[node_idx].assign(numerical_begin, features.end());
+        features.erase(numerical_begin, features.end());
+        oblique_features_to_prepare.insert(oblique_features[node_idx].begin(),
+                                           oblique_features[node_idx].end());
+      }
+    }
+
     // List all the features tested by at least one node.
     auto& unique_active_features =
         unique_active_features_per_weak_models[weak_model_idx];
@@ -689,6 +763,13 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
         unique_active_features.size();
   }
 
+  if (!oblique_features_to_prepare.empty()) {
+    std::vector<int> features(oblique_features_to_prepare.begin(),
+                              oblique_features_to_prepare.end());
+    std::sort(features.begin(), features.end());
+    RETURN_IF_ERROR(oblique_columns_->Prepare(features, thread_pool_.get()));
+  }
+
   std::vector<distributed_decision_tree::SplitPerOpenNode>
       splits_per_weak_models(weak_models_.size());
 
@@ -697,7 +778,7 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
       num_unique_active_features_across_weak_models);
   absl::Status worker_status;
 
-  // Find the best splits.
+  // Find the best axis-aligned splits.
   for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
        weak_model_idx++) {
     auto& weak_model = weak_models_[weak_model_idx];
@@ -716,8 +797,39 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
   }
 
   done_find_splits.Wait();
-  utils::concurrency::MutexLock l(mutex_splits_per_weak_models);
-  RETURN_IF_ERROR(worker_status);
+  {
+    utils::concurrency::MutexLock l(mutex_splits_per_weak_models);
+    RETURN_IF_ERROR(worker_status);
+  }
+
+  // In-worker oblique splits over the owned numerical columns. An oblique
+  // split replaces the axis-aligned one of a node only with a higher score.
+  if (oblique) {
+    const int num_features_for_projection_count =
+        spe_config.in_worker_oblique().num_projections_from_local_features()
+            ? 0
+            : num_global_numerical_features_;
+    for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
+         weak_model_idx++) {
+      auto& weak_model = weak_models_[weak_model_idx];
+      const distributed_decision_tree::ObliqueSplitArgs args{
+          oblique_features_per_weak_models[weak_model_idx],
+          weak_model.example_to_node,
+          welcome_.dataspec(),
+          welcome_.train_config_linking(),
+          dt_config,
+          *weak_model.label_accessor,
+          weak_model.label_stats_per_node,
+          *oblique_columns_,
+          model::proto::Task::REGRESSION,
+          weak_model.label_accessor_type,
+          num_features_for_projection_count,
+          MixProjectionSeed(request.projection_seed(), WorkerIdx(),
+                            weak_model_idx)};
+      RETURN_IF_ERROR(distributed_decision_tree::FindBestObliqueSplits(
+          args, thread_pool_.get(), &splits_per_weak_models[weak_model_idx]));
+    }
+  }
 
   // Save the best splits into the reply.
   for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
@@ -749,6 +861,14 @@ absl::Status DistributedGradientBoostedTreesWorker::EvaluateSplits(
     RETURN_IF_ERROR(distributed_decision_tree::EvaluateSplits(
         weak_model.example_to_node, weak_model.last_splits,
         &weak_model.last_split_evaluation, dataset_.get(), thread_pool_.get()));
+
+    // Oblique splits proposed by this worker (all attributes are local).
+    if (oblique_columns_ != nullptr) {
+      RETURN_IF_ERROR(distributed_decision_tree::EvaluateObliqueSplits(
+          weak_model.example_to_node, weak_model.last_splits, *dataset_,
+          oblique_columns_.get(), thread_pool_.get(),
+          &weak_model.last_split_evaluation));
+    }
   }
 
   return absl::OkStatus();
@@ -792,8 +912,12 @@ absl::Status DistributedGradientBoostedTreesWorker::UpdateOwnedFeatures(
     }
   }
 
-  return dataset_->LoadingAndUnloadingFeatures(features_to_load,
-                                               features_to_unload);
+  RETURN_IF_ERROR(dataset_->LoadingAndUnloadingFeatures(features_to_load,
+                                                        features_to_unload));
+  if (oblique_columns_ != nullptr) {
+    oblique_columns_->Clear();
+  }
+  return absl::OkStatus();
 }
 
 absl::StatusOr<bool>

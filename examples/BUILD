@@ -131,11 +131,11 @@ cc_binary(
 
 # Single-process demo of distributed GBT training (in-process workers).
 #
-#   bazel build -c opt //examples:distributed_gbt_demo
-#   bazel-bin/examples/distributed_gbt_demo --alsologtostderr --num_workers=4
+#   bazel build -c opt //examples:train_distributed_gbt
+#   bazel-bin/examples/train_distributed_gbt --alsologtostderr --num_workers=4
 cc_binary(
-    name = "distributed_gbt_demo",
-    srcs = ["distributed_gbt_demo.cc"],
+    name = "train_distributed_gbt",
+    srcs = ["train_distributed_gbt.cc"],
     deps = [
         "//yggdrasil_decision_forests/dataset:all_dataset_formats",
         "//yggdrasil_decision_forests/dataset:data_spec",
@@ -151,6 +151,8 @@ cc_binary(
         "//yggdrasil_decision_forests/metric:metric_cc_proto",
         "//yggdrasil_decision_forests/metric:report",
         "//yggdrasil_decision_forests/model:abstract_model",
+        "//yggdrasil_decision_forests/model/decision_tree",
+        "//yggdrasil_decision_forests/model/gradient_boosted_trees",
         "//yggdrasil_decision_forests/utils:filesystem",
         "//yggdrasil_decision_forests/utils:logging",
         "//yggdrasil_decision_forests/utils:random",
@@ -159,5 +161,6 @@ cc_binary(
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
     ],
 )

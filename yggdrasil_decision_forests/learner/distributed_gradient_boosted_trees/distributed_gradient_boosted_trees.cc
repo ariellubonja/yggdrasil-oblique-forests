@@ -172,6 +172,12 @@ DistributedGradientBoostedTreesLearner::GetGenericHyperParameterSpecification()
            decision_tree::kHParamMinExamples,
            decision_tree::kHParamNumCandidateAttributes,
            decision_tree::kHParamNumCandidateAttributesRatio,
+           decision_tree::kHParamSplitAxis,
+           decision_tree::kHParamSplitAxisSparseObliqueNumProjectionsExponent,
+           decision_tree::kHParamSplitAxisSparseObliqueProjectionDensityFactor,
+           decision_tree::kHParamSplitAxisSparseObliqueMaxNumProjections,
+           decision_tree::kHParamSplitAxisSparseObliqueWeights,
+           decision_tree::kHParamSplitAxisSparseObliqueNormalization,
        }) {
     const auto src_field = gbt_params.fields().find(supported_field);
     if (src_field == gbt_params.fields().end()) {
@@ -326,6 +332,18 @@ absl::Status SetDefaultHyperParameters(
     LOG(INFO) << "Default loss set to "
               << gradient_boosted_trees::proto::Loss_Name(
                      spe_config->mutable_gbt()->loss());
+  }
+
+  // In-worker oblique splits keep every attribute of a projection on the
+  // proposing worker, so feature ownership must not move during training.
+  if (spe_config->gbt().decision_tree().has_sparse_oblique_split()) {
+    auto* balancer = spe_config->mutable_load_balancer();
+    if (balancer->dynamic_balancing_frequency_iteration() != -1 ||
+        balancer->dynamic_balancing_frequency_seconds() != -1) {
+      LOG(INFO) << "Sparse oblique splits: dynamic load balancing disabled";
+      balancer->set_dynamic_balancing_frequency_iteration(-1);
+      balancer->set_dynamic_balancing_frequency_seconds(-1);
+    }
   }
 
   return absl::OkStatus();
@@ -1172,12 +1190,22 @@ EmitFindSplits(
     feature_per_workers = load_balancer->FeaturesPerWorkers();
   }
 
+  // One projection seed per layer for in-worker oblique splits; the workers
+  // mix in their own index. Drawn only in oblique mode to keep the
+  // axis-aligned random stream unchanged.
+  uint64_t projection_seed = 0;
+  if (spe_config.gbt().decision_tree().has_sparse_oblique_split()) {
+    projection_seed = (static_cast<uint64_t>((*rnd)()) << 32) ^
+                      static_cast<uint64_t>((*rnd)());
+  }
+
   // Send the requests.
   int num_requests = 0;
   for (int worker_idx = 0; worker_idx < load_balancer->NumWorkers();
        worker_idx++) {
     proto::WorkerRequest generic_request;
     auto& request = *generic_request.mutable_find_splits();
+    request.set_projection_seed(projection_seed);
 
     int num_selected_features;
     RETURN_IF_ERROR(ExactSampledFeaturesForWorker(

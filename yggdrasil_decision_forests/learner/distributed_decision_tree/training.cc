@@ -342,11 +342,17 @@ absl::Status TreeBuilder::FindBestSplitsWithFeature(
 
   const auto column_spec = common.dataspec.columns(feature);
 
-  if (dt_config_.has_sparse_oblique_split()) {
+  // With sparse oblique splits, numerical features go through the in-worker
+  // projection sampler (oblique.h); only non-numerical features land here.
+  if (dt_config_.has_sparse_oblique_split() &&
+      column_spec.type() == dataset::proto::ColumnType::NUMERICAL) {
     return absl::InvalidArgumentError(
-        "Oblique splits not implemented with distributed training. Disable "
-        "oblique splits (i.e. sparse_oblique_split=false) or disable "
-        "distributed training.");
+        "Numerical features must use the in-worker oblique splitter when "
+        "sparse_oblique_split is set (see distributed_decision_tree/oblique.h).");
+  }
+  if (dt_config_.has_mhld_oblique_split()) {
+    return absl::InvalidArgumentError(
+        "MHLD oblique splits are not implemented with distributed training.");
   }
   if (dt_config_.numerical_split().type() !=
       decision_tree::proto::NumericalSplit::EXACT) {
@@ -812,6 +818,10 @@ absl::Status EvaluateSplits(const ExampleToNodeMap& example_to_node,
   for (int split_idx = 0; split_idx < splits.size(); split_idx++) {
     const auto& split = splits[split_idx];
     if (!IsSplitValid(split)) {
+      continue;
+    }
+    // Oblique splits are evaluated by EvaluateObliqueSplits (oblique.h).
+    if (split.condition.condition().has_oblique_condition()) {
       continue;
     }
     const FeatureIndex feature = split.condition.attribute();

@@ -21,6 +21,7 @@
 #include "absl/time/time.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/training.h"
+#include "yggdrasil_decision_forests/learner/distributed_decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/learner/distributed_gradient_boosted_trees/worker.pb.h"
 #include "yggdrasil_decision_forests/learner/gradient_boosted_trees/loss/loss_interface.h"
 #include "yggdrasil_decision_forests/learner/gradient_boosted_trees/loss/loss_library.h"
@@ -195,6 +196,9 @@ class DistributedGradientBoostedTreesWorker
   // The worker's type define its job.
   WorkerType GetWorkerType() const;
 
+  // True iff the splits are in-worker sparse oblique projections (oblique.h).
+  bool UseInWorkerObliqueSplits() const;
+
   // Index of the worker in the training worker pool.
   int TrainingWorkerIdx() const;
 
@@ -315,6 +319,15 @@ class DistributedGradientBoostedTreesWorker
 
   // Ranking index for the training dataset.
   std::unique_ptr<gradient_boosted_trees::AbstractLossCache> train_loss_cache_;
+
+  // Dense copies of the owned numerical columns for in-worker oblique splits.
+  // Only allocated on training workers when sparse_oblique_split is set.
+  std::unique_ptr<distributed_decision_tree::DenseNumericalColumns>
+      oblique_columns_;
+
+  // Numerical input features in the whole dataset: the default basis of the
+  // per-worker projection count (sqrt(F) with the 0.5 exponent).
+  int num_global_numerical_features_ = 0;
 };
 
 // Extract the requested features in a FindSplits request.
