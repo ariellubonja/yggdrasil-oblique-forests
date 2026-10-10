@@ -1,5 +1,7 @@
-\documentclass[sigconf,anonymous,review]{acmart}
+\documentclass[sigconf]{acmart}%,anonymous,review]{acmart}
 \usepackage{graphicx} % Required for inserting images
+
+\newcommand{\TODO}[1]{\textbf{\textcolor{red}{#1}}}
 
 % custom packages ariel
 \usepackage{amsmath}
@@ -167,26 +169,22 @@ We overhaul SPO training in YDF, first by fixing inefficiencies in the released 
 
 \keywords{Random Forests, Tree Ensembles, Performance Optimization, Vectorization, GPU}
 
-\section*{Self-Assessment of Relevance}
+% \section*{Self-Assessment of Relevance}
 
-Experiments (primarily experimental contributions)
+% Experiments (primarily experimental contributions)
 
-\begin{itemize}
-\item Interplay between algorithmic parallelism, programming, and architecture
-\item Parallelism in machine learning
-\item Memory or I/O-efficient algorithms
-\end{itemize}
+% \begin{itemize}
+% \item Interplay between algorithmic parallelism, programming, and architecture
+% \item Parallelism in machine learning
+% \item Memory or I/O-efficient algorithms
+% \end{itemize}
 
-% \section{Self-Assessment of Relevance}
+% This is an experimental study of training sparse oblique (SPO) decision forests, the top-ranked configuration of Google's Yggdrasil Decision Forests (YDF), on a 48-core CPU. Tree-level parallelism is already exploited; the cost is a single-threaded per-node kernel that gathers the projection's columns and bins or sorts them. Because the split feature exists only once the projection is drawn, presorting, global quantization and histogram subtraction do not apply: every projection is re-binned or re-sorted at every node, from millions of rows to a handful.
 
-% \emph{Why SPAA.} The parallel content is not the tree-level thread pool but the per-node kernel under it: a memory-bound gather, then a split search whose cost is set by the vector ISA, not by asymptotics. Sparse oblique splits forbid the preprocessing every axis-aligned learner relies on (presorting, global quantization, histogram subtraction), so the algorithm-versus-architecture trade-off recurs at every node, from millions of rows to a handful.
-
-This is an experimental study of training sparse oblique (SPO) decision forests, the top-ranked configuration of Google's Yggdrasil Decision Forests (YDF), on a 48-core CPU. Tree-level parallelism is already exploited; the cost is a single-threaded per-node kernel that gathers the projection's columns and bins or sorts them. Because the split feature exists only once the projection is drawn, presorting, global quantization and histogram subtraction do not apply: every projection is re-binned or re-sorted at every node, from millions of rows to a handful.
-
-We contribute (1)~a branch-free, in-register bin lookup (64 bins on AVX2, 256 on AVX-512) that lets histograms compete with vectorized sorting (Highway VQSort, our baseline), and (2)~a per-node, size-based choice between the $O(n\log k+k)$ histogram and the $O(n\log n)$ exact finder, which no tree learner we know of does. We claim no new bounds or accuracy gains: a 2--5$\times$ stronger baseline than released YDF, then 1.3--2$\times$ at depth 6 and 1.2--1.6$\times$ from depth 16 to purity, accuracy-neutral on 36 datasets, on par with axis-aligned RF, open-sourced.
+% We contribute (1)~a branch-free, in-register bin lookup (64 bins on AVX2, 256 on AVX-512) that lets histograms compete with vectorized sorting (Highway VQSort, our baseline), and (2)~a per-node, size-based choice between the $O(n\log k+k)$ histogram and the $O(n\log n)$ exact finder, which no tree learner we know of does. We claim no new bounds or accuracy gains: a 2--5$\times$ stronger baseline than released YDF, then 1.3--2$\times$ at depth 6 and 1.2--1.6$\times$ from depth 16 to purity, accuracy-neutral on 36 datasets, on par with axis-aligned RF, open-sourced.
 
 
-\newpage
+% \newpage
 
 
 % \{\textit{\href{https://spaa.acm.org/submission-guidelines/}{Submission Guidelines}: The first page of a regular-paper submission is a designated title page and does not count toward the page limit. It must include the paper title, abstract, and an optional section titled “Self-Assessment of Relevance” (single-column, up to 20 lines, using the same template). This section acts as a “pre-rebuttal” to help reviewers understand the paper’s main contributions. It is particularly encouraged for topics that do not traditionally appear in SPAA, papers with mixed theoretical and practical contributions, or submissions that benefit from clarifying their key novelties relative to prior or concurrent work—especially details that do not directly fit into the main body of the paper.}}
@@ -194,7 +192,7 @@ We contribute (1)~a branch-free, in-register bin lookup (64 bins on AVX2, 256 on
 % \{\textit{Up to 10 pages, excluding title, refs, appdx}}
 
 
-\newpage
+% \newpage
 
 \section{Introduction}
 
@@ -221,15 +219,15 @@ Given the importance of SPO methods in YDF, we study how to reduce or eliminate 
 A deep performance study of SPO-RF and SPO-GBT revealed bottlenecks during training. We contributed the fixes to YDF (Floyd's projections sampling, caching projection evaluator, a Fisher-Yates shuffle, among others) as a series of pull requests (see Appendix~\ref{app:pull-requests} for full list). Independently, Google replaced \texttt{std::sort} with Highway VQSort~\cite{wassenberg_vectorized_2022}, a highly optimized sorting library that heavily leverages SIMD instructions, which we adopted. Together these set a new baseline for this paper that is 2-5$\times$ faster than the open-source version with which we started. In this baseline, the majority of runtime is spent sorting nodes with {\em exact} splits: Highway sort is faster than every prior method, including all histogram variants and \texttt{std::sort} (Table~\ref{tab:stdsort-vs-highway}). All speedups in this paper are measured against this stronger baseline. Against \texttt{std::sort} previously, dynamic selection alone achieves 2$\times$ (Appendix~\ref{sec:stdsort-vs-highway}). %\{\textit{[low-priority] update fig in appendix w/ HWY \& Vectorized Random}}.
 
 % Dynamic charts look better on EvalProjection only, but there's no way to fairly compare EvalProj to Axis-Aligned, since AA pays the read cost inside EP - it doesn't have a separate ApplyProjection(). Chose NodeTrain
+% HIGGS doesn't show benefit w/ HWY
 \begin{figure*}[t]
 \centering
-\newcommand{\placeholderpanel}[1]{%
+\newcommand{\placeholderpanel}[1]{
   \fbox{\begin{minipage}[b][0.62\linewidth][c]{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
     \centering\ttfamily\small #1
   \end{minipage}}}
 \begin{subfigure}[b]{0.32\textwidth}
   \centering
-  % \placeholderpanel{NodeTrain: SPO-GBT}
   \includegraphics[width=\linewidth]{figures/intro/dynamic/Youtube-8m-spogbt-NodeTrain.pdf}
   \caption{SPO-GBT}
   \label{fig:motivation-nodetrain-gbt}
@@ -244,7 +242,6 @@ A deep performance study of SPO-RF and SPO-GBT revealed bottlenecks during train
 \hfill
 \begin{subfigure}[b]{0.32\textwidth}
   \centering
-  % \placeholderpanel{NodeTrain: AA-RF}
   \includegraphics[width=\linewidth]{figures/intro/dynamic/Youtube-8m-aa-NodeTrain.pdf}
   \caption{AA-RF}
   \label{fig:motivation-nodetrain-aarf}
@@ -578,13 +575,13 @@ Table~\ref{tab:train-time-by-depth} contains the two single-change comparisons t
 \centering
 \begin{subfigure}[b]{0.49\textwidth}
 \centering
-\includegraphics[width=\linewidth]{{figures/results/vectorized/why AVX-512 is slower high depth/AVX2}.pdf}
+\includegraphics[width=\linewidth]{figures/results/vectorized/why-AVX-512-is-slower-high-depth/AVX2.pdf}
 \caption{AVX2 (64 bins)}
 \end{subfigure}
 \hfill
 \begin{subfigure}[b]{0.49\textwidth}
 \centering
-\includegraphics[width=\linewidth]{{figures/results/vectorized/why AVX-512 is slower high depth/AVX-512}.pdf}
+\includegraphics[width=\linewidth]{figures/results/vectorized/why-AVX-512-is-slower-high-depth/AVX-512.pdf}
 \caption{AVX-512 (256 bins)}
 \end{subfigure}
 \caption{Vectorized histogram cost breakdown: AVX2 with 64 bins (left) and AVX-512 with 256 bins (right).}
@@ -595,7 +592,7 @@ Table~\ref{tab:train-time-by-depth} contains the two single-change comparisons t
 \subsection{Dynamic Threshold Sensitivity Study}
 \label{app:threshold-sensitivity}
 
-\begin{figure}
+\begin{figure}[t]
     \centering
     \input{figures/results/threshold_sensitivity_log}
     \caption{Full-depth train speedup over Exact by a linesearch over Dynamic Thresholds. Above the threshold, Random-Vectorized is used, and below, Exact. Shaded bands: the range of the AVX-512 maxima (light, 800--1200 rows) and of the AVX2 maxima (dark, 300--500 rows).}
@@ -620,6 +617,8 @@ Figure~\ref{fig:threshold-sensitivity} varies the switch threshold $\tau$ from 1
 % \FloatBarrier
 \subsection{Accuracy}
 \label{sec:res-accuracy}
+
+\TODO{SPO-GBT mistakenly used $\sqrt{\mathbf{F}}$ projections instead of $\mathbf{F}$, putting it at an unfair disadvantage}
 
 Vectorization changes no model: the scalar and vectorized binners bin identically and produce identical forests, which is why their accuracy columns coincide in Table~\ref{tab:auc-vs-libraries-per-dataset-auc}. The dynamic switch does change the model, since nodes below $\tau$ take an exact split where an all-histogram forest would take a binned one. Table~\ref{tab:hist-vs-exact-summary} measures the effect on held-out accuracy against Exact on 34 OpenML CC18 binary tasks (10-fold cross-validation $\times$ 3 seeds) plus HIGGS and SUSY. For SPO-RF the mean difference of the dynamic forest to Exact is $+5\times10^{-3}$ with a 95\% interval of $[-4, +14]\times10^{-3}$ that includes zero; it wins on 13 datasets, ties on 17 and loses on 6, and only two per-dataset differences survive Holm correction. For SPO-GBT the difference is $+1\times10^{-3}$ $[-1, +3]$ (9 wins, 20 ties, 7 losses), with electricity and adult significantly below Exact by 1.6 and 0.1 points. The dynamic forests are non-inferior to Exact within $2.5\times10^{-3}$ (RF) and $1\times10^{-3}$ (GBT) accuracy at $\alpha=0.05$, and the all-histogram forests fall in the same intervals. On the large datasets the SPO-RF finders agree to three decimals (HIGGS 0.762 and SUSY 0.802 for Exact and Dynamic alike) and the SPO-GBT ones within 0.2 points. Against XGBoost, LightGBM, CatBoost and axis-aligned YDF (Table ~\ref{tab:train-time-vs-libraries}, ~\ref{tab:auc-vs-libraries-per-dataset-auc}), the RF and GBT learners are very similar, and the dynamic vectorized configuration ties the exact baseline on 34 of 36 datasets.
 
@@ -787,7 +786,7 @@ Dynamic histogramming was motivated by the YDF we started from, in which Exact s
 
 \begin{figure}[b]
     \centering
-    \includegraphics[width=0.478\textwidth]{figures/intro/dynamic/HIGGS - not much improvement over HWY/Scalar-Dynamic.pdf}
+    \includegraphics[width=0.478\textwidth]{figures/appendix/Scalar-Dynamic-HIGGS.pdf}
 
     \caption{Training runtime by tree depth on a dataset with 1M samples 4096 features between \texttt{std::sort} and scalar Random Hist. Exact was reduced by 2-3$\times$ with the advent of Highway.}
 
