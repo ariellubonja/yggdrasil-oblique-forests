@@ -11,7 +11,7 @@ Speedup = median(train_s exact_hwy) / median(train_s dyn_vec). Circles: Trunk
 synthetic datasets; squares: natural datasets. Writes fig_rowcol_map_depths.{pdf,png}
 (background = inverse-distance interpolation of the speedup over the 3 nearest points
 in log-log space, a prediction for unmeasured shapes) + rowcol_map_depths.csv under speedup_map_by_dataset/analysis and copies the PDF to
-paper/spaa27/figures/results/spo_vs_gbt_rowcol_map_depths.pdf.
+paper/vectorized_adaptive_spaa27/figures/results/spo_vs_gbt_rowcol_map_depths.pdf.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from scipy.spatial import cKDTree
 ROOT = Path(__file__).resolve().parents[3]
 RES = ROOT / "benchmarks" / "results" / "runtime"
 SPM = RES / "speedup_map_by_dataset"
-PAPER_FIG = ROOT / "paper" / "spaa27" / "figures" / "results"
+PAPER_FIG = ROOT / "paper" / "vectorized_adaptive_spaa27" / "figures" / "results"
 
 EXACT, DYN = "spo_rf_exact_hwy", "spo_rf_dyn_vec"
 DEPTHS = [(6, "Depth 6"), (16, "Depth 16"), (-1, "Unlimited Depth")]

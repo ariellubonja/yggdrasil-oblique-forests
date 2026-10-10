@@ -8,7 +8,7 @@ Exact (Highway VQSort), Random histogram scalar 64 bins, Random histogram scalar
 
 Source: benchmarks/results/runtime/speedup_map_by_dataset/speedup_map.csv (+ speedup_map_rep*.csv,
 median over reps) -- the same cells make_overall_depth_table.py tabulates.
-Emits pgfplots (Overleaf MCP is text-only) into paper/spaa27/figures/results/.
+Emits pgfplots (Overleaf MCP is text-only) into paper/vectorized_adaptive_spaa27/figures/results/.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 RES = ROOT / "benchmarks" / "results" / "runtime" / "speedup_map_by_dataset"
-OUT = ROOT / "paper" / "spaa27" / "figures" / "results"
+OUT = ROOT / "paper" / "vectorized_adaptive_spaa27" / "figures" / "results"
 
 DATASETS = [  # (key in speedup_map.csv, tick label) -- tab:train-time-by-depth row order
     ("higgs_10500000", "HIGGS 10.5M$\\times$28"),

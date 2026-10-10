@@ -284,7 +284,7 @@ def emit_text(df: pd.DataFrame) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=None, help="default: paper/spaa27/tables/table_train_time_{by_depth,gbt_depth6}.tex")
+    ap.add_argument("--out", default=None, help="default: paper/vectorized_adaptive_spaa27/tables/table_train_time_{by_depth,gbt_depth6}.tex")
     ap.add_argument("--text-only", action="store_true")
     ap.add_argument("--reps", type=int, default=0, help="use only reps 1..N (0 = all)")
     ap.add_argument("--gbt", action="store_true", help="SPO-GBT arms, depth 6 only")
@@ -292,19 +292,19 @@ def main() -> None:
     ap.add_argument("--natural", action="store_true", help="main text: natural datasets, Exact vs ours")
     a = ap.parse_args()
     if a.natural:
-        out = a.out or str(ROOT / "paper" / "spaa27" / "tables" / "table_train_time_natural.tex")
+        out = a.out or str(ROOT / "paper" / "vectorized_adaptive_spaa27" / "tables" / "table_train_time_natural.tex")
         Path(out).write_text(emit_natural_tex(load_cells(a.reps, "rf")[0], load_cells(a.reps, "gbt")[0]))
         print(f"wrote {out}")
         return
     if a.sort:
-        out = a.out or str(ROOT / "paper" / "spaa27" / "tables" / "table_train_time_exact_sort.tex")
+        out = a.out or str(ROOT / "paper" / "vectorized_adaptive_spaa27" / "tables" / "table_train_time_exact_sort.tex")
         Path(out).write_text(emit_sort_tex(load_cells(a.reps, "rf")[0]))
         print(f"wrote {out}")
         return
     if a.gbt:
         use_gbt()
     if a.out is None:
-        a.out = str(ROOT / "paper" / "spaa27" / "tables" / ("table_train_time_gbt_depth6.tex" if a.gbt else "table_train_time_by_depth.tex"))
+        a.out = str(ROOT / "paper" / "vectorized_adaptive_spaa27" / "tables" / ("table_train_time_gbt_depth6.tex" if a.gbt else "table_train_time_by_depth.tex"))
     df, nrep = load_cells(a.reps, "gbt" if a.gbt else "rf")
     print(emit_text(df))
     if not a.text_only:

@@ -7,7 +7,7 @@ datasets both sweeps cover, at the thresholds both scanned; appendix = all datas
 vectorized binners, and the scalar 64-bin binner. Sweeps: benchmarks/results/runtime/dynamic_histogram_breakeven/.
 Captions live in main.tex and must not carry machine specs (CLAUDE.md directive).
 All-exact references (same dataset files as the sweeps) come from REFS below.
-Emits pgfplots (Overleaf MCP is text-only) into paper/spaa27/figures/results/.
+Emits pgfplots (Overleaf MCP is text-only) into paper/vectorized_adaptive_spaa27/figures/results/.
 """
 from __future__ import annotations
 
@@ -235,7 +235,7 @@ def emit(panel: dict, refs: dict[str, float]) -> tuple[str, list[str]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--outdir", default=str(ROOT / "paper" / "spaa27" / "figures" / "results"))
+    ap.add_argument("--outdir", default=str(ROOT / "paper" / "vectorized_adaptive_spaa27" / "figures" / "results"))
     a = ap.parse_args()
     refs = load_refs()
     for k, v in refs.items():

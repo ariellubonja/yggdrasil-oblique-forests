@@ -1,0 +1,229 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{hyperref}
+\usepackage{amsmath,amssymb}
+\usepackage{mathtools}
+\usepackage{enumitem}
+
+\newlist{todolist}{itemize}{2}
+\setlist[todolist]{label=$\square$}
+\newcommand{\done}{\rlap{$\square$}{\raisebox{2pt}{\large\hspace{1pt}\checkmark}}\hspace{-2.5pt}}
+
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.96,0.96,0.94}
+
+\lstdefinestyle{cppstyle}{
+  language=C++,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue},
+  commentstyle=\itshape\color{codegreen},
+  stringstyle=\color{codepurple},
+  backgroundcolor=\color{backcolour},
+  frame=single,
+  columns=fullflexible,
+  breaklines=true,
+  showstringspaces=false,
+  xleftmargin=1em,
+  aboveskip=0.5em, belowskip=0.5em,
+}
+\lstset{style=cppstyle}
+
+\newcommand{\TODO}[1]{\textbf{\textcolor{red}{#1}}}
+
+\title{Distributed SPO-GBT}
+\author{Ariel Lubonja}
+\date{August 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Distributed Tree training offers two main advantages: training on very large data ($>$100m examples+) that does not fit in a single machine's memory, and distributed hyperparameter tuning. 
+
+\section{Challenges}
+
+Distributed training has 0 support for Sparse oblique splits; mainly because it's nontrivial to implement: Workers would need to store the pseudo-features, or store enough features to construct the pseudo-features efficiently, without moving features around too much. 
+Distributed sparse oblique splits has not been done by anyone AFAIK, so this would by really something novel.YDF has all the primitives and the GBT implementation ready
+
+
+\section{Related Work}
+
+Summarize \href{https://claude.ai/chat/4ce221a7-529f-4914-9230-8ac7a33c1371}{Claude}'s research
+
+
+\section{Current Distributed GBT}
+
+\textbf{Different workers handle different features}. This is very scalable, as each worker needs $\sim O(2N)$ memory.
+
+YDF Distributed training requires:
+
+\begin{itemize}
+    \item Manager - a single machine that comms to the workers.
+    \item Workers, communicating via IP. \texttt{Multi\_THREAD} or \texttt{GRPC}
+    \item a Shared Directory - a computation cache \& checkpointing in case of worker(s) failure
+    \item a Sharded dataset (path): csv, tfrecord, Apache Beam. Sharded by column. Usually 10 shards / worker.
+\end{itemize}
+
+ [Source: \href{https://ydf.readthedocs.io/en/latest/tutorial/distributed_training/#setup}{YDF Docs}]
+
+\subsection{Load-balanced Data Sharding}
+
+Feature columns are weighed by their expected compute expense : numerical features weigh $5.0$, Discretized weigh $1.0$ (\texttt{LoadBalancer::Initialize}). Numerical columns are Pre-Sorted (\texttt{dataset\_cache.cc::SortNumericalColumns}).
+
+\begin{enumerate}
+    \item Shard dataset in shared directory, by column. 
+        \begin{itemize}
+            \item 1 column to 1 worker. No replication.
+            \item \TODO{Main issue}: \textbf{how to shard these once in SPO when they're sampled per node?}
+        \end{itemize}
+    \item Presort Columns. \textbf{Issue 1: Not possible in SPO. Will be skipped}
+    \item Load-balanced column round-robin to workers, by compute intensity: 5 for Numeric, 1 for Discretized. \textbf{Issue 2. No fixed columns in SPO}
+    \item Train
+\end{enumerate}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{images/distributed_gbt_column_partitioning.pdf}
+    \caption{Data Sharding illustration. Dataset is split by column, presorted, then round-robin-ed in a load-balancing way to workers.}
+    \label{fig:ydf-dist-gbt-load-balancing}
+\end{figure}
+
+\subsection{Training}
+
+
+\texttt{for depth in tree }\{
+
+\begin{enumerate}
+    \item Workers scan their column subset, computing local \texttt{BestSplit} for nodes at a depth $d$ (in \texttt{FindBestSplitsWithThreadPool}). Local maxes are sent to Manager.
+    \item Manager computes global Max in \texttt{MergeBestSplits}. Update manager's tree structure \texttt{ApplySplitToTree}.
+    \item Manager broadcasts global winning split - \texttt{EmitEvaluateSplits}
+    \item Worker who owns Winning Column creates \textbf{bitmap} of examples : left-right. \emph{\textcolor{magenta}{There is 1 winner per node active at this depth (??)}}
+        \begin{lstlisting}
+for (auto value : values) {
+  const auto node_idx = example_to_node[example_idx];
+  if (active_node_idx >= 0)
+    active_node.writer.Write(value >= active_node.threshold);  // the bitmap
+  example_idx++;
+}
+        \end{lstlisting}
+    \item Winning workers broadcasts bitmap peer-to-peer
+    \item Monitor workload for skew. Work-steal.
+\end{enumerate}
+
+\}
+
+
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=.8\linewidth]{images/distributed_gbt_training_loop.pdf}
+    \caption{Distributed GBT Training Loop}
+    \label{fig:ydf-dist-gbt-training-loop}
+\end{figure}
+
+\section{Method: Distributed SPO-GBT}
+
+In a dataset with $N$ rows and $\mathbf{F}$ columns. In traditional GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike SPO-RF, which samples $\sqrt{\mathbf{F}} \sim \mathbf{F}$. \newline
+
+\textbf{\textit{Benefit}}: Full feature range available for sampling
+
+\textbf{\textit{Cost:}} Requires many-to-many communication at each depth, as no single node holds all features.
+
+
+\subsection{\TODO{V1:} \textbf{Worker-local projections}}
+
+% Also applicable to bivariate and other random subset-based tree kernels
+
+\subsubsection{Method}
+
+Each worker holds and samples from a small subset of columns.
+
+\textbf{\textit{How many features should each worker hold?}}
+
+Define $F_{\text{node}} \coloneqq \sqrt{\mathbf{F}}$ as the number of columns stored at each worker.
+
+
+\begin{description}
+    \item[\textit{Benefit}:]
+    \begin{itemize}
+        \item No communication
+    \end{itemize}
+\end{description}
+
+\begin{description}
+    \item[\textit{Cost}:]
+    \begin{itemize}
+        \item Smaller search space than sampling $\sqrt{F} \sim \mathbf{F}$.
+        \item Each worker still needs to hold $\sqrt{F}$ features instead of 1.
+    \end{itemize}
+\end{description}
+
+
+\subsubsection{Implementation}
+
+\textcolor{red}{
+\begin{enumerate}
+    \item Verify Claude initial implementation
+    \item test locally (+ m7i) for accuracy \& sanity check
+    \item figure out how to start distributed clusters on AWS
+\end{enumerate}
+}
+
+Load-balancing?
+
+\subsubsection{Evaluation}
+
+\begin{itemize}
+    \item Pre-generated projections as control, fanned out before training
+    \begin{itemize}
+        \item Compare performance
+        \item Compare accuracy
+    \end{itemize}
+\end{itemize}
+
+\newpage
+
+\appendix
+
+\section{Call Stack}
+
+\begin{lstlisting}
+distributed_gbt.cc::TrainWithStatusImpl()
+...
+MultiThreadManager() % for MULTI_THREAD, not GRPC
+worker.cc::RunRequest() \& RunRequestImpl()
+
+worker.cc::StartTraining()
+
+ - worker.cc::FindSplits()
+
+   - - training.cc::FindBestSplitsWithThreadPool()
+\end{lstlisting}
+
+\section{Approximate Splits}
+
+\textbf{Consider using approximate splits} to further improve training speed. Very often, this can speed up training by 2x-5x without negative impact on quality. Set hyperparameter \textbf{force\_numerical\_discretization=True} to enable approximate splits for distributed training.
+
+
+Included in Google's Vertex AI
+
+\section{Paper-style writing : Distributed SPO-GBT}
+
+\subsection{Introduction}
+
+No implementation of SPO-GBT distributed training exists, to our knowledge. This severely limits Sparse Oblique methods to datasets that are limited to a single machine. \textbf{AutoML frequently selects SPO-GBT as the best method}
+
+YDF has support for distributed training GBTs: the distribution is among the features, i.e. different workers handle different features. This allows us to train on very large (deep \& wide) datasets, because each worker just needs (roughly) enough memory to hold the label column and the feature column. 
+
+
+Distributed training has 0 support for Sparse oblique splits; mainly because it's nontrivial to implement: Workers would need to store the pseudo-features, or store enough features to construct the pseudo-features efficiently, without moving features around too much. 
+Distributed sparse oblique splits has not been done by anyone AFAIK, so this would by really something novel. YDF has all the primitives and the GBT implementation ready.
+
+\end{document}

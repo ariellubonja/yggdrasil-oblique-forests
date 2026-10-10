@@ -10,7 +10,7 @@ full depth (ranked 2026-09-25, two trunk shapes at most); y = T(arm) / T(Exact H
 are grouped Exact-Rand64-Rand256 | Vec64-Vec256 | DynVec64-DynVec256 with gaps between blocks; the
 y-range is fixed to 0-1.5 and taller bars are cut with a white break mark.
 Source cells: the same speedup_map.csv (+ reps, median) that make_overall_depth_table.py tabulates.
-Emits pgfplots (Overleaf MCP is text-only) to paper/spaa27/figures/results/.
+Emits pgfplots (Overleaf MCP is text-only) to paper/vectorized_adaptive_spaa27/figures/results/.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "src" / "spo_vs_gbt"))
 import make_overall_depth_table as tbl  # noqa: E402  (shared cell loader)
 
-OUT_DIR = ROOT / "paper" / "spaa27" / "figures" / "results"
+OUT_DIR = ROOT / "paper" / "vectorized_adaptive_spaa27" / "figures" / "results"
 
 DATASETS = [  # (key in speedup_map.csv, tick label)
     ("EPSILON", "Epsilon"),

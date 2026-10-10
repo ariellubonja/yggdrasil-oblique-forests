@@ -20,7 +20,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[3]
 RES = ROOT / "benchmarks" / "results"
 SPO = RES / "runtime" / "speedup_map_by_dataset"
-PAPER = ROOT / "paper" / "spaa27"
+PAPER = ROOT / "paper" / "vectorized_adaptive_spaa27"
 
 PANELS = [  # (arm, panel title)
     ("spo_rf_dyn_scalar", "Dynamic"),
