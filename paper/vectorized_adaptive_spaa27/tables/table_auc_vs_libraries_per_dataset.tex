@@ -4,7 +4,7 @@
 \centering
 \scriptsize
 \setlength{\tabcolsep}{2pt}
-\caption{RF (full-depth, top) and GBT (depth 6, bottom) test ROC AUC on various datasets. Cells are the mean $\pm$ std over 5 CV folds. Bold: best per row. ecom-offers, homecredit-default, homesite-insurance are single chronological holdouts. XGBoost, LightGBM, CatBoost used with default parameters.}
+\caption{RF (full-depth, top) and GBT (depth 6, bottom) test ROC AUC on various datasets. Cells are the mean $\pm$ std over 5 CV folds. Bold: best per row. ecom-offers, homecredit-default, homesite-insurance are single chronological holdouts. XGBoost, LightGBM, CatBoost used with default parameters. SPO-GBT samples $F$ projections per node, SPO-RF $\lceil\sqrt{F}\rceil$.}
 \label{tab:auc-vs-libraries-per-dataset-auc}
 \label{tab:auc-vs-libraries-per-dataset-rf-auc}
 \label{tab:accuracy-rf}
@@ -50,39 +50,39 @@ taiwanese\_bankruptcy\_prediction & .9434$_{\pm.0215}$ & .9393$_{\pm.0194}$ & .9
 \midrule
 Dataset & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT Exact}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT Random Hist. (64 bins)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT Random Hist. (256 bins)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT AVX-2 R. Hist. (64 bins, ours)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT AVX-512 R. Hist. (256 bins, ours)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT Dyn AVX-2 R. Hist. (64 bins, ours)$^*$}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT Dyn AVX-512 R. Hist. (256 bins, ours)$^*$}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering AA-GBT Exact}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering XGBoost (256 bins)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering LightGBM (255 bins)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering CatBoost (254 bins)}} \\
 \midrule
-APSFailure & .9917$_{\pm.0033}$ & .9908$_{\pm.0038}$ & .9907$_{\pm.0037}$ & .9908$_{\pm.0038}$ & .9907$_{\pm.0037}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9902$_{\pm.0040}$ & .9904$_{\pm.0046}$ & .9911$_{\pm.0046}$ & {\boldmath\textbf{.9923$_{\pm.0033}$}} \\
-Amazon\_employee\_access & .8390$_{\pm.0045}$ & .8345$_{\pm.0078}$ & .8391$_{\pm.0077}$ & .8345$_{\pm.0078}$ & .8391$_{\pm.0077}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8416$_{\pm.0129}$ & {\boldmath\textbf{.8440$_{\pm.0113}$}} & .8438$_{\pm.0068}$ & .8197$_{\pm.0054}$ \\
-Bank\_Customer\_Churn & .8540$_{\pm.0044}$ & .8548$_{\pm.0027}$ & .8544$_{\pm.0061}$ & .8548$_{\pm.0027}$ & .8544$_{\pm.0061}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8493$_{\pm.0039}$ & .8472$_{\pm.0071}$ & .8416$_{\pm.0063}$ & {\boldmath\textbf{.8600$_{\pm.0062}$}} \\
-Bioresponse & .8716$_{\pm.0088}$ & .8711$_{\pm.0072}$ & .8723$_{\pm.0090}$ & .8711$_{\pm.0072}$ & .8723$_{\pm.0090}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8698$_{\pm.0067}$ & {\boldmath\textbf{.8756$_{\pm.0101}$}} & .8718$_{\pm.0102}$ & .8714$_{\pm.0086}$ \\
-Diabetes130US & .6555$_{\pm.0014}$ & .6589$_{\pm.0033}$ & .6586$_{\pm.0058}$ & .6589$_{\pm.0033}$ & .6586$_{\pm.0058}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .6580$_{\pm.0032}$ & .6548$_{\pm.0052}$ & .6503$_{\pm.0058}$ & {\boldmath\textbf{.6601$_{\pm.0048}$}} \\
-E-CommereShippingData & .7366$_{\pm.0059}$ & .7355$_{\pm.0072}$ & .7319$_{\pm.0047}$ & .7355$_{\pm.0072}$ & .7319$_{\pm.0047}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7356$_{\pm.0061}$ & .7368$_{\pm.0057}$ & .7360$_{\pm.0116}$ & {\boldmath\textbf{.7369$_{\pm.0060}$}} \\
-Fitness\_Club & .7652$_{\pm.0134}$ & .7671$_{\pm.0138}$ & .7644$_{\pm.0145}$ & .7671$_{\pm.0138}$ & .7644$_{\pm.0145}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7672$_{\pm.0098}$ & .7681$_{\pm.0123}$ & .7616$_{\pm.0143}$ & {\boldmath\textbf{.7704$_{\pm.0228}$}} \\
-GiveMeSomeCredit & .8652$_{\pm.0016}$ & .8502$_{\pm.0034}$ & .8570$_{\pm.0029}$ & .8502$_{\pm.0034}$ & .8570$_{\pm.0029}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8641$_{\pm.0014}$ & .8606$_{\pm.0022}$ & .8588$_{\pm.0030}$ & {\boldmath\textbf{.8665$_{\pm.0011}$}} \\
-HR\_Analytics\_Job\_Change\_of\_Data\_Scientists & .7993$_{\pm.0061}$ & .7986$_{\pm.0067}$ & .7977$_{\pm.0075}$ & .7986$_{\pm.0067}$ & .7977$_{\pm.0075}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7955$_{\pm.0090}$ & .7959$_{\pm.0067}$ & .7894$_{\pm.0066}$ & {\boldmath\textbf{.8005$_{\pm.0077}$}} \\
-Is-this-a-good-customer & .7050$_{\pm.0360}$ & {\boldmath\textbf{.7090$_{\pm.0167}$}} & {\boldmath\textbf{.7090$_{\pm.0173}$}} & {\boldmath\textbf{.7090$_{\pm.0167}$}} & {\boldmath\textbf{.7090$_{\pm.0173}$}} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7014$_{\pm.0192}$ & .6889$_{\pm.0235}$ & .6959$_{\pm.0101}$ & {\boldmath\textbf{.7090$_{\pm.0182}$}} \\
-Marketing\_Campaign & {\boldmath\textbf{.9070$_{\pm.0270}$}} & .9030$_{\pm.0297}$ & .9052$_{\pm.0291}$ & .9030$_{\pm.0297}$ & .9052$_{\pm.0291}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8942$_{\pm.0300}$ & .9053$_{\pm.0281}$ & .8910$_{\pm.0293}$ & .9047$_{\pm.0255}$ \\
-NATICUSdroid & .9861$_{\pm.0043}$ & .9860$_{\pm.0046}$ & {\boldmath\textbf{.9863$_{\pm.0040}$}} & .9860$_{\pm.0046}$ & {\boldmath\textbf{.9863$_{\pm.0040}$}} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9851$_{\pm.0040}$ & .9845$_{\pm.0034}$ & .9850$_{\pm.0041}$ & .9858$_{\pm.0034}$ \\
-bank-marketing & .7570$_{\pm.0063}$ & .7569$_{\pm.0068}$ & .7561$_{\pm.0077}$ & .7569$_{\pm.0068}$ & .7561$_{\pm.0077}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7559$_{\pm.0088}$ & .7504$_{\pm.0073}$ & .7465$_{\pm.0078}$ & {\boldmath\textbf{.7619$_{\pm.0075}$}} \\
-blood-transfusion-service-center & .6918$_{\pm.0336}$ & .6932$_{\pm.0364}$ & .6962$_{\pm.0358}$ & .6932$_{\pm.0364}$ & .6962$_{\pm.0358}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .6863$_{\pm.0487}$ & .7002$_{\pm.0417}$ & .6804$_{\pm.0374}$ & {\boldmath\textbf{.7039$_{\pm.0399}$}} \\
-churn & .9233$_{\pm.0164}$ & {\boldmath\textbf{.9239$_{\pm.0176}$}} & .9213$_{\pm.0176}$ & {\boldmath\textbf{.9239$_{\pm.0176}$}} & .9213$_{\pm.0176}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9154$_{\pm.0144}$ & .9204$_{\pm.0156}$ & .9185$_{\pm.0081}$ & .9227$_{\pm.0175}$ \\
-coil2000\_insurance\_policies & .7219$_{\pm.0106}$ & .7264$_{\pm.0035}$ & .7219$_{\pm.0134}$ & .7264$_{\pm.0035}$ & .7219$_{\pm.0134}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7157$_{\pm.0080}$ & .7196$_{\pm.0140}$ & .7003$_{\pm.0083}$ & {\boldmath\textbf{.7309$_{\pm.0074}$}} \\
-credit-g & .7763$_{\pm.0447}$ & .7779$_{\pm.0522}$ & .7803$_{\pm.0473}$ & .7779$_{\pm.0522}$ & .7803$_{\pm.0473}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7600$_{\pm.0439}$ & .7670$_{\pm.0360}$ & .7551$_{\pm.0340}$ & {\boldmath\textbf{.7805$_{\pm.0374}$}} \\
-credit\_card\_clients\_default & .7786$_{\pm.0071}$ & {\boldmath\textbf{.7797$_{\pm.0059}$}} & .7786$_{\pm.0061}$ & {\boldmath\textbf{.7797$_{\pm.0059}$}} & .7786$_{\pm.0061}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7735$_{\pm.0086}$ & .7695$_{\pm.0089}$ & .7682$_{\pm.0095}$ & .7795$_{\pm.0067}$ \\
-customer\_satisfaction\_in\_airline & .9918$_{\pm.0003}$ & .9920$_{\pm.0004}$ & .9919$_{\pm.0002}$ & .9920$_{\pm.0004}$ & .9919$_{\pm.0002}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9929$_{\pm.0003}$ & .9936$_{\pm.0002}$ & .9936$_{\pm.0001}$ & {\boldmath\textbf{.9937$_{\pm.0002}$}} \\
-diabetes & .8030$_{\pm.0171}$ & .8011$_{\pm.0265}$ & .8060$_{\pm.0241}$ & .8011$_{\pm.0265}$ & .8060$_{\pm.0241}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7948$_{\pm.0225}$ & .7881$_{\pm.0165}$ & .7972$_{\pm.0198}$ & {\boldmath\textbf{.8076$_{\pm.0209}$}} \\
-ecom-offers & .6169\phantom{$_{\pm.0000}$} & .6166\phantom{$_{\pm.0000}$} & .6141\phantom{$_{\pm.0000}$} & .6166\phantom{$_{\pm.0000}$} & .6141\phantom{$_{\pm.0000}$} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .6197\phantom{$_{\pm.0000}$} & .6229\phantom{$_{\pm.0000}$} & .6191\phantom{$_{\pm.0000}$} & \textbf{.6250}\phantom{$_{\pm.0000}$} \\
-hazelnut-spread-contaminant-detection & .9774$_{\pm.0076}$ & {\boldmath\textbf{.9795$_{\pm.0061}$}} & .9781$_{\pm.0073}$ & {\boldmath\textbf{.9795$_{\pm.0061}$}} & .9781$_{\pm.0073}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9737$_{\pm.0101}$ & .9767$_{\pm.0087}$ & .9764$_{\pm.0086}$ & .9735$_{\pm.0079}$ \\
-heloc & .7870$_{\pm.0129}$ & {\boldmath\textbf{.7898$_{\pm.0123}$}} & .7894$_{\pm.0120}$ & {\boldmath\textbf{.7898$_{\pm.0123}$}} & .7894$_{\pm.0120}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7827$_{\pm.0098}$ & .7788$_{\pm.0081}$ & .7785$_{\pm.0092}$ & .7882$_{\pm.0132}$ \\
-homecredit-default & .8183\phantom{$_{\pm.0000}$} & \textbf{.8224}\phantom{$_{\pm.0000}$} & .8117\phantom{$_{\pm.0000}$} & \textbf{.8224}\phantom{$_{\pm.0000}$} & .8117\phantom{$_{\pm.0000}$} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8061\phantom{$_{\pm.0000}$} & .8028\phantom{$_{\pm.0000}$} & .7909\phantom{$_{\pm.0000}$} & .8169\phantom{$_{\pm.0000}$} \\
-homesite-insurance & .9533\phantom{$_{\pm.0000}$} & .9542\phantom{$_{\pm.0000}$} & .9540\phantom{$_{\pm.0000}$} & .9542\phantom{$_{\pm.0000}$} & .9540\phantom{$_{\pm.0000}$} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9551\phantom{$_{\pm.0000}$} & .9537\phantom{$_{\pm.0000}$} & .9542\phantom{$_{\pm.0000}$} & \textbf{.9554}\phantom{$_{\pm.0000}$} \\
-in\_vehicle\_coupon\_recommendation & .8221$_{\pm.0067}$ & .8223$_{\pm.0058}$ & .8214$_{\pm.0055}$ & .8223$_{\pm.0058}$ & .8214$_{\pm.0055}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8277$_{\pm.0035}$ & .8310$_{\pm.0044}$ & {\boldmath\textbf{.8325$_{\pm.0042}$}} & .8278$_{\pm.0052}$ \\
-jm1 & {\boldmath\textbf{.7433$_{\pm.0055}$}} & .7403$_{\pm.0054}$ & .7393$_{\pm.0058}$ & .7403$_{\pm.0054}$ & .7393$_{\pm.0058}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7347$_{\pm.0066}$ & .7330$_{\pm.0073}$ & .7306$_{\pm.0111}$ & .7397$_{\pm.0075}$ \\
-kddcup09\_appetency & .8035$_{\pm.0141}$ & .8076$_{\pm.0163}$ & .8031$_{\pm.0122}$ & .8076$_{\pm.0163}$ & .8031$_{\pm.0122}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8035$_{\pm.0111}$ & .8063$_{\pm.0187}$ & .7976$_{\pm.0140}$ & {\boldmath\textbf{.8209$_{\pm.0110}$}} \\
-online\_shoppers\_intention & {\boldmath\textbf{.9267$_{\pm.0053}$}} & .9257$_{\pm.0065}$ & .9255$_{\pm.0069}$ & .9257$_{\pm.0065}$ & .9255$_{\pm.0069}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9232$_{\pm.0070}$ & .9246$_{\pm.0066}$ & .9210$_{\pm.0068}$ & .9260$_{\pm.0059}$ \\
-polish\_companies\_bankruptcy & .9551$_{\pm.0081}$ & .9212$_{\pm.0087}$ & .9429$_{\pm.0068}$ & .9212$_{\pm.0087}$ & .9429$_{\pm.0068}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9533$_{\pm.0097}$ & .9577$_{\pm.0094}$ & .9555$_{\pm.0099}$ & {\boldmath\textbf{.9593$_{\pm.0103}$}} \\
-qsar-biodeg & .9391$_{\pm.0146}$ & {\boldmath\textbf{.9414$_{\pm.0118}$}} & .9366$_{\pm.0120}$ & {\boldmath\textbf{.9414$_{\pm.0118}$}} & .9366$_{\pm.0120}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9244$_{\pm.0206}$ & .9304$_{\pm.0158}$ & .9317$_{\pm.0115}$ & .9309$_{\pm.0152}$ \\
-seismic-bumps & .7210$_{\pm.0542}$ & .7106$_{\pm.0629}$ & .7135$_{\pm.0674}$ & .7106$_{\pm.0629}$ & .7135$_{\pm.0674}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7193$_{\pm.0326}$ & .7156$_{\pm.0400}$ & .7241$_{\pm.0453}$ & {\boldmath\textbf{.7374$_{\pm.0669}$}} \\
-taiwanese\_bankruptcy\_prediction & {\boldmath\textbf{.9425$_{\pm.0219}$}} & .9329$_{\pm.0231}$ & .9353$_{\pm.0211}$ & .9329$_{\pm.0231}$ & .9353$_{\pm.0211}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9363$_{\pm.0209}$ & .9416$_{\pm.0237}$ & .9424$_{\pm.0265}$ & .9421$_{\pm.0193}$ \\
+APSFailure & .9912$_{\pm.0042}$ & .9919$_{\pm.0033}$ & .9904$_{\pm.0034}$ & .9919$_{\pm.0033}$ & .9904$_{\pm.0034}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9902$_{\pm.0040}$ & .9904$_{\pm.0046}$ & .9911$_{\pm.0046}$ & {\boldmath\textbf{.9923$_{\pm.0033}$}} \\
+Amazon\_employee\_access & .8433$_{\pm.0096}$ & .8393$_{\pm.0090}$ & .8415$_{\pm.0047}$ & .8393$_{\pm.0090}$ & .8415$_{\pm.0047}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8416$_{\pm.0129}$ & {\boldmath\textbf{.8440$_{\pm.0113}$}} & .8438$_{\pm.0068}$ & .8197$_{\pm.0054}$ \\
+Bank\_Customer\_Churn & .8541$_{\pm.0016}$ & .8538$_{\pm.0042}$ & .8515$_{\pm.0048}$ & .8538$_{\pm.0042}$ & .8515$_{\pm.0048}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8493$_{\pm.0039}$ & .8472$_{\pm.0071}$ & .8416$_{\pm.0063}$ & {\boldmath\textbf{.8600$_{\pm.0062}$}} \\
+Bioresponse & .8732$_{\pm.0088}$ & .8731$_{\pm.0083}$ & {\boldmath\textbf{.8757$_{\pm.0106}$}} & .8731$_{\pm.0083}$ & {\boldmath\textbf{.8757$_{\pm.0106}$}} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8698$_{\pm.0067}$ & .8756$_{\pm.0101}$ & .8718$_{\pm.0102}$ & .8714$_{\pm.0086}$ \\
+Diabetes130US & .6559$_{\pm.0021}$ & .6562$_{\pm.0044}$ & .6555$_{\pm.0053}$ & .6562$_{\pm.0044}$ & .6555$_{\pm.0053}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .6580$_{\pm.0032}$ & .6548$_{\pm.0052}$ & .6503$_{\pm.0058}$ & {\boldmath\textbf{.6601$_{\pm.0048}$}} \\
+E-CommereShippingData & {\boldmath\textbf{.7373$_{\pm.0033}$}} & .7352$_{\pm.0062}$ & .7335$_{\pm.0083}$ & .7352$_{\pm.0062}$ & .7335$_{\pm.0083}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7356$_{\pm.0061}$ & .7368$_{\pm.0057}$ & .7360$_{\pm.0116}$ & .7369$_{\pm.0060}$ \\
+Fitness\_Club & {\boldmath\textbf{.7714$_{\pm.0092}$}} & .7695$_{\pm.0081}$ & .7665$_{\pm.0127}$ & .7695$_{\pm.0081}$ & .7665$_{\pm.0127}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7672$_{\pm.0098}$ & .7681$_{\pm.0123}$ & .7616$_{\pm.0143}$ & .7704$_{\pm.0228}$ \\
+GiveMeSomeCredit & .8650$_{\pm.0008}$ & .8545$_{\pm.0061}$ & .8623$_{\pm.0009}$ & .8545$_{\pm.0061}$ & .8623$_{\pm.0009}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8641$_{\pm.0014}$ & .8606$_{\pm.0022}$ & .8588$_{\pm.0030}$ & {\boldmath\textbf{.8665$_{\pm.0011}$}} \\
+HR\_Analytics\_Job\_Change\_of\_Data\_Scientists & .7974$_{\pm.0083}$ & .7976$_{\pm.0061}$ & .7978$_{\pm.0079}$ & .7976$_{\pm.0061}$ & .7978$_{\pm.0079}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7955$_{\pm.0090}$ & .7959$_{\pm.0067}$ & .7894$_{\pm.0066}$ & {\boldmath\textbf{.8005$_{\pm.0077}$}} \\
+Is-this-a-good-customer & .7041$_{\pm.0303}$ & .7038$_{\pm.0258}$ & .7076$_{\pm.0246}$ & .7038$_{\pm.0258}$ & .7076$_{\pm.0246}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7014$_{\pm.0192}$ & .6889$_{\pm.0235}$ & .6959$_{\pm.0101}$ & {\boldmath\textbf{.7090$_{\pm.0182}$}} \\
+Marketing\_Campaign & .9053$_{\pm.0283}$ & .9057$_{\pm.0317}$ & {\boldmath\textbf{.9078$_{\pm.0245}$}} & .9057$_{\pm.0317}$ & {\boldmath\textbf{.9078$_{\pm.0245}$}} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8942$_{\pm.0300}$ & .9053$_{\pm.0281}$ & .8910$_{\pm.0293}$ & .9047$_{\pm.0255}$ \\
+NATICUSdroid & {\boldmath\textbf{.9858$_{\pm.0036}$}} & {\boldmath\textbf{.9858$_{\pm.0036}$}} & {\boldmath\textbf{.9858$_{\pm.0037}$}} & {\boldmath\textbf{.9858$_{\pm.0036}$}} & {\boldmath\textbf{.9858$_{\pm.0037}$}} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9851$_{\pm.0040}$ & .9845$_{\pm.0034}$ & .9850$_{\pm.0041}$ & {\boldmath\textbf{.9858$_{\pm.0034}$}} \\
+bank-marketing & .7557$_{\pm.0071}$ & .7554$_{\pm.0073}$ & .7541$_{\pm.0082}$ & .7554$_{\pm.0073}$ & .7541$_{\pm.0082}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7559$_{\pm.0088}$ & .7504$_{\pm.0073}$ & .7465$_{\pm.0078}$ & {\boldmath\textbf{.7619$_{\pm.0075}$}} \\
+blood-transfusion-service-center & .6876$_{\pm.0337}$ & .6906$_{\pm.0417}$ & .6936$_{\pm.0358}$ & .6906$_{\pm.0417}$ & .6936$_{\pm.0358}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .6863$_{\pm.0487}$ & .7002$_{\pm.0417}$ & .6804$_{\pm.0374}$ & {\boldmath\textbf{.7039$_{\pm.0399}$}} \\
+churn & .9244$_{\pm.0170}$ & .9217$_{\pm.0161}$ & {\boldmath\textbf{.9261$_{\pm.0183}$}} & .9217$_{\pm.0161}$ & {\boldmath\textbf{.9261$_{\pm.0183}$}} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9154$_{\pm.0144}$ & .9204$_{\pm.0156}$ & .9185$_{\pm.0081}$ & .9227$_{\pm.0175}$ \\
+coil2000\_insurance\_policies & .7138$_{\pm.0039}$ & .7110$_{\pm.0071}$ & .7111$_{\pm.0067}$ & .7110$_{\pm.0071}$ & .7111$_{\pm.0067}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7157$_{\pm.0080}$ & .7196$_{\pm.0140}$ & .7003$_{\pm.0083}$ & {\boldmath\textbf{.7309$_{\pm.0074}$}} \\
+credit-g & .7812$_{\pm.0405}$ & {\boldmath\textbf{.7845$_{\pm.0372}$}} & .7806$_{\pm.0386}$ & {\boldmath\textbf{.7845$_{\pm.0372}$}} & .7806$_{\pm.0386}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7600$_{\pm.0439}$ & .7670$_{\pm.0360}$ & .7551$_{\pm.0340}$ & .7805$_{\pm.0374}$ \\
+credit\_card\_clients\_default & .7772$_{\pm.0078}$ & .7775$_{\pm.0063}$ & .7789$_{\pm.0061}$ & .7775$_{\pm.0063}$ & .7789$_{\pm.0061}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7735$_{\pm.0086}$ & .7695$_{\pm.0089}$ & .7682$_{\pm.0095}$ & {\boldmath\textbf{.7795$_{\pm.0067}$}} \\
+customer\_satisfaction\_in\_airline & .9935$_{\pm.0002}$ & .9936$_{\pm.0003}$ & .9936$_{\pm.0002}$ & .9936$_{\pm.0003}$ & .9936$_{\pm.0002}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9929$_{\pm.0003}$ & .9936$_{\pm.0002}$ & .9936$_{\pm.0001}$ & {\boldmath\textbf{.9937$_{\pm.0002}$}} \\
+diabetes & .8036$_{\pm.0163}$ & .8031$_{\pm.0267}$ & .8023$_{\pm.0217}$ & .8031$_{\pm.0267}$ & .8023$_{\pm.0217}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7948$_{\pm.0225}$ & .7881$_{\pm.0165}$ & .7972$_{\pm.0198}$ & {\boldmath\textbf{.8076$_{\pm.0209}$}} \\
+ecom-offers & .6183\phantom{$_{\pm.0000}$} & \textbf{.6257}\phantom{$_{\pm.0000}$} & .6202\phantom{$_{\pm.0000}$} & \textbf{.6257}\phantom{$_{\pm.0000}$} & .6202\phantom{$_{\pm.0000}$} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .6197\phantom{$_{\pm.0000}$} & .6229\phantom{$_{\pm.0000}$} & .6191\phantom{$_{\pm.0000}$} & .6250\phantom{$_{\pm.0000}$} \\
+hazelnut-spread-contaminant-detection & .9799$_{\pm.0066}$ & {\boldmath\textbf{.9810$_{\pm.0072}$}} & .9804$_{\pm.0060}$ & {\boldmath\textbf{.9810$_{\pm.0072}$}} & .9804$_{\pm.0060}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9737$_{\pm.0101}$ & .9767$_{\pm.0087}$ & .9764$_{\pm.0086}$ & .9735$_{\pm.0079}$ \\
+heloc & .7876$_{\pm.0109}$ & .7864$_{\pm.0110}$ & .7863$_{\pm.0106}$ & .7864$_{\pm.0110}$ & .7863$_{\pm.0106}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7827$_{\pm.0098}$ & .7788$_{\pm.0081}$ & .7785$_{\pm.0092}$ & {\boldmath\textbf{.7882$_{\pm.0132}$}} \\
+homecredit-default & .8073\phantom{$_{\pm.0000}$} & .8112\phantom{$_{\pm.0000}$} & .8102\phantom{$_{\pm.0000}$} & .8112\phantom{$_{\pm.0000}$} & .8102\phantom{$_{\pm.0000}$} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8061\phantom{$_{\pm.0000}$} & .8028\phantom{$_{\pm.0000}$} & .7909\phantom{$_{\pm.0000}$} & \textbf{.8169}\phantom{$_{\pm.0000}$} \\
+homesite-insurance & .9548\phantom{$_{\pm.0000}$} & .9552\phantom{$_{\pm.0000}$} & .9548\phantom{$_{\pm.0000}$} & .9552\phantom{$_{\pm.0000}$} & .9548\phantom{$_{\pm.0000}$} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9551\phantom{$_{\pm.0000}$} & .9537\phantom{$_{\pm.0000}$} & .9542\phantom{$_{\pm.0000}$} & \textbf{.9554}\phantom{$_{\pm.0000}$} \\
+in\_vehicle\_coupon\_recommendation & .8281$_{\pm.0033}$ & .8273$_{\pm.0046}$ & .8283$_{\pm.0051}$ & .8273$_{\pm.0046}$ & .8283$_{\pm.0051}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8277$_{\pm.0035}$ & .8310$_{\pm.0044}$ & {\boldmath\textbf{.8325$_{\pm.0042}$}} & .8278$_{\pm.0052}$ \\
+jm1 & .7444$_{\pm.0055}$ & .7404$_{\pm.0088}$ & {\boldmath\textbf{.7466$_{\pm.0051}$}} & .7404$_{\pm.0088}$ & {\boldmath\textbf{.7466$_{\pm.0051}$}} & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7347$_{\pm.0066}$ & .7330$_{\pm.0073}$ & .7306$_{\pm.0111}$ & .7397$_{\pm.0075}$ \\
+kddcup09\_appetency & .8064$_{\pm.0072}$ & .8042$_{\pm.0161}$ & .8074$_{\pm.0088}$ & .8042$_{\pm.0161}$ & .8074$_{\pm.0088}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .8035$_{\pm.0111}$ & .8063$_{\pm.0187}$ & .7976$_{\pm.0140}$ & {\boldmath\textbf{.8209$_{\pm.0110}$}} \\
+online\_shoppers\_intention & .9255$_{\pm.0052}$ & .9247$_{\pm.0066}$ & .9257$_{\pm.0059}$ & .9247$_{\pm.0066}$ & .9257$_{\pm.0059}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9232$_{\pm.0070}$ & .9246$_{\pm.0066}$ & .9210$_{\pm.0068}$ & {\boldmath\textbf{.9260$_{\pm.0059}$}} \\
+polish\_companies\_bankruptcy & {\boldmath\textbf{.9838$_{\pm.0039}$}} & .9537$_{\pm.0072}$ & .9621$_{\pm.0067}$ & .9537$_{\pm.0072}$ & .9621$_{\pm.0067}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9533$_{\pm.0097}$ & .9577$_{\pm.0094}$ & .9555$_{\pm.0099}$ & .9593$_{\pm.0103}$ \\
+qsar-biodeg & .9377$_{\pm.0146}$ & {\boldmath\textbf{.9384$_{\pm.0138}$}} & .9383$_{\pm.0123}$ & {\boldmath\textbf{.9384$_{\pm.0138}$}} & .9383$_{\pm.0123}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9244$_{\pm.0206}$ & .9304$_{\pm.0158}$ & .9317$_{\pm.0115}$ & .9309$_{\pm.0152}$ \\
+seismic-bumps & .7300$_{\pm.0546}$ & .7129$_{\pm.0508}$ & .7181$_{\pm.0375}$ & .7129$_{\pm.0508}$ & .7181$_{\pm.0375}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .7193$_{\pm.0326}$ & .7156$_{\pm.0400}$ & .7241$_{\pm.0453}$ & {\boldmath\textbf{.7374$_{\pm.0669}$}} \\
+taiwanese\_bankruptcy\_prediction & .9413$_{\pm.0162}$ & .9348$_{\pm.0233}$ & .9381$_{\pm.0227}$ & .9348$_{\pm.0233}$ & .9381$_{\pm.0227}$ & \multicolumn{1}{c}{---} & \multicolumn{1}{c}{---} & .9363$_{\pm.0209}$ & .9416$_{\pm.0237}$ & {\boldmath\textbf{.9424$_{\pm.0265}$}} & .9421$_{\pm.0193}$ \\
 \bottomrule
 \end{tabular}
 \\[2pt]
@@ -151,39 +151,39 @@ $^*$ Dynamic methods only benefit trees if they're trained deeper than the GBTs'
 % \toprule
 % Dataset & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT Exact}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT Random Hist. (64 bins)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT Random Hist. (256 bins)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT AVX-2 R. Hist. (64 bins, ours)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering SPO-GBT AVX-512 R. Hist. (256 bins, ours)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering AA-GBT Exact}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering XGBoost (256 bins)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering LightGBM (255 bins)}} & \multicolumn{1}{c}{\parbox[b]{1.0cm}{\centering CatBoost (254 bins)}} \\
 % \midrule
-% APSFailure & 9.53 & 10.75 & 13.24 & 7.95 & 8.59 & 8.24 & \textbf{1.15} & 1.29 & 1.16 \\
-% Amazon\_employee\_access & 2.59 & 4.75 & 5.88 & 2.35 & 2.38 & 1.51 & \textbf{0.23} & 0.51 & 0.60 \\
-% Bank\_Customer\_Churn & 0.97 & 1.84 & 2.32 & 1.06 & 1.13 & 0.67 & \textbf{0.20} & 0.45 & 0.39 \\
-% Bioresponse & \textbf{0.91} & 1.25 & 1.49 & 0.98 & 1.07 & 25.41 & 2.05 & 1.11 & 3.09 \\
-% Diabetes130US & 6.33 & 11.56 & 13.25 & 7.00 & 6.98 & 3.15 & \textbf{0.32} & 0.71 & 0.78 \\
-% E-CommereShippingData & 1.04 & 1.98 & 2.43 & 1.12 & 1.18 & 0.71 & \textbf{0.18} & 0.41 & 0.42 \\
-% Fitness\_Club & 0.31 & 0.41 & 0.49 & 0.31 & 0.35 & 0.29 & \textbf{0.15} & 0.26 & 0.20 \\
-% GiveMeSomeCredit & 10.40 & 14.14 & 16.68 & 9.69 & 10.03 & 5.59 & \textbf{0.36} & 0.82 & 0.96 \\
-% HR\_Analytics\_Job\_Change\_of\_Data\_Scientists & 1.57 & 3.05 & 3.58 & 1.79 & 1.85 & 1.01 & \textbf{0.21} & 0.64 & 0.54 \\
-% Is-this-a-good-customer & 0.36 & 0.49 & 0.59 & 0.38 & 0.43 & 0.46 & \textbf{0.15} & 0.44 & 0.20 \\
-% Marketing\_Campaign & 0.43 & 0.64 & 0.81 & 0.44 & 0.49 & 0.64 & \textbf{0.18} & 0.40 & 0.24 \\
-% NATICUSdroid & 1.06 & 1.72 & 2.03 & 1.27 & 1.38 & 1.76 & \textbf{0.22} & 0.57 & 0.45 \\
-% bank-marketing & 3.39 & 5.40 & 6.23 & 3.78 & 3.81 & 1.90 & \textbf{0.23} & 0.59 & 0.65 \\
-% blood-transfusion-service-center & 0.22 & 0.26 & 0.29 & 0.23 & 0.25 & 0.22 & \textbf{0.14} & 0.20 & \textbf{0.14} \\
-% churn & 0.73 & 1.25 & 1.73 & 0.66 & 0.73 & 0.67 & \textbf{0.19} & 0.50 & 0.31 \\
-% coil2000\_insurance\_policies & 1.35 & 2.90 & 3.27 & 1.68 & 1.76 & 1.70 & \textbf{0.23} & 0.45 & 0.46 \\
-% credit-g & 0.30 & 0.40 & 0.48 & 0.33 & 0.38 & 0.53 & \textbf{0.15} & 0.48 & 0.19 \\
-% credit\_card\_clients\_default & 3.16 & 4.60 & 5.73 & 2.86 & 3.09 & 1.64 & \textbf{0.27} & 0.50 & 0.62 \\
-% customer\_satisfaction\_in\_airline & 9.73 & 19.02 & 21.85 & 11.39 & 11.73 & 5.56 & \textbf{0.45} & 0.98 & 0.94 \\
-% diabetes & 0.26 & 0.32 & 0.39 & 0.27 & 0.30 & 0.28 & \textbf{0.15} & 0.23 & 0.18 \\
-% ecom-offers & 3.95 & 5.18 & 6.15 & 3.75 & 3.97 & 3.71 & \textbf{0.43} & 0.95 & 0.81 \\
-% hazelnut-spread-contaminant-detection & 0.52 & 0.87 & 1.19 & 0.46 & 0.54 & 0.76 & \textbf{0.21} & 0.38 & 0.26 \\
-% heloc & 1.13 & 2.22 & 2.92 & 1.15 & 1.22 & 0.93 & \textbf{0.20} & 0.51 & 0.42 \\
-% homecredit-default & 5.97 & 9.28 & 11.34 & 5.49 & 5.80 & 14.29 & 2.50 & 2.21 & \textbf{2.18} \\
-% homesite-insurance & 5.14 & 11.61 & 13.61 & 5.50 & 5.91 & 7.29 & \textbf{0.61} & 1.03 & 1.43 \\
-% in\_vehicle\_coupon\_recommendation & 1.21 & 2.42 & 2.71 & 1.55 & 1.64 & 1.03 & \textbf{0.23} & 0.59 & 0.54 \\
-% jm1 & 1.23 & 1.87 & 2.46 & 1.24 & 1.32 & 0.93 & \textbf{0.21} & 0.48 & 0.45 \\
-% kddcup09\_appetency & 5.77 & 8.46 & 10.20 & 5.68 & 5.83 & 5.84 & \textbf{0.67} & 1.19 & 1.39 \\
-% online\_shoppers\_intention & 1.27 & 2.08 & 2.63 & 1.41 & 1.48 & 0.89 & \textbf{0.21} & 0.59 & 0.46 \\
-% polish\_companies\_bankruptcy & 1.03 & 1.15 & 1.58 & 0.82 & 0.94 & 1.27 & \textbf{0.33} & 0.43 & 0.43 \\
-% qsar-biodeg & 0.35 & 0.49 & 0.63 & 0.37 & 0.44 & 0.76 & \textbf{0.17} & 0.39 & 0.24 \\
-% seismic-bumps & 0.41 & 0.54 & 0.66 & 0.44 & 0.49 & 0.48 & \textbf{0.16} & 0.40 & 0.25 \\
-% taiwanese\_bankruptcy\_prediction & 1.37 & 2.05 & 2.79 & 1.11 & 1.23 & 1.72 & 0.41 & \textbf{0.38} & 0.50 \\
+% APSFailure & 15.38 & 16.89 & 21.67 & 12.57 & 13.67 & 8.24 & \textbf{1.15} & 1.29 & 1.16 \\
+% Amazon\_employee\_access & 4.90 & 10.45 & 13.84 & 4.40 & 4.42 & 1.51 & \textbf{0.23} & 0.51 & 0.60 \\
+% Bank\_Customer\_Churn & 1.58 & 3.83 & 4.72 & 1.89 & 2.01 & 0.67 & \textbf{0.20} & 0.45 & 0.39 \\
+% Bioresponse & 2.82 & 4.64 & 5.77 & 3.34 & 3.87 & 25.41 & 2.05 & \textbf{1.11} & 3.09 \\
+% Diabetes130US & 8.95 & 17.64 & 20.97 & 9.99 & 10.14 & 3.15 & \textbf{0.32} & 0.71 & 0.78 \\
+% E-CommereShippingData & 1.76 & 4.06 & 5.01 & 1.94 & 2.10 & 0.71 & \textbf{0.18} & 0.41 & 0.42 \\
+% Fitness\_Club & 0.37 & 0.57 & 0.73 & 0.38 & 0.44 & 0.29 & \textbf{0.15} & 0.26 & 0.20 \\
+% GiveMeSomeCredit & 17.99 & 27.42 & 33.21 & 16.66 & 17.30 & 5.59 & \textbf{0.36} & 0.82 & 0.96 \\
+% HR\_Analytics\_Job\_Change\_of\_Data\_Scientists & 1.99 & 4.36 & 5.29 & 2.28 & 2.38 & 1.01 & \textbf{0.21} & 0.64 & 0.54 \\
+% Is-this-a-good-customer & 0.43 & 0.66 & 0.84 & 0.47 & 0.54 & 0.46 & \textbf{0.15} & 0.44 & 0.20 \\
+% Marketing\_Campaign & 0.57 & 0.98 & 1.29 & 0.60 & 0.68 & 0.64 & \textbf{0.18} & 0.40 & 0.24 \\
+% NATICUSdroid & 1.26 & 1.97 & 2.25 & 1.57 & 1.71 & 1.76 & \textbf{0.22} & 0.57 & 0.45 \\
+% bank-marketing & 4.67 & 8.03 & 9.51 & 5.27 & 5.37 & 1.90 & \textbf{0.23} & 0.59 & 0.65 \\
+% blood-transfusion-service-center & 0.24 & 0.32 & 0.38 & 0.26 & 0.29 & 0.22 & \textbf{0.14} & 0.20 & \textbf{0.14} \\
+% churn & 1.08 & 2.10 & 2.97 & 0.94 & 1.08 & 0.67 & \textbf{0.19} & 0.50 & 0.31 \\
+% coil2000\_insurance\_policies & 1.56 & 3.27 & 3.82 & 1.95 & 2.08 & 1.70 & \textbf{0.23} & 0.45 & 0.46 \\
+% credit-g & 0.37 & 0.58 & 0.76 & 0.43 & 0.53 & 0.53 & \textbf{0.15} & 0.48 & 0.19 \\
+% credit\_card\_clients\_default & 4.37 & 6.84 & 8.86 & 3.80 & 4.10 & 1.64 & \textbf{0.27} & 0.50 & 0.62 \\
+% customer\_satisfaction\_in\_airline & 13.32 & 26.44 & 31.09 & 15.50 & 15.86 & 5.56 & \textbf{0.45} & 0.98 & 0.94 \\
+% diabetes & 0.32 & 0.49 & 0.67 & 0.34 & 0.42 & 0.28 & \textbf{0.15} & 0.23 & 0.18 \\
+% ecom-offers & 6.04 & 8.38 & 10.42 & 6.07 & 6.26 & 3.71 & \textbf{0.43} & 0.95 & 0.81 \\
+% hazelnut-spread-contaminant-detection & 0.70 & 1.31 & 1.82 & 0.65 & 0.77 & 0.76 & \textbf{0.21} & 0.38 & 0.26 \\
+% heloc & 1.53 & 3.16 & 4.29 & 1.58 & 1.67 & 0.93 & \textbf{0.20} & 0.51 & 0.42 \\
+% homecredit-default & 10.08 & 17.68 & 24.07 & 10.22 & 10.31 & 14.29 & 2.50 & 2.21 & \textbf{2.18} \\
+% homesite-insurance & 6.16 & 16.87 & 20.83 & 7.30 & 7.37 & 7.29 & \textbf{0.61} & 1.03 & 1.43 \\
+% in\_vehicle\_coupon\_recommendation & 1.59 & 3.45 & 4.05 & 2.19 & 2.31 & 1.03 & \textbf{0.23} & 0.59 & 0.54 \\
+% jm1 & 1.60 & 2.34 & 3.14 & 1.65 & 1.75 & 0.93 & \textbf{0.21} & 0.48 & 0.45 \\
+% kddcup09\_appetency & 8.10 & 13.66 & 17.36 & 7.96 & 8.08 & 5.84 & \textbf{0.67} & 1.19 & 1.39 \\
+% online\_shoppers\_intention & 1.78 & 3.18 & 4.18 & 2.05 & 2.14 & 0.89 & \textbf{0.21} & 0.59 & 0.46 \\
+% polish\_companies\_bankruptcy & 1.33 & 1.61 & 2.16 & 1.15 & 1.31 & 1.27 & \textbf{0.33} & 0.43 & 0.43 \\
+% qsar-biodeg & 0.48 & 0.70 & 0.88 & 0.53 & 0.61 & 0.76 & \textbf{0.17} & 0.39 & 0.24 \\
+% seismic-bumps & 0.54 & 0.80 & 1.04 & 0.59 & 0.67 & 0.48 & \textbf{0.16} & 0.40 & 0.25 \\
+% taiwanese\_bankruptcy\_prediction & 1.55 & 2.37 & 3.28 & 1.40 & 1.54 & 1.72 & 0.41 & \textbf{0.38} & 0.50 \\
 % \bottomrule
 % \end{tabular}
 % \end{table*}

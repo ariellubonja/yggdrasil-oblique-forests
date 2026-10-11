@@ -1878,6 +1878,11 @@ _PIVOT_GBT_LABELS = {"spo_gbt_rand_scalar": "SPO-GBT Random Hist. (64 bins)",
 # Scalar-binner GBT arms (arms.py ARMS_GBT_HIST, outside ARM_ORDER): shown in the
 # accuracy pivot only, in the same column order as their RF counterparts.
 _PIVOT_GBT_EXTRA = ["spo_gbt_rand_scalar", "spo_gbt_rand256_scalar"]
+# SPO-GBT columns read the P = F projection runs (arms.py ARMS_GBT_FULLPROJ, 2026-10-10)
+# so SPO-GBT scans as many candidates per node as AA-GBT and the libraries.
+_PIVOT_GBT_SOURCE = {a: f"{a}_fullproj" for a in (
+    "spo_gbt_exact_hwy", "spo_gbt_rand_vec", "spo_gbt_rand256_vec",
+    "spo_gbt_rand_scalar", "spo_gbt_rand256_scalar")}
 # Metrics whose RF and GBT tables share one float and caption (user, 2026-09-25).
 _PIVOT_MERGED = {"auc"}
 # GBT arm -> the RF column it sits under in a merged table.
@@ -1938,6 +1943,7 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
     for fam, arms in (("rf", rf_arms), ("gbt", gbt_arms)):
         labels = _PIVOT_RF_LABELS if fam == "rf" else _PIVOT_GBT_LABELS
         marks = _PIVOT_RF_MARK if fam == "rf" else {}
+        src = (lambda m: _PIVOT_GBT_SOURCE.get(m, m)) if fam == "gbt" else (lambda m: m)
         for col, std_col, key, fmt, desc, fn in _PIVOT_METRICS:
             # Horizontal, centred, wrapped to the cell width.
             heads = ["Dataset"] + [
@@ -1946,7 +1952,7 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
                 + marks.get(m, "") + "}}" for m in arms]
             lines, row_cells = [], []
             for ds in datasets:
-                vals = [np.nan if m in marks or m in _PIVOT_NO_RUN else _val(ds, m, col)
+                vals = [np.nan if m in marks or m in _PIVOT_NO_RUN else _val(ds, src(m), col)
                         for m in arms]
                 finite = [v for v in vals if v == v]
                 b = fn(finite) if finite else None
@@ -1954,7 +1960,7 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
                 for m, v in zip(arms, vals):
                     if m in marks or m in _PIVOT_NO_RUN:
                         cells.append("\\multicolumn{1}{c}{---}"); continue
-                    sd = _val(ds, m, std_col) if std_col else np.nan
+                    sd = _val(ds, src(m), std_col) if std_col else np.nan
                     # 1-fold holdouts get an invisible subscript so means line up.
                     pm = (f"$_{{\\pm{fmt.format(sd)}}}$" if sd == sd else
                           f"\\phantom{{$_{{\\pm{fmt.format(0)}}}$}}" if std_col else "")
@@ -2027,9 +2033,10 @@ def _per_dataset_pivot_tex(suite: pd.DataFrame) -> str:
                 + ["\\midrule", " & ".join(_spread(g_heads, g_fill_head)) + " \\\\", "\\midrule"]
                 + [" & ".join(_spread(c, g_fill_cell)) + " \\\\" for c in g_rows])
         labels = "".join(f"\\label{{{lb}}}\n" for lb in rf_labels + g_labels if lb)
-        caption = (f"RF (top) and GBT (bottom) {mk['desc']} on various datasets. "
+        caption = (f"RF (full-depth, top) and GBT (depth 6, bottom) {mk['desc']} on various datasets. "
                    f"{mk['cells_note']} Bold: best per row.{mk['note']}"
-                   " XGBoost, LightGBM, CatBoost used with default parameters.")  # Overleaf wording
+                   " XGBoost, LightGBM, CatBoost used with default parameters."  # Overleaf wording
+                   " SPO-GBT samples $F$ projections per node, SPO-RF $\\lceil\\sqrt{F}\\rceil$.")
         out.insert(1, "\\begin{table*}[p]\n\\centering\n\\scriptsize\n\\setlength{\\tabcolsep}{2pt}\n"
                    f"\\caption{{{caption}}}\n\\label{{tab:per-dataset-appendix-{key}}}\n{labels}"
                    f"\\begin{{tabular}}{{l{'r' * len(rf_arms)}}}\n\\toprule\n"
