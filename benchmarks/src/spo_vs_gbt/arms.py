@@ -332,3 +332,22 @@ ARMS_GBT_HIST: dict[str, dict] = {
     },
 }
 ARMS.update(ARMS_GBT_HIST)
+
+# Full-projection SPO-GBT arms (added 2026-10-10, user directive). The Table 9
+# SPO-GBT arms above ran with the harness default num_projections_exponent=0.5,
+# i.e. ceil(sqrt(F)) projections per node, while aa_gbt_exact (and XGBoost/
+# LightGBM/CatBoost) scan all F features. These arms set the exponent to 1 so
+# P = F. GetNumProjections (oblique.cc) clamps P to max_num_projections and has
+# no "-1 = unlimited" sentinel (-1 would collapse P to min_num_projections), so
+# the cap is lifted by passing INT_MAX; the harness default of 1000 would
+# otherwise truncate Bioresponse (F = 1776). Same binaries, trees, depth,
+# min_examples and seed as the sqrt(F) arms; kept out of ARM_ORDER.
+_FULL_PROJ = ["--num_projections_exponent", "1",
+              "--max_num_projections", "2147483647"]
+ARMS_GBT_FULLPROJ: dict[str, dict] = {
+    f"{name}_fullproj": {**arm, "ydf_flags": arm["ydf_flags"] + _FULL_PROJ}
+    for name, arm in ARMS.items()
+    if name in ("spo_gbt_exact_hwy", "spo_gbt_rand_vec", "spo_gbt_rand256_vec",
+                "spo_gbt_rand_scalar", "spo_gbt_rand256_scalar")
+}
+ARMS.update(ARMS_GBT_FULLPROJ)
