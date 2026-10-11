@@ -5,7 +5,7 @@
 # -> speedup_map.csv. Holds run_all.lock; commits + pushes at the end (union-merges on conflict).
 set -uo pipefail
 WORK_DIR=/home/ubuntu/spo_vs_gbt; REPO_DIR=/home/ubuntu/yggdrasil-oblique-forests
-SCRIPT_DIR="$REPO_DIR/benchmarks/src/spo_vs_gbt"; PY=${PY:-$REPO_DIR/.venv/bin/python}
+SCRIPT_DIR="$REPO_DIR/benchmarks/src/spaa27_experiments"; PY=${PY:-$REPO_DIR/.venv/bin/python}
 LOG_DIR="$WORK_DIR/logs"; RES_DIR="$REPO_DIR/benchmarks/results/runtime/speedup_map_by_dataset"
 OUT="$WORK_DIR/results/speedup_map.csv"; L="$LOG_DIR/run_b7_new3_dyn256.log"
 exec 9>"$WORK_DIR/run_all.lock"

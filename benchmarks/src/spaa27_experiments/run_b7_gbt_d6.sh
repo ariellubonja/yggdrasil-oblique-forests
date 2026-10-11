@@ -11,13 +11,13 @@
 # HIGGS/SUSY/Epsilon/GiveMeSomeCredit CSVs under benchmarks/data, and YouTube-8M
 # (`python benchmarks/data/download_youtube8m.py --partitions train`, ~5 min, 56 GB + 18 GB shards).
 # Trunk cells are generated in-process (no data needed); 1.5M x 40k needs ~250 GB RAM.
-#   tmux new-session -d -s gbt_d6 'bash benchmarks/src/spo_vs_gbt/run_b7_gbt_d6.sh'
+#   tmux new-session -d -s gbt_d6 'bash benchmarks/src/spaa27_experiments/run_b7_gbt_d6.sh'
 # Resumable (skip-existing per cell). Stages: fast arms (dataset-outer) then scalar arms.
 set -uo pipefail
 WORK_DIR=${WORK_DIR:-/home/ubuntu/spo_vs_gbt}
 REPO_DIR=${REPO_DIR:-/home/ubuntu/yggdrasil-oblique-forests}
 PY=${PY:-/home/ubuntu/gbt_venv/bin/python}
-SCRIPT_DIR="$REPO_DIR/benchmarks/src/spo_vs_gbt"
+SCRIPT_DIR="$REPO_DIR/benchmarks/src/spaa27_experiments"
 LOG_DIR="$WORK_DIR/logs"; mkdir -p "$LOG_DIR" "$WORK_DIR/results"
 OUT=${OUT:-$WORK_DIR/results/speedup_map_gbt_d6.csv}   # m7i: OUT=.../speedup_map.csv COMMIT=1
 L="$LOG_DIR/run_b7_gbt_d6.log"

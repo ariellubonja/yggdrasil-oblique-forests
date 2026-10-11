@@ -12,7 +12,7 @@
 set -uo pipefail
 W=/home/ubuntu/spo_vs_gbt
 REPO=/home/ubuntu/yggdrasil-oblique-forests
-SD="$REPO/benchmarks/src/spo_vs_gbt"
+SD="$REPO/benchmarks/src/spaa27_experiments"
 PY=/home/ubuntu/gbt_venv/bin/python
 DATA="$REPO/benchmarks/data"
 ARMS="spo_rf_rand256_vec spo_rf_dyn256_vec spo_gbt_dyn256_vec"

@@ -8,7 +8,7 @@
 #   box 2 (trunk only, 1.5M x 40k needs ~250 GB RAM): 1.5M x 40k, 150k x 160k, 150k x 400k (21)
 #   box 3 (trunk only): 4.5M x 4096, 1.5M x 16384, 1.5M x 4096 (21)
 # Bins: /home/ubuntu/spo_vs_gbt/bin/{default,scalar} built by build_bins.sh at 6885c576 (icx).
-#   tmux new-session -d -s d20 'BOX=2 COMMIT=1 bash benchmarks/src/spo_vs_gbt/run_b7_d20.sh'
+#   tmux new-session -d -s d20 'BOX=2 COMMIT=1 bash benchmarks/src/spaa27_experiments/run_b7_d20.sh'
 # Box 1 writes straight into speedup_map.csv (OUT=.../results/speedup_map.csv); boxes 2/3 write
 # results/speedup_map_d20_box$BOX.csv, committed as-is and merged into speedup_map.csv by hand.
 # Resumable (skip-existing per cell). Holds run_all.lock.
@@ -16,7 +16,7 @@ set -uo pipefail
 WORK_DIR=${WORK_DIR:-/home/ubuntu/spo_vs_gbt}
 REPO_DIR=${REPO_DIR:-/home/ubuntu/yggdrasil-oblique-forests}
 PY=${PY:-/home/ubuntu/gbt_venv/bin/python}
-SCRIPT_DIR="$REPO_DIR/benchmarks/src/spo_vs_gbt"
+SCRIPT_DIR="$REPO_DIR/benchmarks/src/spaa27_experiments"
 LOG_DIR="$WORK_DIR/logs"; mkdir -p "$LOG_DIR" "$WORK_DIR/results"
 BOX=${BOX:-1}
 OUT=${OUT:-$WORK_DIR/results/speedup_map_d20_box$BOX.csv}

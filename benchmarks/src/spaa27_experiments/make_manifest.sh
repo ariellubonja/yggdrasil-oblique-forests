@@ -43,7 +43,7 @@ cd "$REPO"
   find "$REPO/benchmarks/data/tabarena_binary_csv" "$REPO/benchmarks/data/tabred_binary_csv" \
        -type f \( -name '*.csv' -o -name '*.json' \) | sort | xargs sha256sum
   find "$WORK/folds" -type f | sort | xargs sha256sum
-  find "$REPO/benchmarks/src/spo_vs_gbt" -maxdepth 1 -type f \
+  find "$REPO/benchmarks/src/spaa27_experiments" -maxdepth 1 -type f \
        \( -name '*.py' -o -name '*.json' -o -name '*.sh' \) | sort | xargs sha256sum
 } > "$OUT/inputs.sha256"
 echo "wrote $OUT/inputs.sha256 ($(wc -l < "$OUT/inputs.sha256") files)"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the overall-depth-table suite (paper table `table_train_time_by_depth.tex`) on ONE new CSV dataset.
 #
-#   bash benchmarks/src/spo_vs_gbt/run_b7_dataset.sh <NAME> <train.csv> <label_col>
+#   bash benchmarks/src/spaa27_experiments/run_b7_dataset.sh <NAME> <train.csv> <label_col>
 #
 # NAME is the `dataset` key in speedup_map.csv (e.g. YOUTUBE8M) — add a row
 # ("<NAME>", "<display> R$\times$C") to DATASETS in make_overall_depth_table.py afterwards.
@@ -24,7 +24,7 @@ NAME=$1; CSV=$(readlink -f "$2"); LABEL=$3
 WORK_DIR=${WORK_DIR:-/home/ubuntu/spo_vs_gbt}
 REPO_DIR=${REPO_DIR:-/home/ubuntu/yggdrasil-oblique-forests}
 PY=${PY:-/home/ubuntu/gbt_venv/bin/python}
-SCRIPT_DIR="$REPO_DIR/benchmarks/src/spo_vs_gbt"
+SCRIPT_DIR="$REPO_DIR/benchmarks/src/spaa27_experiments"
 LOG_DIR="$WORK_DIR/logs"; mkdir -p "$LOG_DIR" "$WORK_DIR/results"
 RES_DIR="$REPO_DIR/benchmarks/results/runtime/speedup_map_by_dataset"
 OUT=${OUT:-$WORK_DIR/results/speedup_map.csv}

@@ -8,7 +8,7 @@ set -uo pipefail
 REP="${1:-1}"
 WORK_DIR=/home/ubuntu/spo_vs_gbt
 REPO_DIR=/home/ubuntu/yggdrasil-oblique-forests
-SCRIPT_DIR="$REPO_DIR/benchmarks/src/spo_vs_gbt"
+SCRIPT_DIR="$REPO_DIR/benchmarks/src/spaa27_experiments"
 PY=/home/ubuntu/gbt_venv/bin/python
 LOG_DIR="$WORK_DIR/logs"
 if [ "$REP" = "1" ]; then OUT="$WORK_DIR/results/speedup_map.csv"; SKIP=""; SUF="";

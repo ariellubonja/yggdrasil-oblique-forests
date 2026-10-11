@@ -105,7 +105,7 @@ or row-filtered; report what was changed (columns encoded, cells imputed) with t
   → 0). Implementation: `tabular_suite_prep.encode_binary_label`; YouTube-8M applies it
   at download time (`download_youtube8m.py`, entity 0 = "Game").
 - Reference implementation: `benchmarks/data/tabular_suite_prep.py` (encoding) +
-  `benchmarks/src/spo_vs_gbt/run_suite.py::make_folds` (per-fold imputation); documented
+  `benchmarks/src/spaa27_experiments/run_suite.py::make_folds` (per-fold imputation); documented
   in `benchmarks/results/runtime/speedup_map_by_dataset/README.md`. The CC18 accuracy study
   (`benchmarks/results/accuracy/`) predates this rule and fed raw CSVs to the harness.
 
@@ -282,7 +282,7 @@ refresh is a manual re-upload — not worth repeating per data correction.
 
 One command runs the paper's depth-table suite (6 SPO-RF arms x depths {6,10,16,24,purity},
 240 trees, min_examples 1, 48 threads, 1 run) on a new CSV and appends to `speedup_map.csv`:
-`bash benchmarks/src/spo_vs_gbt/run_b7_dataset.sh <NAME> <train.csv> <label_col>` (run it inside
+`bash benchmarks/src/spaa27_experiments/run_b7_dataset.sh <NAME> <train.csv> <label_col>` (run it inside
 tmux; `COMMIT=1` commits + pushes after each stage; holds `run_all.lock`, so queue behind any
 other training). The CSV must satisfy the dataset policy above (numeric, NaN-free, 0/1 label);
 the download scripts in `benchmarks/data/` show the massage. Afterwards add the dataset to

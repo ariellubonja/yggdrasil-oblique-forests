@@ -53,7 +53,7 @@ record the CLI, host, python and library versions at the time each CSV was creat
 
 ## 3. Input manifest (hashes)
 
-`bash benchmarks/src/spo_vs_gbt/make_manifest.sh [--large]` writes
+`bash benchmarks/src/spaa27_experiments/make_manifest.sh [--large]` writes
 `/home/ubuntu/spo_vs_gbt/MANIFEST/`:
 
 - `inputs.sha256` — sha256 of the 3 binaries, every TabArena/TabReD source CSV +
@@ -131,7 +131,7 @@ while a timing stage is active; even sub-second python arms spin 48 OpenMP threa
 ## 6. Spot-check recipe (what the user will ask for)
 
 ```bash
-cd /home/ubuntu/yggdrasil-oblique-forests/benchmarks/src/spo_vs_gbt
+cd /home/ubuntu/yggdrasil-oblique-forests/benchmarks/src/spaa27_experiments
 sha256sum -c /home/ubuntu/spo_vs_gbt/MANIFEST/inputs.sha256 --quiet && echo inputs-OK
 
 # random sample: N rows from each of suite / large / speedup, seeded
@@ -245,7 +245,7 @@ repo under `benchmarks/results/runtime/speedup_map_by_dataset/MANIFEST/`, and ba
 | `bin/default` | `bazel build -c opt //examples:train_oblique_forest` (`.bazelrc`: icx, `-O3 -march=native`) at the current HEAD; `bin/default.gitsha` = `git rev-parse --short=8 HEAD` | new build (different sha by design) |
 | TabArena CSVs | `python3 benchmarks/data/download_tabarena_datasets.py` (OpenML → `benchmarks/data/tabarena/<name>/data.parquet`), then for each `status: ok` entry of `benchmarks/data/tabarena_binary_manifest.json`: `tabular_suite_prep.write_dataset(out, name, df.drop(columns=[target]), df[target])` (both files restored from branch `origin/pr356-replication`) | 30/30 `train.csv` OK; `meta.json` differ (the original one-off driver added extra keys that were never committed; `run_suite` reads only `label_col` from it, and `discover_datasets` tolerates the difference) |
 | TabReD 40k mirror | HF `danil-e/harbor-datasets-tabred`, file `datasets/tabred-real/<name>/environment/data/train_full.csv` → `benchmarks/data/tabred_raw_mirror/<name>_train_full.csv`; drop `id,timestamp,target`, `write_dataset(out, name, X, raw["target"])` | 3/3 `train.csv` OK; `meta.json` differ (as above) |
-| `train_nan.csv` | `gbt_venv/bin/python benchmarks/src/spo_vs_gbt/make_train_nan.py` | 13/13 OK |
+| `train_nan.csv` | `gbt_venv/bin/python benchmarks/src/spaa27_experiments/make_train_nan.py` | 13/13 OK |
 | folds | `run_suite.make_folds(name, train_csv, label_col, 5, 0, "/home/ubuntu/spo_vs_gbt/folds", chrono=name in {ecom-offers, homecredit-default, homesite-insurance}, holdout_frac=0.2)` for every dataset of both suite dirs | 306/306 OK |
 | HIGGS / SUSY train | `head -n 10500001 HIGGS_with_header.csv`, `head -n 4500001 SUSY_with_header.csv` | OK |
 | HIGGS / SUSY test | header + `tail -n 500000` of `*_with_header.csv`, label column rewritten to integer tokens: `sed -E 's/^1\.0+e\+00,/1,/; s/^0\.0+e\+00,/0,/'` (the label-token bug in `benchmarks/results/accuracy/README.md`) | OK |

@@ -3,7 +3,7 @@
 Environment from scratch: shell, toolchain, repo build, datasets. Originally copied from the
 "AWS setup" Google Doc on 2026-09-21; turned into an unattended script the same day.
 Companion docs: `oblique_context/build_measure.md` (bazel configs, harness flags),
-`benchmarks/src/spo_vs_gbt/REPLICABILITY.md` §10 (regenerating the study inputs).
+`benchmarks/src/spaa27_experiments/REPLICABILITY.md` §10 (regenerating the study inputs).
 
 ## Run it
 

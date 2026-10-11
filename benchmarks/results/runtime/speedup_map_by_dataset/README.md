@@ -2,7 +2,7 @@
 
 How the 33 suite datasets (30 TabArena binary + 3 TabReD) were turned into the
 fold CSVs every arm read. Code: `benchmarks/data/tabular_suite_prep.py` (encoding,
-m7i only) and `benchmarks/src/spo_vs_gbt/run_suite.py::make_folds`
+m7i only) and `benchmarks/src/spaa27_experiments/run_suite.py::make_folds`
 (folds + imputation). Replication details: `../../evaluation/spo_vs_gbt/REPLICABILITY.md`.
 
 ## Non-numeric columns

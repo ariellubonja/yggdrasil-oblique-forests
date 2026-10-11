@@ -5,7 +5,7 @@
 # B7 map cells (all 5 depths), suite. Appends to the same CSVs (skip-existing).
 set -uo pipefail
 WORK_DIR=/home/ubuntu/spo_vs_gbt; REPO_DIR=/home/ubuntu/yggdrasil-oblique-forests
-SCRIPT_DIR="$REPO_DIR/benchmarks/src/spo_vs_gbt"; PY=/home/ubuntu/gbt_venv/bin/python
+SCRIPT_DIR="$REPO_DIR/benchmarks/src/spaa27_experiments"; PY=/home/ubuntu/gbt_venv/bin/python
 LOG_DIR="$WORK_DIR/logs"; RESULTS_DIR="$WORK_DIR/results"; REPO_DATA="$REPO_DIR/benchmarks/data"
 L="$LOG_DIR/run_b7_dynscalar.log"
 exec 9>"$WORK_DIR/run_all.lock"

@@ -7,7 +7,7 @@
 # Commits + pushes the result files at the end. Holds run_all.lock throughout.
 set -uo pipefail
 WORK_DIR=/home/ubuntu/spo_vs_gbt; REPO_DIR=/home/ubuntu/yggdrasil-oblique-forests
-SCRIPT_DIR="$REPO_DIR/benchmarks/src/spo_vs_gbt"; PY=/home/ubuntu/gbt_venv/bin/python
+SCRIPT_DIR="$REPO_DIR/benchmarks/src/spaa27_experiments"; PY=/home/ubuntu/gbt_venv/bin/python
 LOG_DIR="$WORK_DIR/logs"; RES_DIR="$REPO_DIR/benchmarks/results/runtime/speedup_map_by_dataset"
 L="$LOG_DIR/run_b7_dynvec.log"
 exec 9>"$WORK_DIR/run_all.lock"

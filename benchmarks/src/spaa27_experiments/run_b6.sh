@@ -5,7 +5,7 @@
 set -uo pipefail
 WORK_DIR=/home/ubuntu/spo_vs_gbt
 REPO_DIR=/home/ubuntu/yggdrasil-oblique-forests
-SCRIPT_DIR="$REPO_DIR/benchmarks/src/spo_vs_gbt"
+SCRIPT_DIR="$REPO_DIR/benchmarks/src/spaa27_experiments"
 PY=/home/ubuntu/gbt_venv/bin/python
 LOG_DIR="$WORK_DIR/logs"
 exec 9>"$WORK_DIR/run_all.lock"
