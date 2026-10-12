@@ -1,9 +1,9 @@
-\documentclass{article}
-\usepackage{graphicx} % Required for inserting images
+\documentclass[sigconf]{acmart}
 \usepackage{hyperref}
-\usepackage{amsmath,amssymb}
 \usepackage{mathtools}
 \usepackage{enumitem}
+
+% \usepackage[letterpaper,margin=0.8in]{geometry}
 
 \newlist{todolist}{itemize}{2}
 \setlist[todolist]{label=$\square$}
@@ -37,7 +37,7 @@
 
 \title{Distributed SPO-GBT}
 \author{Ariel Lubonja}
-\date{August 2026}
+% \affiliation
 
 \begin{document}
 
@@ -46,6 +46,14 @@
 \section{Introduction}
 
 Distributed Tree training offers two main advantages: training on very large data ($>$100m examples+) that does not fit in a single machine's memory, and distributed hyperparameter tuning. 
+
+No implementation of SPO-GBT distributed training exists, to our knowledge. This severely limits Sparse Oblique methods to datasets that are limited to a single machine. \textbf{AutoML frequently selects SPO-GBT as the best method}
+
+YDF has support for distributed training GBTs: the distribution is among the features, i.e. different workers handle different features. This allows us to train on very large (deep \& wide) datasets, because each worker just needs (roughly) enough memory to hold the label column and the feature column. 
+
+
+Distributed training has 0 support for Sparse oblique splits; mainly because it's nontrivial to implement: Workers would need to store the pseudo-features, or store enough features to construct the pseudo-features efficiently, without moving features around too much. 
+Distributed sparse oblique splits has not been done by anyone AFAIK, so this would by really something novel. YDF has all the primitives and the GBT implementation ready.
 
 \section{Challenges}
 
@@ -73,7 +81,21 @@ YDF Distributed training requires:
 
  [Source: \href{https://ydf.readthedocs.io/en/latest/tutorial/distributed_training/#setup}{YDF Docs}]
 
+ \begin{figure*}[t]
+    \centering
+    \includegraphics[width=.8\linewidth]{images/distributed_gbt_training_loop.pdf}
+    \caption{Distributed GBT Training Loop}
+    \label{fig:ydf-dist-gbt-training-loop}
+\end{figure*}
+
 \subsection{Load-balanced Data Sharding}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{images/distributed_gbt_column_partitioning.pdf}
+    \caption{Data Sharding illustration. Dataset is split by column, presorted, then round-robin-ed in a load-balancing way to workers.}
+    \label{fig:ydf-dist-gbt-load-balancing}
+\end{figure}
 
 Feature columns are weighed by their expected compute expense : numerical features weigh $5.0$, Discretized weigh $1.0$ (\texttt{LoadBalancer::Initialize}). Numerical columns are Pre-Sorted (\texttt{dataset\_cache.cc::SortNumericalColumns}).
 
@@ -81,19 +103,12 @@ Feature columns are weighed by their expected compute expense : numerical featur
     \item Shard dataset in shared directory, by column. 
         \begin{itemize}
             \item 1 column to 1 worker. No replication.
-            \item \TODO{Main issue}: \textbf{how to shard these once in SPO when they're sampled per node?}
+            \item \textbf{Main issue}: how to shard these once in SPO when they're sampled per node?
         \end{itemize}
-    \item Presort Columns. \textbf{Issue 1: Not possible in SPO. Will be skipped}
-    \item Load-balanced column round-robin to workers, by compute intensity: 5 for Numeric, 1 for Discretized. \textbf{Issue 2. No fixed columns in SPO}
+    \item Presort Columns. \textbf{Issue 2: Not possible in SPO. Will be skipped}
+    \item Load-balanced column round-robin to workers, by compute intensity: 5 for Numeric, 1 for Discretized. \textbf{Issue 3. No fixed columns in SPO}
     \item Train
 \end{enumerate}
-
-\begin{figure}
-    \centering
-    \includegraphics[width=1\linewidth]{images/distributed_gbt_column_partitioning.pdf}
-    \caption{Data Sharding illustration. Dataset is split by column, presorted, then round-robin-ed in a load-balancing way to workers.}
-    \label{fig:ydf-dist-gbt-load-balancing}
-\end{figure}
 
 \subsection{Training}
 
@@ -120,17 +135,9 @@ for (auto value : values) {
 \}
 
 
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=.8\linewidth]{images/distributed_gbt_training_loop.pdf}
-    \caption{Distributed GBT Training Loop}
-    \label{fig:ydf-dist-gbt-training-loop}
-\end{figure}
-
 \section{Method: Distributed SPO-GBT}
 
-In a dataset with $N$ rows and $\mathbf{F}$ columns. In traditional GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike SPO-RF, which samples $\sqrt{\mathbf{F}} \sim \mathbf{F}$. \newline
+In a dataset with $N$ rows and $\mathbf{F}$ columns. In GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike RF and SPO-RF, which sample $\sqrt{\mathbf{F}} \sim \mathbf{F}$. \newline
 
 \textbf{\textit{Benefit}}: Full feature range available for sampling
 
@@ -141,7 +148,16 @@ In a dataset with $N$ rows and $\mathbf{F}$ columns. In traditional GBT, each wo
 
 % Also applicable to bivariate and other random subset-based tree kernels
 
+\begin{figure}
+    \centering
+    \includegraphics[width=.5\linewidth]{images/in_node_spo_sampling.pdf}
+    \caption{V1 works identically to Distributed GBT, but features are sampled only within a worker.}
+    \label{fig:placeholder}
+\end{figure}
+
 \subsubsection{Method}
+
+\input{tables/table_dist_runtime}
 
 Each worker holds and samples from a small subset of columns.
 
@@ -178,7 +194,9 @@ Define $F_{\text{node}} \coloneqq \sqrt{\mathbf{F}}$ as the number of columns st
 
 Load-balancing?
 
-\subsubsection{Evaluation}
+\section{Evaluation}
+
+\subsection{In-worker Projection Sampling}
 
 \begin{itemize}
     \item Pre-generated projections as control, fanned out before training
@@ -188,11 +206,19 @@ Load-balancing?
     \end{itemize}
 \end{itemize}
 
-\newpage
+\section{Results}
+
+Single-machine results
+
+\input{tables/table_dist_accuracy}
+
+% \clearpage
 
 \appendix
 
-\section{Call Stack}
+\section{Appendix}
+
+\subsection{Call Stack}
 
 \begin{lstlisting}
 distributed_gbt.cc::TrainWithStatusImpl()
@@ -207,23 +233,21 @@ worker.cc::StartTraining()
    - - training.cc::FindBestSplitsWithThreadPool()
 \end{lstlisting}
 
-\section{Approximate Splits}
+\subsection{Approximate Splits}
 
 \textbf{Consider using approximate splits} to further improve training speed. Very often, this can speed up training by 2x-5x without negative impact on quality. Set hyperparameter \textbf{force\_numerical\_discretization=True} to enable approximate splits for distributed training.
 
 
-Included in Google's Vertex AI
+\subsection{Using GCP and Vertex AI}
 
-\section{Paper-style writing : Distributed SPO-GBT}
+Not all instance types are supported in Vertex AI Custom Jobs.
 
-\subsection{Introduction}
+Google Cloud Hyperdisk is Google's next-generation block storage service, designed to decouple storage performance from capacity. Unlike traditional persistent disks (Standard PD, Balanced PD, SSD PD), where storage performance (IOPS and throughput) scales based on the size of the disk, Hyperdisk allows you to provision performance independently of the disk's capacity.
 
-No implementation of SPO-GBT distributed training exists, to our knowledge. This severely limits Sparse Oblique methods to datasets that are limited to a single machine. \textbf{AutoML frequently selects SPO-GBT as the best method}
-
-YDF has support for distributed training GBTs: the distribution is among the features, i.e. different workers handle different features. This allows us to train on very large (deep \& wide) datasets, because each worker just needs (roughly) enough memory to hold the label column and the feature column. 
+Google Colab Gemini is not agentic and not smart - too slow to iterate. Use local Claude with GCP CLI
 
 
-Distributed training has 0 support for Sparse oblique splits; mainly because it's nontrivial to implement: Workers would need to store the pseudo-features, or store enough features to construct the pseudo-features efficiently, without moving features around too much. 
-Distributed sparse oblique splits has not been done by anyone AFAIK, so this would by really something novel. YDF has all the primitives and the GBT implementation ready.
+
+
 
 \end{document}
