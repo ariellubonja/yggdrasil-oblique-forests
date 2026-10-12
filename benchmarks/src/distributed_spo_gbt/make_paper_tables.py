@@ -51,7 +51,8 @@ def runtime_table(trees=50, workers=(1, 4)):
     return "\n".join(lines) + "\n"
 
 
-def accuracy_table(metric="test_auc"):
+def accuracy_stats(metric="test_auc"):
+    """Per-arm (family, label, mean/std/count by dataset) and the datasets with every fold done."""
     p = pd.read_csv(R / "speedup_map_by_dataset/suite_results.csv"); p = p[p.status == "OK"]
     d = pd.read_csv(R / "distributed_spo_gbt/suite_results.csv"); d = d[d.rc == 0]
     d = d.drop_duplicates(["dataset", "fold", "workers", "split_axis"], keep="last")
@@ -67,6 +68,11 @@ def accuracy_table(metric="test_auc"):
     # Only datasets whose every distributed cell has all folds (suite still running).
     done = [ds for ds in sorted(d.dataset.unique())
             if all(ds in s.index and s.loc[ds, "count"] == nfolds.get(ds, -1) for _, _, s in stats)]
+    return stats, done, nfolds
+
+
+def accuracy_table(metric="test_auc"):
+    stats, done, nfolds = accuracy_stats(metric)
     fams = [f for f, _, _ in AXES]
     lines = [HDR, r"\begin{table*}[t]", r"\centering", r"\scriptsize", r"\setlength{\tabcolsep}{2pt}",
              r"\caption{Test ROC AUC of single-machine and distributed GBT with $W$ workers (300 trees, depth 6), for sparse oblique (SPO) and axis-aligned (AA). Cells are the mean $\pm$ std over 5 CV folds. Single chronological holdouts have no std. Single-machine SPO-GBT samples $F$ projections per node; distributed SPO-GBT workers \TODO{sample $F/W$ projections from their $F/W$ columns.}}",
@@ -99,38 +105,69 @@ FIG_ARMS = (("SPO", "SPARSE_OBLIQUE", "spo_gbt_exact_hwy", ("0C447C", "378ADD", 
             ("AA", "AXIS_ALIGNED", "aa_gbt_exact", ("993C1D", "D85A30", "F5C4B3")))
 
 
-def runtime_figure(trees=50, workers=(1, 4)):
-    """Same cells as runtime_table, as interleaved SPO/AA bars on a log axis."""
-    d = pd.read_csv(R / "distributed_spo_gbt/results.csv")
-    d = d[(d.rc == 0) & (d.trees == trees)].drop_duplicates(["dataset", "workers", "split_axis"], keep="last")
-    a = pd.read_csv(R / "distributed_spo_gbt/anchors.csv")
-    a = a[(a.rc == 0) & (a.trees == trees)].drop_duplicates(["dataset", "arm"], keep="last")
-    series = []  # (legend, color, {dataset: seconds}), interleaved SPO/AA per setting
-    for k, w in enumerate((None,) + tuple(workers)):
-        for fam, axis, arm, colors in FIG_ARMS:
-            if w is None:
-                v = {ds: a[(a.dataset == ds) & (a.arm == arm)].train_s for ds in NAMES}
-                lab = f"{fam} Local"
-            else:
-                v = {ds: d[(d.dataset == ds) & (d.workers == w) & (d.split_axis == axis)].tree_training_s for ds in NAMES}
-                lab = f"{fam} $W{{=}}{w}$ Dist."
-            series.append((lab, colors[k], {ds: float(x.iloc[0]) for ds, x in v.items() if len(x)}))
-    lines = [HDR, r"\begin{figure}[t]", r"\centering",
-             r"\begin{tikzpicture}", r"\begin{axis}[ybar, ymode=log, log origin=infty, ymin=5, ymax=5000,",
-             r"  width=\columnwidth, height=5.2cm, bar width=3.6pt, enlarge x limits=0.15,",
-             "  symbolic x coords={" + ",".join(NAMES.values()) + "}, xtick=data,",
-             r"  ylabel={Training time (s)}, ymajorgrids, major grid style={gray!25},",
-             r"  tick label style={font=\footnotesize}, label style={font=\footnotesize},",
-             r"  legend style={font=\scriptsize, at={(0.5,1.03)}, anchor=south, draw=none, /tikz/every even column/.append style={column sep=6pt}},",
-             r"  legend columns=2, legend cell align=left, area legend, xtick style={draw=none}]"]
-    for lab, color, v in series:
-        coords = " ".join(f"({NAMES[ds]},{v[ds]:.0f})" for ds in NAMES if ds in v)
-        lines += [rf"\addplot[fill={{rgb,255:red,{int(color[:2], 16)};green,{int(color[2:4], 16)};blue,{int(color[4:], 16)}}}, draw=none] coordinates {{{coords}}};",
-                  rf"\addlegendentry{{{lab}}}"]
+def _rgb(c):
+    return "{rgb,255:red,%d;green,%d;blue,%d}" % tuple(int(c[k:k + 2], 16) for k in (0, 2, 4))
+
+
+def _diverge(v, cap=15.0):
+    """Blue (better) / red (worse) / gray midpoint, as an RGB triple string for \\cellcolor[RGB]."""
+    t = max(-1.0, min(1.0, v / cap))
+    mid, pole = (240, 239, 236), ((42, 120, 214) if t > 0 else (227, 73, 72))
+    return ",".join(str(round(m + abs(t) * (q - m))) for m, q in zip(mid, pole))
+
+
+def accuracy_delta_heatmap(metric="test_auc"):
+    """Distributed minus single-machine mean AUC (x1e3) per dataset and W, as a colored table."""
+    stats, done, _ = accuracy_stats(metric)
+    fams = [f for f, _, _ in AXES]
+    blocks = {f: [(lab, s) for g, lab, s in stats if g == f] for f in fams}
+    nw = len(blocks[fams[0]]) - 1
+    ws = [lab.split("W{=}")[1].rstrip("$") for lab, _ in blocks[fams[0]][1:]]
+    lines = [HDR, r"\begin{figure*}[t]", r"\centering", r"\scriptsize", r"\setlength{\tabcolsep}{3pt}",
+             r"\renewcommand{\arraystretch}{1.1}",
+             r"\begin{tabular}{l" + "|".join("c" * nw for _ in fams) + "}", r"\toprule",
+             " & " + " & ".join(rf"\multicolumn{{{nw}}}{{c}}{{{f}}}" for f in fams) + r" \\",
+             "Dataset & " + " & ".join(f"$W{{=}}{w}$" for _ in fams for w in ws) + r" \\", r"\midrule"]
+    deltas = {(f, i): [] for f in fams for i in range(nw)}
+    def cell(v):
+        txt = f"{v:+.1f}".replace("+0.0", "0.0").replace("-0.0", "0.0").replace("-", "$-$")
+        return rf"\cellcolor[RGB]{{{_diverge(v)}}}" + (rf"\textcolor{{white}}{{{txt}}}" if abs(v) > 9 else txt)
+    for ds in done:
+        cells = []
+        for f in fams:
+            ref = blocks[f][0][1].loc[ds, "mean"]
+            for i, (_, st) in enumerate(blocks[f][1:]):
+                v = (st.loc[ds, "mean"] - ref) * 1e3
+                deltas[(f, i)].append(v); cells.append(cell(v))
+        lines.append(ds.replace("_", r"\_") + " & " + " & ".join(cells) + r" \\")
+    lines += [r"\midrule", "Mean & " + " & ".join(cell(sum(deltas[(f, i)]) / len(done)) for f in fams for i in range(nw)) + r" \\",
+              r"\bottomrule", r"\end{tabular}",
+              r"\caption{Change in test ROC AUC ($\times 10^{-3}$) of distributed GBT with $W$ workers relative to single-machine GBT, for sparse oblique (SPO) and axis-aligned (AA). Blue: distributed is higher; red: lower. Same runs as Table~\ref{tab:dist-accuracy}.}",
+              r"\Description{Heatmap of per-dataset AUC differences between distributed and single-machine GBT, SPO and AA, for each worker count.}",
+              r"\label{fig:dist-accuracy-delta}", r"\end{figure*}"]
+    return "\n".join(lines) + "\n"
+
+
+def accuracy_mean_figure(metric="test_auc"):
+    """The table's Mean row as one line per family over single machine, W=1..."""
+    stats, done, _ = accuracy_stats(metric)
+    xs = ["Single"] + [lab.split("W{=}")[1].rstrip("$") for f, lab, _ in stats if f == AXES[0][0] and "W{=}" in lab]
+    xl = ["single", *(f"$W{{=}}{w}$" for w in xs[1:])]
+    lines = [HDR, r"\begin{figure*}[t]", r"\centering", r"\begin{tikzpicture}",
+             r"\begin{axis}[width=0.5\textwidth, height=4.6cm, symbolic x coords={" + ",".join(xs) + "}, xtick=data,",
+             "  xticklabels={" + ",".join(xl) + r"}, ylabel={Mean test ROC AUC},",
+             r"  yticklabel style={/pgf/number format/fixed, /pgf/number format/precision=3, /pgf/number format/fixed zerofill},",
+             r"  tick label style={font=\footnotesize}, label style={font=\footnotesize}, tick style={draw=none},",
+             r"  legend style={font=\scriptsize, at={(0.98,0.98)}, anchor=north east, draw=none}, legend cell align=left]"]
+    for (f, _, _, colors), mark in zip(FIG_ARMS, ("*", "diamond*")):
+        m = [sum(st.loc[ds, "mean"] for ds in done) / len(done) for g, _, st in stats if g == f"{f}-GBT"]
+        style = "" if mark == "*" else ", dashed"
+        lines += [rf"\addplot[color={_rgb(colors[1])}, mark={mark}, thick{style}] coordinates {{"
+                  + " ".join(f"({x},{v:.4f})" for x, v in zip(xs, m)) + "};", rf"\addlegendentry{{{f}-GBT}}"]
     lines += [r"\end{axis}", r"\end{tikzpicture}",
-              r"\caption{Training time in seconds (log scale) of sparse oblique (SPO) and axis-aligned (AA) GBT, local (single machine) and distributed with $W$ workers. Same runs as Table~\ref{tab:dist-runtime}.}",
-              r"\Description{Grouped bar chart per dataset of SPO and AA GBT training time, local and distributed.}",
-              r"\label{fig:dist-runtime}", r"\end{figure}"]
+              r"\caption{Mean test ROC AUC over the datasets of Table~\ref{tab:dist-accuracy}, single machine and distributed with $W$ workers, for sparse oblique (SPO) and axis-aligned (AA) GBT.}",
+              r"\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}",
+              r"\label{fig:dist-accuracy-mean}", r"\end{figure*}"]
     return "\n".join(lines) + "\n"
 
 
@@ -140,5 +177,6 @@ if __name__ == "__main__":
     (out / "table_dist_runtime.tex").write_text(runtime_table())
     (out / "table_dist_accuracy.tex").write_text(accuracy_table())
     fig = out.parent / "figures"; fig.mkdir(exist_ok=True)
-    (fig / "fig_dist_runtime.tex").write_text(runtime_figure())
+    (fig / "fig_dist_accuracy_delta.tex").write_text(accuracy_delta_heatmap())
+    (fig / "fig_dist_accuracy_mean.tex").write_text(accuracy_mean_figure())
     print(f"wrote {out}/table_dist_runtime.tex, table_dist_accuracy.tex")

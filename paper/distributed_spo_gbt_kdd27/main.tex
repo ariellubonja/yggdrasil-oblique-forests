@@ -2,6 +2,8 @@
 \usepackage{hyperref}
 \usepackage{mathtools}
 \usepackage{enumitem}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 
 % \usepackage[letterpaper,margin=0.8in]{geometry}
 
@@ -12,6 +14,7 @@
 
 \usepackage{listings}
 \usepackage{xcolor}
+\usepackage{colortbl}
 
 \definecolor{codegreen}{rgb}{0,0.6,0}
 \definecolor{codepurple}{rgb}{0.58,0,0.82}
@@ -83,7 +86,7 @@ YDF Distributed training requires:
 
  \begin{figure*}[t]
     \centering
-    \includegraphics[width=.8\linewidth]{images/distributed_gbt_training_loop.pdf}
+    \includegraphics[width=.8\linewidth]{figures/distributed_gbt_training_loop.pdf}
     \caption{Distributed GBT Training Loop}
     \label{fig:ydf-dist-gbt-training-loop}
 \end{figure*}
@@ -92,7 +95,7 @@ YDF Distributed training requires:
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{images/distributed_gbt_column_partitioning.pdf}
+    \includegraphics[width=1\linewidth]{figures/distributed_gbt_column_partitioning.pdf}
     \caption{Data Sharding illustration. Dataset is split by column, presorted, then round-robin-ed in a load-balancing way to workers.}
     \label{fig:ydf-dist-gbt-load-balancing}
 \end{figure}
@@ -150,14 +153,27 @@ In a dataset with $N$ rows and $\mathbf{F}$ columns. In GBT, each worker (tree) 
 
 \begin{figure}
     \centering
-    \includegraphics[width=.5\linewidth]{images/in_node_spo_sampling.pdf}
+    \includegraphics[width=.5\linewidth]{figures/in_node_spo_sampling.pdf}
     \caption{V1 works identically to Distributed GBT, but features are sampled only within a worker.}
     \label{fig:placeholder}
 \end{figure}
 
 \subsubsection{Method}
 
+% Runtime results share one float page, accuracy results the next.
+\clearpage
 \input{tables/table_dist_runtime}
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.5\textwidth]{figures/dist_runtime_bars_chat.pdf}
+    \caption{Runtime of Dist-GBT vs. Local}
+    \label{fig:placeholder}
+\end{figure*}
+\clearpage
+\input{tables/table_dist_accuracy}
+\input{figures/fig_dist_accuracy_delta}
+\input{figures/fig_dist_accuracy_mean}
+\clearpage
 
 Each worker holds and samples from a small subset of columns.
 
@@ -198,21 +214,9 @@ Load-balancing?
 
 \subsection{In-worker Projection Sampling}
 
-\begin{itemize}
-    \item Pre-generated projections as control, fanned out before training
-    \begin{itemize}
-        \item Compare performance
-        \item Compare accuracy
-    \end{itemize}
-\end{itemize}
+Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{However, for Youtube, AA is a lot slower than SPO}}
 
-\section{Results}
-
-Single-machine results
-
-\input{tables/table_dist_accuracy}
-
-% \clearpage
+\clearpage
 
 \appendix
 
@@ -220,18 +224,17 @@ Single-machine results
 
 \subsection{Call Stack}
 
+\noindent\begin{minipage}{\columnwidth}
 \begin{lstlisting}
 distributed_gbt.cc::TrainWithStatusImpl()
-...
-MultiThreadManager() % for MULTI_THREAD, not GRPC
-worker.cc::RunRequest() \& RunRequestImpl()
-
-worker.cc::StartTraining()
-
- - worker.cc::FindSplits()
-
-   - - training.cc::FindBestSplitsWithThreadPool()
+  ...
+  MultiThreadManager()  // MULTI_THREAD, not GRPC
+  worker.cc::RunRequest() & RunRequestImpl()
+    worker.cc::StartTraining()
+      worker.cc::FindSplits()
+        training.cc::FindBestSplitsWithThreadPool()
 \end{lstlisting}
+\end{minipage}
 
 \subsection{Approximate Splits}
 
