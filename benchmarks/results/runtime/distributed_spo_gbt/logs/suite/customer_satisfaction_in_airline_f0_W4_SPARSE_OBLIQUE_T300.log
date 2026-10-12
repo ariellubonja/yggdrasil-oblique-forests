@@ -1,0 +1,811 @@
+I1012 11:00:19.060942 1231325 csv_example_reader.cc:216] 0 row(s) processed
+I1012 11:00:19.063625 1231325 csv_example_reader.cc:225] Stop scanning the csv file to infer the type. Some records were not considered.
+I1012 11:00:19.063643 1231325 data_spec_inference.cc:518] 22 column(s) found
+I1012 11:00:19.063660 1231325 csv_example_reader.cc:320] 0 row(s) processed
+I1012 11:00:19.150322 1231325 data_spec_inference.cc:557] Finalizing [103904 row(s) found]
+I1012 11:00:19.150328 1231325 train_distributed_gbt.cc:125] Dataspec:
+Number of records: 103904
+Number of columns: 22
+
+Number of columns by type:
+	NUMERICAL: 19 (86.3636%)
+	BOOLEAN: 2 (9.09091%)
+	CATEGORICAL: 1 (4.54545%)
+
+Columns:
+
+NUMERICAL: 19 (86.3636%)
+	1: "Age" NUMERICAL mean:39.4604 min:7 max:85 sd:15.127
+	3: "Class" NUMERICAL mean:0.594972 min:0 max:2 sd:0.621443
+	4: "FlightDistance" NUMERICAL mean:1978.54 min:50 max:6951 sd:1027.1
+	5: "Seatcomfort" NUMERICAL mean:2.83938 min:0 max:5 sd:1.39331
+	6: "DepartureArrivaltimeconvenient" NUMERICAL mean:2.99094 min:0 max:5 sd:1.527
+	7: "Foodanddrink" NUMERICAL mean:2.85438 min:0 max:5 sd:1.44352
+	8: "Gatelocation" NUMERICAL mean:2.99246 min:0 max:5 sd:1.30585
+	9: "Inflightwifiservice" NUMERICAL mean:3.24918 min:0 max:5 sd:1.31788
+	10: "Inflightentertainment" NUMERICAL mean:3.38043 min:0 max:5 sd:1.34706
+	11: "Onlinesupport" NUMERICAL mean:3.51865 min:0 max:5 sd:1.3056
+	12: "EaseofOnlinebooking" NUMERICAL mean:3.47206 min:0 max:5 sd:1.30516
+	13: "Onboardservice" NUMERICAL mean:3.46573 min:0 max:5 sd:1.27181
+	14: "Legroomservice" NUMERICAL mean:3.48848 min:0 max:5 sd:1.29096
+	15: "Baggagehandling" NUMERICAL mean:2.69421 min:0 max:4 sd:1.15721
+	16: "Checkinservice" NUMERICAL mean:3.33997 min:0 max:5 sd:1.26079
+	17: "Cleanliness" NUMERICAL mean:3.70735 min:0 max:5 sd:1.15196
+	18: "Onlineboarding" NUMERICAL mean:3.35121 min:0 max:5 sd:1.29729
+	19: "DepartureDelayinMinutes" NUMERICAL mean:14.6841 min:0 max:1592 sd:38.1175
+	20: "ArrivalDelayinMinutes" NUMERICAL mean:15.0607 min:0 max:1584 sd:38.4414
+
+BOOLEAN: 2 (9.09091%)
+	0: "CustomerType" BOOLEAN true_count:19055 false_count:84849
+	2: "TypeofTravel" BOOLEAN true_count:32179 false_count:71725
+
+CATEGORICAL: 1 (4.54545%)
+	21: "label" CATEGORICAL manually-defined has-dict vocab-size:3 zero-ood-items most-frequent:"0" 56870 (54.7332%)
+
+Terminology:
+	nas: Number of non-available (i.e. missing) values.
+	ood: Out of dictionary.
+	manually-defined: Attribute whose type is manually defined by the user, i.e., the type was not automatically inferred.
+	tokenized: The attribute value is obtained through tokenization.
+	has-dict: The attribute is attached to a string dictionary e.g. a categorical attribute stored as a string.
+	vocab-size: Number of unique values.
+
+I1012 11:00:19.150566 1231325 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I1012 11:00:19.150569 1231325 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I1012 11:00:19.150578 1231325 distributed_gradient_boosted_trees.cc:332] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I1012 11:00:19.150674 1231325 distributed_gradient_boosted_trees.cc:343] Sparse oblique splits: dynamic load balancing disabled
+I1012 11:00:19.150678 1231325 dataset_cache.cc:212] Create dataset cache in /home/ubuntu/dgbt_work/suite/customer_satisfaction_in_airline_f0_W4/cache/dataset_cache for dataset csv:/home/ubuntu/spo_vs_gbt/folds/customer_satisfaction_in_airline/fold0_train.csv
+I1012 11:00:19.150752 1231325 multi_thread.cc:189] Initialize manager with 0 bytes welcome blob and 4 workers
+I1012 11:00:19.151930 1231325 dataset_cache.cc:248] Found 22 column(s)
+I1012 11:00:19.152001 1231325 dataset_cache.cc:258] Found 1 shard(s)
+I1012 11:00:19.152006 1231325 dataset_cache.cc:400] Start separating dataset by columns
+I1012 11:00:19.152013 1231325 multi_thread.cc:153] Change the number of parallel execution per worker to 1
+I1012 11:00:19.153441 1231325 dataset_cache.cc:429] Create 1 shards in the dataset cache from the 1 shards of the original dataset i.e. ~1 shards to prepare for each of the 4 workers
+I1012 11:00:19.153510 1231325 dataset_cache.cc:473] 	Split dataset by columns 1/1
+I1012 11:00:19.153532 1231387 dataset_cache_worker.cc:259] Separate dataset columns on csv:/home/ubuntu/spo_vs_gbt/folds/customer_satisfaction_in_airline/fold0_train.csv
+I1012 11:00:19.153551 1231387 dataset_cache_worker.cc:263] Reading dataset
+I1012 11:00:19.153827 1231387 vertical_dataset_io.cc:82] 100 examples scanned.
+I1012 11:00:19.260318 1231387 vertical_dataset_io.cc:91] 103904 examples read. Memory: usage:8MB allocated:8MB. 0 (0%) examples have been skipped.
+I1012 11:00:19.260521 1231405 dataset_cache_worker.cc:302] Exporting columns 1/22
+I1012 11:00:19.262640 1231325 multi_thread.cc:153] Change the number of parallel execution per worker to 5
+I1012 11:00:19.263841 1231325 dataset_cache.cc:498] Column separation done. 103904 example(s) found
+I1012 11:00:19.263854 1231325 dataset_cache.cc:581] Start sorting numerical columns
+I1012 11:00:19.263887 1231409 dataset_cache_worker.cc:327] Sort numerical column #1 with 103904 examples
+I1012 11:00:19.263899 1231409 dataset_cache_worker.cc:331] Allocate buffer [column #1]
+I1012 11:00:19.263926 1231325 dataset_cache.cc:642] 	Sorting numerical columns 1/19
+I1012 11:00:19.264041 1231409 dataset_cache_worker.cc:335] Load data [column #1]
+I1012 11:00:19.264058 1231408 dataset_cache_worker.cc:327] Sort numerical column #3 with 103904 examples
+I1012 11:00:19.264076 1231408 dataset_cache_worker.cc:331] Allocate buffer [column #3]
+I1012 11:00:19.264072 1231410 dataset_cache_worker.cc:327] Sort numerical column #5 with 103904 examples
+I1012 11:00:19.264064 1231411 dataset_cache_worker.cc:327] Sort numerical column #4 with 103904 examples
+I1012 11:00:19.264107 1231411 dataset_cache_worker.cc:331] Allocate buffer [column #4]
+I1012 11:00:19.264090 1231410 dataset_cache_worker.cc:331] Allocate buffer [column #5]
+I1012 11:00:19.264154 1231411 dataset_cache_worker.cc:335] Load data [column #4]
+I1012 11:00:19.264212 1231408 dataset_cache_worker.cc:335] Load data [column #3]
+I1012 11:00:19.264212 1231412 dataset_cache_worker.cc:327] Sort numerical column #6 with 103904 examples
+I1012 11:00:19.264221 1231426 dataset_cache_worker.cc:327] Sort numerical column #7 with 103904 examples
+I1012 11:00:19.264230 1231425 dataset_cache_worker.cc:327] Sort numerical column #8 with 103904 examples
+I1012 11:00:19.264249 1231425 dataset_cache_worker.cc:331] Allocate buffer [column #8]
+I1012 11:00:19.264230 1231412 dataset_cache_worker.cc:331] Allocate buffer [column #6]
+I1012 11:00:19.264239 1231424 dataset_cache_worker.cc:327] Sort numerical column #9 with 103904 examples
+I1012 11:00:19.264239 1231426 dataset_cache_worker.cc:331] Allocate buffer [column #7]
+I1012 11:00:19.264272 1231440 dataset_cache_worker.cc:327] Sort numerical column #13 with 103904 examples
+I1012 11:00:19.264293 1231440 dataset_cache_worker.cc:331] Allocate buffer [column #13]
+I1012 11:00:19.264288 1231442 dataset_cache_worker.cc:327] Sort numerical column #15 with 103904 examples
+I1012 11:00:19.264311 1231442 dataset_cache_worker.cc:331] Allocate buffer [column #15]
+I1012 11:00:19.264265 1231439 dataset_cache_worker.cc:327] Sort numerical column #12 with 103904 examples
+I1012 11:00:19.264328 1231439 dataset_cache_worker.cc:331] Allocate buffer [column #12]
+I1012 11:00:19.264254 1231410 dataset_cache_worker.cc:335] Load data [column #5]
+I1012 11:00:19.264249 1231423 dataset_cache_worker.cc:327] Sort numerical column #10 with 103904 examples
+I1012 11:00:19.264352 1231423 dataset_cache_worker.cc:331] Allocate buffer [column #10]
+I1012 11:00:19.264280 1231441 dataset_cache_worker.cc:327] Sort numerical column #14 with 103904 examples
+I1012 11:00:19.264367 1231441 dataset_cache_worker.cc:331] Allocate buffer [column #14]
+I1012 11:00:19.264255 1231438 dataset_cache_worker.cc:327] Sort numerical column #11 with 103904 examples
+I1012 11:00:19.264374 1231438 dataset_cache_worker.cc:331] Allocate buffer [column #11]
+I1012 11:00:19.264278 1231424 dataset_cache_worker.cc:331] Allocate buffer [column #9]
+I1012 11:00:19.264391 1231423 dataset_cache_worker.cc:335] Load data [column #10]
+I1012 11:00:19.264395 1231425 dataset_cache_worker.cc:335] Load data [column #8]
+I1012 11:00:19.264397 1231412 dataset_cache_worker.cc:335] Load data [column #6]
+I1012 11:00:19.264413 1231426 dataset_cache_worker.cc:335] Load data [column #7]
+I1012 11:00:19.264409 1231427 dataset_cache_worker.cc:327] Sort numerical column #16 with 103904 examples
+I1012 11:00:19.264436 1231427 dataset_cache_worker.cc:331] Allocate buffer [column #16]
+I1012 11:00:19.264429 1231454 dataset_cache_worker.cc:327] Sort numerical column #18 with 103904 examples
+I1012 11:00:19.264437 1231455 dataset_cache_worker.cc:327] Sort numerical column #19 with 103904 examples
+I1012 11:00:19.264461 1231455 dataset_cache_worker.cc:331] Allocate buffer [column #19]
+I1012 11:00:19.264452 1231454 dataset_cache_worker.cc:331] Allocate buffer [column #18]
+I1012 11:00:19.264420 1231453 dataset_cache_worker.cc:327] Sort numerical column #17 with 103904 examples
+I1012 11:00:19.264483 1231453 dataset_cache_worker.cc:331] Allocate buffer [column #17]
+I1012 11:00:19.264443 1231456 dataset_cache_worker.cc:327] Sort numerical column #20 with 103904 examples
+I1012 11:00:19.264496 1231456 dataset_cache_worker.cc:331] Allocate buffer [column #20]
+I1012 11:00:19.264509 1231438 dataset_cache_worker.cc:335] Load data [column #11]
+I1012 11:00:19.264511 1231424 dataset_cache_worker.cc:335] Load data [column #9]
+I1012 11:00:19.264565 1231409 dataset_cache_worker.cc:359] Sort data [column #1]
+I1012 11:00:19.264585 1231411 dataset_cache_worker.cc:359] Sort data [column #4]
+I1012 11:00:19.264610 1231440 dataset_cache_worker.cc:335] Load data [column #13]
+I1012 11:00:19.264644 1231442 dataset_cache_worker.cc:335] Load data [column #15]
+I1012 11:00:19.264653 1231408 dataset_cache_worker.cc:359] Sort data [column #3]
+I1012 11:00:19.264662 1231439 dataset_cache_worker.cc:335] Load data [column #12]
+I1012 11:00:19.264683 1231441 dataset_cache_worker.cc:335] Load data [column #14]
+I1012 11:00:19.264763 1231410 dataset_cache_worker.cc:359] Sort data [column #5]
+I1012 11:00:19.264782 1231427 dataset_cache_worker.cc:335] Load data [column #16]
+I1012 11:00:19.264789 1231455 dataset_cache_worker.cc:335] Load data [column #19]
+I1012 11:00:19.264815 1231454 dataset_cache_worker.cc:335] Load data [column #18]
+I1012 11:00:19.264816 1231453 dataset_cache_worker.cc:335] Load data [column #17]
+I1012 11:00:19.264829 1231456 dataset_cache_worker.cc:335] Load data [column #20]
+I1012 11:00:19.264856 1231423 dataset_cache_worker.cc:359] Sort data [column #10]
+I1012 11:00:19.264869 1231425 dataset_cache_worker.cc:359] Sort data [column #8]
+I1012 11:00:19.264889 1231426 dataset_cache_worker.cc:359] Sort data [column #7]
+I1012 11:00:19.264914 1231412 dataset_cache_worker.cc:359] Sort data [column #6]
+I1012 11:00:19.264949 1231438 dataset_cache_worker.cc:359] Sort data [column #11]
+I1012 11:00:19.264961 1231424 dataset_cache_worker.cc:359] Sort data [column #9]
+I1012 11:00:19.265215 1231440 dataset_cache_worker.cc:359] Sort data [column #13]
+I1012 11:00:19.265245 1231442 dataset_cache_worker.cc:359] Sort data [column #15]
+I1012 11:00:19.265280 1231439 dataset_cache_worker.cc:359] Sort data [column #12]
+I1012 11:00:19.265291 1231441 dataset_cache_worker.cc:359] Sort data [column #14]
+I1012 11:00:19.265312 1231455 dataset_cache_worker.cc:359] Sort data [column #19]
+I1012 11:00:19.265353 1231456 dataset_cache_worker.cc:359] Sort data [column #20]
+I1012 11:00:19.265366 1231453 dataset_cache_worker.cc:359] Sort data [column #17]
+I1012 11:00:19.265365 1231427 dataset_cache_worker.cc:359] Sort data [column #16]
+I1012 11:00:19.265420 1231454 dataset_cache_worker.cc:359] Sort data [column #18]
+I1012 11:00:19.270985 1231408 dataset_cache_worker.cc:363] Save sorted numerical values [column #3]
+I1012 11:00:19.271079 1231408 dataset_cache_worker.cc:388] Found 2/103904 unique values on numerical [column #3]
+I1012 11:00:19.271087 1231408 dataset_cache_worker.cc:405] Exported column column #3 as pre-sorted
+I1012 11:00:19.272179 1231424 dataset_cache_worker.cc:363] Save sorted numerical values [column #9]
+I1012 11:00:19.272222 1231408 dataset_cache_worker.cc:414] Done exporting column #3 with 2/103904 unique values.
+I1012 11:00:19.272305 1231424 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #9]
+I1012 11:00:19.272315 1231424 dataset_cache_worker.cc:405] Exported column column #9 as pre-sorted
+I1012 11:00:19.272327 1231438 dataset_cache_worker.cc:363] Save sorted numerical values [column #11]
+I1012 11:00:19.272411 1231438 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #11]
+I1012 11:00:19.272421 1231438 dataset_cache_worker.cc:405] Exported column column #11 as pre-sorted
+I1012 11:00:19.272467 1231455 dataset_cache_worker.cc:363] Save sorted numerical values [column #19]
+I1012 11:00:19.272531 1231442 dataset_cache_worker.cc:363] Save sorted numerical values [column #15]
+I1012 11:00:19.272563 1231455 dataset_cache_worker.cc:388] Found 444/103904 unique values on numerical [column #19]
+I1012 11:00:19.272572 1231455 dataset_cache_worker.cc:405] Exported column column #19 as pre-sorted
+I1012 11:00:19.272600 1231441 dataset_cache_worker.cc:363] Save sorted numerical values [column #14]
+I1012 11:00:19.272605 1231423 dataset_cache_worker.cc:363] Save sorted numerical values [column #10]
+I1012 11:00:19.272626 1231442 dataset_cache_worker.cc:388] Found 4/103904 unique values on numerical [column #15]
+I1012 11:00:19.272635 1231442 dataset_cache_worker.cc:405] Exported column column #15 as pre-sorted
+I1012 11:00:19.272699 1231441 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #14]
+I1012 11:00:19.272708 1231441 dataset_cache_worker.cc:405] Exported column column #14 as pre-sorted
+I1012 11:00:19.272728 1231423 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #10]
+I1012 11:00:19.272738 1231423 dataset_cache_worker.cc:405] Exported column column #10 as pre-sorted
+I1012 11:00:19.272749 1231412 dataset_cache_worker.cc:363] Save sorted numerical values [column #6]
+I1012 11:00:19.272797 1231425 dataset_cache_worker.cc:363] Save sorted numerical values [column #8]
+I1012 11:00:19.272831 1231410 dataset_cache_worker.cc:363] Save sorted numerical values [column #5]
+I1012 11:00:19.272840 1231456 dataset_cache_worker.cc:363] Save sorted numerical values [column #20]
+I1012 11:00:19.272846 1231412 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #6]
+I1012 11:00:19.272855 1231412 dataset_cache_worker.cc:405] Exported column column #6 as pre-sorted
+I1012 11:00:19.272895 1231425 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #8]
+I1012 11:00:19.272905 1231425 dataset_cache_worker.cc:405] Exported column column #8 as pre-sorted
+I1012 11:00:19.272936 1231453 dataset_cache_worker.cc:363] Save sorted numerical values [column #17]
+I1012 11:00:19.272941 1231410 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #5]
+I1012 11:00:19.272951 1231410 dataset_cache_worker.cc:405] Exported column column #5 as pre-sorted
+I1012 11:00:19.272963 1231440 dataset_cache_worker.cc:363] Save sorted numerical values [column #13]
+I1012 11:00:19.272969 1231426 dataset_cache_worker.cc:363] Save sorted numerical values [column #7]
+I1012 11:00:19.272972 1231456 dataset_cache_worker.cc:388] Found 449/103904 unique values on numerical [column #20]
+I1012 11:00:19.272981 1231456 dataset_cache_worker.cc:405] Exported column column #20 as pre-sorted
+I1012 11:00:19.273037 1231453 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #17]
+I1012 11:00:19.273046 1231453 dataset_cache_worker.cc:405] Exported column column #17 as pre-sorted
+I1012 11:00:19.273085 1231426 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #7]
+I1012 11:00:19.273102 1231426 dataset_cache_worker.cc:405] Exported column column #7 as pre-sorted
+I1012 11:00:19.273121 1231440 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #13]
+I1012 11:00:19.273136 1231440 dataset_cache_worker.cc:405] Exported column column #13 as pre-sorted
+I1012 11:00:19.273191 1231439 dataset_cache_worker.cc:363] Save sorted numerical values [column #12]
+I1012 11:00:19.273295 1231439 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #12]
+I1012 11:00:19.273306 1231439 dataset_cache_worker.cc:405] Exported column column #12 as pre-sorted
+I1012 11:00:19.273323 1231424 dataset_cache_worker.cc:414] Done exporting column #9 with 5/103904 unique values.
+I1012 11:00:19.273411 1231454 dataset_cache_worker.cc:363] Save sorted numerical values [column #18]
+I1012 11:00:19.273519 1231454 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #18]
+I1012 11:00:19.273530 1231454 dataset_cache_worker.cc:405] Exported column column #18 as pre-sorted
+I1012 11:00:19.273524 1231438 dataset_cache_worker.cc:414] Done exporting column #11 with 5/103904 unique values.
+I1012 11:00:19.273583 1231409 dataset_cache_worker.cc:363] Save sorted numerical values [column #1]
+I1012 11:00:19.273659 1231427 dataset_cache_worker.cc:363] Save sorted numerical values [column #16]
+I1012 11:00:19.273661 1231409 dataset_cache_worker.cc:388] Found 74/103904 unique values on numerical [column #1]
+I1012 11:00:19.273682 1231409 dataset_cache_worker.cc:405] Exported column column #1 as pre-sorted
+I1012 11:00:19.273762 1231427 dataset_cache_worker.cc:388] Found 5/103904 unique values on numerical [column #16]
+I1012 11:00:19.273786 1231427 dataset_cache_worker.cc:405] Exported column column #16 as pre-sorted
+I1012 11:00:19.273930 1231442 dataset_cache_worker.cc:414] Done exporting column #15 with 4/103904 unique values.
+I1012 11:00:19.273967 1231411 dataset_cache_worker.cc:363] Save sorted numerical values [column #4]
+I1012 11:00:19.274069 1231411 dataset_cache_worker.cc:388] Found 5290/103904 unique values on numerical [column #4]
+I1012 11:00:19.274082 1231411 dataset_cache_worker.cc:405] Exported column column #4 as pre-sorted
+I1012 11:00:19.274086 1231455 dataset_cache_worker.cc:414] Done exporting column #19 with 444/103904 unique values.
+I1012 11:00:19.274341 1231441 dataset_cache_worker.cc:414] Done exporting column #14 with 5/103904 unique values.
+I1012 11:00:19.274438 1231412 dataset_cache_worker.cc:414] Done exporting column #6 with 5/103904 unique values.
+I1012 11:00:19.274671 1231410 dataset_cache_worker.cc:414] Done exporting column #5 with 5/103904 unique values.
+I1012 11:00:19.274775 1231423 dataset_cache_worker.cc:414] Done exporting column #10 with 5/103904 unique values.
+I1012 11:00:19.274946 1231425 dataset_cache_worker.cc:414] Done exporting column #8 with 5/103904 unique values.
+I1012 11:00:19.275120 1231456 dataset_cache_worker.cc:414] Done exporting column #20 with 449/103904 unique values.
+I1012 11:00:19.275412 1231439 dataset_cache_worker.cc:414] Done exporting column #12 with 5/103904 unique values.
+I1012 11:00:19.275470 1231409 dataset_cache_worker.cc:414] Done exporting column #1 with 74/103904 unique values.
+I1012 11:00:19.275510 1231440 dataset_cache_worker.cc:414] Done exporting column #13 with 5/103904 unique values.
+I1012 11:00:19.275632 1231453 dataset_cache_worker.cc:414] Done exporting column #17 with 5/103904 unique values.
+I1012 11:00:19.275757 1231426 dataset_cache_worker.cc:414] Done exporting column #7 with 5/103904 unique values.
+I1012 11:00:19.276075 1231427 dataset_cache_worker.cc:414] Done exporting column #16 with 5/103904 unique values.
+I1012 11:00:19.276089 1231454 dataset_cache_worker.cc:414] Done exporting column #18 with 5/103904 unique values.
+I1012 11:00:19.276127 1231411 dataset_cache_worker.cc:414] Done exporting column #4 with 5290/103904 unique values.
+I1012 11:00:19.276174 1231325 multi_thread.cc:129] Release workers
+I1012 11:00:19.276823 1231325 dataset_cache.cc:278] Dataset cache meta-data:
+Number of columns: 22
+Number of examples: 103904
+Statistics on 22 / 22 features
+Columns by type
+	 column-type: NUMERICAL count: 19
+	 column-type: BOOLEAN count: 2
+	 column-type: CATEGORICAL count: 1
+Numerical columns:
+	Mean number of unique values: 333
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 0.842105 (16)
+	Ratio of numerical columns with <=16k values: 1 (19)
+	Mean number of unique values for discretized columns: nan
+
+I1012 11:00:19.276837 1231325 dataset_cache.cc:279] Dataset cache created in 126.158821ms
+I1012 11:00:19.276926 1231325 load_balancer.cc:93] Create load balancer:
+Features(21):
+	#0 worker:0 score:1
+	#1 worker:2 score:5
+	#2 worker:3 score:1
+	#3 worker:1 score:5
+	#4 worker:0 score:5
+	#5 worker:3 score:5
+	#6 worker:2 score:5
+	#7 worker:1 score:5
+	#8 worker:0 score:5
+	#9 worker:3 score:5
+	#10 worker:2 score:5
+	#11 worker:1 score:5
+	#12 worker:0 score:5
+	#13 worker:3 score:5
+	#14 worker:2 score:5
+	#15 worker:1 score:5
+	#16 worker:0 score:5
+	#17 worker:3 score:5
+	#18 worker:2 score:5
+	#19 worker:1 score:5
+	#20 worker:0 score:5
+
+Workers(4):
+	#0 measure:0 features(6): 20 16 12 8 4 0
+	#1 measure:0 features(5): 19 15 11 7 3
+	#2 measure:0 features(5): 18 14 10 6 1
+	#3 measure:0 features(5): 17 13 9 5 2
+Maximum features per workers: 7
+
+I1012 11:00:19.276960 1231325 multi_thread.cc:189] Initialize manager with 1812 bytes welcome blob and 4 workers
+I1012 11:00:19.276999 1231325 dataset_cache_reader.cc:87] Create dataset cache reader on 6 / 22 feature(s) and 103904 example(s)
+I1012 11:00:19.277003 1231325 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 11:00:19.277735 1231325 dataset_cache_reader.cc:588] Loading features in memory
+I1012 11:00:19.278773 1231325 dataset_cache_reader.cc:630] Features loaded in memory in 1.033487ms for 4 MB
+I1012 11:00:19.278783 1231325 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 22
+Number of examples: 103904
+Statistics on 6 / 22 features
+Columns by type
+	 column-type: BOOLEAN count: 1
+	 column-type: NUMERICAL count: 5
+Numerical columns:
+	Mean number of unique values: 1150
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 0.6 (3)
+	Ratio of numerical columns with <=16k values: 1 (5)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 6
+
+I1012 11:00:19.278791 1231325 dataset_cache_reader.cc:185] Dataset cache reader created in 1.800362ms
+I1012 11:00:19.279558 1231325 dataset_cache_reader.cc:87] Create dataset cache reader on 5 / 22 feature(s) and 103904 example(s)
+I1012 11:00:19.279564 1231325 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 11:00:19.279848 1231325 dataset_cache_reader.cc:588] Loading features in memory
+I1012 11:00:19.281230 1231325 dataset_cache_reader.cc:630] Features loaded in memory in 1.377563ms for 3 MB
+I1012 11:00:19.281241 1231325 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 22
+Number of examples: 103904
+Statistics on 5 / 22 features
+Columns by type
+	 column-type: NUMERICAL count: 5
+Numerical columns:
+	Mean number of unique values: 92
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 0.8 (4)
+	Ratio of numerical columns with <=16k values: 1 (5)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 5
+
+I1012 11:00:19.281247 1231325 dataset_cache_reader.cc:185] Dataset cache reader created in 1.70646ms
+I1012 11:00:19.282014 1231325 dataset_cache_reader.cc:87] Create dataset cache reader on 5 / 22 feature(s) and 103904 example(s)
+I1012 11:00:19.282019 1231325 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 11:00:19.282278 1231325 dataset_cache_reader.cc:588] Loading features in memory
+I1012 11:00:19.283664 1231325 dataset_cache_reader.cc:630] Features loaded in memory in 1.379922ms for 3 MB
+I1012 11:00:19.283671 1231325 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 22
+Number of examples: 103904
+Statistics on 5 / 22 features
+Columns by type
+	 column-type: NUMERICAL count: 5
+Numerical columns:
+	Mean number of unique values: 18
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (5)
+	Ratio of numerical columns with <=16k values: 1 (5)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 5
+
+I1012 11:00:19.283680 1231325 dataset_cache_reader.cc:185] Dataset cache reader created in 1.679243ms
+I1012 11:00:19.284441 1231325 dataset_cache_reader.cc:87] Create dataset cache reader on 5 / 22 feature(s) and 103904 example(s)
+I1012 11:00:19.284447 1231325 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 11:00:19.284722 1231325 dataset_cache_reader.cc:588] Loading features in memory
+I1012 11:00:19.285978 1231325 dataset_cache_reader.cc:630] Features loaded in memory in 1.251372ms for 3 MB
+I1012 11:00:19.285987 1231325 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 22
+Number of examples: 103904
+Statistics on 5 / 22 features
+Columns by type
+	 column-type: BOOLEAN count: 1
+	 column-type: NUMERICAL count: 4
+Numerical columns:
+	Mean number of unique values: 5
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (4)
+	Ratio of numerical columns with <=16k values: 1 (4)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 5
+
+I1012 11:00:19.285994 1231325 dataset_cache_reader.cc:185] Dataset cache reader created in 1.566925ms
+I1012 11:00:19.286781 1231325 distributed_gradient_boosted_trees.cc:1669] 	Loading dataset in workers 1 / 4 [duration: 32.078us]
+I1012 11:00:19.286791 1231325 distributed_gradient_boosted_trees.cc:1674] All workers ready to train in 40.267us
+I1012 11:00:19.286838 1231325 distributed_gradient_boosted_trees.cc:545] Asking one worker for the initial label statistics
+I1012 11:00:19.286932 1231325 distributed_gradient_boosted_trees.cc:549] Training dataset label statistics:
+goo.gle/debugproto   
+num_examples: 103904
+classification {
+  labels {
+    counts: 0
+    counts: 56870
+    counts: 47034
+    sum: 103904
+  }
+}
+
+I1012 11:00:19.287450 1231325 distributed_gradient_boosted_trees.cc:581] Start tree training
+I1012 11:00:19.287453 1231325 distributed_gradient_boosted_trees.cc:944] Start creating checkpoint for iteration 0
+I1012 11:00:19.287825 1231325 distributed_gradient_boosted_trees.cc:980] Checkpoint created in 369.943us for iteration 0
+I1012 11:00:19.362061 1231325 distributed_gradient_boosted_trees.cc:854] num-trees:1/300 train-loss:1.259660 train-accuracy:0.809642 time-per-iter-{avg,last}:74.234817ms 74.234817ms last-{min,median,max}-split-time:5.548215ms 7.174104ms 8.626009ms last-{slowest,fastest}-worker:0 3 mean-{min,median,max}-split-time:7.4962035ms 9.93519075ms 12.6820505ms
+		GetLabelStatistics: avg:91.973us count:1
+		SetInitialPredictions: avg:262.136us count:1
+		StartNewIter: avg:679.61us count:1
+		FindSplits: avg:12.686521ms count:5
+		EvaluateSplits: avg:876.203us count:5
+		ShareSplits: avg:1.0406385ms count:5
+		EndIter: avg:452.171us count:1
+		CreateCheckpoint: avg:377.219us count:1
+		StartTraining: avg:42.203us count:1
+Balancer: workers:4 features:21 measures:5 pending-order:false max-features-per-workers:7 rebalance-with-change:0/0 total_num_changes:0 feature-loading-time:0.00126059 feature-loading-time:0.00126059
+I1012 11:00:44.370091 1231325 distributed_gradient_boosted_trees.cc:944] Start creating checkpoint for iteration 300
+I1012 11:00:44.378077 1231325 distributed_gradient_boosted_trees.cc:980] Checkpoint created in 7.939418ms for iteration 300
+I1012 11:00:44.378093 1231325 distributed_gradient_boosted_trees.cc:662] Training done. Final model: num-trees:300/300 train-loss:0.195508 train-accuracy:0.962071 time-per-iter-{avg,last}:83.63421575ms 71.747999ms last-{min,median,max}-split-time:4.488217ms 5.191858ms 6.409302ms last-{slowest,fastest}-worker:0 3 mean-{min,median,max}-split-time:8.304246ms 11.1667555ms 14.6462165ms
+		GetLabelStatistics: avg:91.973us count:1
+		SetInitialPredictions: avg:262.136us count:1
+		StartNewIter: avg:391.15175us count:300
+		FindSplits: avg:14.6506335ms count:1500
+		EvaluateSplits: avg:804.45425us count:1500
+		ShareSplits: avg:1.11131875ms count:1500
+		EndIter: avg:304.01475us count:300
+		CreateCheckpoint: avg:4.18863ms count:2
+		StartTraining: avg:42.203us count:1
+Balancer: workers:4 features:21 measures:1500 pending-order:false max-features-per-workers:7 rebalance-with-change:0/0 total_num_changes:0 feature-loading-time:0.00126059 feature-loading-time:0.00126059
+I1012 11:00:44.378256 1231325 multi_thread.cc:129] Release workers
+I1012 11:00:44.378275 1231325 worker.cc:485] Done called on the worker (0 running requests)
+I1012 11:00:44.378733 1231325 worker.cc:485] Done called on the worker (0 running requests)
+I1012 11:00:44.379265 1231325 worker.cc:485] Done called on the worker (0 running requests)
+I1012 11:00:44.379763 1231325 worker.cc:485] Done called on the worker (0 running requests)
+I1012 11:00:44.382441 1231325 train_distributed_gbt.cc:203] Training (incl. cache creation) took 25.231898264s split_axis=SPARSE_OBLIQUE
+I1012 11:00:44.413667 1231325 decision_forest.cc:817] Model loaded with 300 root(s), 17688 node(s), and 21 input feature(s).
+I1012 11:00:44.413684 1231325 abstract_model.cc:1500] Engine "GradientBoostedTreesGeneric" built
+I1012 11:00:44.512870 1231325 metric.cc:1394] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I1012 11:00:45.418525 1231325 metric.cc:1394] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I1012 11:00:46.322500 1231325 train_distributed_gbt.cc:214] Evaluation:
+Number of predictions (without weights): 25976
+Number of predictions (with weights): 25976
+Task: CLASSIFICATION
+Label: label
+
+Accuracy: 0.951494  CI95[W][0.949244 0.953668]
+LogLoss: : 0.115089
+ErrorRate: : 0.0485063
+
+Default Accuracy: : 0.547313
+Default LogLoss: : 0.688663
+Default ErrorRate: : 0.452687
+
+Confusion Table:
+truth\prediction
+           0      1
+    0  13466    751
+    1    509  11250
+Total: 25976
+
+  "0" vs. the others
+    auc: 0.991989  CI95[H][0.990945 0.993033] CI95[B][0.991307 0.992653]
+    p/r-auc: 0.993906  CI95[L][0.992484 0.995061] CI95[B][0.993382 0.994401]
+    ap: 0.993906   CI95[B][0.993381 0.994401]
+
+  "1" vs. the others
+    auc: 0.991989  CI95[H][0.990845 0.993134] CI95[B][0.99129 0.992709]
+    p/r-auc: 0.989998  CI95[L][0.98803 0.991645] CI95[B][0.989104 0.990925]
+    ap: 0.989997   CI95[B][0.989103 0.990924]
+
+
+W1012 11:00:46.327538 1231325 gradient_boosted_trees.cc:661] Validation evaluation not available for the Gradient Boosted Tree model as no validation dataset was provided for training (i.e. validation_set_ratio == 0).
+I1012 11:00:46.322569 1231325 train_distributed_gbt.cc:216] Model:
+Type: "GRADIENT_BOOSTED_TREES"
+Task: CLASSIFICATION
+Label: "label"
+
+Input Features (21):
+	CustomerType
+	Age
+	TypeofTravel
+	Class
+	FlightDistance
+	Seatcomfort
+	DepartureArrivaltimeconvenient
+	Foodanddrink
+	Gatelocation
+	Inflightwifiservice
+	Inflightentertainment
+	Onlinesupport
+	EaseofOnlinebooking
+	Onboardservice
+	Legroomservice
+	Baggagehandling
+	Checkinservice
+	Cleanliness
+	Onlineboarding
+	DepartureDelayinMinutes
+	ArrivalDelayinMinutes
+
+No weights
+
+Variable Importance: INV_MEAN_MIN_DEPTH:
+    1.                    "Seatcomfort"  0.281360 ################
+    2.          "Inflightentertainment"  0.235014 ########
+    3.                    "Cleanliness"  0.226212 #######
+    4.            "EaseofOnlinebooking"  0.218929 ######
+    5.                 "Legroomservice"  0.214883 #####
+    6.                 "Onlineboarding"  0.211572 ####
+    7.                 "Onboardservice"  0.209584 ####
+    8. "DepartureArrivaltimeconvenient"  0.208429 ####
+    9.                          "Class"  0.207496 ####
+   10.                "Baggagehandling"  0.206895 ####
+   11.                 "Checkinservice"  0.206644 ####
+   12.                  "Onlinesupport"  0.206625 ####
+   13.                            "Age"  0.206506 ####
+   14.            "Inflightwifiservice"  0.204383 ###
+   15.                   "Foodanddrink"  0.201577 ###
+   16.          "ArrivalDelayinMinutes"  0.199601 ###
+   17.                   "Gatelocation"  0.197974 ##
+   18.                 "FlightDistance"  0.196047 ##
+   19.                   "TypeofTravel"  0.191568 #
+   20.                   "CustomerType"  0.182223 
+   21.        "DepartureDelayinMinutes"  0.180312 
+
+Variable Importance: NUM_AS_ROOT:
+    1.                    "Seatcomfort" 74.000000 ################
+    2.                    "Cleanliness" 48.000000 ##########
+    3.          "Inflightentertainment" 45.000000 #########
+    4.            "EaseofOnlinebooking" 41.000000 ########
+    5.                 "Legroomservice" 38.000000 #######
+    6.                 "Onboardservice" 35.000000 #######
+    7.                 "Checkinservice" 34.000000 ######
+    8.                  "Onlinesupport" 33.000000 ######
+    9.            "Inflightwifiservice" 32.000000 ######
+   10.                 "Onlineboarding" 32.000000 ######
+   11.                          "Class" 31.000000 ######
+   12.                "Baggagehandling" 30.000000 #####
+   13.          "ArrivalDelayinMinutes" 29.000000 #####
+   14. "DepartureArrivaltimeconvenient" 25.000000 ####
+   15.                   "Foodanddrink" 22.000000 ####
+   16.                            "Age" 20.000000 ###
+   17.                   "Gatelocation" 17.000000 ##
+   18.                 "FlightDistance"  9.000000 #
+   19.        "DepartureDelayinMinutes"  5.000000 
+   20.                   "CustomerType"  4.000000 
+
+Variable Importance: NUM_NODES:
+    1.                    "Seatcomfort" 1313.000000 ###############
+    2.          "Inflightentertainment" 995.000000 ##########
+    3.                 "FlightDistance" 793.000000 #######
+    4.            "EaseofOnlinebooking" 785.000000 #######
+    5.                    "Cleanliness" 777.000000 #######
+    6. "DepartureArrivaltimeconvenient" 775.000000 #######
+    7.                   "Foodanddrink" 744.000000 #######
+    8.                            "Age" 737.000000 ######
+    9.                 "Legroomservice" 691.000000 ######
+   10.                 "Onboardservice" 672.000000 #####
+   11.                   "Gatelocation" 656.000000 #####
+   12.                 "Onlineboarding" 655.000000 #####
+   13.                          "Class" 629.000000 #####
+   14.                "Baggagehandling" 617.000000 #####
+   15.                  "Onlinesupport" 591.000000 ####
+   16.                 "Checkinservice" 570.000000 ####
+   17.            "Inflightwifiservice" 569.000000 ####
+   18.          "ArrivalDelayinMinutes" 527.000000 ###
+   19.                   "TypeofTravel" 524.000000 ###
+   20.        "DepartureDelayinMinutes" 358.000000 
+   21.                   "CustomerType" 300.000000 
+
+Variable Importance: SUM_SCORE:
+    1.          "Inflightentertainment" 34129.289961 ################
+    2.                    "Seatcomfort" 27356.214691 ############
+    3.                  "Onlinesupport" 14024.267489 ######
+    4.            "EaseofOnlinebooking" 8564.655950 ###
+    5.                   "CustomerType" 7387.542988 ###
+    6.                 "Onboardservice" 6789.981671 ###
+    7.                    "Cleanliness" 6415.365664 ##
+    8.                          "Class" 5875.621599 ##
+    9.                "Baggagehandling" 4355.184933 #
+   10.                 "Legroomservice" 4170.521332 #
+   11. "DepartureArrivaltimeconvenient" 4011.922201 #
+   12.                   "Foodanddrink" 3907.971623 #
+   13.                   "TypeofTravel" 3728.318173 #
+   14.                 "Onlineboarding" 3265.952977 #
+   15.                 "Checkinservice" 2117.905276 
+   16.            "Inflightwifiservice" 1819.974245 
+   17.                   "Gatelocation" 1535.792120 
+   18.                 "FlightDistance" 1393.277551 
+   19.          "ArrivalDelayinMinutes" 827.916013 
+   20.                            "Age" 817.724858 
+   21.        "DepartureDelayinMinutes" 402.292054 
+
+
+Cannot compute model self evaluation:This model does not support evaluation reports.
+
+Loss: BINOMIAL_LOG_LIKELIHOOD
+Number of trees per iteration: 1
+Node format: NOT_SET
+Early stopping triggered: NOT_SET
+Number of trees: 300
+Total number of nodes: 17688
+
+Number of nodes by tree:
+Count: 300 Average: 58.96 StdDev: 6.58471
+Min: 17 Max: 63 Ignored: 0
+----------------------------------------------
+[ 17, 19)   1   0.33%   0.33%
+[ 19, 21)   1   0.33%   0.67%
+[ 21, 24)   0   0.00%   0.67%
+[ 24, 26)   0   0.00%   0.67%
+[ 26, 28)   0   0.00%   0.67%
+[ 28, 31)   0   0.00%   0.67%
+[ 31, 33)   0   0.00%   0.67%
+[ 33, 35)   3   1.00%   1.67%
+[ 35, 38)   2   0.67%   2.33%
+[ 38, 40)   0   0.00%   2.33%
+[ 40, 42)   1   0.33%   2.67%
+[ 42, 45)   3   1.00%   3.67%
+[ 45, 47)   2   0.67%   4.33%
+[ 47, 49)   3   1.00%   5.33%
+[ 49, 52)  18   6.00%  11.33% #
+[ 52, 54)  12   4.00%  15.33% #
+[ 54, 56)  18   6.00%  21.33% #
+[ 56, 59)  20   6.67%  28.00% #
+[ 59, 61)  28   9.33%  37.33% #
+[ 61, 63] 188  62.67% 100.00% ##########
+
+Depth by leafs:
+Count: 8994 Average: 4.95097 StdDev: 0.275244
+Min: 1 Max: 5 Ignored: 0
+----------------------------------------------
+[ 1, 2)    5   0.06%   0.06%
+[ 2, 3)    9   0.10%   0.16%
+[ 3, 4)   74   0.82%   0.98%
+[ 4, 5)  246   2.74%   3.71%
+[ 5, 5] 8660  96.29% 100.00% ##########
+
+Number of training obs by leaf:
+Count: 8994 Average: 3465.78 StdDev: 9224.34
+Min: 5 Max: 102814 Ignored: 0
+----------------------------------------------
+[      5,   5145) 7639  84.93%  84.93% ##########
+[   5145,  10286)  599   6.66%  91.59% #
+[  10286,  15426)  259   2.88%  94.47%
+[  15426,  20567)  140   1.56%  96.03%
+[  20567,  25707)   75   0.83%  96.86%
+[  25707,  30848)   63   0.70%  97.57%
+[  30848,  35988)   56   0.62%  98.19%
+[  35988,  41129)   31   0.34%  98.53%
+[  41129,  46269)   28   0.31%  98.84%
+[  46269,  51410)   22   0.24%  99.09%
+[  51410,  56550)   15   0.17%  99.26%
+[  56550,  61691)    7   0.08%  99.33%
+[  61691,  66831)   17   0.19%  99.52%
+[  66831,  71972)    9   0.10%  99.62%
+[  71972,  77112)   10   0.11%  99.73%
+[  77112,  82253)    4   0.04%  99.78%
+[  82253,  87393)    3   0.03%  99.81%
+[  87393,  92534)    6   0.07%  99.88%
+[  92534,  97674)    4   0.04%  99.92%
+[  97674, 102814]    7   0.08% 100.00%
+
+Attribute in nodes:
+	1313 : Seatcomfort [NUMERICAL]
+	793 : FlightDistance [NUMERICAL]
+	737 : Age [NUMERICAL]
+	629 : Class [NUMERICAL]
+	625 : Inflightentertainment [NUMERICAL]
+	573 : DepartureArrivaltimeconvenient [NUMERICAL]
+	524 : TypeofTravel [BOOLEAN]
+	509 : Foodanddrink [NUMERICAL]
+	446 : Gatelocation [NUMERICAL]
+	419 : EaseofOnlinebooking [NUMERICAL]
+	300 : CustomerType [BOOLEAN]
+	283 : Onlinesupport [NUMERICAL]
+	259 : Inflightwifiservice [NUMERICAL]
+	247 : Onboardservice [NUMERICAL]
+	220 : Legroomservice [NUMERICAL]
+	210 : Baggagehandling [NUMERICAL]
+	165 : Checkinservice [NUMERICAL]
+	157 : Cleanliness [NUMERICAL]
+	133 : Onlineboarding [NUMERICAL]
+	95 : ArrivalDelayinMinutes [NUMERICAL]
+	57 : DepartureDelayinMinutes [NUMERICAL]
+
+Attribute in nodes with depth <= 0:
+	74 : Seatcomfort [NUMERICAL]
+	31 : Class [NUMERICAL]
+	30 : EaseofOnlinebooking [NUMERICAL]
+	29 : Inflightentertainment [NUMERICAL]
+	20 : Age [NUMERICAL]
+	17 : DepartureArrivaltimeconvenient [NUMERICAL]
+	14 : Gatelocation [NUMERICAL]
+	12 : Onboardservice [NUMERICAL]
+	12 : Inflightwifiservice [NUMERICAL]
+	11 : Onlinesupport [NUMERICAL]
+	10 : Foodanddrink [NUMERICAL]
+	9 : FlightDistance [NUMERICAL]
+	8 : ArrivalDelayinMinutes [NUMERICAL]
+	8 : Legroomservice [NUMERICAL]
+	5 : Checkinservice [NUMERICAL]
+	4 : CustomerType [BOOLEAN]
+	3 : Baggagehandling [NUMERICAL]
+	2 : Cleanliness [NUMERICAL]
+	1 : Onlineboarding [NUMERICAL]
+
+Attribute in nodes with depth <= 1:
+	179 : Seatcomfort [NUMERICAL]
+	98 : Age [NUMERICAL]
+	71 : Class [NUMERICAL]
+	68 : Inflightentertainment [NUMERICAL]
+	57 : FlightDistance [NUMERICAL]
+	56 : EaseofOnlinebooking [NUMERICAL]
+	53 : TypeofTravel [BOOLEAN]
+	49 : DepartureArrivaltimeconvenient [NUMERICAL]
+	41 : Gatelocation [NUMERICAL]
+	31 : Foodanddrink [NUMERICAL]
+	30 : CustomerType [BOOLEAN]
+	27 : Onboardservice [NUMERICAL]
+	27 : Onlinesupport [NUMERICAL]
+	19 : Checkinservice [NUMERICAL]
+	19 : Legroomservice [NUMERICAL]
+	19 : Inflightwifiservice [NUMERICAL]
+	18 : Baggagehandling [NUMERICAL]
+	15 : ArrivalDelayinMinutes [NUMERICAL]
+	9 : Onlineboarding [NUMERICAL]
+	8 : Cleanliness [NUMERICAL]
+	1 : DepartureDelayinMinutes [NUMERICAL]
+
+Attribute in nodes with depth <= 2:
+	360 : Seatcomfort [NUMERICAL]
+	196 : Age [NUMERICAL]
+	167 : FlightDistance [NUMERICAL]
+	157 : Class [NUMERICAL]
+	146 : Inflightentertainment [NUMERICAL]
+	136 : TypeofTravel [BOOLEAN]
+	134 : DepartureArrivaltimeconvenient [NUMERICAL]
+	113 : EaseofOnlinebooking [NUMERICAL]
+	90 : Gatelocation [NUMERICAL]
+	87 : Foodanddrink [NUMERICAL]
+	74 : CustomerType [BOOLEAN]
+	66 : Onlinesupport [NUMERICAL]
+	63 : Onboardservice [NUMERICAL]
+	49 : Inflightwifiservice [NUMERICAL]
+	48 : Legroomservice [NUMERICAL]
+	46 : Baggagehandling [NUMERICAL]
+	41 : Cleanliness [NUMERICAL]
+	38 : Checkinservice [NUMERICAL]
+	29 : ArrivalDelayinMinutes [NUMERICAL]
+	24 : Onlineboarding [NUMERICAL]
+	12 : DepartureDelayinMinutes [NUMERICAL]
+
+Attribute in nodes with depth <= 3:
+	688 : Seatcomfort [NUMERICAL]
+	385 : FlightDistance [NUMERICAL]
+	379 : Age [NUMERICAL]
+	329 : Class [NUMERICAL]
+	315 : Inflightentertainment [NUMERICAL]
+	287 : TypeofTravel [BOOLEAN]
+	283 : DepartureArrivaltimeconvenient [NUMERICAL]
+	227 : Foodanddrink [NUMERICAL]
+	214 : EaseofOnlinebooking [NUMERICAL]
+	204 : Gatelocation [NUMERICAL]
+	159 : CustomerType [BOOLEAN]
+	148 : Onlinesupport [NUMERICAL]
+	132 : Onboardservice [NUMERICAL]
+	116 : Baggagehandling [NUMERICAL]
+	111 : Inflightwifiservice [NUMERICAL]
+	101 : Legroomservice [NUMERICAL]
+	74 : Checkinservice [NUMERICAL]
+	70 : Cleanliness [NUMERICAL]
+	64 : Onlineboarding [NUMERICAL]
+	53 : ArrivalDelayinMinutes [NUMERICAL]
+	25 : DepartureDelayinMinutes [NUMERICAL]
+
+Attribute in nodes with depth <= 5:
+	1313 : Seatcomfort [NUMERICAL]
+	793 : FlightDistance [NUMERICAL]
+	737 : Age [NUMERICAL]
+	629 : Class [NUMERICAL]
+	625 : Inflightentertainment [NUMERICAL]
+	573 : DepartureArrivaltimeconvenient [NUMERICAL]
+	524 : TypeofTravel [BOOLEAN]
+	509 : Foodanddrink [NUMERICAL]
+	446 : Gatelocation [NUMERICAL]
+	419 : EaseofOnlinebooking [NUMERICAL]
+	300 : CustomerType [BOOLEAN]
+	283 : Onlinesupport [NUMERICAL]
+	259 : Inflightwifiservice [NUMERICAL]
+	247 : Onboardservice [NUMERICAL]
+	220 : Legroomservice [NUMERICAL]
+	210 : Baggagehandling [NUMERICAL]
+	165 : Checkinservice [NUMERICAL]
+	157 : Cleanliness [NUMERICAL]
+	133 : Onlineboarding [NUMERICAL]
+	95 : ArrivalDelayinMinutes [NUMERICAL]
+	57 : DepartureDelayinMinutes [NUMERICAL]
+
+Condition type in nodes:
+	7870 : ObliqueCondition
+	824 : TrueValueCondition
+Condition type in nodes with depth <= 0:
+	296 : ObliqueCondition
+	4 : TrueValueCondition
+Condition type in nodes with depth <= 1:
+	812 : ObliqueCondition
+	83 : TrueValueCondition
+Condition type in nodes with depth <= 2:
+	1866 : ObliqueCondition
+	210 : TrueValueCondition
+Condition type in nodes with depth <= 3:
+	3918 : ObliqueCondition
+	446 : TrueValueCondition
+Condition type in nodes with depth <= 5:
+	7870 : ObliqueCondition
+	824 : TrueValueCondition
+
+Training logs:
+Number of iteration to final model: 300
+	Iter:1 train-loss:1.259660 valid-loss:0.000000  train-accuracy:0.809642 valid-accuracy:0.000000
+	Iter:2 train-loss:1.161223 valid-loss:0.000000  train-accuracy:0.872122 valid-accuracy:0.000000
+	Iter:3 train-loss:1.080989 valid-loss:0.000000  train-accuracy:0.884499 valid-accuracy:0.000000
+	Iter:4 train-loss:1.009710 valid-loss:0.000000  train-accuracy:0.886174 valid-accuracy:0.000000
+	Iter:5 train-loss:0.949085 valid-loss:0.000000  train-accuracy:0.888830 valid-accuracy:0.000000
+	Iter:6 train-loss:0.895539 valid-loss:0.000000  train-accuracy:0.890707 valid-accuracy:0.000000
+	Iter:16 train-loss:0.591835 valid-loss:0.000000  train-accuracy:0.907386 valid-accuracy:0.000000
+	Iter:26 train-loss:0.471251 valid-loss:0.000000  train-accuracy:0.914710 valid-accuracy:0.000000
+	Iter:36 train-loss:0.407476 valid-loss:0.000000  train-accuracy:0.920994 valid-accuracy:0.000000
+	Iter:46 train-loss:0.365130 valid-loss:0.000000  train-accuracy:0.928482 valid-accuracy:0.000000
+	Iter:56 train-loss:0.336416 valid-loss:0.000000  train-accuracy:0.934459 valid-accuracy:0.000000
+	Iter:66 train-loss:0.316014 valid-loss:0.000000  train-accuracy:0.938299 valid-accuracy:0.000000
+	Iter:76 train-loss:0.301766 valid-loss:0.000000  train-accuracy:0.941051 valid-accuracy:0.000000
+	Iter:86 train-loss:0.290973 valid-loss:0.000000  train-accuracy:0.942678 valid-accuracy:0.000000
+	Iter:96 train-loss:0.281805 valid-loss:0.000000  train-accuracy:0.944208 valid-accuracy:0.000000
+	Iter:106 train-loss:0.274423 valid-loss:0.000000  train-accuracy:0.945806 valid-accuracy:0.000000
+	Iter:116 train-loss:0.263789 valid-loss:0.000000  train-accuracy:0.947875 valid-accuracy:0.000000
+	Iter:126 train-loss:0.258148 valid-loss:0.000000  train-accuracy:0.948549 valid-accuracy:0.000000
+	Iter:136 train-loss:0.251092 valid-loss:0.000000  train-accuracy:0.949790 valid-accuracy:0.000000
+	Iter:146 train-loss:0.245363 valid-loss:0.000000  train-accuracy:0.951089 valid-accuracy:0.000000
+	Iter:156 train-loss:0.240692 valid-loss:0.000000  train-accuracy:0.951965 valid-accuracy:0.000000
+	Iter:166 train-loss:0.235444 valid-loss:0.000000  train-accuracy:0.953101 valid-accuracy:0.000000
+	Iter:176 train-loss:0.230751 valid-loss:0.000000  train-accuracy:0.954198 valid-accuracy:0.000000
+	Iter:186 train-loss:0.227072 valid-loss:0.000000  train-accuracy:0.954843 valid-accuracy:0.000000
+	Iter:196 train-loss:0.224218 valid-loss:0.000000  trai
+I1012 11:00:46.328494 1231325 train_distributed_gbt.cc:238] Conditions: 8694 total, 7870 oblique, 3952 with >1 column

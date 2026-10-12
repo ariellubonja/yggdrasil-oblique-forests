@@ -1,0 +1,65 @@
+=== 20261012T080526Z anchor EPSILON aa_gbt_exact trees=50 bin=/home/ubuntu/spo_vs_gbt/bin/default (6885c576)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1791792326.212366   75260 train_oblique_forest.cc:1101] Loading CSV in a single pass: /home/ubuntu/yggdrasil-oblique-forests/benchmarks/data/epsilon_normalized_train.csv
+I0000 00:00:1791792327.813147   75260 train_oblique_forest.cc:1108] Single-pass CSV load complete: 400000 rows, 2001 columns.
+I0000 00:00:1791792327.813231   75260 train_oblique_forest.cc:1229] -1 (automatic) threads requested. 48 threads set.
+I0000 00:00:1791792327.813240   75260 train_oblique_forest.cc:1318] Using axis-aligned splits
+I0000 00:00:1791792327.813253   75260 train_oblique_forest.cc:1364] AA sorting strategy: in_node
+I0000 00:00:1791792327.813254   75260 train_oblique_forest.cc:1366] Num Candidate Attributes: 45
+I0000 00:00:1791792327.813256   75260 train_oblique_forest.cc:1381] Using exact splitting
+I0000 00:00:1791792327.813264   75260 train_oblique_forest.cc:1428] train_oblique_forest wall-time - Loading/Init (pre-train): 1.60092s
+I0000 00:00:1791792327.813415   75260 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I0000 00:00:1791792327.813421   75260 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I0000 00:00:1791792327.813533   75260 gradient_boosted_trees.cc:541] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I0000 00:00:1791792327.814135   75260 gradient_boosted_trees.cc:1204] Training gradient boosted tree on 400000 example(s) and 2000 feature(s).
+I0000 00:00:1791792327.814622   75260 gradient_boosted_trees.cc:1244] 400000 examples used for training and 0 examples used for validation
+I0000 00:00:1791792327.817219   75260 gpu.cc:93] Cannot initialize GPU: Not compiled with GPU support
+I0000 00:00:1791792327.817258   75260 training.cc:5234] Create processor with 48 threads for split computation
+I0000 00:00:1791792327.818002   75260 gradient_boosted_trees.cc:1425] Create thread pool with 48 threads for loss computation
+I0000 00:00:1791792327.977532   75260 gradient_boosted_trees.cc:1744] Train tree 1/50 train-loss:1.373106 train-accuracy:0.604802 [total:0.16s iter:0.16s]
+I0000 00:00:1791792328.122714   75260 gradient_boosted_trees.cc:1744] Train tree 2/50 train-loss:1.357985 train-accuracy:0.648337 [total:0.30s iter:0.15s]
+I0000 00:00:1791792328.266333   75260 gradient_boosted_trees.cc:1746] Train tree 3/50 train-loss:1.345657 train-accuracy:0.665395 [total:0.45s iter:0.14s]
+I0000 00:00:1791792334.620338   75260 gradient_boosted_trees.cc:1744] Train tree 50/50 train-loss:1.044319 train-accuracy:0.797785 [total:6.80s iter:0.13s]
+I0000 00:00:1791792334.631365   75260 gradient_boosted_trees.cc:1825] gradient_boosted_trees.cc Training block took: 6.81806 s
+I0000 00:00:1791792334.636685   75260 train_oblique_forest.cc:1501] train_oblique_forest wall-time - Training + Post-Processing: 6.8234s
+I0000 00:00:1791792334.675351   75260 vertical_dataset_io.cc:82] 100 examples scanned.
+I0000 00:00:1791792364.686101   75260 vertical_dataset_io.cc:82] 99500 examples scanned.
+I0000 00:00:1791792364.951206   75260 vertical_dataset_io.cc:91] 100000 examples read. Memory: usage:800MB allocated:800MB. 0 (0%) examples have been skipped.
+I0000 00:00:1791792364.951741   75260 quick_scorer_extended.cc:526] Highway static dispatch to CPU Target: AVX3_SPR
+I0000 00:00:1791792364.952292   75260 abstract_model.cc:1500] Engine "GradientBoostedTreesQuickScorerExtendedHighway" built
+I0000 00:00:1791792365.009291   75260 metric.cc:1394] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I0000 00:00:1791792369.264557   75260 metric.cc:1394] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I0000 00:00:1791792373.514802   75260 train_oblique_forest.cc:1551] Test-set evaluation on /home/ubuntu/spo_vs_gbt/data/epsilon_test_100k.csv (100000 rows): test-accuracy:0.78895 test-auc:0.872098 test-logloss:0.528352
+I0000 00:00:1791792373.514912   75260 train_oblique_forest.cc:1557] Test-set report:
+Number of predictions (without weights): 100000
+Number of predictions (with weights): 100000
+Task: CLASSIFICATION
+Label: label
+
+Accuracy: 0.78895  CI95[W][0.786816 0.791071]
+LogLoss: : 0.528352
+ErrorRate: : 0.21105
+
+Default Accuracy: : 0.50045
+Default LogLoss: : 0.693147
+Default ErrorRate: : 0.49955
+
+Confusion Table:
+truth\prediction
+           0      1
+    0  39552  10493
+    1  10612  39343
+Total: 100000
+
+  "0" vs. the others
+    auc: 0.872098  CI95[H][0.86987 0.874325] CI95[B][0.869894 0.874258]
+    p/r-auc: 0.870519  CI95[L][0.867549 0.873432] CI95[B][0.86768 0.873371]
+    ap: 0.870517   CI95[B][0.867676 0.873367]
+
+  "1" vs. the others
+    auc: 0.872098  CI95[H][0.869869 0.874326] CI95[B][0.870035 0.87433]
+    p/r-auc: 0.871952  CI95[L][0.868994 0.874854] CI95[B][0.869344 0.874643]
+    ap: 0.871951   CI95[B][0.86934 0.87464]
+
+
+=== rc=0 train_s=6.81806 acc=0.78895 auc=0.872098 wall=47.49s

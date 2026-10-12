@@ -1,0 +1,399 @@
+I1012 10:50:03.443394  981092 csv_example_reader.cc:216] 0 row(s) processed
+I1012 10:50:03.443799  981092 data_spec_inference.cc:518] 5 column(s) found
+I1012 10:50:03.443807  981092 csv_example_reader.cc:320] 0 row(s) processed
+I1012 10:50:03.443966  981092 data_spec_inference.cc:557] Finalizing [599 row(s) found]
+I1012 10:50:03.443969  981092 train_distributed_gbt.cc:125] Dataspec:
+Number of records: 599
+Number of columns: 5
+
+Number of columns by type:
+	NUMERICAL: 4 (80%)
+	CATEGORICAL: 1 (20%)
+
+Columns:
+
+NUMERICAL: 4 (80%)
+	0: "MonthsSinceLastDonation" NUMERICAL mean:9.54424 min:0 max:74 sd:8.31181
+	1: "NumberOfDonations" NUMERICAL mean:5.33556 min:1 max:50 sd:5.59148
+	2: "TotalBloodDonated" NUMERICAL mean:1333.89 min:250 max:12500 sd:1397.87
+	3: "MonthsSinceFirstDonation" NUMERICAL mean:33.8614 min:2 max:98 sd:24.3052
+
+CATEGORICAL: 1 (20%)
+	4: "label" CATEGORICAL manually-defined has-dict vocab-size:3 zero-ood-items most-frequent:"0" 456 (76.1269%)
+
+Terminology:
+	nas: Number of non-available (i.e. missing) values.
+	ood: Out of dictionary.
+	manually-defined: Attribute whose type is manually defined by the user, i.e., the type was not automatically inferred.
+	tokenized: The attribute value is obtained through tokenization.
+	has-dict: The attribute is attached to a string dictionary e.g. a categorical attribute stored as a string.
+	vocab-size: Number of unique values.
+
+I1012 10:50:03.444157  981092 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I1012 10:50:03.444162  981092 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I1012 10:50:03.444169  981092 distributed_gradient_boosted_trees.cc:332] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I1012 10:50:03.444261  981092 dataset_cache.cc:212] Create dataset cache in /home/ubuntu/dgbt_work/suite/blood-transfusion-service-center_f4_W1/cache/dataset_cache for dataset csv:/home/ubuntu/spo_vs_gbt/folds/blood-transfusion-service-center/fold4_train.csv
+I1012 10:50:03.444331  981092 multi_thread.cc:189] Initialize manager with 0 bytes welcome blob and 1 workers
+I1012 10:50:03.444563  981092 dataset_cache.cc:248] Found 5 column(s)
+I1012 10:50:03.444615  981092 dataset_cache.cc:258] Found 1 shard(s)
+I1012 10:50:03.444618  981092 dataset_cache.cc:400] Start separating dataset by columns
+I1012 10:50:03.444623  981092 multi_thread.cc:153] Change the number of parallel execution per worker to 1
+I1012 10:50:03.445091  981092 dataset_cache.cc:429] Create 1 shards in the dataset cache from the 1 shards of the original dataset i.e. ~1 shards to prepare for each of the 1 workers
+I1012 10:50:03.445112  981092 dataset_cache.cc:473] 	Split dataset by columns 1/1
+I1012 10:50:03.445277  981109 dataset_cache_worker.cc:259] Separate dataset columns on csv:/home/ubuntu/spo_vs_gbt/folds/blood-transfusion-service-center/fold4_train.csv
+I1012 10:50:03.445305  981109 dataset_cache_worker.cc:263] Reading dataset
+I1012 10:50:03.445485  981109 vertical_dataset_io.cc:82] 100 examples scanned.
+I1012 10:50:03.445647  981109 vertical_dataset_io.cc:91] 599 examples read. Memory: usage:0MB allocated:0MB. 0 (0%) examples have been skipped.
+I1012 10:50:03.445878  981111 dataset_cache_worker.cc:302] Exporting columns 1/5
+I1012 10:50:03.447022  981092 multi_thread.cc:153] Change the number of parallel execution per worker to 5
+I1012 10:50:03.447306  981092 dataset_cache.cc:498] Column separation done. 599 example(s) found
+I1012 10:50:03.447312  981092 dataset_cache.cc:581] Start sorting numerical columns
+I1012 10:50:03.447332  981092 dataset_cache.cc:642] 	Sorting numerical columns 1/4
+I1012 10:50:03.447336  981122 dataset_cache_worker.cc:327] Sort numerical column #0 with 599 examples
+I1012 10:50:03.447356  981122 dataset_cache_worker.cc:331] Allocate buffer [column #0]
+I1012 10:50:03.447350  981124 dataset_cache_worker.cc:327] Sort numerical column #2 with 599 examples
+I1012 10:50:03.447365  981122 dataset_cache_worker.cc:335] Load data [column #0]
+I1012 10:50:03.447343  981123 dataset_cache_worker.cc:327] Sort numerical column #1 with 599 examples
+I1012 10:50:03.447391  981123 dataset_cache_worker.cc:331] Allocate buffer [column #1]
+I1012 10:50:03.447354  981125 dataset_cache_worker.cc:327] Sort numerical column #3 with 599 examples
+I1012 10:50:03.447403  981125 dataset_cache_worker.cc:331] Allocate buffer [column #3]
+I1012 10:50:03.447367  981124 dataset_cache_worker.cc:331] Allocate buffer [column #2]
+I1012 10:50:03.447407  981125 dataset_cache_worker.cc:335] Load data [column #3]
+I1012 10:50:03.447395  981123 dataset_cache_worker.cc:335] Load data [column #1]
+I1012 10:50:03.447411  981124 dataset_cache_worker.cc:335] Load data [column #2]
+I1012 10:50:03.447707  981122 dataset_cache_worker.cc:359] Sort data [column #0]
+I1012 10:50:03.447749  981122 dataset_cache_worker.cc:363] Save sorted numerical values [column #0]
+I1012 10:50:03.447753  981124 dataset_cache_worker.cc:359] Sort data [column #2]
+I1012 10:50:03.447771  981123 dataset_cache_worker.cc:359] Sort data [column #1]
+I1012 10:50:03.447792  981124 dataset_cache_worker.cc:363] Save sorted numerical values [column #2]
+I1012 10:50:03.447804  981125 dataset_cache_worker.cc:359] Sort data [column #3]
+I1012 10:50:03.447808  981123 dataset_cache_worker.cc:363] Save sorted numerical values [column #1]
+I1012 10:50:03.447813  981122 dataset_cache_worker.cc:388] Found 29/599 unique values on numerical [column #0]
+I1012 10:50:03.447824  981122 dataset_cache_worker.cc:405] Exported column column #0 as pre-sorted
+I1012 10:50:03.447850  981125 dataset_cache_worker.cc:363] Save sorted numerical values [column #3]
+I1012 10:50:03.447856  981124 dataset_cache_worker.cc:388] Found 28/599 unique values on numerical [column #2]
+I1012 10:50:03.447861  981124 dataset_cache_worker.cc:405] Exported column column #2 as pre-sorted
+I1012 10:50:03.447894  981123 dataset_cache_worker.cc:388] Found 28/599 unique values on numerical [column #1]
+I1012 10:50:03.447907  981123 dataset_cache_worker.cc:405] Exported column column #1 as pre-sorted
+I1012 10:50:03.447932  981125 dataset_cache_worker.cc:388] Found 76/599 unique values on numerical [column #3]
+I1012 10:50:03.447938  981125 dataset_cache_worker.cc:405] Exported column column #3 as pre-sorted
+I1012 10:50:03.448349  981122 dataset_cache_worker.cc:414] Done exporting column #0 with 29/599 unique values.
+I1012 10:50:03.448485  981124 dataset_cache_worker.cc:414] Done exporting column #2 with 28/599 unique values.
+I1012 10:50:03.448558  981125 dataset_cache_worker.cc:414] Done exporting column #3 with 76/599 unique values.
+I1012 10:50:03.448622  981123 dataset_cache_worker.cc:414] Done exporting column #1 with 28/599 unique values.
+I1012 10:50:03.448705  981092 multi_thread.cc:129] Release workers
+I1012 10:50:03.448871  981092 dataset_cache.cc:278] Dataset cache meta-data:
+Number of columns: 5
+Number of examples: 599
+Statistics on 5 / 5 features
+Columns by type
+	 column-type: NUMERICAL count: 4
+	 column-type: CATEGORICAL count: 1
+Numerical columns:
+	Mean number of unique values: 40
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (4)
+	Ratio of numerical columns with <=16k values: 1 (4)
+	Mean number of unique values for discretized columns: nan
+
+I1012 10:50:03.448881  981092 dataset_cache.cc:279] Dataset cache created in 4.619696ms
+I1012 10:50:03.448956  981092 load_balancer.cc:93] Create load balancer:
+Features(4):
+	#0 worker:0 score:5
+	#1 worker:0 score:5
+	#2 worker:0 score:5
+	#3 worker:0 score:5
+
+Workers(1):
+	#0 measure:0 features(4): 3 2 1 0
+Maximum features per workers: 5
+
+I1012 10:50:03.448979  981092 multi_thread.cc:189] Initialize manager with 832 bytes welcome blob and 1 workers
+I1012 10:50:03.449006  981092 dataset_cache_reader.cc:87] Create dataset cache reader on 4 / 5 feature(s) and 599 example(s)
+I1012 10:50:03.449010  981092 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:50:03.449472  981092 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:50:03.450621  981092 dataset_cache_reader.cc:630] Features loaded in memory in 1.144987ms for 0 MB
+I1012 10:50:03.450628  981092 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 5
+Number of examples: 599
+Statistics on 4 / 5 features
+Columns by type
+	 column-type: NUMERICAL count: 4
+Numerical columns:
+	Mean number of unique values: 40
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (4)
+	Ratio of numerical columns with <=16k values: 1 (4)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 4
+
+I1012 10:50:03.450638  981092 dataset_cache_reader.cc:185] Dataset cache reader created in 1.63738ms
+I1012 10:50:03.451991  981092 distributed_gradient_boosted_trees.cc:1669] 	Loading dataset in workers 1 / 1 [duration: 30.933us]
+I1012 10:50:03.451999  981092 distributed_gradient_boosted_trees.cc:1674] All workers ready to train in 37.038us
+I1012 10:50:03.452039  981092 distributed_gradient_boosted_trees.cc:545] Asking one worker for the initial label statistics
+I1012 10:50:03.452212  981092 distributed_gradient_boosted_trees.cc:549] Training dataset label statistics:
+goo.gle/debugstr    
+num_examples: 599
+classification {
+  labels {
+    counts: 0
+    counts: 456
+    counts: 143
+    sum: 599
+  }
+}
+
+I1012 10:50:03.452485  981092 distributed_gradient_boosted_trees.cc:581] Start tree training
+I1012 10:50:03.452488  981092 distributed_gradient_boosted_trees.cc:944] Start creating checkpoint for iteration 0
+I1012 10:50:03.452698  981092 distributed_gradient_boosted_trees.cc:980] Checkpoint created in 207.935us for iteration 0
+I1012 10:50:03.452994  981092 load_balancer.cc:352] Try to balance workers' load [feature-loading-time:0.00114499 max-features-per-workers:5]
+I1012 10:50:03.453010  981092 load_balancer.cc:362] Best and worst sorted wall time per workers:
+I1012 10:50:03.455364  981092 distributed_gradient_boosted_trees.cc:854] num-trees:1/300 train-loss:1.038940 train-accuracy:0.761269 time-per-iter-{avg,last}:2.663269ms 2.663269ms last-{min,median,max}-split-time:121.861us 121.861us 121.861us last-{slowest,fastest}-worker:0 0 mean-{min,median,max}-split-time:116.336us 116.336us 116.336us
+		GetLabelStatistics: avg:170.428us count:1
+		SetInitialPredictions: avg:34.927us count:1
+		StartNewIter: avg:134.605us count:1
+		FindSplits: avg:125.73575us count:5
+		EvaluateSplits: avg:93.157us count:5
+		ShareSplits: avg:238.80575us count:5
+		EndIter: avg:191.937us count:1
+		CreateCheckpoint: avg:213.987us count:1
+		StartTraining: avg:39.097us count:1
+Balancer: workers:1 features:4 measures:5 pending-order:false max-features-per-workers:5 rebalance-with-change:0/1 total_num_changes:0 feature-loading-time:0.00114499 feature-loading-time:0.00114499
+I1012 10:50:03.910138  981092 distributed_gradient_boosted_trees.cc:944] Start creating checkpoint for iteration 300
+I1012 10:50:03.913316  981092 distributed_gradient_boosted_trees.cc:980] Checkpoint created in 3.163902ms for iteration 300
+I1012 10:50:03.913331  981092 distributed_gradient_boosted_trees.cc:662] Training done. Final model: num-trees:300/300 train-loss:0.336434 train-accuracy:0.934891 time-per-iter-{avg,last}:1.5354345ms 4.874066ms last-{min,median,max}-split-time:99.207us 99.207us 99.207us last-{slowest,fastest}-worker:0 0 mean-{min,median,max}-split-time:52.6635us 52.6635us 52.6635us
+		GetLabelStatistics: avg:170.428us count:1
+		SetInitialPredictions: avg:34.927us count:1
+		StartNewIter: avg:215.544us count:300
+		FindSplits: avg:55.6615us count:1500
+		EvaluateSplits: avg:38.84725us count:1500
+		ShareSplits: avg:118.83975us count:1500
+		EndIter: avg:219.26075us count:300
+		CreateCheckpoint: avg:1.7030855ms count:2
+		StartTraining: avg:39.097us count:1
+Balancer: workers:1 features:4 measures:1500 pending-order:false max-features-per-workers:5 rebalance-with-change:0/1 total_num_changes:0 feature-loading-time:0.00114499 feature-loading-time:0.00114499
+I1012 10:50:03.913479  981092 multi_thread.cc:129] Release workers
+I1012 10:50:03.913489  981092 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:50:03.914406  981092 train_distributed_gbt.cc:203] Training (incl. cache creation) took 470.266371ms split_axis=AXIS_ALIGNED
+I1012 10:50:03.915506  981092 quick_scorer_extended.cc:526] Highway static dispatch to CPU Target: AVX3_SPR
+I1012 10:50:03.916412  981092 abstract_model.cc:1500] Engine "GradientBoostedTreesQuickScorerExtendedHighway" built
+I1012 10:50:03.916645  981092 metric.cc:1394] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I1012 10:50:03.923127  981092 metric.cc:1394] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I1012 10:50:03.929515  981092 train_distributed_gbt.cc:214] Evaluation:
+Number of predictions (without weights): 149
+Number of predictions (with weights): 149
+Task: CLASSIFICATION
+Label: label
+
+Accuracy: 0.691275  CI95[W][0.623161 0.75358]
+LogLoss: : 0.976088
+ErrorRate: : 0.308725
+
+Default Accuracy: : 0.765101
+Default LogLoss: : 0.545129
+Default ErrorRate: : 0.234899
+
+Confusion Table:
+truth\prediction
+        0   1
+    0  92  22
+    1  24  11
+Total: 149
+
+  "0" vs. the others
+    auc: 0.61391  CI95[H][0.512114 0.715705] CI95[B][0.504429 0.718562]
+    p/r-auc: 0.817164  CI95[L][0.735428 0.877843] CI95[B][0.730052 0.904575]
+    ap: 0.811097   CI95[B][0.717508 0.904129]
+
+  "1" vs. the others
+    auc: 0.61391  CI95[H][0.503464 0.724356] CI95[B][0.497655 0.718797]
+    p/r-auc: 0.333246  CI95[L][0.198393 0.502322] CI95[B][0.211715 0.494016]
+    ap: 0.329943   CI95[B][0.193915 0.481899]
+
+
+W1012 10:50:03.930336  981092 gradient_boosted_trees.cc:661] Validation evaluation not available for the Gradient Boosted Tree model as no validation dataset was provided for training (i.e. validation_set_ratio == 0).
+I1012 10:50:03.929549  981092 train_distributed_gbt.cc:216] Model:
+Type: "GRADIENT_BOOSTED_TREES"
+Task: CLASSIFICATION
+Label: "label"
+
+Input Features (4):
+	MonthsSinceLastDonation
+	NumberOfDonations
+	TotalBloodDonated
+	MonthsSinceFirstDonation
+
+No weights
+
+Variable Importance: INV_MEAN_MIN_DEPTH:
+    1. "MonthsSinceFirstDonation"  0.443911 ################
+    2.  "MonthsSinceLastDonation"  0.355984 ###
+    3.        "NumberOfDonations"  0.334619 
+
+Variable Importance: NUM_AS_ROOT:
+    1. "MonthsSinceFirstDonation" 132.000000 ################
+    2.  "MonthsSinceLastDonation" 114.000000 ############
+    3.        "NumberOfDonations" 54.000000 
+
+Variable Importance: NUM_NODES:
+    1. "MonthsSinceFirstDonation" 2050.000000 ###############
+    2.        "NumberOfDonations" 1374.000000 ####
+    3.  "MonthsSinceLastDonation" 1109.000000 
+
+Variable Importance: SUM_SCORE:
+    1. "MonthsSinceFirstDonation" 123.618799 ################
+    2.        "NumberOfDonations" 123.416545 ###############
+    3.  "MonthsSinceLastDonation" 101.219350 
+
+
+Cannot compute model self evaluation:This model does not support evaluation reports.
+
+Loss: BINOMIAL_LOG_LIKELIHOOD
+Number of trees per iteration: 1
+Node format: NOT_SET
+Early stopping triggered: NOT_SET
+Number of trees: 300
+Total number of nodes: 9366
+
+Number of nodes by tree:
+Count: 300 Average: 31.22 StdDev: 10.8045
+Min: 13 Max: 59 Ignored: 0
+----------------------------------------------
+[ 13, 15)  7   2.33%   2.33% ##
+[ 15, 17)  4   1.33%   3.67% #
+[ 17, 20) 37  12.33%  16.00% #########
+[ 20, 22)  9   3.00%  19.00% ##
+[ 22, 24) 20   6.67%  25.67% #####
+[ 24, 27) 37  12.33%  38.00% #########
+[ 27, 29) 41  13.67%  51.67% ##########
+[ 29, 31) 12   4.00%  55.67% ###
+[ 31, 34) 24   8.00%  63.67% ######
+[ 34, 36) 14   4.67%  68.33% ###
+[ 36, 38) 21   7.00%  75.33% #####
+[ 38, 41) 11   3.67%  79.00% ###
+[ 41, 43)  8   2.67%  81.67% ##
+[ 43, 45) 11   3.67%  85.33% ###
+[ 45, 48) 10   3.33%  88.67% ##
+[ 48, 50) 10   3.33%  92.00% ##
+[ 50, 52)  9   3.00%  95.00% ##
+[ 52, 55)  8   2.67%  97.67% ##
+[ 55, 57)  2   0.67%  98.33%
+[ 57, 59]  5   1.67% 100.00% #
+
+Depth by leafs:
+Count: 4833 Average: 4.51314 StdDev: 0.954957
+Min: 1 Max: 5 Ignored: 0
+----------------------------------------------
+[ 1, 2)  130   2.69%   2.69%
+[ 2, 3)  164   3.39%   6.08%
+[ 3, 4)  328   6.79%  12.87% #
+[ 4, 5)  685  14.17%  27.04% ##
+[ 5, 5] 3526  72.96% 100.00% ##########
+
+Number of training obs by leaf:
+Count: 4833 Average: 37.1819 StdDev: 70.4788
+Min: 5 Max: 553 Ignored: 0
+----------------------------------------------
+[   5,  32) 3697  76.49%  76.49% ##########
+[  32,  59)  419   8.67%  85.16% #
+[  59,  87)  200   4.14%  89.30% #
+[  87, 114)  122   2.52%  91.83%
+[ 114, 142)   72   1.49%  93.32%
+[ 142, 169)   63   1.30%  94.62%
+[ 169, 197)   45   0.93%  95.55%
+[ 197, 224)   26   0.54%  96.09%
+[ 224, 252)   51   1.06%  97.14%
+[ 252, 279)   36   0.74%  97.89%
+[ 279, 306)   19   0.39%  98.28%
+[ 306, 334)   10   0.21%  98.49%
+[ 334, 361)   22   0.46%  98.94%
+[ 361, 389)   13   0.27%  99.21%
+[ 389, 416)    5   0.10%  99.32%
+[ 416, 444)    7   0.14%  99.46%
+[ 444, 471)    3   0.06%  99.52%
+[ 471, 499)    2   0.04%  99.57%
+[ 499, 526)    7   0.14%  99.71%
+[ 526, 553]   14   0.29% 100.00%
+
+Attribute in nodes:
+	2050 : MonthsSinceFirstDonation [NUMERICAL]
+	1374 : NumberOfDonations [NUMERICAL]
+	1109 : MonthsSinceLastDonation [NUMERICAL]
+
+Attribute in nodes with depth <= 0:
+	132 : MonthsSinceFirstDonation [NUMERICAL]
+	114 : MonthsSinceLastDonation [NUMERICAL]
+	54 : NumberOfDonations [NUMERICAL]
+
+Attribute in nodes with depth <= 1:
+	334 : MonthsSinceFirstDonation [NUMERICAL]
+	222 : MonthsSinceLastDonation [NUMERICAL]
+	214 : NumberOfDonations [NUMERICAL]
+
+Attribute in nodes with depth <= 2:
+	660 : MonthsSinceFirstDonation [NUMERICAL]
+	489 : NumberOfDonations [NUMERICAL]
+	397 : MonthsSinceLastDonation [NUMERICAL]
+
+Attribute in nodes with depth <= 3:
+	1199 : MonthsSinceFirstDonation [NUMERICAL]
+	846 : NumberOfDonations [NUMERICAL]
+	725 : MonthsSinceLastDonation [NUMERICAL]
+
+Attribute in nodes with depth <= 5:
+	2050 : MonthsSinceFirstDonation [NUMERICAL]
+	1374 : NumberOfDonations [NUMERICAL]
+	1109 : MonthsSinceLastDonation [NUMERICAL]
+
+Condition type in nodes:
+	4533 : HigherCondition
+Condition type in nodes with depth <= 0:
+	300 : HigherCondition
+Condition type in nodes with depth <= 1:
+	770 : HigherCondition
+Condition type in nodes with depth <= 2:
+	1546 : HigherCondition
+Condition type in nodes with depth <= 3:
+	2770 : HigherCondition
+Condition type in nodes with depth <= 5:
+	4533 : HigherCondition
+
+Training logs:
+Number of iteration to final model: 300
+	Iter:1 train-loss:1.038940 valid-loss:0.000000  train-accuracy:0.761269 valid-accuracy:0.000000
+	Iter:2 train-loss:0.991258 valid-loss:0.000000  train-accuracy:0.761269 valid-accuracy:0.000000
+	Iter:3 train-loss:0.952579 valid-loss:0.000000  train-accuracy:0.761269 valid-accuracy:0.000000
+	Iter:4 train-loss:0.921388 valid-loss:0.000000  train-accuracy:0.782972 valid-accuracy:0.000000
+	Iter:5 train-loss:0.893470 valid-loss:0.000000  train-accuracy:0.781302 valid-accuracy:0.000000
+	Iter:6 train-loss:0.871181 valid-loss:0.000000  train-accuracy:0.801336 valid-accuracy:0.000000
+	Iter:16 train-loss:0.742306 valid-loss:0.000000  train-accuracy:0.839733 valid-accuracy:0.000000
+	Iter:26 train-loss:0.686380 valid-loss:0.000000  train-accuracy:0.851419 valid-accuracy:0.000000
+	Iter:36 train-loss:0.654140 valid-loss:0.000000  train-accuracy:0.859766 valid-accuracy:0.000000
+	Iter:46 train-loss:0.632379 valid-loss:0.000000  train-accuracy:0.864775 valid-accuracy:0.000000
+	Iter:56 train-loss:0.614687 valid-loss:0.000000  train-accuracy:0.869783 valid-accuracy:0.000000
+	Iter:66 train-loss:0.586791 valid-loss:0.000000  train-accuracy:0.873122 valid-accuracy:0.000000
+	Iter:76 train-loss:0.568513 valid-loss:0.000000  train-accuracy:0.878130 valid-accuracy:0.000000
+	Iter:86 train-loss:0.548486 valid-loss:0.000000  train-accuracy:0.886477 valid-accuracy:0.000000
+	Iter:96 train-loss:0.526953 valid-loss:0.000000  train-accuracy:0.889816 valid-accuracy:0.000000
+	Iter:106 train-loss:0.499734 valid-loss:0.000000  train-accuracy:0.894825 valid-accuracy:0.000000
+	Iter:116 train-loss:0.480294 valid-loss:0.000000  train-accuracy:0.901502 valid-accuracy:0.000000
+	Iter:126 train-loss:0.460181 valid-loss:0.000000  train-accuracy:0.909850 valid-accuracy:0.000000
+	Iter:136 train-loss:0.450549 valid-loss:0.000000  train-accuracy:0.913189 valid-accuracy:0.000000
+	Iter:146 train-loss:0.437767 valid-loss:0.000000  train-accuracy:0.914858 valid-accuracy:0.000000
+	Iter:156 train-loss:0.427417 valid-loss:0.000000  train-accuracy:0.914858 valid-accuracy:0.000000
+	Iter:166 train-loss:0.419096 valid-loss:0.000000  train-accuracy:0.918197 valid-accuracy:0.000000
+	Iter:176 train-loss:0.410543 valid-loss:0.000000  train-accuracy:0.918197 valid-accuracy:0.000000
+	Iter:186 train-loss:0.401301 valid-loss:0.000000  train-accuracy:0.919866 valid-accuracy:0.000000
+	Iter:196 train-loss:0.391146 valid-loss:0.000000  train-accuracy:0.919866 valid-accuracy:0.000000
+	Iter:206 train-loss:0.381571 valid-loss:0.000000  train-accuracy:0.924875 valid-accuracy:0.000000
+	Iter:216 train-loss:0.376349 valid-loss:0.000000  train-accuracy:0.926544 valid-accuracy:0.000000
+	Iter:226 train-loss:0.370088 valid-loss:0.000000  train-accuracy:0.926544 valid-accuracy:0.000000
+	Iter:236 train-loss:0.363953 valid-loss:0.000000  train-accuracy:0.929883 valid-accuracy:0.000000
+	Iter:246 train-loss:0.357441 valid-loss:0.000000  train-accuracy:0.931553 valid-accuracy:0.000000
+	Iter:256 train-loss:0.350888 valid-loss:0.000000  train-accuracy:0.933222 valid-accuracy:0.000000
+	Iter:266 train-loss:0.346021 valid-loss:0.000000  train-accuracy:0.934891 valid-accuracy:0.000000
+	Iter:276 train-loss:0.343342 valid-loss:0.000000  train-accuracy:0.934891 valid-accuracy:0.000000
+	Iter:286 train-loss:0.341102 valid-loss:0.000000  train-accuracy:0.934891 valid-accuracy:0.000000
+	Iter:296 train-loss:0.338996 valid-loss:0.000000  train-accuracy:0.934891 valid-accuracy:0.000000
+
+I1012 10:50:03.930815  981092 train_distributed_gbt.cc:238] Conditions: 4533 total, 0 oblique, 0 with >1 column

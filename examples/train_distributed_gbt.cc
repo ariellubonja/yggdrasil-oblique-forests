@@ -90,6 +90,10 @@ ABSL_FLAG(double, sparse_oblique_projection_density_factor, 2.0,
           "Expected number of non-zero weights per projection.");
 ABSL_FLAG(std::string, sparse_oblique_weights, "BINARY",
           "BINARY or CONTINUOUS projection weights.");
+ABSL_FLAG(int, sparse_oblique_max_num_projections, 1000,
+          "Cap on projections per node (proto default 1000). The paper's "
+          "P = F arms pass INT_MAX so wide datasets (Bioresponse, F = 1776) "
+          "are not truncated.");
 ABSL_FLAG(bool, sparse_oblique_local_projection_count, false,
           "If true, F in ceil(F^exponent) is the worker's own numerical "
           "candidate count instead of the dataset's numerical feature count.");
@@ -144,6 +148,8 @@ int main(int argc, char** argv) {
         absl::GetFlag(FLAGS_sparse_oblique_num_projections_exponent));
     oblique->set_projection_density_factor(
         absl::GetFlag(FLAGS_sparse_oblique_projection_density_factor));
+    oblique->set_max_num_projections(
+        absl::GetFlag(FLAGS_sparse_oblique_max_num_projections));
     if (absl::GetFlag(FLAGS_sparse_oblique_weights) == "CONTINUOUS") {
       oblique->mutable_continuous();
     } else {

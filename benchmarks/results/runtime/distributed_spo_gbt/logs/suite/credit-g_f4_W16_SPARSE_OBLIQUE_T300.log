@@ -1,0 +1,1049 @@
+I1012 10:54:12.706982 1172045 csv_example_reader.cc:216] 0 row(s) processed
+I1012 10:54:12.709111 1172045 data_spec_inference.cc:518] 21 column(s) found
+I1012 10:54:12.709122 1172045 csv_example_reader.cc:320] 0 row(s) processed
+I1012 10:54:12.709825 1172045 data_spec_inference.cc:557] Finalizing [800 row(s) found]
+I1012 10:54:12.709828 1172045 train_distributed_gbt.cc:125] Dataspec:
+Number of records: 800
+Number of columns: 21
+
+Number of columns by type:
+	NUMERICAL: 18 (85.7143%)
+	BOOLEAN: 2 (9.52381%)
+	CATEGORICAL: 1 (4.7619%)
+
+Columns:
+
+NUMERICAL: 18 (85.7143%)
+	0: "checking_status" NUMERICAL mean:1.51875 min:0 max:3 sd:1.26081
+	1: "duration_months" NUMERICAL mean:20.9225 min:4 max:72 sd:12.1584
+	2: "credit_history" NUMERICAL mean:2.20375 min:0 max:4 sd:1.06171
+	3: "credit_purpose" NUMERICAL mean:3.8275 min:0 max:9 sd:2.72034
+	4: "credit_amount" NUMERICAL mean:3302.33 min:250 max:18424 sd:2779.7
+	5: "savings_status" NUMERICAL mean:2.1475 min:0 max:4 sd:1.11613
+	6: "employment_since" NUMERICAL mean:1.535 min:0 max:4 sd:1.34491
+	7: "installment_rate_percent" NUMERICAL mean:2.94875 min:1 max:4 sd:1.12855
+	8: "personal_status_sex" NUMERICAL mean:1.875 min:0 max:3 sd:1.35162
+	9: "other_debtors" NUMERICAL mean:1.855 min:0 max:2 sd:0.465269
+	10: "residence_since" NUMERICAL mean:2.8175 min:1 max:4 sd:1.10643
+	11: "property" NUMERICAL mean:1.36375 min:0 max:3 sd:0.999468
+	12: "age_years" NUMERICAL mean:35.61 min:19 max:75 sd:11.3369
+	13: "other_installment_plans" NUMERICAL mean:0.91125 min:0 max:2 sd:0.416381
+	14: "housing" NUMERICAL mean:1.08 min:0 max:2 sd:0.537215
+	15: "existing_credits_count" NUMERICAL mean:1.42375 min:1 max:4 sd:0.59092
+	16: "job" NUMERICAL mean:1.25 min:0 max:3 sd:0.930054
+	17: "people_liable" NUMERICAL mean:1.155 min:1 max:2 sd:0.361905
+
+BOOLEAN: 2 (9.52381%)
+	18: "telephone" BOOLEAN true_count:324 false_count:476
+	19: "foreign_worker" BOOLEAN true_count:775 false_count:25
+
+CATEGORICAL: 1 (4.7619%)
+	20: "label" CATEGORICAL manually-defined has-dict vocab-size:3 zero-ood-items most-frequent:"0" 560 (70%)
+
+Terminology:
+	nas: Number of non-available (i.e. missing) values.
+	ood: Out of dictionary.
+	manually-defined: Attribute whose type is manually defined by the user, i.e., the type was not automatically inferred.
+	tokenized: The attribute value is obtained through tokenization.
+	has-dict: The attribute is attached to a string dictionary e.g. a categorical attribute stored as a string.
+	vocab-size: Number of unique values.
+
+I1012 10:54:12.710023 1172045 abstract_learner.cc:171] No input feature explicitly specified. Using all the available input features.
+I1012 10:54:12.710025 1172045 abstract_learner.cc:185] The label "label" was removed from the input feature set.
+I1012 10:54:12.710034 1172045 distributed_gradient_boosted_trees.cc:332] Default loss set to BINOMIAL_LOG_LIKELIHOOD
+I1012 10:54:12.710131 1172045 distributed_gradient_boosted_trees.cc:343] Sparse oblique splits: dynamic load balancing disabled
+I1012 10:54:12.710135 1172045 dataset_cache.cc:212] Create dataset cache in /home/ubuntu/dgbt_work/suite/credit-g_f4_W16/cache/dataset_cache for dataset csv:/home/ubuntu/spo_vs_gbt/folds/credit-g/fold4_train.csv
+I1012 10:54:12.710206 1172045 multi_thread.cc:189] Initialize manager with 0 bytes welcome blob and 16 workers
+I1012 10:54:12.714011 1172045 dataset_cache.cc:248] Found 21 column(s)
+I1012 10:54:12.714096 1172045 dataset_cache.cc:258] Found 1 shard(s)
+I1012 10:54:12.714105 1172045 dataset_cache.cc:400] Start separating dataset by columns
+I1012 10:54:12.714112 1172045 multi_thread.cc:153] Change the number of parallel execution per worker to 1
+I1012 10:54:12.717567 1172045 dataset_cache.cc:429] Create 1 shards in the dataset cache from the 1 shards of the original dataset i.e. ~1 shards to prepare for each of the 16 workers
+I1012 10:54:12.717628 1172045 dataset_cache.cc:473] 	Split dataset by columns 1/1
+I1012 10:54:12.717648 1172287 dataset_cache_worker.cc:259] Separate dataset columns on csv:/home/ubuntu/spo_vs_gbt/folds/credit-g/fold4_train.csv
+I1012 10:54:12.717668 1172287 dataset_cache_worker.cc:263] Reading dataset
+I1012 10:54:12.717939 1172287 vertical_dataset_io.cc:82] 100 examples scanned.
+I1012 10:54:12.718724 1172287 vertical_dataset_io.cc:91] 800 examples read. Memory: usage:0MB allocated:0MB. 0 (0%) examples have been skipped.
+I1012 10:54:12.718980 1172343 dataset_cache_worker.cc:302] Exporting columns 1/21
+I1012 10:54:12.720687 1172045 multi_thread.cc:153] Change the number of parallel execution per worker to 5
+I1012 10:54:12.725651 1172045 dataset_cache.cc:498] Column separation done. 800 example(s) found
+I1012 10:54:12.725667 1172045 dataset_cache.cc:581] Start sorting numerical columns
+I1012 10:54:12.725698 1172344 dataset_cache_worker.cc:327] Sort numerical column #0 with 800 examples
+I1012 10:54:12.725713 1172344 dataset_cache_worker.cc:331] Allocate buffer [column #0]
+I1012 10:54:12.725717 1172344 dataset_cache_worker.cc:335] Load data [column #0]
+I1012 10:54:12.725716 1172345 dataset_cache_worker.cc:327] Sort numerical column #1 with 800 examples
+I1012 10:54:12.725722 1172346 dataset_cache_worker.cc:327] Sort numerical column #2 with 800 examples
+I1012 10:54:12.725741 1172346 dataset_cache_worker.cc:331] Allocate buffer [column #2]
+I1012 10:54:12.725728 1172345 dataset_cache_worker.cc:331] Allocate buffer [column #1]
+I1012 10:54:12.725747 1172346 dataset_cache_worker.cc:335] Load data [column #2]
+I1012 10:54:12.725743 1172359 dataset_cache_worker.cc:327] Sort numerical column #5 with 800 examples
+I1012 10:54:12.725751 1172360 dataset_cache_worker.cc:327] Sort numerical column #6 with 800 examples
+I1012 10:54:12.725729 1172347 dataset_cache_worker.cc:327] Sort numerical column #3 with 800 examples
+I1012 10:54:12.725752 1172345 dataset_cache_worker.cc:335] Load data [column #1]
+I1012 10:54:12.725766 1172362 dataset_cache_worker.cc:327] Sort numerical column #8 with 800 examples
+I1012 10:54:12.725787 1172362 dataset_cache_worker.cc:331] Allocate buffer [column #8]
+I1012 10:54:12.725781 1172374 dataset_cache_worker.cc:327] Sort numerical column #10 with 800 examples
+I1012 10:54:12.725787 1172375 dataset_cache_worker.cc:327] Sort numerical column #11 with 800 examples
+I1012 10:54:12.725768 1172360 dataset_cache_worker.cc:331] Allocate buffer [column #6]
+I1012 10:54:12.725800 1172377 dataset_cache_worker.cc:327] Sort numerical column #13 with 800 examples
+I1012 10:54:12.725822 1172377 dataset_cache_worker.cc:331] Allocate buffer [column #13]
+I1012 10:54:12.725736 1172348 dataset_cache_worker.cc:327] Sort numerical column #4 with 800 examples
+I1012 10:54:12.725828 1172391 dataset_cache_worker.cc:327] Sort numerical column #17 with 800 examples
+I1012 10:54:12.725831 1172377 dataset_cache_worker.cc:335] Load data [column #13]
+I1012 10:54:12.725837 1172348 dataset_cache_worker.cc:331] Allocate buffer [column #4]
+I1012 10:54:12.725758 1172361 dataset_cache_worker.cc:327] Sort numerical column #7 with 800 examples
+I1012 10:54:12.725853 1172361 dataset_cache_worker.cc:331] Allocate buffer [column #7]
+I1012 10:54:12.725860 1172361 dataset_cache_worker.cc:335] Load data [column #7]
+I1012 10:54:12.725812 1172360 dataset_cache_worker.cc:335] Load data [column #6]
+I1012 10:54:12.725776 1172347 dataset_cache_worker.cc:331] Allocate buffer [column #3]
+I1012 10:54:12.725881 1172347 dataset_cache_worker.cc:335] Load data [column #3]
+I1012 10:54:12.725773 1172363 dataset_cache_worker.cc:327] Sort numerical column #9 with 800 examples
+I1012 10:54:12.725895 1172363 dataset_cache_worker.cc:331] Allocate buffer [column #9]
+I1012 10:54:12.725805 1172378 dataset_cache_worker.cc:327] Sort numerical column #14 with 800 examples
+I1012 10:54:12.725911 1172378 dataset_cache_worker.cc:331] Allocate buffer [column #14]
+I1012 10:54:12.725819 1172390 dataset_cache_worker.cc:327] Sort numerical column #16 with 800 examples
+I1012 10:54:12.725923 1172390 dataset_cache_worker.cc:331] Allocate buffer [column #16]
+I1012 10:54:12.725814 1172389 dataset_cache_worker.cc:327] Sort numerical column #15 with 800 examples
+I1012 10:54:12.725940 1172389 dataset_cache_worker.cc:331] Allocate buffer [column #15]
+I1012 10:54:12.725752 1172045 dataset_cache.cc:642] 	Sorting numerical columns 1/18
+I1012 10:54:12.725838 1172391 dataset_cache_worker.cc:331] Allocate buffer [column #17]
+I1012 10:54:12.725761 1172359 dataset_cache_worker.cc:331] Allocate buffer [column #5]
+I1012 10:54:12.725977 1172359 dataset_cache_worker.cc:335] Load data [column #5]
+I1012 10:54:12.725794 1172362 dataset_cache_worker.cc:335] Load data [column #8]
+I1012 10:54:12.725844 1172348 dataset_cache_worker.cc:335] Load data [column #4]
+I1012 10:54:12.725841 1172346 dataset_cache_worker.cc:359] Sort data [column #2]
+I1012 10:54:12.725802 1172374 dataset_cache_worker.cc:331] Allocate buffer [column #10]
+I1012 10:54:12.725793 1172376 dataset_cache_worker.cc:327] Sort numerical column #12 with 800 examples
+I1012 10:54:12.726020 1172376 dataset_cache_worker.cc:331] Allocate buffer [column #12]
+I1012 10:54:12.725811 1172375 dataset_cache_worker.cc:331] Allocate buffer [column #11]
+I1012 10:54:12.726024 1172376 dataset_cache_worker.cc:335] Load data [column #12]
+I1012 10:54:12.725900 1172363 dataset_cache_worker.cc:335] Load data [column #9]
+I1012 10:54:12.726040 1172346 dataset_cache_worker.cc:363] Save sorted numerical values [column #2]
+I1012 10:54:12.726038 1172360 dataset_cache_worker.cc:359] Sort data [column #6]
+I1012 10:54:12.725928 1172390 dataset_cache_worker.cc:335] Load data [column #16]
+I1012 10:54:12.725944 1172389 dataset_cache_worker.cc:335] Load data [column #15]
+I1012 10:54:12.725969 1172391 dataset_cache_worker.cc:335] Load data [column #17]
+I1012 10:54:12.725976 1172344 dataset_cache_worker.cc:359] Sort data [column #0]
+I1012 10:54:12.726013 1172374 dataset_cache_worker.cc:335] Load data [column #10]
+I1012 10:54:12.726031 1172375 dataset_cache_worker.cc:335] Load data [column #11]
+I1012 10:54:12.726113 1172346 dataset_cache_worker.cc:388] Found 4/800 unique values on numerical [column #2]
+I1012 10:54:12.726123 1172346 dataset_cache_worker.cc:405] Exported column column #2 as pre-sorted
+I1012 10:54:12.725916 1172378 dataset_cache_worker.cc:335] Load data [column #14]
+I1012 10:54:12.726089 1172360 dataset_cache_worker.cc:363] Save sorted numerical values [column #6]
+I1012 10:54:12.726131 1172347 dataset_cache_worker.cc:359] Sort data [column #3]
+I1012 10:54:12.726083 1172359 dataset_cache_worker.cc:359] Sort data [column #5]
+I1012 10:54:12.726113 1172361 dataset_cache_worker.cc:359] Sort data [column #7]
+I1012 10:54:12.726146 1172344 dataset_cache_worker.cc:363] Save sorted numerical values [column #0]
+I1012 10:54:12.726181 1172347 dataset_cache_worker.cc:363] Save sorted numerical values [column #3]
+I1012 10:54:12.726186 1172359 dataset_cache_worker.cc:363] Save sorted numerical values [column #5]
+I1012 10:54:12.726195 1172345 dataset_cache_worker.cc:359] Sort data [column #1]
+I1012 10:54:12.726199 1172361 dataset_cache_worker.cc:363] Save sorted numerical values [column #7]
+I1012 10:54:12.726199 1172360 dataset_cache_worker.cc:388] Found 4/800 unique values on numerical [column #6]
+I1012 10:54:12.726207 1172360 dataset_cache_worker.cc:405] Exported column column #6 as pre-sorted
+I1012 10:54:12.726231 1172348 dataset_cache_worker.cc:359] Sort data [column #4]
+I1012 10:54:12.726251 1172345 dataset_cache_worker.cc:363] Save sorted numerical values [column #1]
+I1012 10:54:12.726248 1172344 dataset_cache_worker.cc:388] Found 3/800 unique values on numerical [column #0]
+I1012 10:54:12.726259 1172344 dataset_cache_worker.cc:405] Exported column column #0 as pre-sorted
+I1012 10:54:12.726280 1172348 dataset_cache_worker.cc:363] Save sorted numerical values [column #4]
+I1012 10:54:12.726275 1172347 dataset_cache_worker.cc:388] Found 9/800 unique values on numerical [column #3]
+I1012 10:54:12.726289 1172347 dataset_cache_worker.cc:405] Exported column column #3 as pre-sorted
+I1012 10:54:12.726294 1172363 dataset_cache_worker.cc:359] Sort data [column #9]
+I1012 10:54:12.726303 1172377 dataset_cache_worker.cc:359] Sort data [column #13]
+I1012 10:54:12.726305 1172359 dataset_cache_worker.cc:388] Found 4/800 unique values on numerical [column #5]
+I1012 10:54:12.726325 1172359 dataset_cache_worker.cc:405] Exported column column #5 as pre-sorted
+I1012 10:54:12.726334 1172363 dataset_cache_worker.cc:363] Save sorted numerical values [column #9]
+I1012 10:54:12.726343 1172377 dataset_cache_worker.cc:363] Save sorted numerical values [column #13]
+I1012 10:54:12.726349 1172361 dataset_cache_worker.cc:388] Found 3/800 unique values on numerical [column #7]
+I1012 10:54:12.726370 1172361 dataset_cache_worker.cc:405] Exported column column #7 as pre-sorted
+I1012 10:54:12.726378 1172348 dataset_cache_worker.cc:388] Found 751/800 unique values on numerical [column #4]
+I1012 10:54:12.726386 1172348 dataset_cache_worker.cc:405] Exported column column #4 as pre-sorted
+I1012 10:54:12.726393 1172345 dataset_cache_worker.cc:388] Found 30/800 unique values on numerical [column #1]
+I1012 10:54:12.726398 1172345 dataset_cache_worker.cc:405] Exported column column #1 as pre-sorted
+I1012 10:54:12.726428 1172362 dataset_cache_worker.cc:359] Sort data [column #8]
+I1012 10:54:12.726433 1172363 dataset_cache_worker.cc:388] Found 2/800 unique values on numerical [column #9]
+I1012 10:54:12.726439 1172376 dataset_cache_worker.cc:359] Sort data [column #12]
+I1012 10:54:12.726448 1172363 dataset_cache_worker.cc:405] Exported column column #9 as pre-sorted
+I1012 10:54:12.726463 1172377 dataset_cache_worker.cc:388] Found 2/800 unique values on numerical [column #13]
+I1012 10:54:12.726486 1172391 dataset_cache_worker.cc:359] Sort data [column #17]
+I1012 10:54:12.726481 1172362 dataset_cache_worker.cc:363] Save sorted numerical values [column #8]
+I1012 10:54:12.726493 1172377 dataset_cache_worker.cc:405] Exported column column #13 as pre-sorted
+I1012 10:54:12.726506 1172376 dataset_cache_worker.cc:363] Save sorted numerical values [column #12]
+I1012 10:54:12.726523 1172391 dataset_cache_worker.cc:363] Save sorted numerical values [column #17]
+I1012 10:54:12.726514 1172390 dataset_cache_worker.cc:359] Sort data [column #16]
+I1012 10:54:12.726527 1172389 dataset_cache_worker.cc:359] Sort data [column #15]
+I1012 10:54:12.726570 1172390 dataset_cache_worker.cc:363] Save sorted numerical values [column #16]
+I1012 10:54:12.726565 1172362 dataset_cache_worker.cc:388] Found 3/800 unique values on numerical [column #8]
+I1012 10:54:12.726577 1172362 dataset_cache_worker.cc:405] Exported column column #8 as pre-sorted
+I1012 10:54:12.726579 1172376 dataset_cache_worker.cc:388] Found 52/800 unique values on numerical [column #12]
+I1012 10:54:12.726598 1172376 dataset_cache_worker.cc:405] Exported column column #12 as pre-sorted
+I1012 10:54:12.726604 1172389 dataset_cache_worker.cc:363] Save sorted numerical values [column #15]
+I1012 10:54:12.726634 1172390 dataset_cache_worker.cc:388] Found 3/800 unique values on numerical [column #16]
+I1012 10:54:12.726645 1172390 dataset_cache_worker.cc:405] Exported column column #16 as pre-sorted
+I1012 10:54:12.726535 1172374 dataset_cache_worker.cc:359] Sort data [column #10]
+I1012 10:54:12.726666 1172391 dataset_cache_worker.cc:388] Found 1/800 unique values on numerical [column #17]
+I1012 10:54:12.726681 1172391 dataset_cache_worker.cc:399] Exported column column #17 as pre-discretized
+I1012 10:54:12.726691 1172346 dataset_cache_worker.cc:414] Done exporting column #2 with 4/800 unique values.
+I1012 10:54:12.726694 1172375 dataset_cache_worker.cc:359] Sort data [column #11]
+I1012 10:54:12.726695 1172389 dataset_cache_worker.cc:388] Found 3/800 unique values on numerical [column #15]
+I1012 10:54:12.726723 1172389 dataset_cache_worker.cc:405] Exported column column #15 as pre-sorted
+I1012 10:54:12.726699 1172378 dataset_cache_worker.cc:359] Sort data [column #14]
+I1012 10:54:12.726714 1172374 dataset_cache_worker.cc:363] Save sorted numerical values [column #10]
+I1012 10:54:12.726754 1172375 dataset_cache_worker.cc:363] Save sorted numerical values [column #11]
+I1012 10:54:12.726763 1172378 dataset_cache_worker.cc:363] Save sorted numerical values [column #14]
+I1012 10:54:12.726848 1172375 dataset_cache_worker.cc:388] Found 3/800 unique values on numerical [column #11]
+I1012 10:54:12.726858 1172375 dataset_cache_worker.cc:405] Exported column column #11 as pre-sorted
+I1012 10:54:12.726803 1172374 dataset_cache_worker.cc:388] Found 3/800 unique values on numerical [column #10]
+I1012 10:54:12.727024 1172374 dataset_cache_worker.cc:405] Exported column column #10 as pre-sorted
+I1012 10:54:12.726873 1172378 dataset_cache_worker.cc:388] Found 2/800 unique values on numerical [column #14]
+I1012 10:54:12.727084 1172378 dataset_cache_worker.cc:405] Exported column column #14 as pre-sorted
+I1012 10:54:12.727241 1172348 dataset_cache_worker.cc:414] Done exporting column #4 with 751/800 unique values.
+I1012 10:54:12.727425 1172344 dataset_cache_worker.cc:414] Done exporting column #0 with 3/800 unique values.
+I1012 10:54:12.727790 1172360 dataset_cache_worker.cc:414] Done exporting column #6 with 4/800 unique values.
+I1012 10:54:12.727931 1172345 dataset_cache_worker.cc:414] Done exporting column #1 with 30/800 unique values.
+I1012 10:54:12.728114 1172359 dataset_cache_worker.cc:414] Done exporting column #5 with 4/800 unique values.
+I1012 10:54:12.728156 1172347 dataset_cache_worker.cc:414] Done exporting column #3 with 9/800 unique values.
+I1012 10:54:12.728350 1172390 dataset_cache_worker.cc:414] Done exporting column #16 with 3/800 unique values.
+I1012 10:54:12.728464 1172389 dataset_cache_worker.cc:414] Done exporting column #15 with 3/800 unique values.
+I1012 10:54:12.728565 1172363 dataset_cache_worker.cc:414] Done exporting column #9 with 2/800 unique values.
+I1012 10:54:12.728688 1172361 dataset_cache_worker.cc:414] Done exporting column #7 with 3/800 unique values.
+I1012 10:54:12.728878 1172377 dataset_cache_worker.cc:414] Done exporting column #13 with 2/800 unique values.
+I1012 10:54:12.729002 1172362 dataset_cache_worker.cc:414] Done exporting column #8 with 3/800 unique values.
+I1012 10:54:12.729360 1172378 dataset_cache_worker.cc:414] Done exporting column #14 with 2/800 unique values.
+I1012 10:54:12.729379 1172391 dataset_cache_worker.cc:414] Done exporting column #17 with 1/800 unique values.
+I1012 10:54:12.729531 1172376 dataset_cache_worker.cc:414] Done exporting column #12 with 52/800 unique values.
+I1012 10:54:12.729584 1172375 dataset_cache_worker.cc:414] Done exporting column #11 with 3/800 unique values.
+I1012 10:54:12.729668 1172374 dataset_cache_worker.cc:414] Done exporting column #10 with 3/800 unique values.
+I1012 10:54:12.729712 1172045 multi_thread.cc:129] Release workers
+I1012 10:54:12.732260 1172045 dataset_cache.cc:278] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 21 / 21 features
+Columns by type
+	 column-type: BOOLEAN count: 2
+	 column-type: NUMERICAL count: 18
+	 column-type: CATEGORICAL count: 1
+Numerical columns:
+	Mean number of unique values: 49
+	Ratio of discretized numerical columns: 0.0555556 (1)
+	Ratio of numerical columns with <=100 values: 0.944444 (17)
+	Ratio of numerical columns with <=16k values: 1 (18)
+	Mean number of unique values for discretized columns: 2
+
+I1012 10:54:12.732273 1172045 dataset_cache.cc:279] Dataset cache created in 22.138079ms
+I1012 10:54:12.732363 1172045 load_balancer.cc:93] Create load balancer:
+Features(20):
+	#0 worker:0 score:5
+	#1 worker:15 score:5
+	#2 worker:14 score:5
+	#3 worker:13 score:5
+	#4 worker:12 score:5
+	#5 worker:11 score:5
+	#6 worker:10 score:5
+	#7 worker:9 score:5
+	#8 worker:8 score:5
+	#9 worker:7 score:5
+	#10 worker:6 score:5
+	#11 worker:5 score:5
+	#12 worker:4 score:5
+	#13 worker:3 score:5
+	#14 worker:2 score:5
+	#15 worker:1 score:5
+	#16 worker:0 score:5
+	#17 worker:1 score:1
+	#18 worker:3 score:1
+	#19 worker:2 score:1
+
+Workers(16):
+	#0 measure:0 features(2): 16 0
+	#1 measure:0 features(2): 15 17
+	#2 measure:0 features(2): 14 19
+	#3 measure:0 features(2): 13 18
+	#4 measure:0 features(1): 12
+	#5 measure:0 features(1): 11
+	#6 measure:0 features(1): 10
+	#7 measure:0 features(1): 9
+	#8 measure:0 features(1): 8
+	#9 measure:0 features(1): 7
+	#10 measure:0 features(1): 6
+	#11 measure:0 features(1): 5
+	#12 measure:0 features(1): 4
+	#13 measure:0 features(1): 3
+	#14 measure:0 features(1): 2
+	#15 measure:0 features(1): 1
+Maximum features per workers: 3
+
+I1012 10:54:12.732398 1172045 multi_thread.cc:189] Initialize manager with 1688 bytes welcome blob and 16 workers
+I1012 10:54:12.732432 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 2 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.732436 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.732937 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.734051 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 1.10932ms for 0 MB
+I1012 10:54:12.734057 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 2 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 2
+Numerical columns:
+	Mean number of unique values: 3
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (2)
+	Ratio of numerical columns with <=16k values: 1 (2)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 2
+
+I1012 10:54:12.734063 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.639254ms
+I1012 10:54:12.734783 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 2 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.734789 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.734866 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.735888 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 1.01846ms for 0 MB
+I1012 10:54:12.735895 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 2 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 2
+Numerical columns:
+	Mean number of unique values: 2
+	Ratio of discretized numerical columns: 0.5 (1)
+	Ratio of numerical columns with <=100 values: 1 (2)
+	Ratio of numerical columns with <=16k values: 1 (2)
+	Mean number of unique values for discretized columns: 2
+Number of loaded columns: 2
+
+I1012 10:54:12.735900 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.132736ms
+I1012 10:54:12.736636 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 2 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.736642 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.736698 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.737579 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 876.946us for 0 MB
+I1012 10:54:12.737586 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 2 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+	 column-type: BOOLEAN count: 1
+Numerical columns:
+	Mean number of unique values: 2
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 2
+
+I1012 10:54:12.737592 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 967.595us
+I1012 10:54:12.738359 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 2 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.738364 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.738432 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.739355 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 919.898us for 0 MB
+I1012 10:54:12.739362 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 2 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+	 column-type: BOOLEAN count: 1
+Numerical columns:
+	Mean number of unique values: 2
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 2
+
+I1012 10:54:12.739372 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.024295ms
+I1012 10:54:12.740091 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.740095 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.740230 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.741132 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 897.225us for 0 MB
+I1012 10:54:12.741138 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 52
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.741143 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.064071ms
+I1012 10:54:12.741843 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.741848 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.741914 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.742825 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 907.632us for 0 MB
+I1012 10:54:12.742832 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 3
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.742836 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.004793ms
+I1012 10:54:12.743535 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.743539 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.743605 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.744553 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 944.734us for 0 MB
+I1012 10:54:12.744559 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 3
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.744564 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.040287ms
+I1012 10:54:12.745220 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.745225 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.745291 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.746230 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 935.736us for 0 MB
+I1012 10:54:12.746236 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 2
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.746241 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.032026ms
+I1012 10:54:12.746890 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.746894 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.746958 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.747898 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 935.883us for 0 MB
+I1012 10:54:12.747905 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 3
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.747909 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.032222ms
+I1012 10:54:12.748571 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.748576 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.749006 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.749957 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 947.28us for 0 MB
+I1012 10:54:12.749963 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 3
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.749967 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.407746ms
+I1012 10:54:12.750624 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.750629 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.750702 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.751586 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 881.479us for 0 MB
+I1012 10:54:12.751593 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 4
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.751597 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 984.573us
+I1012 10:54:12.752261 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.752265 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.752327 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.753246 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 915.752us for 0 MB
+I1012 10:54:12.753252 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 4
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.753256 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.007009ms
+I1012 10:54:12.753913 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.753917 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.753975 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.754847 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 869.575us for 0 MB
+I1012 10:54:12.754854 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 751
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 0 (0)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.754858 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 956.348us
+I1012 10:54:12.755494 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.755499 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.755551 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.756468 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 914.281us for 0 MB
+I1012 10:54:12.756475 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 9
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.756479 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 996.558us
+I1012 10:54:12.757148 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.757152 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.757204 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.758019 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 811.244us for 0 MB
+I1012 10:54:12.758031 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 4
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.758037 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 900.867us
+I1012 10:54:12.758700 1172045 dataset_cache_reader.cc:87] Create dataset cache reader on 1 / 21 feature(s) and 800 example(s)
+I1012 10:54:12.758709 1172045 dataset_cache_reader.cc:108] Loading labels in memory
+I1012 10:54:12.758865 1172045 dataset_cache_reader.cc:588] Loading features in memory
+I1012 10:54:12.759791 1172045 dataset_cache_reader.cc:630] Features loaded in memory in 922.481us for 0 MB
+I1012 10:54:12.759798 1172045 dataset_cache_reader.cc:184] Dataset cache meta-data:
+Number of columns: 21
+Number of examples: 800
+Statistics on 1 / 21 features
+Columns by type
+	 column-type: NUMERICAL count: 1
+Numerical columns:
+	Mean number of unique values: 30
+	Ratio of discretized numerical columns: 0 (0)
+	Ratio of numerical columns with <=100 values: 1 (1)
+	Ratio of numerical columns with <=16k values: 1 (1)
+	Mean number of unique values for discretized columns: nan
+Number of loaded columns: 1
+
+I1012 10:54:12.759804 1172045 dataset_cache_reader.cc:185] Dataset cache reader created in 1.124104ms
+I1012 10:54:12.760473 1172045 distributed_gradient_boosted_trees.cc:1669] 	Loading dataset in workers 1 / 16 [duration: 42.049us]
+I1012 10:54:12.760493 1172045 distributed_gradient_boosted_trees.cc:1674] All workers ready to train in 60.255us
+I1012 10:54:12.760537 1172045 distributed_gradient_boosted_trees.cc:545] Asking one worker for the initial label statistics
+I1012 10:54:12.760579 1172045 distributed_gradient_boosted_trees.cc:549] Training dataset label statistics:
+goo.gle/debugonly   
+num_examples: 800
+classification {
+  labels {
+    counts: 0
+    counts: 560
+    counts: 240
+    sum: 800
+  }
+}
+
+I1012 10:54:12.760891 1172045 distributed_gradient_boosted_trees.cc:581] Start tree training
+I1012 10:54:12.760895 1172045 distributed_gradient_boosted_trees.cc:944] Start creating checkpoint for iteration 0
+I1012 10:54:12.761155 1172045 distributed_gradient_boosted_trees.cc:980] Checkpoint created in 257.21us for iteration 0
+I1012 10:54:12.767321 1172045 distributed_gradient_boosted_trees.cc:854] num-trees:1/300 train-loss:1.168956 train-accuracy:0.700000 time-per-iter-{avg,last}:6.162316ms 6.162316ms last-{min,median,max}-split-time:145.615us 238.739us 293.677us last-{slowest,fastest}-worker:15 0 mean-{min,median,max}-split-time:144.78975us 274.63925us 350.125us
+		GetLabelStatistics: avg:39.387us count:1
+		SetInitialPredictions: avg:71.885us count:1
+		StartNewIter: avg:767.415us count:1
+		FindSplits: avg:353.902us count:5
+		EvaluateSplits: avg:148.865us count:5
+		ShareSplits: avg:531.1725us count:5
+		EndIter: avg:77.408us count:1
+		CreateCheckpoint: avg:265.945us count:1
+		StartTraining: avg:62.447us count:1
+Balancer: workers:16 features:20 measures:5 pending-order:false max-features-per-workers:3 rebalance-with-change:0/0 total_num_changes:0 feature-loading-time:0.000925495 feature-loading-time:0.000925495
+I1012 10:54:13.607828 1172045 distributed_gradient_boosted_trees.cc:944] Start creating checkpoint for iteration 300
+I1012 10:54:13.613472 1172045 distributed_gradient_boosted_trees.cc:980] Checkpoint created in 5.631358ms for iteration 300
+I1012 10:54:13.613491 1172045 distributed_gradient_boosted_trees.cc:662] Training done. Final model: num-trees:300/300 train-loss:0.021334 train-accuracy:1.000000 time-per-iter-{avg,last}:2.84110775ms 8.656338ms last-{min,median,max}-split-time:176.616us 287.043us 363.714us last-{slowest,fastest}-worker:15 0 mean-{min,median,max}-split-time:111.26175us 167.12225us 199.12175us
+		GetLabelStatistics: avg:39.387us count:1
+		SetInitialPredictions: avg:71.885us count:1
+		StartNewIter: avg:156.47425us count:300
+		FindSplits: avg:203.54075us count:1500
+		EvaluateSplits: avg:96.38925us count:1500
+		ShareSplits: avg:180.626us count:1500
+		EndIter: avg:88.26725us count:300
+		CreateCheckpoint: avg:2.963927ms count:2
+		StartTraining: avg:62.447us count:1
+Balancer: workers:16 features:20 measures:1500 pending-order:false max-features-per-workers:3 rebalance-with-change:0/0 total_num_changes:0 feature-loading-time:0.000925495 feature-loading-time:0.000925495
+I1012 10:54:13.613643 1172045 multi_thread.cc:129] Release workers
+I1012 10:54:13.613674 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.614259 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.614905 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.615289 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.615731 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.616203 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.616662 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.617150 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.617678 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.618180 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.618717 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.619287 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.619857 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.620397 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.620970 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.621576 1172045 worker.cc:485] Done called on the worker (0 running requests)
+I1012 10:54:13.625176 1172045 train_distributed_gbt.cc:203] Training (incl. cache creation) took 915.22501ms split_axis=SPARSE_OBLIQUE
+I1012 10:54:13.627419 1172045 decision_forest.cc:817] Model loaded with 300 root(s), 12502 node(s), and 20 input feature(s).
+I1012 10:54:13.627432 1172045 abstract_model.cc:1500] Engine "GradientBoostedTreesGeneric" built
+I1012 10:54:13.629408 1172045 metric.cc:1394] Computing confidence intervals of evaluation metrics with bootstrapping for label #1.
+I1012 10:54:13.638754 1172045 metric.cc:1394] Computing confidence intervals of evaluation metrics with bootstrapping for label #2.
+I1012 10:54:13.647737 1172045 train_distributed_gbt.cc:214] Evaluation:
+Number of predictions (without weights): 200
+Number of predictions (with weights): 200
+Task: CLASSIFICATION
+Label: label
+
+Accuracy: 0.78  CI95[W][0.726345 0.827321]
+LogLoss: : 0.613282
+ErrorRate: : 0.22
+
+Default Accuracy: : 0.7
+Default LogLoss: : 0.610864
+Default ErrorRate: : 0.3
+
+Confusion Table:
+truth\prediction
+         0   1
+    0  125  15
+    1   29  31
+Total: 200
+
+  "0" vs. the others
+    auc: 0.8225  CI95[H][0.765548 0.879452] CI95[B][0.751578 0.87963]
+    p/r-auc: 0.909495  CI95[L][0.849428 0.947092] CI95[B][0.858054 0.95088]
+    ap: 0.909017   CI95[B][0.856347 0.950465]
+
+  "1" vs. the others
+    auc: 0.8225  CI95[H][0.752866 0.892134] CI95[B][0.756559 0.880083]
+    p/r-auc: 0.662544  CI95[L][0.534825 0.77026] CI95[B][0.525806 0.784241]
+    ap: 0.657135   CI95[B][0.51038 0.779343]
+
+
+W1012 10:54:13.650388 1172045 gradient_boosted_trees.cc:661] Validation evaluation not available for the Gradient Boosted Tree model as no validation dataset was provided for training (i.e. validation_set_ratio == 0).
+I1012 10:54:13.647778 1172045 train_distributed_gbt.cc:216] Model:
+Type: "GRADIENT_BOOSTED_TREES"
+Task: CLASSIFICATION
+Label: "label"
+
+Input Features (20):
+	checking_status
+	duration_months
+	credit_history
+	credit_purpose
+	credit_amount
+	savings_status
+	employment_since
+	installment_rate_percent
+	personal_status_sex
+	other_debtors
+	residence_since
+	property
+	age_years
+	other_installment_plans
+	housing
+	existing_credits_count
+	job
+	people_liable
+	telephone
+	foreign_worker
+
+No weights
+
+Variable Importance: INV_MEAN_MIN_DEPTH:
+    1.            "credit_amount"  0.262694 ################
+    2.          "checking_status"  0.249135 #############
+    3.          "duration_months"  0.227475 #########
+    4.                      "job"  0.223971 ########
+    5.                "age_years"  0.217934 #######
+    6.           "credit_history"  0.208801 #####
+    7.           "credit_purpose"  0.203026 ####
+    8.           "savings_status"  0.202607 ####
+    9.          "residence_since"  0.196344 ##
+   10.         "employment_since"  0.195877 ##
+   11.      "personal_status_sex"  0.193147 ##
+   12.   "existing_credits_count"  0.191131 #
+   13. "installment_rate_percent"  0.191074 #
+   14.  "other_installment_plans"  0.190695 #
+   15.            "people_liable"  0.190456 #
+   16.            "other_debtors"  0.188649 #
+   17.                  "housing"  0.186710 #
+   18.           "foreign_worker"  0.186386 #
+   19.                 "property"  0.185303 
+   20.                "telephone"  0.181250 
+
+Variable Importance: NUM_AS_ROOT:
+    1.          "checking_status" 75.000000 ################
+    2.            "credit_amount" 51.000000 ##########
+    3.                      "job" 42.000000 ########
+    4.           "credit_history" 33.000000 ######
+    5.          "duration_months" 30.000000 ######
+    6.      "personal_status_sex" 21.000000 ####
+    7.           "savings_status" 20.000000 ####
+    8.           "credit_purpose" 16.000000 ###
+    9.         "employment_since" 15.000000 ###
+   10.           "foreign_worker" 13.000000 ##
+   11.                  "housing" 10.000000 #
+   12.                "age_years"  5.000000 
+   13.  "other_installment_plans"  3.000000 
+   14.   "existing_credits_count"  3.000000 
+   15.            "people_liable"  3.000000 
+   16. "installment_rate_percent"  2.000000 
+   17.            "other_debtors"  2.000000 
+   18.          "residence_since"  1.000000 
+
+Variable Importance: NUM_NODES:
+    1.            "credit_amount" 1338.000000 ################
+    2.                "age_years" 793.000000 #########
+    3.          "checking_status" 546.000000 ######
+    4.          "duration_months" 512.000000 #####
+    5.           "credit_purpose" 464.000000 #####
+    6.                      "job" 440.000000 #####
+    7.          "residence_since" 315.000000 ###
+    8. "installment_rate_percent" 265.000000 ##
+    9.         "employment_since" 257.000000 ##
+   10.           "credit_history" 246.000000 ##
+   11.                 "property" 236.000000 ##
+   12.   "existing_credits_count" 222.000000 ##
+   13.           "savings_status" 210.000000 ##
+   14.            "people_liable" 201.000000 ##
+   15.  "other_installment_plans" 170.000000 #
+   16.      "personal_status_sex" 154.000000 #
+   17.            "other_debtors" 117.000000 #
+   18.                "telephone" 93.000000 
+   19.                  "housing" 80.000000 
+   20.           "foreign_worker" 21.000000 
+
+Variable Importance: SUM_SCORE:
+    1.            "credit_amount" 155.158949 ################
+    2.          "checking_status" 145.766093 ###############
+    3.                      "job" 80.073082 ########
+    4.                "age_years" 78.676104 #######
+    5.          "duration_months" 74.744056 #######
+    6.           "credit_purpose" 50.827165 #####
+    7.          "residence_since" 34.816126 ###
+    8. "installment_rate_percent" 34.604772 ###
+    9.           "credit_history" 34.583925 ###
+   10.           "savings_status" 33.519446 ###
+   11.                 "property" 31.369857 ###
+   12.         "employment_since" 26.240180 ##
+   13.            "people_liable" 20.368341 #
+   14.   "existing_credits_count" 19.941161 #
+   15.  "other_installment_plans" 14.579122 #
+   16.            "other_debtors" 14.165536 #
+   17.      "personal_status_sex" 14.068435 #
+   18.                "telephone"  7.324870 
+   19.                  "housing"  7.245997 
+   20.           "foreign_worker"  2.438107 
+
+
+Cannot compute model self evaluation:This model does not support evaluation reports.
+
+Loss: BINOMIAL_LOG_LIKELIHOOD
+Number of trees per iteration: 1
+Node format: NOT_SET
+Early stopping triggered: NOT_SET
+Number of trees: 300
+Total number of nodes: 12502
+
+Number of nodes by tree:
+Count: 300 Average: 41.6733 StdDev: 9.24554
+Min: 19 Max: 63 Ignored: 0
+----------------------------------------------
+[ 19, 21)  1   0.33%   0.33%
+[ 21, 23) 10   3.33%   3.67% ##
+[ 23, 25)  4   1.33%   5.00% #
+[ 25, 28)  8   2.67%   7.67% ##
+[ 28, 30)  6   2.00%   9.67% #
+[ 30, 32) 15   5.00%  14.67% ###
+[ 32, 34) 24   8.00%  22.67% #####
+[ 34, 37) 11   3.67%  26.33% ##
+[ 37, 39) 18   6.00%  32.33% ####
+[ 39, 41) 25   8.33%  40.67% #####
+[ 41, 43) 29   9.67%  50.33% ######
+[ 43, 46) 48  16.00%  66.33% ##########
+[ 46, 48) 20   6.67%  73.00% ####
+[ 48, 50) 20   6.67%  79.67% ####
+[ 50, 52) 18   6.00%  85.67% ####
+[ 52, 55) 12   4.00%  89.67% ###
+[ 55, 57) 16   5.33%  95.00% ###
+[ 57, 59) 11   3.67%  98.67% ##
+[ 59, 61)  1   0.33%  99.00%
+[ 61, 63]  3   1.00% 100.00% #
+
+Depth by leafs:
+Count: 6401 Average: 4.65255 StdDev: 0.693587
+Min: 1 Max: 5 Ignored: 0
+----------------------------------------------
+[ 1, 2)    9   0.14%   0.14%
+[ 2, 3)  116   1.81%   1.95%
+[ 3, 4)  412   6.44%   8.39% #
+[ 4, 5) 1016  15.87%  24.26% ##
+[ 5, 5] 4848  75.74% 100.00% ##########
+
+Number of training obs by leaf:
+Count: 6401 Average: 37.4941 StdDev: 79.076
+Min: 5 Max: 732 Ignored: 0
+----------------------------------------------
+[   5,  41) 5105  79.75%  79.75% ##########
+[  41,  77)  559   8.73%  88.49% #
+[  77, 114)  239   3.73%  92.22%
+[ 114, 150)  136   2.12%  94.34%
+[ 150, 187)   72   1.12%  95.47%
+[ 187, 223)   61   0.95%  96.42%
+[ 223, 259)   62   0.97%  97.39%
+[ 259, 296)   37   0.58%  97.97%
+[ 296, 332)   21   0.33%  98.30%
+[ 332, 369)   17   0.27%  98.56%
+[ 369, 405)   21   0.33%  98.89%
+[ 405, 441)   12   0.19%  99.08%
+[ 441, 478)    7   0.11%  99.19%
+[ 478, 514)    6   0.09%  99.28%
+[ 514, 551)    3   0.05%  99.33%
+[ 551, 587)    8   0.12%  99.45%
+[ 587, 623)    7   0.11%  99.56%
+[ 623, 660)   16   0.25%  99.81%
+[ 660, 696)    8   0.12%  99.94%
+[ 696, 732]    4   0.06% 100.00%
+
+Attribute in nodes:
+	1338 : credit_amount [NUMERICAL]
+	793 : age_years [NUMERICAL]
+	546 : checking_status [NUMERICAL]
+	512 : duration_months [NUMERICAL]
+	464 : credit_purpose [NUMERICAL]
+	315 : residence_since [NUMERICAL]
+	265 : installment_rate_percent [NUMERICAL]
+	257 : employment_since [NUMERICAL]
+	246 : credit_history [NUMERICAL]
+	236 : property [NUMERICAL]
+	222 : existing_credits_count [NUMERICAL]
+	210 : savings_status [NUMERICAL]
+	170 : other_installment_plans [NUMERICAL]
+	154 : personal_status_sex [NUMERICAL]
+	117 : other_debtors [NUMERICAL]
+	93 : telephone [BOOLEAN]
+	80 : housing [NUMERICAL]
+	47 : job [NUMERICAL]
+	21 : foreign_worker [BOOLEAN]
+	15 : people_liable [NUMERICAL]
+
+Attribute in nodes with depth <= 0:
+	75 : checking_status [NUMERICAL]
+	51 : credit_amount [NUMERICAL]
+	33 : credit_history [NUMERICAL]
+	30 : duration_months [NUMERICAL]
+	21 : personal_status_sex [NUMERICAL]
+	20 : savings_status [NUMERICAL]
+	16 : credit_purpose [NUMERICAL]
+	15 : employment_since [NUMERICAL]
+	13 : foreign_worker [BOOLEAN]
+	10 : housing [NUMERICAL]
+	5 : age_years [NUMERICAL]
+	3 : existing_credits_count [NUMERICAL]
+	3 : other_installment_plans [NUMERICAL]
+	2 : other_debtors [NUMERICAL]
+	2 : installment_rate_percent [NUMERICAL]
+	1 : residence_since [NUMERICAL]
+
+Attribute in nodes with depth <= 1:
+	183 : credit_amount [NUMERICAL]
+	115 : checking_status [NUMERICAL]
+	98 : age_years [NUMERICAL]
+	91 : duration_months [NUMERICAL]
+	60 : credit_history [NUMERICAL]
+	46 : credit_purpose [NUMERICAL]
+	45 : savings_status [NUMERICAL]
+	42 : employment_since [NUMERICAL]
+	38 : other_installment_plans [NUMERICAL]
+	33 : residence_since [NUMERICAL]
+	28 : other_debtors [NUMERICAL]
+	28 : personal_status_sex [NUMERICAL]
+	25 : existing_credits_count [NUMERICAL]
+	18 : foreign_worker [BOOLEAN]
+	16 : installment_rate_percent [NUMERICAL]
+	14 : housing [NUMERICAL]
+	6 : property [NUMERICAL]
+	3 : telephone [BOOLEAN]
+	1 : people_liable [NUMERICAL]
+	1 : job [NUMERICAL]
+
+Attribute in nodes with depth <= 2:
+	434 : credit_amount [NUMERICAL]
+	220 : age_years [NUMERICAL]
+	177 : checking_status [NUMERICAL]
+	157 : duration_months [NUMERICAL]
+	129 : credit_purpose [NUMERICAL]
+	120 : residence_since [NUMERICAL]
+	99 : credit_history [NUMERICAL]
+	88 : installment_rate_percent [NUMERICAL]
+	87 : savings_status [NUMERICAL]
+	77 : other_installment_plans [NUMERICAL]
+	64 : other_debtors [NUMERICAL]
+	64 : employment_since [NUMERICAL]
+	61 : existing_credits_count [NUMERICAL]
+	54 : property [NUMERICAL]
+	49 : personal_status_sex [NUMERICAL]
+	28 : housing [NUMERICAL]
+	21 : foreign_worker [BOOLEAN]
+	14 : telephone [BOOLEAN]
+	7 : people_liable [NUMERICAL]
+	7 : job [NUMERICAL]
+
+Attribute in nodes with depth <= 3:
+	827 : credit_amount [NUMERICAL]
+	443 : age_years [NUMERICAL]
+	333 : checking_status [NUMERICAL]
+	306 : duration_months [NUMERICAL]
+	257 : credit_purpose [NUMERICAL]
+	189 : residence_since [NUMERICAL]
+	170 : credit_history [NUMERICAL]
+	146 : installment_rate_percent [NUMERICAL]
+	146 : savings_status [NUMERICAL]
+	143 : employment_since [NUMERICAL]
+	133 : existing_credits_count [NUMERICAL]
+	131 : property [NUMERICAL]
+	120 : other_installment_plans [NUMERICAL]
+	91 : personal_status_sex [NUMERICAL]
+	85 : other_debtors [NUMERICAL]
+	54 : housing [NUMERICAL]
+	49 : telephone [BOOLEAN]
+	26 : job [NUMERICAL]
+	21 : foreign_worker [BOOLEAN]
+	7 : people_liable [NUMERICAL]
+
+Attribute in nodes with depth <= 5:
+	1338 : credit_amount [NUMERICAL]
+	793 : age_years [NUMERICAL]
+	546 : checking_status [NUMERICAL]
+	512 : duration_months [NUMERICAL]
+	464 : credit_purpose [NUMERICAL]
+	315 : residence_since [NUMERICAL]
+	265 : installment_rate_percent [NUMERICAL]
+	257 : employment_since [NUMERICAL]
+	246 : credit_history [NUMERICAL]
+	236 : property [NUMERICAL]
+	222 : existing_credits_count [NUMERICAL]
+	210 : savings_status [NUMERICAL]
+	170 : other_installment_plans [NUMERICAL]
+	154 : personal_status_sex [NUMERICAL]
+	117 : other_debtors [NUMERICAL]
+	93 : telephone [BOOLEAN]
+	80 : housing [NUMERICAL]
+	47 : job [NUMERICAL]
+	21 : foreign_worker [BOOLEAN]
+	15 : people_liable [NUMERICAL]
+
+Condition type in nodes:
+	5987 : ObliqueCondition
+	114 : TrueValueCondition
+Condition type in nodes with depth <= 0:
+	287 : ObliqueCondition
+	13 : TrueValueCondition
+Condition type in nodes with depth <= 1:
+	870 : ObliqueCondition
+	21 : TrueValueCondition
+Condition type in nodes with depth <= 2:
+	1922 : ObliqueCondition
+	35 : TrueValueCondition
+Condition type in nodes with depth <= 3:
+	3607 : ObliqueCondition
+	70 : TrueValueCondition
+Condition type in nodes with depth <= 5:
+	5987 : ObliqueCondition
+	114 : TrueValueCondition
+
+Training logs:
+Number of iteration to final model: 300
+	Iter:1 train-loss:1.168956 valid-loss:0.000000  train-accuracy:0.700000 valid-accuracy:0.000000
+	Iter:2 train-loss:1.118593 valid-loss:0.000000  train-accuracy:0.700000 valid-accuracy:0.000000
+	Iter:3 train-loss:1.074824 valid-loss:0.000000  train-accuracy:0.700000 valid-accuracy:0.000000
+	Iter:4 train-loss:1.037555 valid-loss:0.000000  train-accuracy:0.702500 valid-accuracy:0.000000
+	Iter:5 train-loss:1.000841 valid-loss:0.000000  train-accuracy:0.732500 valid-accuracy:0.000000
+	Iter:6 train-loss:0.969410 valid-loss:0.000000  train-accuracy:0.756250 valid-accuracy:0.000000
+	Iter:16 train-loss:0.751937 valid-loss:0.000000  train-accuracy:0.866250 valid-accuracy:0.000000
+	Iter:26 train-loss:0.633449 valid-loss:0.000000  train-accuracy:0.906250 valid-accuracy:0.000000
+	Iter:36 train-loss:0.551806 valid-loss:0.000000  train-accuracy:0.923750 valid-accuracy:0.000000
+	Iter:46 train-loss:0.465540 valid-loss:0.000000  train-accuracy:0.948750 valid-accuracy:0.000000
+	Iter:56 train-loss:0.411375 valid-loss:0.000000  train-accuracy:0.963750 valid-accuracy:0.000000
+	Iter:66 train-loss:0.350254 valid-loss:0.000000  train-accuracy:0.976250 valid-accuracy:0.000000
+	Iter:76 train-loss:0.313908 valid-loss:0.000000  train-accuracy:0.985000 valid-accuracy:0.000000
+	Iter:86 train-loss:0.273303 valid-loss:0.000000  train-accuracy:0.988750 valid-accuracy:0.000000
+	Iter:96 train-loss:0.238456 valid-loss:0.000000  train-accuracy:0.991250 valid-accuracy:0.000000
+	Iter:106 train-loss:0.209032 valid-loss:0.000000  train-accuracy:0.995000 valid-accuracy:0.000000
+	Iter:116 train-loss:0.186146 valid-loss:0.000000  train-accuracy:0.997500 valid-accuracy:0.000000
+	Iter:126 train-loss:0.163358 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:136 train-loss:0.142710 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:146 train-loss:0.123663 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:156 train-loss:0.108424 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:166 train-loss:0.096706 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:176 train-loss:0.087673 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:186 train-loss:0.078976 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:196 train-loss:0.070124 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:206 train-loss:0.062287 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:216 train-loss:0.053860 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:226 train-loss:0.048024 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:236 train-loss:0.042306 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:246 train-loss:0.037241 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:256 train-loss:0.033160 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:266 train-loss:0.030082 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:276 train-loss:0.027698 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:286 train-loss:0.025106 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+	Iter:296 train-loss:0.022500 valid-loss:0.000000  train-accuracy:1.000000 valid-accuracy:0.000000
+
+I1012 10:54:13.651244 1172045 train_distributed_gbt.cc:238] Conditions: 6101 total, 5987 oblique, 579 with >1 column

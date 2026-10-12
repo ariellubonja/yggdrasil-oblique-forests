@@ -300,3 +300,21 @@ timers masked. In chat, report each arm as speedup = exact_hwy / arm.
 **Never put hardware/run specs (CPU model, thread count, tree count, instance type) in Overleaf
 figure captions.** The paper has a dedicated experimental-setup section for them. Captions state
 what the panel shows and the axes; the generator scripts must not emit spec text into captions.
+
+## Unspecified parameters: library defaults (user directive, 2026-10-12)
+
+For any parameter the user does not specify, use the library/driver default (YDF proto default,
+harness flag default) unless there is a strong, stated reason to change it. Do not invent "sensible"
+values (e.g. threads = 48 / workers); when a non-default is needed, say which parameter, the value
+and the reason in the run report, and keep it constant across the arms being compared.
+
+## SPO always uses BINARY projection weights (user directive, 2026-10-12)
+
+Every sparse-oblique arm (RF, GBT, single-machine or distributed) uses **binary** weights
+(`sparse_oblique_split.binary`, each non-zero weight ±1). The paper arms get it implicitly:
+the harness leaves the proto field unset and the RF/GBT learners' `SetDefaultHyperParameters`
+(training.cc, "By default, we use binary weights") picks binary. The distributed learner never
+calls that, so pass `--sparse_oblique_weights BINARY` (the driver default) explicitly and never
+`CONTINUOUS`. The seven 300-tree distributed oblique cells of 2026-10-11 ran continuous by
+mistake and are not comparable to the paper on accuracy (`results.csv` rows with trees==300 and
+extra==""); every later run is binary.
