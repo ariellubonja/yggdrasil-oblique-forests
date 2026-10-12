@@ -86,7 +86,7 @@ ABSL_FLAG(std::string, split_axis, "AXIS_ALIGNED",
           "splits: each worker samples projections of the columns it owns.");
 ABSL_FLAG(double, sparse_oblique_num_projections_exponent, 0.5,
           "Projections per node = ceil(F^exponent); 0.5 = sqrt(F).");
-ABSL_FLAG(double, sparse_oblique_projection_density_factor, 2.0,
+ABSL_FLAG(double, sparse_oblique_projection_density_factor, 1.5,
           "Expected number of non-zero weights per projection.");
 ABSL_FLAG(std::string, sparse_oblique_weights, "BINARY",
           "BINARY or CONTINUOUS projection weights.");
