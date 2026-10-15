@@ -15,6 +15,8 @@
 #   tmux new-session -d -s gbtfp 'BOX=2 COMMIT=1 bash benchmarks/src/spaa27_experiments/run_gbt_d6_fullproj.sh'
 # Box 1 writes straight into speedup_map.csv (OUT=.../results/speedup_map.csv); boxes 2/3 write
 # results/speedup_map_gbt_fullproj_box$BOX.csv, committed as-is and merged into speedup_map.csv by hand.
+# CELLS=<file> overrides the cell list (2026-10-15: cells_gbt_d6_fullproj_trunks13.json = the paper's 13 trunk
+# shapes, all on the main m7i, BOX=trunks13 OUT=.../results/speedup_map.csv).
 # Resumable (skip-existing per cell). Holds run_all.lock. Per-cell timeout 24 h.
 set -uo pipefail
 WORK_DIR=${WORK_DIR:-/home/ubuntu/spo_vs_gbt}
@@ -30,7 +32,8 @@ exec 9>"$WORK_DIR/run_all.lock"
 echo "[gbtfp box$BOX] $(date -u +%FT%TZ) waiting for run_all.lock" | tee -a "$L"
 flock 9
 echo "[gbtfp box$BOX] $(date -u +%FT%TZ) start" | tee -a "$L"
-"$PY" "$SCRIPT_DIR/run_speedup_map.py" --cells-file "$SCRIPT_DIR/cells_gbt_d6_fullproj_box$BOX.json" \
+CELLS=${CELLS:-$SCRIPT_DIR/cells_gbt_d6_fullproj_box$BOX.json}
+"$PY" "$SCRIPT_DIR/run_speedup_map.py" --cells-file "$CELLS" \
   --bin-dir "$WORK_DIR/bin" --threads 48 --timeout 86400 --out "$OUT" > "$LOG_DIR/gbt_d6_fullproj_box$BOX.log" 2>&1
 echo "[gbtfp box$BOX] $(date -u +%FT%TZ) DONE exit $?" | tee -a "$L"
 touch "$WORK_DIR/gbt_d6_fullproj_box${BOX}_DONE"
