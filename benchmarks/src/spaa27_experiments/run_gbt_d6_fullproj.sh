@@ -17,7 +17,7 @@
 # results/speedup_map_gbt_fullproj_box$BOX.csv, committed as-is and merged into speedup_map.csv by hand.
 # CELLS=<file> overrides the cell list (2026-10-15: cells_gbt_d6_fullproj_trunks13.json = the paper's 13 trunk
 # shapes, all on the main m7i, BOX=trunks13 OUT=.../results/speedup_map.csv).
-# Resumable (skip-existing per cell). Holds run_all.lock. Per-cell timeout 24 h.
+# Resumable (skip-existing per cell). Holds run_all.lock. Per-cell timeout TIMEOUT s (default 24 h; the 13-trunk run uses 7 d, 15k x 1.6M cells est. ~36 h).
 set -uo pipefail
 WORK_DIR=${WORK_DIR:-/home/ubuntu/spo_vs_gbt}
 REPO_DIR=${REPO_DIR:-/home/ubuntu/yggdrasil-oblique-forests}
@@ -34,7 +34,7 @@ flock 9
 echo "[gbtfp box$BOX] $(date -u +%FT%TZ) start" | tee -a "$L"
 CELLS=${CELLS:-$SCRIPT_DIR/cells_gbt_d6_fullproj_box$BOX.json}
 "$PY" "$SCRIPT_DIR/run_speedup_map.py" --cells-file "$CELLS" \
-  --bin-dir "$WORK_DIR/bin" --threads 48 --timeout 86400 --out "$OUT" > "$LOG_DIR/gbt_d6_fullproj_box$BOX.log" 2>&1
+  --bin-dir "$WORK_DIR/bin" --threads 48 --timeout "${TIMEOUT:-86400}" --out "$OUT" >> "$LOG_DIR/gbt_d6_fullproj_box$BOX.log" 2>&1
 echo "[gbtfp box$BOX] $(date -u +%FT%TZ) DONE exit $?" | tee -a "$L"
 touch "$WORK_DIR/gbt_d6_fullproj_box${BOX}_DONE"
 if [ "${COMMIT:-0}" = 1 ]; then
