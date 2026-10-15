@@ -1,0 +1,80 @@
+% In-worker sparse oblique splits for distributed GBT (YDF fork, commit 383529b4).
+% Source: learner/distributed_decision_tree/oblique.cc (FindBestObliqueSplitForNode,
+% EvaluateObliqueSplits) and learner/distributed_gradient_boosted_trees/worker.cc
+% (FindSplits, EvaluateSplits). Real code where short; pseudocode for the glue.
+\begin{figure*}[t]
+\begin{minipage}[t]{0.52\textwidth}
+\begin{lstlisting}
+// Worker: best oblique split of one open node, using only the
+// numerical columns this worker owns (oblique.cc).
+void FindBestObliqueSplitForNode(int node, Span<const Idx> rows,
+                                 Span<const int> local_feats,
+                                 Split* best) {   // holds the AA split
+  const int P = GetNumProjections(dt_config, F_numerical); // sqrt(F)
+  const float density = density_factor / local_feats.size(); // E[nnz]
+  RandomEngine rng(Seed(layer_seed, worker, weak_model, node));
+  const int n = rows.size();
+  for (int p = 0; p < P; ++p) {
+    Projection proj;  // {(attribute, weight = +-1)}, nnz ~ Binomial
+    SampleProjection(local_feats, dt_config, density, &proj, &rng);
+    // ApplyProjection: gather owned columns at the node's rows.
+    for (int i = 0; i < n; ++i) {
+      float value = 0;
+      for (const auto& [column, weight] : proj)
+        value += column[rows[i]] * weight;
+      value_and_row[i] = {value, rows[i]};
+    }
+    std::sort(value_and_row.begin(), value_and_row.end());
+    // Exact scan with the axis-aligned scorer: gradient (and
+    // hessian) sums move from `pos` to `neg` in value order.
+    initializer.InitFull(&pos); initializer.InitEmpty(&neg);
+    for (int i = 0, num_pos = n; i < n; ++i, --num_pos) {
+      const auto [value, row] = value_and_row[i];
+      if (i > 0 && value != value_and_row[i - 1].first &&
+          num_pos >= min_examples && num_pos <= n - min_examples) {
+        const double score = Score(initializer, pos, neg);
+        if (score > best->score)   // beats AA and earlier projections
+          *best = {proj, MidThreshold(value_and_row[i-1].first, value),
+                   score, /*label stats of both children*/};
+      }
+      label_filler.Add(row, &neg); label_filler.Sub(row, &pos);
+    }
+  }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.46\textwidth}
+\begin{lstlisting}
+// Manager, per layer: the axis-aligned protocol, plus one seed.
+request.set_projection_seed(rng());   // same seed to every worker
+
+// Worker: FindSplits(request) (worker.cc).
+for (node : open_nodes) {
+  // Manager's candidate features for this node; all owned here.
+  [other, numerical] = PartitionByType(request.features[node]);
+  best[node] = AxisAlignedSplitter(other, node);   // stock YDF
+}
+columns.Prepare(numerical);   // dense fp32 col[row], once
+for (node : open_nodes)       // one thread-pool job per node
+  FindBestObliqueSplitForNode(node, rows_of(node),
+                              numerical[node], &best[node]);
+reply.splits = best;          // manager keeps the max over workers
+
+// Worker: EvaluateSplits (oblique.cc). The proposer owns every
+// attribute of its projection, so it alone writes its bitmap;
+// the bitmap is shared exactly as for axis-aligned splits.
+for (ex : examples) {
+  node = example_to_node[ex];
+  if (!winner[node].is_oblique()) continue;
+  if (!owns(winner[node])) continue;   // proposed elsewhere
+  float value = 0;
+  for (const auto& [column, weight] : winner[node].terms)
+    value += column[ex] * weight;
+  bitmap[node].Write(value >= winner[node].threshold);
+}
+// Feature ownership is frozen: dynamic load balancing is off.
+\end{lstlisting}
+\end{minipage}
+\caption{In-worker sparse oblique split search in the distributed GBT worker. Left: the per-node search over the worker's own numerical columns (projection sampling, projection evaluation, exact scan). Right: the manager and worker glue around it, and the bitmap evaluation by the proposing worker.}
+\label{lst:in_worker_oblique}
+\end{figure*}
