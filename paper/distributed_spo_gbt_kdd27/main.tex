@@ -1,9 +1,10 @@
-\documentclass[sigconf]{acmart}
+\documentclass[sigconf,screen]{acmart}
 \usepackage{hyperref}
 \usepackage{mathtools}
 \usepackage{enumitem}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
+
 
 % \usepackage[letterpaper,margin=0.8in]{geometry}
 
@@ -48,6 +49,10 @@
 
 \section{Introduction}
 
+% The timely story writes itself — tabular foundation models (TabPFN etc.) don’t scale to large data, GBDTs still win there, and you’re pushing the frontier of the thing that wins at scale. Lead with that in papers and talks, not “trees are still relevant.”
+
+% Being excellent at the unfashionable-but-used thing is a good position, but only if you stay literate in the fashionable thing — which is what the 20% buys you. 20% on tabular llm - to GBT dynamic
+
 Distributed Tree training offers two main advantages: training on very large data ($>$100m examples+) that does not fit in a single machine's memory, and distributed hyperparameter tuning. 
 
 No implementation of SPO-GBT distributed training exists, to our knowledge. This severely limits Sparse Oblique methods to datasets that are limited to a single machine. \textbf{AutoML frequently selects SPO-GBT as the best method}
@@ -86,7 +91,7 @@ YDF Distributed training requires:
 
  \begin{figure*}[t]
     \centering
-    \includegraphics[width=.8\linewidth]{figures/distributed_gbt_training_loop.pdf}
+    \includegraphics[width=.8\linewidth]{figures/method/distributed_gbt_training_loop.pdf}
     \caption{Distributed GBT Training Loop}
     \label{fig:ydf-dist-gbt-training-loop}
 \end{figure*}
@@ -95,7 +100,7 @@ YDF Distributed training requires:
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\linewidth]{figures/distributed_gbt_column_partitioning.pdf}
+    \includegraphics[width=1\linewidth]{figures/method/distributed_gbt_column_partitioning.pdf}
     \caption{Data Sharding illustration. Dataset is split by column, presorted, then round-robin-ed in a load-balancing way to workers.}
     \label{fig:ydf-dist-gbt-load-balancing}
 \end{figure}
@@ -147,39 +152,59 @@ In a dataset with $N$ rows and $\mathbf{F}$ columns. In GBT, each worker (tree) 
 \textbf{\textit{Cost:}} Requires many-to-many communication at each depth, as no single node holds all features.
 
 
-\subsection{\TODO{V1:} \textbf{Worker-local projections}}
+\subsection{V0: $\frac{F}{W}$ Worker-local projections}
 
 % Also applicable to bivariate and other random subset-based tree kernels
 
 \begin{figure}
     \centering
-    \includegraphics[width=.5\linewidth]{figures/in_node_spo_sampling.pdf}
+    \includegraphics[width=.6\linewidth]{figures/method/in_node_spo_sampling.pdf}
     \caption{V1 works identically to Distributed GBT, but features are sampled only within a worker.}
-    \label{fig:placeholder}
+    \label{fig:simple-in-worker-column-sampling}
 \end{figure}
 
-\subsubsection{Method}
+% \begin{figure}[t]
+% \begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+% if (oblique) {
+%   const int num_features_for_projection_count =
+%       spe_config.in_worker_oblique().num_projections_from_local_features()
+%           ? 0
+%           : num_global_numerical_features_;
+%   for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
+%        weak_model_idx++) {
+%     auto& weak_model = weak_models_[weak_model_idx];
+%     const distributed_decision_tree::ObliqueSplitArgs args{
+%         oblique_features_per_weak_models[weak_model_idx],
+%         weak_model.example_to_node,
+%         welcome_.dataspec(),
+%         welcome_.train_config_linking(),
+%         dt_config,
+%         *weak_model.label_accessor,
+%         weak_model.label_stats_per_node,
+%         *oblique_columns_,
+%         model::proto::Task::REGRESSION,
+%         weak_model.label_accessor_type,
+%         num_features_for_projection_count,
+%         MixProjectionSeed(request.projection_seed(), WorkerIdx(),
+%                           weak_model_idx)};
+%     RETURN_IF_ERROR(distributed_decision_tree::FindBestObliqueSplits(
+%         args, thread_pool_.get(), &splits_per_weak_models[weak_model_idx]));
+%   }
+% }
+% \end{lstlisting}
+% \caption{Worker-side call into the in-worker oblique split search (\texttt{worker.cc}, \texttt{FindSplits}).}
+% \label{lst:worker_oblique_call}
+% \end{figure}
 
-% Runtime results share one float page, accuracy results the next.
-\clearpage
-\input{tables/table_dist_runtime}
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=0.5\textwidth]{figures/dist_runtime_bars_chat.pdf}
-    \caption{Runtime of Dist-GBT vs. Local}
-    \label{fig:placeholder}
-\end{figure*}
-\clearpage
-\input{tables/table_dist_accuracy}
-\input{figures/fig_dist_accuracy_delta}
-\input{figures/fig_dist_accuracy_mean}
-\clearpage
+Load balancing disabled for Dist. SPO-GBT
+
 
 Each worker holds and samples from a small subset of columns.
 
 \textbf{\textit{How many features should each worker hold?}}
 
 Define $F_{\text{node}} \coloneqq \sqrt{\mathbf{F}}$ as the number of columns stored at each worker.
+
 
 
 \begin{description}
@@ -197,24 +222,42 @@ Define $F_{\text{node}} \coloneqq \sqrt{\mathbf{F}}$ as the number of columns st
     \end{itemize}
 \end{description}
 
-
-\subsubsection{Implementation}
-
-\textcolor{red}{
-\begin{enumerate}
-    \item Verify Claude initial implementation
-    \item test locally (+ m7i) for accuracy \& sanity check
-    \item figure out how to start distributed clusters on AWS
-\end{enumerate}
-}
-
-Load-balancing?
-
+% New page with the scaling figure pinned full-width at its top (non-floating).
+\twocolumn[{%
+\centering
+\includegraphics[width=0.95\textwidth]{figures/evaluation/grcp_n2/strong_weak_scaling.pdf}
+\captionof{figure}{Weak and Strong scaling results on Vertex AI.}
+\label{fig:vertex-scaling}
+\vspace{1em}
+\input{tables/table_vertex_scaling}
+\vspace{1em}
+}]
 \section{Evaluation}
+
+
 
 \subsection{In-worker Projection Sampling}
 
 Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{However, for Youtube, AA is a lot slower than SPO}}
+
+\subsubsection{Vertex AI Results on N2-highmem}
+
+\subsubsection{\texttt{MULTI\_THREAD} results on m7i.metal-24x}
+
+% Runtime results share one float page, accuracy results the next.
+% \clearpage
+\input{tables/table_dist_runtime}
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.75\textwidth]{figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf}
+    \caption{Training time of Dist-GBT (\texttt{MULTI\_THREAD}) vs. Local}
+    \label{fig:placeholder}
+\end{figure*}
+\clearpage
+\input{tables/table_dist_accuracy}
+\input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_delta}
+\input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean}
+\clearpage
 
 \clearpage
 
@@ -238,7 +281,7 @@ distributed_gbt.cc::TrainWithStatusImpl()
 
 \subsection{Approximate Splits}
 
-\textbf{Consider using approximate splits} to further improve training speed. Very often, this can speed up training by 2x-5x without negative impact on quality. Set hyperparameter \textbf{force\_numerical\_discretization=True} to enable approximate splits for distributed training.
+\textbf{Consider using approximate splits} to further improve training speed. Very often, this can speed up training by 2x-5x without negative impact on quality. Set hyperparameter\\ \textbf{force\_numerical\_discretization=True} to enable approximate splits for distributed training.
 
 
 \subsection{Using GCP and Vertex AI}
@@ -250,7 +293,21 @@ Google Cloud Hyperdisk is Google's next-generation block storage service, design
 Google Colab Gemini is not agentic and not smart - too slow to iterate. Use local Claude with GCP CLI
 
 
+\input{listings/in_worker_oblique}
+
+\subsection{Work log - Weekly TODOs}
+
+\textbf{\textit{Ariel TODOs by Oct-26}}
+\begin{itemize}
+    \item Run on actual remove with GRPC
+    \item RB good experiment: All data to all workers experiments. Makes SPO very alike AA
+    \item run accuracy for multiple seeds
+    \item sample features w. replacement per worker. Ensure each column is in at least 1 worker.
+    \item  \href{https://github.com/google/yggdrasil-decision-forests/commit/2fe3a7fae5a3e8646401cd98f5c0a2a9d5d81653}{Richard's new} AA + SPO scan.
+    
+\end{itemize}
 
 
+\subsection{Full Implementation Code}
 
 \end{document}

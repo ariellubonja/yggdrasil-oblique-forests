@@ -10,12 +10,12 @@
 void FindBestObliqueSplitForNode(int node, Span<const Idx> rows,
                                  Span<const int> local_feats,
                                  Split* best) {   // holds the AA split
-  const int P = GetNumProjections(dt_config, F_numerical); // sqrt(F)
-  const float density = density_factor / local_feats.size(); // E[nnz]
-  RandomEngine rng(Seed(layer_seed, worker, weak_model, node));
+  const int P = GetNumProjections(dt_config, F_numerical);
+  const float density = density_factor / local_feats.size();
+ 
   const int n = rows.size();
   for (int p = 0; p < P; ++p) {
-    Projection proj;  // {(attribute, weight = +-1)}, nnz ~ Binomial
+    Projection proj;
     SampleProjection(local_feats, dt_config, density, &proj, &rng);
     // ApplyProjection: gather owned columns at the node's rows.
     for (int i = 0; i < n; ++i) {
@@ -24,9 +24,9 @@ void FindBestObliqueSplitForNode(int node, Span<const Idx> rows,
         value += column[rows[i]] * weight;
       value_and_row[i] = {value, rows[i]};
     }
+    // TODO should be HIGHWAY
     std::sort(value_and_row.begin(), value_and_row.end());
-    // Exact scan with the axis-aligned scorer: gradient (and
-    // hessian) sums move from `pos` to `neg` in value order.
+    // Exact scan with the axis-aligned scorer
     initializer.InitFull(&pos); initializer.InitEmpty(&neg);
     for (int i = 0, num_pos = n; i < n; ++i, --num_pos) {
       const auto [value, row] = value_and_row[i];
@@ -45,17 +45,15 @@ void FindBestObliqueSplitForNode(int node, Span<const Idx> rows,
 \end{minipage}\hfill
 \begin{minipage}[t]{0.46\textwidth}
 \begin{lstlisting}
-// Manager, per layer: the axis-aligned protocol, plus one seed.
-request.set_projection_seed(rng());   // same seed to every worker
-
-// Worker: FindSplits(request) (worker.cc).
+// Worker.cc: FindSplits()
 for (node : open_nodes) {
   // Manager's candidate features for this node; all owned here.
   [other, numerical] = PartitionByType(request.features[node]);
   best[node] = AxisAlignedSplitter(other, node);   // stock YDF
 }
-columns.Prepare(numerical);   // dense fp32 col[row], once
-for (node : open_nodes)       // one thread-pool job per node
+
+for (node : open_nodes)
+    // one thread-pool job per node
   FindBestObliqueSplitForNode(node, rows_of(node),
                               numerical[node], &best[node]);
 reply.splits = best;          // manager keeps the max over workers
