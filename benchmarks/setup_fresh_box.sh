@@ -76,6 +76,9 @@ if [[ ! -x /usr/local/bin/bazel ]]; then
   sudo install -m 0755 "$DL_DIR/bazelisk-linux-amd64" /usr/local/bin/bazel
 fi
 bazel --version
+
+# Claude Code CLI (installs to ~/.local/bin)
+[[ -x "$HOME/.local/bin/claude" ]] || curl -fsSL https://claude.ai/install.sh | bash
 mark "tmux, apt, bazelisk" done "$(bazel --version)"
 
 begin "Intel oneAPI (icx, VTune, Advisor)"
