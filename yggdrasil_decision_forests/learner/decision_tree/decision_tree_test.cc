@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <numeric>
 #include <random>
 #include <string>
@@ -108,6 +109,27 @@ SplitterWorkResponse FakeFindBestConditionConcurrentConsumerAlternate(
   }
   response.condition->set_split_score(request.attribute_idx * 10.f);
   return response;
+}
+
+// Records the "num_oblique_projections_to_run" of every request (-1 for an
+// axis-aligned request) and reports no better split.
+std::mutex* RecordedRequestsMutex() {
+  static auto* mutex = new std::mutex;
+  return mutex;
+}
+std::vector<int>* RecordedRequests() {
+  static auto* requests = new std::vector<int>;
+  return requests;
+}
+SplitterWorkResponse FakeFindBestConditionConcurrentConsumerRecordRequests(
+    SplitterWorkRequest request) {
+  {
+    std::lock_guard<std::mutex> lock(*RecordedRequestsMutex());
+    RecordedRequests()->push_back(request.num_oblique_projections_to_run);
+  }
+  return SplitterWorkResponse(request.manager_data,
+                              SplitSearchResult::kNoBetterSplitFound,
+                              absl::make_unique<proto::NodeCondition>());
 }
 
 TEST(DecisionTree, FakeTrain) {
@@ -2512,6 +2534,77 @@ TEST(DecisionTree, FindBestConditionConcurrentManagerScaled) {
                .value();
   EXPECT_TRUE(result);
   EXPECT_NEAR(best_condition.split_score(), 990.f, 0.001);
+}
+
+// Sparse oblique: one job per projection (capped by the thread count), the
+// projections spread evenly over the jobs so exactly P are evaluated.
+TEST(DecisionTree, FindBestConditionConcurrentManager_ObliqueJobs) {
+  constexpr int kNumFeatures = 7;
+  dataset::VerticalDataset dataset;
+  model::proto::TrainingConfig config;
+  model::proto::TrainingConfigLinking config_link;
+  for (int i = 0; i < kNumFeatures; i++) {
+    auto* column = dataset.mutable_data_spec()->add_columns();
+    column->set_name(absl::StrCat("f", i));
+    column->set_type(dataset::proto::ColumnType::NUMERICAL);
+    config_link.add_features(i);
+    config_link.add_numerical_features(i);
+  }
+  proto::DecisionTreeTrainingConfig dt_config;
+  dt_config.set_num_candidate_attributes(-1);
+  // P = 7^1 = 7 projections per node.
+  dt_config.mutable_sparse_oblique_split()->set_num_projections_exponent(1.f);
+  dt_config.mutable_sparse_oblique_split()->set_max_num_projections(1000);
+  proto::Node parent;
+  FakeLabelStats label_stats;
+  std::vector<UnsignedExampleIdx> selected_examples;
+  std::vector<float> weights;
+
+  struct TestCase {
+    int num_threads;
+    std::vector<int> expected_projections_per_job;
+  };
+  for (const TestCase& test_case : std::vector<TestCase>{
+           {1, {7}}, {5, {2, 2, 1, 1, 1}}, {8, {1, 1, 1, 1, 1, 1, 1}}}) {
+    SCOPED_TRACE(absl::StrCat("num_threads=", test_case.num_threads));
+    InternalTrainConfig internal_config;
+    auto split_finder_processor =
+        std::make_unique<SplitterFinderStreamProcessor>(
+            "SplitFinder", test_case.num_threads,
+            FakeFindBestConditionConcurrentConsumerRecordRequests);
+    split_finder_processor->StartWorkers();
+    internal_config.split_finder_processor = split_finder_processor.get();
+    PerThreadCache cache;
+    utils::RandomEngine random(1234);
+    proto::NodeCondition best_condition;
+    best_condition.set_split_score(0.f);
+    {
+      std::lock_guard<std::mutex> lock(*RecordedRequestsMutex());
+      RecordedRequests()->clear();
+    }
+
+    const bool result =
+        FindBestConditionConcurrentManager(
+            dataset, selected_examples, weights, config, config_link,
+            dt_config, parent, internal_config, label_stats, {},
+            &best_condition, &random, &cache)
+            .value();
+    EXPECT_FALSE(result);
+
+    std::vector<int> recorded;
+    {
+      std::lock_guard<std::mutex> lock(*RecordedRequestsMutex());
+      recorded = *RecordedRequests();
+    }
+    // Every feature is numerical, so the axis-aligned jobs are not dispatched
+    // and only the oblique jobs reach the workers.
+    EXPECT_EQ(cache.durable_response_list.size(),
+              test_case.expected_projections_per_job.size());
+    EXPECT_THAT(recorded, ::testing::UnorderedElementsAreArray(
+                              test_case.expected_projections_per_job));
+    EXPECT_EQ(std::accumulate(recorded.begin(), recorded.end(), 0),
+              kNumFeatures);
+  }
 }
 
 TEST(DecisionTree, GenericHyperParameterCategorical) {

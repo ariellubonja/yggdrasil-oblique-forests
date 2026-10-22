@@ -1723,8 +1723,7 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   // Computes the number of oblique projections to evaluate and how to group
   // them into requests.
   int num_oblique_jobs = 0;
-  int num_oblique_projections;
-  int num_oblique_projections_per_oblique_job;
+  int num_oblique_projections = 0;
 
   if (config_link.numerical_features_size() > 0) {
     if (dt_config.split_axis_case() ==
@@ -1733,26 +1732,26 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
           GetNumProjections(dt_config, config_link.numerical_features_size());
 
       if (num_oblique_projections > 0) {
-        // Arbitrary minimum number of oblique projections to test in each job.
-        // Because oblique jobs are expensive (more than non oblique jobs), it
-        // is not efficient to create a request with too little work to do.
+        // One oblique job per projection, capped by the number of worker
+        // threads. Upstream grouped at least 10 projections per job
+        // (ceil(P / 10) jobs), which with P = ceil(sqrt(F)) <= 10 for every
+        // dataset up to 100 features made the whole sparse-oblique split
+        // search of a node run on ONE worker thread whatever the thread
+        // count (GBT grows one node at a time, so nothing else runs in
+        // parallel). An oblique job is far more expensive than an
+        // axis-aligned one (P projections x [gather + sort + scan]), so
+        // even a single projection is enough work for a job.
         //
-        // In most real cases, this parameter does not matter as the limit is
-        // effectively constraint by the number of threads.
-        const int min_projections_per_request = 10;
-
+        // Changes the per-job RNG seeding (one seed per job) and hence the
+        // trained model whenever the job count changes; at 1 thread the job
+        // count is unchanged (1), so the 1-thread model is identical to
+        // upstream. The thread count already changed the model before this.
         DCHECK_GE(num_threads, 1);
-        num_oblique_jobs = std::min(
-            num_threads,
-            (num_oblique_projections + min_projections_per_request - 1) /
-                min_projections_per_request);
-        num_oblique_projections_per_oblique_job =
-            (num_oblique_projections + num_oblique_jobs - 1) / num_oblique_jobs;
+        num_oblique_jobs = std::min(num_threads, num_oblique_projections);
       }
     } else if (dt_config.split_axis_case() ==
                proto::DecisionTreeTrainingConfig::kMhldObliqueSplit) {
       num_oblique_projections = 1;
-      num_oblique_projections_per_oblique_job = 1;
       num_oblique_jobs = 1;
     }
   }
@@ -1861,17 +1860,22 @@ absl::StatusOr<bool> FindBestConditionConcurrentManager(
   // worker threads remain. Manual begin/end: next_job_to_schedule outlives it.
   CHRONO_BEGIN_COARSE(split_mgr_submit);
 
-  // Schedule all the oblique jobs.
+  // Schedule all the oblique jobs. The projections are spread as evenly as
+  // possible over the jobs (the first P % jobs jobs get one more), so exactly
+  // P projections are evaluated in total. Upstream gave every job but the
+  // last ceil(P / jobs) projections and the last one the remainder, which
+  // goes negative (= 0 projections, and more than P in total) as soon as
+  // (jobs - 1) * ceil(P / jobs) > P, e.g. P = 633, 48 jobs.
+  const int base_projections_per_job =
+      num_oblique_jobs > 0 ? num_oblique_projections / num_oblique_jobs : 0;
+  const int num_jobs_with_extra_projection =
+      num_oblique_jobs > 0 ? num_oblique_projections % num_oblique_jobs : 0;
   for (int oblique_job_idx = 0; oblique_job_idx < num_oblique_jobs;
        oblique_job_idx++) {
-    int num_projections_in_request;
-    if (oblique_job_idx == num_oblique_jobs - 1) {
-      num_projections_in_request =
-          num_oblique_projections -
-          oblique_job_idx * num_oblique_projections_per_oblique_job;
-    } else {
-      num_projections_in_request = num_oblique_projections_per_oblique_job;
-    }
+    const int num_projections_in_request =
+        base_projections_per_job +
+        (oblique_job_idx < num_jobs_with_extra_projection ? 1 : 0);
+    DCHECK_GT(num_projections_in_request, 0);
 
     processor.Submit(build_request(
         next_job_to_schedule++,

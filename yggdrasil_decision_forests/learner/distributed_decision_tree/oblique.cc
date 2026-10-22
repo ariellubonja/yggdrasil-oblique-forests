@@ -31,6 +31,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/span.h"
+#include "hwy/base.h"
+#include "hwy/contrib/sort/vqsort.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_types.h"
@@ -55,6 +57,80 @@ struct ColumnAndWeight {
   float weight;
 };
 
+// Sort record of the exact scan: one projected value and its example index.
+//
+// Default: the value is packed as a sort-monotone unsigned key next to the
+// row and sorted with Highway VQSort, as the single-machine finder does
+// (FlatBucketTraits<..., hwy::K32V32> in splitter_scanner.h). Rows with equal
+// values may come out in a different order than with std::sort; the scan only
+// evaluates thresholds between distinct values, so the candidate splits are
+// the same, but the label accumulators then sum the tied rows in another
+// order and can differ in their last bits.
+//
+// --config=exact_std_sort keeps the pre-VQSort std::sort on (value, row)
+// pairs (both here and in the single-machine finder), i.e. the exact
+// arithmetic of the serial implementation.
+#ifdef EXACT_STD_SORT
+struct SortRecordTraits {
+  using Record = std::pair<float, ExampleIndex>;
+  static Record Pack(const float value, const ExampleIndex row) {
+    return {value, row};
+  }
+  static float Value(const Record& record) { return record.first; }
+  static ExampleIndex Row(const Record& record) { return record.second; }
+  static void Sort(Record* const begin, const size_t num_records) {
+    std::sort(begin, begin + num_records,
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+  }
+};
+#else
+template <size_t kIndexBytes>
+struct HighwaySortRecordTraits;
+
+template <>
+struct HighwaySortRecordTraits<4> {
+  using Record = hwy::K32V32;
+  static Record Pack(const float value, const ExampleIndex row) {
+    Record record;
+    record.key = decision_tree::internal::FloatToUintForSort(value);
+    record.value = static_cast<uint32_t>(row);
+    return record;
+  }
+  static float Value(const Record& record) {
+    return decision_tree::internal::UintToFloatFromSort(record.key);
+  }
+  static ExampleIndex Row(const Record& record) {
+    return static_cast<ExampleIndex>(record.value);
+  }
+  static void Sort(Record* const begin, const size_t num_records) {
+    hwy::VQSort(begin, num_records, hwy::SortAscending());
+  }
+};
+
+template <>
+struct HighwaySortRecordTraits<8> {
+  using Record = hwy::K64V64;
+  static Record Pack(const float value, const ExampleIndex row) {
+    Record record;
+    record.key = decision_tree::internal::FloatToUintForSort(value);
+    record.value = static_cast<uint64_t>(row);
+    return record;
+  }
+  static float Value(const Record& record) {
+    return decision_tree::internal::UintToFloatFromSort(
+        static_cast<uint32_t>(record.key));
+  }
+  static ExampleIndex Row(const Record& record) {
+    return static_cast<ExampleIndex>(record.value);
+  }
+  static void Sort(Record* const begin, const size_t num_records) {
+    hwy::VQSort(begin, num_records, hwy::SortAscending());
+  }
+};
+
+using SortRecordTraits = HighwaySortRecordTraits<sizeof(ExampleIndex)>;
+#endif  // EXACT_STD_SORT
+
 template <typename Initializer>
 absl::StatusOr<std::vector<Initializer>> CreateInitializers(
     const ObliqueSplitArgs& args,
@@ -69,27 +145,14 @@ absl::StatusOr<std::vector<Initializer>> CreateInitializers(
   return initializers;
 }
 
-// Best oblique split of one node. "split" holds the current best (possibly
-// axis-aligned) split of the node and is only overwritten by a higher score.
-template <typename LabelFiller>
-absl::Status FindBestObliqueSplitForNode(
-    const ObliqueSplitArgs& args, const int node_idx,
-    const absl::Span<const ExampleIndex> rows, const LabelFiller& label_filler,
-    const typename LabelFiller::AccumulatorInitializer& initializer,
-    const ExampleIndex min_num_examples, Split* split) {
+// Samples the projections of one open node, in order, from the node's own
+// random stream (derived from the base seed and the node index). Sampling is
+// the only consumer of that stream, so sampling all the projections up front
+// and scoring them in any order / on any thread yields the projections the
+// serial loop would have sampled.
+std::vector<Projection> SampleNodeProjections(const ObliqueSplitArgs& args,
+                                              const int node_idx) {
   const auto& features = args.numerical_features_per_open_node[node_idx];
-  const auto& label_stats = args.label_stats_per_open_node[node_idx];
-  const ExampleIndex num_examples = rows.size();
-  if (num_examples != label_stats.num_examples()) {
-    return absl::InternalError(absl::Substitute(
-        "Node $0 holds $1 examples but its statistics count $2", node_idx,
-        num_examples, label_stats.num_examples()));
-  }
-  if (features.empty() || num_examples < 2 ||
-      num_examples < 2 * min_num_examples) {
-    return absl::OkStatus();
-  }
-
   const auto& oblique_config = args.dt_config.sparse_oblique_split();
   const int count_basis = args.num_features_for_projection_count > 0
                               ? args.num_features_for_projection_count
@@ -107,25 +170,56 @@ absl::Status FindBestObliqueSplitForNode(
                          static_cast<uint32_t>(node_idx)};
   utils::RandomEngine random(seed_seq);
 
-  std::vector<std::pair<float, ExampleIndex>> value_and_row(num_examples);
-  std::vector<ColumnAndWeight> terms;
-  Projection projection;
+  std::vector<Projection> projections(std::max(num_projections, 0));
   int8_t monotonic_direction;
-
-  typename LabelFiller::Accumulator pos, neg;
-  double best_score = split->condition.split_score();
-  bool found = false;
-  Projection best_projection;
-  float best_threshold = std::numeric_limits<float>::quiet_NaN();
-  ExampleIndex best_num_pos = 0;
-  typename LabelFiller::Accumulator best_pos;
-  double weighted_num_examples = 0;
-
-  for (int projection_idx = 0; projection_idx < num_projections;
-       projection_idx++) {
+  for (auto& projection : projections) {
     decision_tree::internal::SampleProjection(
         features, args.dt_config, args.dataspec, args.config_link,
         projection_density, &projection, &monotonic_direction, &random);
+  }
+  return projections;
+}
+
+// Best split found by one job over a range of a node's projections.
+template <typename Accumulator>
+struct ObliqueChunkResult {
+  bool found = false;
+  double score = 0;
+  // Index of the winning projection in the node's sampling order.
+  int projection_idx = -1;
+  float threshold = std::numeric_limits<float>::quiet_NaN();
+  ExampleIndex num_pos = 0;
+  Accumulator pos;
+  double weighted_num_examples = 0;
+};
+
+// Scores the projections [first_projection_idx, first_projection_idx +
+// projections.size()) of a node. "initial_score" is the score to beat (the
+// node's current, possibly axis-aligned, split). Within the chunk the serial
+// rule applies: a candidate replaces the best only with a strictly higher
+// score, so the first (projection, threshold) reaching the chunk maximum
+// wins.
+template <typename LabelFiller>
+absl::Status ScoreProjectionChunk(
+    const ObliqueSplitArgs& args, const absl::Span<const ExampleIndex> rows,
+    const absl::Span<const Projection> projections,
+    const int first_projection_idx, const LabelFiller& label_filler,
+    const typename LabelFiller::AccumulatorInitializer& initializer,
+    const ExampleIndex min_num_examples, const double initial_score,
+    ObliqueChunkResult<typename LabelFiller::Accumulator>* result) {
+  using Traits = SortRecordTraits;
+  const ExampleIndex num_examples = rows.size();
+  DCHECK_GE(num_examples, 2);
+  DCHECK_GE(num_examples, 2 * min_num_examples);
+
+  std::vector<typename Traits::Record> records(num_examples);
+  std::vector<ColumnAndWeight> terms;
+  typename LabelFiller::Accumulator pos, neg;
+  double best_score = initial_score;
+  result->found = false;
+
+  for (int local_idx = 0; local_idx < projections.size(); local_idx++) {
+    const Projection& projection = projections[local_idx];
 
     terms.clear();
     for (const auto& item : projection) {
@@ -145,65 +239,89 @@ absl::Status FindBestObliqueSplitForNode(
       for (const auto& term : terms) {
         value += term.column[row] * term.weight;
       }
-      value_and_row[i] = {value, row};
+      records[i] = Traits::Pack(value, row);
     }
-    std::sort(value_and_row.begin(), value_and_row.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    Traits::Sort(records.data(), num_examples);
 
     // Exact scan, mirroring FillNumericalAccumulator: all examples start on
     // the positive side and move to the negative side in value order.
     initializer.InitFull(&pos);
     initializer.InitEmpty(&neg);
-    weighted_num_examples = pos.WeightedNumExamples();
+    const double weighted_num_examples = pos.WeightedNumExamples();
     ExampleIndex num_pos = num_examples;
     const ExampleIndex max_num_pos = num_examples - min_num_examples;
+    float previous_value = 0;
     for (ExampleIndex i = 0; i < num_examples; i++) {
-      const float value = value_and_row[i].first;
-      const ExampleIndex row = value_and_row[i].second;
-      if (i > 0 && value != value_and_row[i - 1].first &&
-          num_pos >= min_num_examples && num_pos <= max_num_pos) {
+      const float value = Traits::Value(records[i]);
+      const ExampleIndex row = Traits::Row(records[i]);
+      if (i > 0 && value != previous_value && num_pos >= min_num_examples &&
+          num_pos <= max_num_pos) {
         const double score = decision_tree::Score<>(
             initializer, weighted_num_examples, pos, neg);
         if (score > best_score) {
           best_score = score;
-          found = true;
-          best_projection = projection;
-          best_threshold =
-              decision_tree::MidThreshold(value_and_row[i - 1].first, value);
-          best_num_pos = num_pos;
-          best_pos = pos;
+          result->found = true;
+          result->score = score;
+          result->projection_idx = first_projection_idx + local_idx;
+          result->threshold = decision_tree::MidThreshold(previous_value, value);
+          result->num_pos = num_pos;
+          result->pos = pos;
+          result->weighted_num_examples = weighted_num_examples;
         }
       }
       label_filler.Add(row, &neg);
       label_filler.Sub(row, &pos);
       num_pos--;
+      previous_value = value;
     }
   }
-
-  if (!found) {
-    return absl::OkStatus();
-  }
-
-  RETURN_IF_ERROR(decision_tree::internal::SetCondition(
-      best_projection, best_threshold, args.dataspec, &split->condition));
-  split->condition.set_num_pos_training_examples_without_weight(best_num_pos);
-  split->condition.set_num_pos_training_examples_with_weight(
-      best_pos.WeightedNumExamples());
-  split->condition.set_num_training_examples_without_weight(num_examples);
-  split->condition.set_num_training_examples_with_weight(
-      weighted_num_examples);
-  split->condition.set_split_score(best_score);
-
-  typename LabelFiller::Accumulator best_neg;
-  best_neg.ImportLabelStats(label_stats);
-  best_pos.Sub(&best_neg);
-  best_neg.ExportLabelStats(&split->label_statistics[0]);
-  best_pos.ExportLabelStats(&split->label_statistics[1]);
-  split->label_statistics[0].set_num_examples(num_examples - best_num_pos);
-  split->label_statistics[1].set_num_examples(best_num_pos);
   return absl::OkStatus();
 }
 
+// Writes the winning projection of a node into "split" if its score beats the
+// split already there (same float comparison as the serial implementation).
+template <typename Accumulator>
+absl::Status CommitObliqueSplit(const ObliqueSplitArgs& args,
+                                const int node_idx,
+                                const Projection& projection,
+                                ObliqueChunkResult<Accumulator> result,
+                                const ExampleIndex num_examples, Split* split) {
+  Split candidate = *split;
+  RETURN_IF_ERROR(decision_tree::internal::SetCondition(
+      projection, result.threshold, args.dataspec, &candidate.condition));
+  candidate.condition.set_num_pos_training_examples_without_weight(
+      result.num_pos);
+  candidate.condition.set_num_pos_training_examples_with_weight(
+      result.pos.WeightedNumExamples());
+  candidate.condition.set_num_training_examples_without_weight(num_examples);
+  candidate.condition.set_num_training_examples_with_weight(
+      result.weighted_num_examples);
+  candidate.condition.set_split_score(result.score);
+
+  Accumulator best_neg;
+  best_neg.ImportLabelStats(args.label_stats_per_open_node[node_idx]);
+  result.pos.Sub(&best_neg);
+  best_neg.ExportLabelStats(&candidate.label_statistics[0]);
+  result.pos.ExportLabelStats(&candidate.label_statistics[1]);
+  candidate.label_statistics[0].set_num_examples(num_examples -
+                                                 result.num_pos);
+  candidate.label_statistics[1].set_num_examples(result.num_pos);
+
+  if (candidate.condition.split_score() > split->condition.split_score()) {
+    *split = std::move(candidate);
+  }
+  return absl::OkStatus();
+}
+
+// Scores every open node's projections on the thread pool.
+//
+// Jobs are (node, projection range) pairs rather than one job per node: a
+// layer with few open nodes (the root above all) would otherwise keep a
+// single thread busy per worker. Every node's projections are pre-sampled on
+// the calling thread, so the result does not depend on the chunking or on the
+// scheduling: per node the chunk results are reduced by score, ties going to
+// the lowest projection index, which is what the serial loop's strict ">"
+// in sampling order selects.
 template <typename LabelFiller>
 absl::Status TemplatedFindBestObliqueSplits(
     const ObliqueSplitArgs& args, const LabelFiller& label_filler,
@@ -212,48 +330,140 @@ absl::Status TemplatedFindBestObliqueSplits(
     const ExampleIndex min_num_examples,
     utils::concurrency::ThreadPool* thread_pool,
     SplitPerOpenNode* best_splits) {
+  using Accumulator = typename LabelFiller::Accumulator;
   const int num_nodes = args.numerical_features_per_open_node.size();
   const auto rows_per_node = BuildRowsPerNode(args.example_to_node, num_nodes);
 
-  int num_jobs = 0;
-  for (const auto& features : args.numerical_features_per_open_node) {
-    num_jobs += !features.empty();
-  }
-  if (num_jobs == 0) {
-    return absl::OkStatus();
-  }
-
-  utils::concurrency::Mutex mutex;
-  absl::Status status;
-  utils::concurrency::BlockingCounter counter(num_jobs);
+  // Nodes with something to score, and their projections.
+  std::vector<int> active_nodes;
+  std::vector<std::vector<Projection>> projections_per_node(num_nodes);
   for (int node_idx = 0; node_idx < num_nodes; node_idx++) {
     if (args.numerical_features_per_open_node[node_idx].empty()) {
       continue;
     }
-    thread_pool->Schedule([&, node_idx]() {
-      Split local_split;
-      {
-        utils::concurrency::MutexLock l(mutex);
-        local_split = (*best_splits)[node_idx];
-      }
-      const auto local_status = FindBestObliqueSplitForNode(
-          args, node_idx, rows_per_node.rows(node_idx), label_filler,
-          initializers[node_idx], min_num_examples, &local_split);
-      {
+    const ExampleIndex num_examples = rows_per_node.rows(node_idx).size();
+    const auto& label_stats = args.label_stats_per_open_node[node_idx];
+    if (num_examples != label_stats.num_examples()) {
+      return absl::InternalError(absl::Substitute(
+          "Node $0 holds $1 examples but its statistics count $2", node_idx,
+          num_examples, label_stats.num_examples()));
+    }
+    if (num_examples < 2 || num_examples < 2 * min_num_examples) {
+      continue;
+    }
+    projections_per_node[node_idx] = SampleNodeProjections(args, node_idx);
+    if (projections_per_node[node_idx].empty()) {
+      continue;
+    }
+    active_nodes.push_back(node_idx);
+  }
+  if (active_nodes.empty()) {
+    return absl::OkStatus();
+  }
+
+  // Largest nodes first: their jobs are the longest.
+  std::stable_sort(active_nodes.begin(), active_nodes.end(),
+                   [&](const int a, const int b) {
+                     return rows_per_node.rows(a).size() >
+                            rows_per_node.rows(b).size();
+                   });
+
+  // Split each node's projections into chunks so the layer offers about
+  // kJobsPerThread jobs per thread; a chunk never holds less than one
+  // projection.
+  constexpr int kJobsPerThread = 4;
+  const int num_threads = std::max(1, thread_pool->num_threads());
+  const int max_chunks_per_node = std::max<int>(
+      1, (kJobsPerThread * num_threads + active_nodes.size() - 1) /
+             active_nodes.size());
+
+  struct Job {
+    int node_idx;
+    int first_projection_idx;
+    int num_projections;
+  };
+  std::vector<Job> jobs;
+  for (const int node_idx : active_nodes) {
+    const int num_projections = projections_per_node[node_idx].size();
+    const int num_chunks = std::min(num_projections, max_chunks_per_node);
+    const int base = num_projections / num_chunks;
+    const int extra = num_projections % num_chunks;
+    int first_projection_idx = 0;
+    for (int chunk_idx = 0; chunk_idx < num_chunks; chunk_idx++) {
+      const int chunk_size = base + (chunk_idx < extra ? 1 : 0);
+      jobs.push_back({node_idx, first_projection_idx, chunk_size});
+      first_projection_idx += chunk_size;
+    }
+    DCHECK_EQ(first_projection_idx, num_projections);
+  }
+
+  // Score to beat per node, read before any job runs: "best_splits" is only
+  // written after all the jobs are done.
+  std::vector<double> initial_score_per_node(num_nodes, 0);
+  for (const int node_idx : active_nodes) {
+    initial_score_per_node[node_idx] =
+        (*best_splits)[node_idx].condition.split_score();
+  }
+
+  std::vector<ObliqueChunkResult<Accumulator>> results(jobs.size());
+  utils::concurrency::Mutex mutex;
+  absl::Status status;
+  utils::concurrency::BlockingCounter counter(jobs.size());
+  for (size_t job_idx = 0; job_idx < jobs.size(); job_idx++) {
+    thread_pool->Schedule([&, job_idx]() {
+      const Job& job = jobs[job_idx];
+      const auto& projections = projections_per_node[job.node_idx];
+      const auto local_status = ScoreProjectionChunk(
+          args, rows_per_node.rows(job.node_idx),
+          absl::MakeConstSpan(projections)
+              .subspan(job.first_projection_idx, job.num_projections),
+          job.first_projection_idx, label_filler, initializers[job.node_idx],
+          min_num_examples, initial_score_per_node[job.node_idx],
+          &results[job_idx]);
+      if (!local_status.ok()) {
         utils::concurrency::MutexLock l(mutex);
         status.Update(local_status);
-        if (local_status.ok() &&
-            local_split.condition.split_score() >
-                (*best_splits)[node_idx].condition.split_score()) {
-          (*best_splits)[node_idx] = std::move(local_split);
-        }
       }
       counter.DecrementCount();
     });
   }
   counter.Wait();
-  utils::concurrency::MutexLock l(mutex);
-  return status;
+  {
+    utils::concurrency::MutexLock l(mutex);
+    RETURN_IF_ERROR(status);
+  }
+
+  // Per node: highest score, ties to the lowest projection index.
+  std::vector<int> best_job_per_node(num_nodes, -1);
+  for (size_t job_idx = 0; job_idx < jobs.size(); job_idx++) {
+    const auto& result = results[job_idx];
+    if (!result.found) {
+      continue;
+    }
+    int& best_job_idx = best_job_per_node[jobs[job_idx].node_idx];
+    if (best_job_idx < 0) {
+      best_job_idx = job_idx;
+      continue;
+    }
+    const auto& best = results[best_job_idx];
+    if (result.score > best.score ||
+        (result.score == best.score &&
+         result.projection_idx < best.projection_idx)) {
+      best_job_idx = job_idx;
+    }
+  }
+  for (const int node_idx : active_nodes) {
+    const int best_job_idx = best_job_per_node[node_idx];
+    if (best_job_idx < 0) {
+      continue;
+    }
+    const auto& result = results[best_job_idx];
+    RETURN_IF_ERROR(CommitObliqueSplit(
+        args, node_idx, projections_per_node[node_idx][result.projection_idx],
+        result, rows_per_node.rows(node_idx).size(),
+        &(*best_splits)[node_idx]));
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace
