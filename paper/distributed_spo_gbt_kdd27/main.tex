@@ -127,7 +127,7 @@ Feature columns are weighed by their expected compute expense : numerical featur
     \item Workers scan their column subset, computing local \texttt{BestSplit} for nodes at a depth $d$ (in \texttt{FindBestSplitsWithThreadPool}). Local maxes are sent to Manager.
     \item Manager computes global Max in \texttt{MergeBestSplits}. Update manager's tree structure \texttt{ApplySplitToTree}.
     \item Manager broadcasts global winning split - \texttt{EmitEvaluateSplits}
-    \item Worker who owns Winning Column creates \textbf{bitmap} of examples : left-right. \emph{\textcolor{magenta}{There is 1 winner per node active at this depth (??)}}
+    \item Worker who owns Winning Column creates \textbf{bitmap} of examples : left-right. There is 1 winner per node at this depth
         \begin{lstlisting}
 for (auto value : values) {
   const auto node_idx = example_to_node[example_idx];
@@ -143,9 +143,13 @@ for (auto value : values) {
 \}
 
 
-\section{Method: Distributed SPO-GBT}
+\section{Method: Column Distribution Strategies on Distributed SPO-GBT}
 
-In a dataset with $N$ rows and $\mathbf{F}$ columns. In GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike RF and SPO-RF, which sample $\sqrt{\mathbf{F}} \sim \mathbf{F}$. \newline
+\subsection{All Columns on Every Worker}
+
+\TODO{ensure matches accuracy of single-machine}
+
+In GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike RF and SPO-RF, which sample $\sqrt{\mathbf{F}} \sim \mathbf{F}$. \newline
 
 \textbf{\textit{Benefit}}: Full feature range available for sampling
 
@@ -232,6 +236,19 @@ Define $F_{\text{node}} \coloneqq \sqrt{\mathbf{F}}$ as the number of columns st
 \input{tables/table_vertex_scaling}
 \vspace{1em}
 }]
+
+
+\subsection{Random Column Assignment}
+
+\subsection{$C_2$ Permutations}
+
+\subsection{Smart Column Assignments}
+
+Frequently-selected columns \TODO{plot this}, Correlation-based, Information per column, Vova sketching
+
+\TODO{measure accuracy of each}
+
+
 \section{Evaluation}
 
 
@@ -297,15 +314,46 @@ Google Colab Gemini is not agentic and not smart - too slow to iterate. Use loca
 
 \subsection{Work log - Weekly TODOs}
 
-\textbf{\textit{Ariel TODOs by Oct-26}}
-\begin{itemize}
-    \item Run on actual remove with GRPC
+\TODO{Ariel TODOs by Oct-26}
+
+\textbf{\textit{Timing}}
+\begin{enumerate}
+    \item Time to train -> time at barrier -> time to sync bitmap
+    \item Skew to reach barrier
+\end{enumerate}
+
+\textbf{\textit{Measure accuracy cost of parititioning columns: }}
+
+\begin{enumerate}
+    \item full data on each worker
+    \item partial data on each: random assignment. 1 column on each
+    \item Store all Choose(2) permutations
+    
+    \item Smart partition strategies
+    \begin{itemize}
+        \item Correlated columns, put them: (together? apart?)
+        \item by some column score
+        \item Jovo informative columns
+        \item Columns that are split at most often. Usually same columns get picked. \textbf{Implement visualization of this} on natural data
+        \item method X - vova?
+    \end{itemize}
+\end{enumerate}
+
+
+Extend this to: 1) put globally most important columns in all nodes.
+2) v2: put columns that are together most important (i.e. projections) are most important - put them together
+
+
+
+\textbf{\textit{Ariel TODOs by Oct-17}}
+\begin{todolist}
+    \item[\done] Run on actual remove with GRPC
+    \item[\done] Disable Turbo boost and SMT in GCP. These settings are not controllable in GCP. We'll need to run multiple experiments
     \item RB good experiment: All data to all workers experiments. Makes SPO very alike AA
     \item run accuracy for multiple seeds
     \item sample features w. replacement per worker. Ensure each column is in at least 1 worker.
     \item  \href{https://github.com/google/yggdrasil-decision-forests/commit/2fe3a7fae5a3e8646401cd98f5c0a2a9d5d81653}{Richard's new} AA + SPO scan.
-    
-\end{itemize}
+\end{todolist}
 
 
 \subsection{Full Implementation Code}
