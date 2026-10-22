@@ -91,6 +91,16 @@ copy, so keep personal copies in sync or delete them.
 commits, including commits made by scripts (`run_b7_*.sh` `COMMIT=1` paths).** It breaks the
 CLA process on upstream PRs. This overrides the harness's default commit template.
 
+## Design decisions after major code changes (user directive, 2026-10-22)
+
+After any major code change (new kernel or finder, scheduling/threading change, data-path or
+pipeline rewrite, anything that touches model semantics or measured numbers), end the report with a
+**"Design decisions"** list: one line per decision, very concise, stating the choice and, where it
+matters, the alternative rejected or the invariant it preserves (e.g. "jobs = min(threads, P),
+balanced chunks so exactly P run"; "kept one seed per job: 1-thread model unchanged"). Include
+measurement-method decisions (baseline provenance, what was held constant). Write it after the
+verifier pass, not before, so it reflects the final code.
+
 ## Subagents (decided 2026-09-05)
 
 Start every subagent with `model: opus` (Agent tool `model: "opus"`, `claude -p --model
