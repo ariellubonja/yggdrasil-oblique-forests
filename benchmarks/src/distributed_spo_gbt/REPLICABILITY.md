@@ -73,10 +73,14 @@ Two families of experiments live in this folder. They share the C++ learner (thi
 | RUN_ID | cols | trees | machine | status |
 |---|---|---|---|---|
 | `20261015T035046Z_32c` | 32 | 50 | n2-highmem-2 | complete (18 cells; AA all defaults, SPO P = F total) |
-| 512-column repeat | 512 | 50 | n2-highmem-2 | started 2026-10-15 02:01 EDT, laptop lost network during the data-gen wait; re-run with `RESUME_RUN_ID` of the new id |
+| `20261015T134009Z_512c` | 512 | 50 | n2-highmem-2 | complete, 17 of 18 cells: `spo_n1600k_w1` OOM on 16 GB (never rerun), so 512c strong-scaling speedups are relative to W=2; one row restored by hand after a Vertex re-provision. Details in that folder's `NOTES.md`; plot via `finish_512c.py`. |
+
+Memory per worker and which **natural** datasets fit the 16 GB machines (measured B/cell per dataset,
+W = 1..16 table): `benchmarks/results/runtime/distributed_spo_gbt/MEMORY_BUDGET.md` (2026-10-22).
 
 Memory rule of thumb for choosing `COLS`: each worker holds ~12 B per cell of its F/W columns (values +
-pre-sorted indices + sorted uniques). 1.6M × 512 at W=1 ≈ 10 GB (fits 16 GB); 1.6M × 1024 ≈ 20 GB (does not).
+pre-sorted indices + sorted uniques), plus 4 B per cell for the SPO dense copy. 1.6M × 512 at W=1 ≈ 10 GB
+AA (ran) / 13 GB SPO (OOM on 16 GB); 1.6M × 1024 ≈ 20 GB (does not fit). Full model in `MEMORY_BUDGET.md`.
 
 ## B. Single box (`m7i.metal-24x`, workers = local processes)
 
@@ -94,5 +98,22 @@ Driver binary: `bazel-bin/examples/train_distributed_gbt` (flags `--num_workers`
 | `summarize.py` | `results.csv` (+ `anchors.csv`) → markdown table: per-tree time and "x slower" vs the single-machine anchor. |
 | `compare_suite.py` | `suite_results.csv` vs the paper's single-machine GBT arms: test AUC mean ± std over folds, best per row in bold, `--latex`. |
 | `make_paper_tables.py` | Emits the paper's runtime and accuracy LaTeX tables from the three CSVs. |
+| `make_scaling_tables.py [--run <vertex_scaling dir>]` | Emits `table_vertex_scaling.tex` (weak + strong, side by side) from a Vertex run's `results.csv`; default run = the 32c one. |
 
 Timing columns there: `train_took` (incl. cache creation), `tree_training_s` (per-tree loop), `cache_created`.
+
+## C. Paper artifacts and what regenerates them (`paper/distributed_spo_gbt_kdd27/`, checked 2026-10-22)
+
+| Artifact in `main.tex` | Generator | Input |
+|---|---|---|
+| `tables/table_vertex_scaling.tex` | `make_scaling_tables.py` | `vertex_scaling/20261015T035046Z_32c/results.csv` (32 columns; the 512c run is not in the paper yet) |
+| `tables/table_dist_runtime.tex` | `make_paper_tables.py` | `results.csv` + `anchors.csv` (m7i, 50 trees) |
+| `tables/table_dist_accuracy.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_{delta,mean}.tex` | `make_paper_tables.py` | `suite_results.csv` vs the SPAA paper's single-machine GBT arms |
+| `figures/evaluation/grcp_n2/strong_weak_scaling.pdf` | plot cell of `Distributed_SPO_GBT_scaling.ipynb` (copied from the 32c results folder) | 32c `results.csv` |
+| `figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf` | **no generator in the repo** (made interactively in a chat session) | `results.csv` + `anchors.csv` |
+| `figures/method/*.pdf`, `manager_barrier.tex`, `listings/in_worker_oblique` | hand-made (SVG sources for the two method diagrams in `benchmarks/results/figures/`) | - |
+
+Rerun order for a full refresh: (1) family B scripts on the m7i (`run_grid.sh`, `run_single_anchor.sh`,
+`run_dgbt_suite.sh`), (2) family A notebook on Vertex, (3) `make_paper_tables.py` and
+`make_scaling_tables.py`, (4) re-export the notebook plot and the bars figure by hand, (5) push the
+`.tex` outputs to Overleaf (captions: pull the Overleaf versions first, see CLAUDE.md).
