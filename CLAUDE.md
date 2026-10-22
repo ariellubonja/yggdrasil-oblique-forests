@@ -337,6 +337,17 @@ timers masked. In chat, report each arm as speedup = exact_hwy / arm.
 figure captions.** The paper has a dedicated experimental-setup section for them. Captions state
 what the panel shows and the axes; the generator scripts must not emit spec text into captions.
 
+## Distributed GBT barrier timing (added 2026-10-22)
+
+The distributed GBT manager records one CSV row per request round when `DGBT_BARRIER_CSV=<path>`
+is set (`internal::Monitoring` in `learner/distributed_gradient_boosted_trees/`): stage, layer,
+barrier length, manager serial time before dispatch, fan-out, worker self-reported max/median/min
+runtime, idle worker-seconds, comm residual, bytes out/in. Off by default (no env var = no file; the hooks
+that stay on cost a few clock reads and proto size computations per round, below timing noise). Summarize with `benchmarks/src/distributed_spo_gbt/summarize_barriers.py`; the first
+measurement and the barrier taxonomy (comm barriers are not the only ones: stragglers, manager
+serial sections, in-worker joins, I/O) are in
+`benchmarks/results/runtime/distributed_spo_gbt/barriers/README.md`.
+
 ## Unspecified parameters: library defaults (user directive, 2026-10-12)
 
 For any parameter the user does not specify, use the library/driver default (YDF proto default,

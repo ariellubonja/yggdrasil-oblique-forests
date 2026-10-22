@@ -99,6 +99,8 @@ Driver binary: `bazel-bin/examples/train_distributed_gbt` (flags `--num_workers`
 | `compare_suite.py` | `suite_results.csv` vs the paper's single-machine GBT arms: test AUC mean ± std over folds, best per row in bold, `--latex`. |
 | `make_paper_tables.py` | Emits the paper's runtime and accuracy LaTeX tables from the three CSVs. |
 | `make_scaling_tables.py [--run <vertex_scaling dir>]` | Emits `table_vertex_scaling.tex` (weak + strong, side by side) from a Vertex run's `results.csv`; default run = the 32c one. |
+| `run_barrier_cell.sh AXIS [TREES] [W] [THREADS]` | One in-process cell with the manager's **barrier recorder** on (`DGBT_BARRIER_CSV`, added 2026-10-22): per request round, barrier length, manager serial time, fan-out, worker max/median/min runtime, idle worker-seconds, comm residual, bytes. Needs `TRUNK_DIR` from `gen_trunk.py` (>= 256 columns). |
+| `summarize_barriers.py <csv> [tree_training_s]` | Per-stage sums, per-layer FindSplits, identity check (sum of barriers + gaps = tree-training time), idle share. First results and the barrier taxonomy: `benchmarks/results/runtime/distributed_spo_gbt/barriers/README.md`. |
 
 Timing columns there: `train_took` (incl. cache creation), `tree_training_s` (per-tree loop), `cache_created`.
 
