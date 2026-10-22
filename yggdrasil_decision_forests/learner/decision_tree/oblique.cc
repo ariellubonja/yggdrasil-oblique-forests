@@ -237,6 +237,7 @@ absl::StatusOr<bool> FindBestConditionSparseObliqueTemplate(
   ProjectionEvaluator& projection_evaluator =
       GetProjectionEvaluator(train_dataset, config_link, dt_config, cache);
 
+  // Ariel: labels are densified here, once per projection
   // TODO: Cache.
   const auto selected_labels = ExtractLabels(label_stats, selected_examples);
   std::vector<float> selected_weights;

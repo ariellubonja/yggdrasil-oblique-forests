@@ -239,3 +239,7 @@ if [[ -r "$HOME/.kaggle/kaggle.json" ]]; then
 else
   mark "TabReD" skipped "no ~/.kaggle/kaggle.json: needs a Kaggle token + accepted competition rules"
 fi
+
+
+
+# TODO add Claude-Overleaf connector

@@ -9,7 +9,9 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#ifdef __linux__
 #include <malloc.h>
+#endif
 #include <map>
 #include <memory>
 #include <mutex>
@@ -389,7 +391,9 @@ dataset::VerticalDataset MakeTrunkDataset(const dataset::proto::DataSpecificatio
   // column: 48 threads faulting into fresh mmaps serialize on mmap_lock (~4.9 us
   // vs ~1.65 us per fault; 1.5M x 4096 gen 2.07 -> 1.35 s). 32 MB = glibc's max.
   constexpr int kGenMmapThreshold = 32 * 1024 * 1024;
+#ifdef __linux__
   mallopt(M_MMAP_THRESHOLD, kGenMmapThreshold);
+#endif
 
   std::vector<std::thread> workers;
   workers.reserve(n_threads);
@@ -405,7 +409,9 @@ dataset::VerticalDataset MakeTrunkDataset(const dataset::proto::DataSpecificatio
   // Restore, but NOT to 128 KB: any mallopt pins glibc's dynamic threshold, and
   // that made the training block 21 % slower. Set the state the dynamic policy
   // converges to instead (threshold 32 MB, trim 2x); training is then in noise.
+#ifdef __linux__
   mallopt(M_TRIM_THRESHOLD, 2 * kGenMmapThreshold);
+#endif
 
   // Fill the label column ----------------------------------------------------
   auto* y_col = ds.MutableColumnWithCast<
