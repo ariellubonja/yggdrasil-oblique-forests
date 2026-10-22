@@ -91,8 +91,8 @@ YDF Distributed training requires:
 
  \begin{figure*}[t]
     \centering
-    \includegraphics[width=.8\linewidth]{figures/method/distributed_gbt_training_loop.pdf}
-    \caption{Distributed GBT Training Loop}
+    \includegraphics[width=.72\linewidth]{figures/method/distributed_gbt_training_loop_barrier.pdf}
+    \caption{Distributed GBT Training Loop. Bottom: the manager barrier that ends steps \textcircled{\scriptsize 1}, \textcircled{\scriptsize 3} and \textcircled{\scriptsize 5} -- $W$ requests fanned out, $W$ replies popped from one answer queue; the next stage starts only after the last reply (dashed line).}
     \label{fig:ydf-dist-gbt-training-loop}
 \end{figure*}
 
@@ -120,8 +120,6 @@ Feature columns are weighed by their expected compute expense : numerical featur
 
 \subsection{Training}
 
-\input{figures/method/manager_barrier}
-
 
 \texttt{for depth in tree }\{
 
@@ -144,7 +142,7 @@ for (auto value : values) {
 
 \}
 
-Steps 1, 3 and 5 each end in a manager barrier (Figure~\ref{fig:manager-barrier}); so do the per-tree \texttt{StartNewIter} and \texttt{EndIter} stages.
+Steps 1, 3 and 5 each end in a manager barrier (Figure~\ref{fig:ydf-dist-gbt-training-loop}, bottom); so do the per-tree \texttt{StartNewIter} and \texttt{EndIter} stages.
 
 
 \section{Method: Column Distribution Strategies on Distributed SPO-GBT}

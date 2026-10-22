@@ -259,6 +259,17 @@ table/figure, `git pull` the MCP clone, diff every Overleaf `\caption`/`\Descrip
 against what the generator emits, and copy the user's wording (TODOs included) into the script.
 Only then regenerate — otherwise the push overwrites their edits.
 
+## Compile the Overleaf clone locally before every push (user directive, 2026-10-22)
+
+**Before any Overleaf MCP `write_file`/`write_section`, `git pull` the MCP clone
+(`/private/tmp/overleaf-<id>`), copy it to the scratchpad, apply the intended change there and
+run `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex` (MacTeX, `/Library/TeX/texbin`).
+Push only on rc=0.** Compiling the repo snapshot `paper/<venue>/` is not a test: it has files
+Overleaf lacks (and vice versa). On 2026-10-22 a push referenced a PDF the user was meant to
+upload by hand; it never landed and the project broke. The MCP is text-only, but the clone's
+git remote accepts binaries: `git add` + commit + `git push origin main` from the clone uploads
+a PDF — do that instead of asking the user to upload.
+
 ## Don't commit paper figure/table edits to this repo (user directive, 2026-09-25)
 
 **After pushing a figure or table change to Overleaf, do not `git commit` the matching local
