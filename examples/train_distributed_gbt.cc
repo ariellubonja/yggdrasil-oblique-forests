@@ -53,6 +53,7 @@
 #include "yggdrasil_decision_forests/metric/metric.pb.h"
 #include "yggdrasil_decision_forests/metric/report.h"
 #include "yggdrasil_decision_forests/model/abstract_model.h"
+#include "yggdrasil_decision_forests/model/model_library.h"
 #include "yggdrasil_decision_forests/model/decision_tree/decision_tree.h"
 #include "yggdrasil_decision_forests/model/gradient_boosted_trees/gradient_boosted_trees.h"
 #include "yggdrasil_decision_forests/utils/filesystem.h"
@@ -97,6 +98,9 @@ ABSL_FLAG(int, sparse_oblique_max_num_projections, 1000,
 ABSL_FLAG(bool, sparse_oblique_local_projection_count, false,
           "If true, F in ceil(F^exponent) is the worker's own numerical "
           "candidate count instead of the dataset's numerical feature count.");
+ABSL_FLAG(std::string, model_out_dir, "",
+          "If set, the trained model is saved there (for bit-identity checks "
+          "between builds / thread counts).");
 ABSL_FLAG(int64_t, max_unique_values_for_discretized_numerical, -1,
           "If >= 1, overrides the cache's discretization threshold (1 keeps "
           "every non-constant column exact). Needs a fresh cache dir.");
@@ -202,6 +206,12 @@ int main(int argc, char** argv) {
   const auto model = learner->TrainWithStatus(train_path, data_spec).value();
   LOG(INFO) << "Training (incl. cache creation) took "
             << absl::Now() - begin_train << " split_axis=" << split_axis;
+
+  const std::string model_out_dir = absl::GetFlag(FLAGS_model_out_dir);
+  if (!model_out_dir.empty()) {
+    QCHECK_OK(ydf::model::SaveModel(model_out_dir, *model));
+    LOG(INFO) << "Model saved to " << model_out_dir;
+  }
 
   // 5. Evaluate + describe.
   ydf::dataset::VerticalDataset test_dataset;
