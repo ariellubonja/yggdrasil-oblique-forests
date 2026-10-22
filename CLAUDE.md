@@ -70,6 +70,11 @@ below directly; the user should never have to relay between them.
   `ariel_notes/journal.md`; before a meeting, draft the agenda from it plus the board as a
   new Doc in the Drive folder.
 
+- **User directives live in this file, not only in agent memory (user directive, 2026-10-22).**
+  The user works from many accounts and devices, so Claude Code's per-account memory does not
+  follow them. Every standing rule the user states in a session is appended here (dated, with the
+  reason) in the same turn it is given; memory files may mirror it but CLAUDE.md is the copy of record.
+
 ## No Co-Authored-By trailer in commits (user directive, standing)
 
 **Never add `Co-Authored-By: Claude ...` (or any Claude/Anthropic co-author line) to git
@@ -214,6 +219,16 @@ and never report a Random-only arm on regression without the Dynamic arm next to
 results in `ariel_notes/journal.md` 2026-09-24; dataset scripts write `<name>_{train,test}_reg.csv`
 with `--also_regression`.
 
+## Always VQSort, never std::sort (user directive, 2026-10-22)
+
+Every sort on a hot path in this fork uses Highway VQSort (`hwy::VQSort` on `hwy::K32V32` /
+`K64V64` packed pairs, as in `FindBestSplitFlatHighway`, `splitter_scanner.h`), never `std::sort`.
+This includes new code such as the distributed in-worker oblique finder
+(`learner/distributed_decision_tree/oblique.cc`, written 2026-10-10 with `std::sort` on
+(float, uint32) pairs). Reason: the single-machine exact finder already uses VQSort, which is
+several times faster on (key, value) pairs; every arm must be measured on the same sort so speedups
+compare the method, not the sort. Before finishing a kernel change, grep the diff for `std::sort`.
+
 ## Times in chat: US Eastern (user directive, 2026-09-24)
 
 When telling the user a clock time (start, ETA, finish), give it in US Eastern time
@@ -277,6 +292,16 @@ refresh is a manual re-upload — not worth repeating per data correction.
   (done on the m7i on 2026-09-24; `setup_fresh_box.sh` does not do it yet). When a lone cell
   bumps 2–5 % with flat neighbours, check `journalctl --since <run start>` for apt before
   blaming the code, and re-run the cell.
+
+- **No dataset slicing (user directive, 2026-10-22).** Never cut a row prefix or tail (`head`/`tail`)
+  out of a real dataset to fit a time budget; a slice is neither the real dataset nor a controlled
+  synthetic one. Pick a smaller *whole* dataset, or generate a trunk of the needed shape
+  (`benchmarks/src/distributed_spo_gbt/vertex_build/gen_trunk.py` for CSV, the harness trunk mode
+  in-process). Generalises the HIGGS-full-size rule above.
+- **Trunk datasets have at least 256 columns (user directive, 2026-10-22).** The trunk puts the class
+  signal mu_j = 1/sqrt(j+1) on the first 256 columns, so fewer columns changes the problem. To shorten a
+  run reduce rows or trees, never columns below 256 (quick distributed smoke: 100k rows x 256 cols,
+  4 workers = 64 cols each).
 
 ## Adding a dataset to the overall depth table (recipe, 2026-09-24)
 
