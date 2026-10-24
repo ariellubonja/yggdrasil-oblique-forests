@@ -3,7 +3,7 @@
 > Shard of `OBLIQUE_CONTEXT.md` (the lean core). Read this when a question is
 > about the `VerticalDataset` memory layout, the row-major alternate store, or
 > the full `SampleProjection` / `GetNumProjections` source (weight modes,
-> normalization, Floyd sampler). Snapshot as of 2026-07-04, branch `rebased-main`,
+> normalization, Floyd sampler). Snapshot as of 2026-07-04, branch `main`,
 > commit `c80ffbf7`. Line numbers drift; grep for the symbol if a ref misses.
 
 ---

@@ -3,7 +3,7 @@
 > Shard of `OBLIQUE_CONTEXT.md`. The core keeps the driver's skeleton; this shard has the
 > **full** body with every variant `#ifdef`, plus the variant kernels themselves (DW1
 > col-sharing / shared-rows, symmetric depthwise AP, the subtree-gather dead end). Snapshot
-> 2026-07-04, `rebased-main` @ `c80ffbf7`; grep for symbols if a line ref misses.
+> 2026-07-04, `main` @ `c80ffbf7`; grep for symbols if a line ref misses.
 
 ---
 

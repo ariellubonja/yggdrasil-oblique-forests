@@ -28,7 +28,7 @@ record the CLI, host, python and library versions at the time each CSV was creat
 
 ## 2. Source state and binaries
 
-- Repo `/home/ubuntu/yggdrasil-oblique-forests`, branch `rebased-main`, HEAD
+- Repo `/home/ubuntu/yggdrasil-oblique-forests`, branch `main`, HEAD
   `576cc1dd` ("Update comment", on top of cherry-picked `bd85e57e` "v1 speedup GBT
   high-dimensional datasets"). Plus **one uncommitted patch** to
   `examples/train_oblique_forest.cc`: new flags `--min_examples` (default −1 = harness

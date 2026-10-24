@@ -37,7 +37,7 @@ for stage in fast slow; do
       && git commit -q -m "[results] SPO-GBT depth 6 on the B7 grid + YouTube-8M, $stage arms
 
 Claude-Session: https://claude.ai/code/session_01R4q8nNbev2HUa6WD56ciQm" \
-      && (git push -q origin rebased-main || (git stash -q; git fetch -q origin && git rebase -q origin/rebased-main && git push -q origin rebased-main; git stash pop -q))
+      && (git push -q origin main || (git stash -q; git fetch -q origin && git rebase -q origin/main && git push -q origin main; git stash pop -q))
     echo "[gbt_d6] $(date -u +%FT%TZ) git push exit $?" | tee -a "$L"
   fi
 done

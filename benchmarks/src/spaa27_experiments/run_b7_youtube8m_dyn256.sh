@@ -21,6 +21,6 @@ cd "$REPO_DIR" && git add "$RES_DIR/speedup_map.csv" "$SCRIPT_DIR/cells_b7_youtu
   && git commit -q -m "[results] YouTube-8M: spo_rf_dyn256_vec (AVX-512 256-bin dynamic, threshold 1000), depths 6/10/16/24/purity
 
 Claude-Session: https://claude.ai/code/session_01R4q8nNbev2HUa6WD56ciQm" \
-  && (git push -q origin rebased-main || echo "[yt8m-dyn256] push rejected; resolve by hand" | tee -a "$L")
+  && (git push -q origin main || echo "[yt8m-dyn256] push rejected; resolve by hand" | tee -a "$L")
 touch "$WORK_DIR/b7_youtube8m_dyn256_DONE"
 echo "[yt8m-dyn256] $(date -u +%FT%TZ) ALL DONE" | tee -a "$L"

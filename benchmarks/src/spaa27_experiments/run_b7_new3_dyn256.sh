@@ -16,7 +16,7 @@ echo "[new3-dyn256] $(date -u +%FT%TZ) start" | tee -a "$L"
   --bin-dir "$WORK_DIR/bin" --threads 48 --timeout 14400 --out "$OUT" > "$LOG_DIR/b7_new3_dyn256.log" 2>&1
 rc=$?
 echo "[new3-dyn256] $(date -u +%FT%TZ) DONE exit $rc" | tee -a "$L"
-cd "$REPO_DIR" && git pull -q --rebase origin rebased-main
+cd "$REPO_DIR" && git pull -q --rebase origin main
 "$PY" - "$OUT" "$RES_DIR/speedup_map.csv" <<'PYEOF'
 import sys, pandas as pd
 w, r = sys.argv[1:]; m = pd.concat([pd.read_csv(r), pd.read_csv(w)]).drop_duplicates(); m.to_csv(r, index=False); print("merged rows", len(m))
@@ -25,5 +25,5 @@ git add "$RES_DIR/speedup_map.csv" "$SCRIPT_DIR/cells_b7_new3_dyn256.json" "$SCR
   && git commit -q -m "[results] Shifts weather, ClimSim, Jane Street: spo_rf_dyn256_vec (AVX-512 256-bin dynamic, threshold 1000), depths 6/10/16/24/purity
 
                                                        " \
-  && (git push -q origin rebased-main && echo "[new3-dyn256] push ok" || echo "[new3-dyn256] PUSH FAILED; resolve by hand") | tee -a "$L"
+  && (git push -q origin main && echo "[new3-dyn256] push ok" || echo "[new3-dyn256] PUSH FAILED; resolve by hand") | tee -a "$L"
 echo "[new3-dyn256] $(date -u +%FT%TZ) ALL DONE" | tee -a "$L"

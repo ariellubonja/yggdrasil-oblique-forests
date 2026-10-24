@@ -30,7 +30,7 @@ cd "$REPO_DIR" && git add "$RES_DIR/speedup_map_rep2.csv" "$RES_DIR/speedup_map_
   && git commit -q -m "[results] spo_rf_dyn_vec (AVX2 64-bin dynamic, threshold 250), B7 map grid, reps 2-3
 
 Claude-Session: https://claude.ai/code/session_01R4q8nNbev2HUa6WD56ciQm" \
-  && (git push -q origin rebased-main || (git fetch -q origin && git rebase -q origin/rebased-main && git push -q origin rebased-main))
+  && (git push -q origin main || (git fetch -q origin && git rebase -q origin/main && git push -q origin main))
 echo "[dynvec] $(date -u +%FT%TZ) git push exit $?" | tee -a "$L"
 touch "$WORK_DIR/b7_dynvec_DONE"
 echo "[dynvec] $(date -u +%FT%TZ) ALL DONE" | tee -a "$L"

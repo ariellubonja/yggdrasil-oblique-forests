@@ -20,7 +20,7 @@ commit_push() {
     && git commit -q -m "[results] $1
 
 Claude-Session: https://claude.ai/code/session_01R4q8nNbev2HUa6WD56ciQm" \
-    && (git push -q origin rebased-main || (git fetch -q origin && git rebase -q origin/rebased-main && git push -q origin rebased-main))
+    && (git push -q origin main || (git fetch -q origin && git rebase -q origin/main && git push -q origin main))
   echo "[yt8m] $(date -u +%FT%TZ) git push exit $?" | tee -a "$L"
 }
 for stage in fast slow; do

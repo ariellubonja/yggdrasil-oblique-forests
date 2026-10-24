@@ -10,7 +10,7 @@
 > logging contract); this file + its shards = the *code*; `E2E + Chrono coarse. Col-major -
 > m7i.metal-24x Bootstrapping.csv` = end-to-end timing.
 >
-> Snapshots and `file:line` refs as of 2026-07-04, `rebased-main` @ `c80ffbf7`. Line numbers
+> Snapshots and `file:line` refs as of 2026-07-04, `main` @ `c80ffbf7`. Line numbers
 > drift; grep for the symbol if a ref misses.
 
 ### Shard router — read the shard when the question lands in its area

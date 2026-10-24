@@ -6,13 +6,13 @@ Everything repo-specific the workflow in SKILL.md needs. Verified 2026-09-05.
 
 | name | what | notes |
 |---|---|---|
-| `origin/rebased-main` | the fork's integration branch, default baseline | full instrumentation; default protocol available |
+| `origin/main` | the fork's integration branch, default baseline | full instrumentation; default protocol available |
 | `upstream/main` | google/yggdrasil-decision-forests | fetch with `git fetch upstream` (remote is unshallowed since 2026-09-05; true merge-base b506e72f, 2026-05-12) |
 | `upstream-main-benchmarks` | upstream/main + one tooling commit | trimmed harness + the three scripts. Refresh with `git rebase upstream/main`; only upstream-owned file touched is `examples/BUILD` |
 
 Two baseline targets, two protocols:
 
-1. **vs `origin/rebased-main`**: default protocol (below). Flag-gated changes
+1. **vs `origin/main`**: default protocol (below). Flag-gated changes
    are A/B'd on one tree via `EXTRA_BAZEL_CONFIGS`. Arm A must replicate the
    newest matching CSV under `benchmarks/results` (tolerance 3 %; same-protocol
    m7i runs a month apart drifted 0.2–1.0 %).
@@ -60,7 +60,7 @@ parses that line, not the harness wall-time lines.
 
 ## Protocol flags (put only these in `EXTRA_TRAIN_ARGS`)
 
-| path the change touches | `EXTRA_TRAIN_ARGS` on rebased-main | on upstream-main-benchmarks |
+| path the change touches | `EXTRA_TRAIN_ARGS` on main | on upstream-main-benchmarks |
 |---|---|---|
 | RF sparse-oblique, default | `--numerical_split_type "Dynamic Random Histogram"` (bins 64, threshold 250 are the binary defaults) | `--numerical_split_type "Exact"` |
 | RF Exact path (sort, scan) | `--numerical_split_type "Exact"` | same |
@@ -71,7 +71,7 @@ Flag-gated candidates: read `git diff <base>..<cand> -- .bazelrc` for the
 `build:<name>` line and pass `EXTRA_BAZEL_CONFIGS=--config=<name>` for arm B.
 Example: `origin/gbt-high-dim-speedup` added `build:skip_dead_axis_jobs` (GBT-only,
 measured on the laptop 2026-08-07, 10 trees: 3.96× e2e on 15k×400k Boosting, trees
-identical). Since 2026-09-07 that behaviour is unconditional on `rebased-main`; the
+identical). Since 2026-09-07 that behaviour is unconditional on `main`; the
 config no longer exists, so do not pass it.
 
 ## Default datasets, RAM, and prior m7i durations (seconds per run)
@@ -124,10 +124,10 @@ size, arm A: Bioresponse 35.7 s, Internet-Ads 25.1 s, madelon 10.1 s, nomao
 
 < 15 % time saved = failed experiment (log it anyway); ≥ 20 % = ★. Replication
 tolerance 3 %. Results directory: `benchmarks/results/verify/<candidate>/
-vs-rebased-main/` or `.../vs-upstream/`, holding `A.csv`, `B.csv`, the accuracy
+vs-main/` or `.../vs-upstream/`, holding `A.csv`, `B.csv`, the accuracy
 CSVs, `bitid.md`, `compare.md` and `report.md`. Commit that directory on the
 candidate branch (use a worktree of it when the main tree is busy) — never on
-`rebased-main` or `upstream-main-benchmarks`; the user merges it into `rebased-main`
+`main` or `upstream-main-benchmarks`; the user merges it into `main`
 themselves. No `Co-Authored-By` trailers (CLA). Tell the user the commit sha.
 
 Publishing (ask each time): engineering change bound for a YDF PR → Drive

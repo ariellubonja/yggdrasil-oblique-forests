@@ -5,7 +5,7 @@
 > drivers (`GrowTreeLocal` / `GrowTreeLocalBFS`), node evaluation order, the slab
 > handoff fields, or the forest driver + bootstrap. The core keeps only the
 > sortedness / RNG-order invariants distilled; the full bodies live here.
-> Snapshot as of 2026-07-04, branch `rebased-main`, commit `c80ffbf7`. Line
+> Snapshot as of 2026-07-04, branch `main`, commit `c80ffbf7`. Line
 > numbers drift; grep for the symbol if a ref misses.
 
 ---

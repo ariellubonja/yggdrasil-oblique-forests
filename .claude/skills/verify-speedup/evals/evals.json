@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "We switched the Exact (CART) split search to hwy VQSort a while back; the exact_std_sort bazel config restores std::sort. Verify the speedup of VQSort over std::sort on origin/rebased-main for the random forest Exact path, and tell me whether the models are bit-identical.",
+      "prompt": "We switched the Exact (CART) split search to hwy VQSort a while back; the exact_std_sort bazel config restores std::sort. Verify the speedup of VQSort over std::sort on origin/main for the random forest Exact path, and tell me whether the models are bit-identical.",
       "expected_output": "Flag-gated A/B on one tree: arm A = --config=exact_std_sort, arm B = default, EXTRA_TRAIN_ARGS='--numerical_split_type \"Exact\"', RF. One run per arm on the full default dataset list first, then the 30-minute rule. compare.md with per-dataset speedup, gates, provenance for both arms, and a replication section (on a non-m7i host: no matching prior for this machine, stated). Bit-identity via the 10-task CC18 hash check with a clear identical/differ statement. On a Mac: mechanics-only disclaimer, RAM prediction for the 24 GB trunk shapes, critical warning about SIMD/RAM, no verdict claimed. No edits to the benchmark scripts' defaults.",
       "files": []
     },
@@ -23,17 +23,17 @@
         "Warns about the ~24 GB trunk shapes on a 32 GB Mac before running them and reports any OOM cells",
         "compare.md exists with the per-dataset A/B table, gates (15/20 %), geometric mean and both provenance blocks; report says mechanics only / no verdict",
         "Replication: reports that no prior CSV matches this protocol (upstream-main-benchmarks, RF Exact, this machine) rather than inventing a baseline",
-        "Does not commit on any branch (upstream-main-benchmarks and rebased-main HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user",
+        "Does not commit on any branch (upstream-main-benchmarks and main HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user",
         "Names the follow-up: full protocol on the m7i (and the same-regime smaller shape if a quick run exceeded 3 min)"
       ]
     },
     {
       "id": 3,
-      "prompt": "run a quick speedup check of origin/gbt-high-dim-speedup vs origin/rebased-main on this mac, 10x fewer trees (but check if i merged it already, i dont remember)",
+      "prompt": "run a quick speedup check of origin/gbt-high-dim-speedup vs origin/main on this mac, 10x fewer trees (but check if i merged it already, i dont remember)",
       "expected_output": "Infers GBT protocol from the diff, confirms the branch is unmerged, rebases onto the tip, arm B = --config=skip_dead_axis_jobs. Quick pass: NUM_TREES_DIVISOR=10, --runs=1, default datasets, sequential arms, RAM warning for the 24 GB shapes. Then the 3-minute rule stops it (15k x 400k ~13 min in arm A), reports, proposes 15000|40000. compare.md, bit-identity on 10 CC18 tasks, mechanics-only disclaimer, Drive question left for the user, nothing committed.",
       "files": [],
       "assertions": [
-        "Detects that origin/gbt-high-dim-speedup is NOT merged into rebased-main (2 outstanding commits) and says so before measuring",
+        "Detects that origin/gbt-high-dim-speedup is NOT merged into main (2 outstanding commits) and says so before measuring",
         "Infers the GBT protocol from the diff: both arms run with --ensemble_method Boosting (visible in CSV provenance EXTRA_TRAIN_ARGS)",
         "Arm B is built with EXTRA_BAZEL_CONFIGS=--config=skip_dead_axis_jobs and arm A without (visible in the two CSVs' provenance)",
         "Benchmark script defaults untouched: runtime.sh, accuracy.sh, bench_common.sh, parse_log_to_csv.py, .bazelrc checksums unchanged vs pre_state.txt",
@@ -44,7 +44,7 @@
         "compare.md exists with a per-dataset A/B table, gates (15/20 %), geometric mean and both provenance blocks",
         "Cites prior evidence for expectations/durations: gbt_e2e.csv m7i numbers and/or the 2026-08-07 laptop measurement (3.96x, trees identical)",
         "Runs the model-equivalence check (10-task CC18 hashes + accuracy.sh on both arms at reduced size) BEFORE the timing pass and states identical/differ, with a MODEL CHANGED warning up front if they differ",
-        "Does not commit anything (HEAD of rebased-main unchanged) and does not upload to Drive without asking; leaves the PRs/ vs Results/ question for the user"
+        "Does not commit anything (HEAD of main unchanged) and does not upload to Drive without asking; leaves the PRs/ vs Results/ question for the user"
       ]
     },
     {
@@ -63,7 +63,7 @@
         "Warns about the ~24 GB trunk shapes on a 32 GB Mac before running them and reports any OOM cells",
         "compare.md exists with the per-dataset A/B table, gates (15/20 %), geometric mean and both provenance blocks; report says mechanics only / no verdict",
         "Replication: reports that no prior CSV matches this protocol (upstream-main-benchmarks, GBT Exact, this machine) rather than inventing a baseline; cites today's fork-side quick pass or the 2026-08-07 measurement as the expectation",
-        "Does not commit on rebased-main or upstream-main-benchmarks (HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user, noting the baseline roll-forward for an engineering change",
+        "Does not commit on main or upstream-main-benchmarks (HEADs unchanged) and leaves the Drive PRs/ vs Results/ question for the user, noting the baseline roll-forward for an engineering change",
         "Names the follow-up: full protocol on the m7i"
       ]
     }

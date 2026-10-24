@@ -55,7 +55,7 @@ for stage in fast slow; do
   if [ "${COMMIT:-0}" = 1 ]; then
     cd "$REPO_DIR" && git add "$RES_DIR/$(basename "$OUT")" "$SCRIPT_DIR/cells_b7_${lc}_fast.json" "$SCRIPT_DIR/cells_b7_${lc}_slow.json" \
       && git commit -q -m "[results] $NAME on the depth table, $stage arms, depths 6/10/16/24/purity" \
-      && (git push -q origin rebased-main || (git stash -q; git fetch -q origin && git rebase -q origin/rebased-main && git push -q origin rebased-main; git stash pop -q))
+      && (git push -q origin main || (git stash -q; git fetch -q origin && git rebase -q origin/main && git push -q origin main; git stash pop -q))
     echo "[$NAME] $(date -u +%FT%TZ) git push exit $?" | tee -a "$L"
   fi
 done

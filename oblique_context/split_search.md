@@ -4,7 +4,7 @@
 > about what happens to the projected values: the dispatch, the histogram finder
 > (default benchmark path), the EXACT/Cart finder (VQSort + scan), bin
 > generation, the SIMD upper_bound, or the per-node dynamic downgrade. Snapshot
-> as of 2026-07-04, branch `rebased-main`, commit `c80ffbf7`. Line numbers drift;
+> as of 2026-07-04, branch `main`, commit `c80ffbf7`. Line numbers drift;
 > grep for the symbol if a ref misses.
 
 ---

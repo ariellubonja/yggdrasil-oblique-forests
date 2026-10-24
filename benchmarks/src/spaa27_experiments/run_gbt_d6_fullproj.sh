@@ -43,7 +43,7 @@ if [ "${COMMIT:-0}" = 1 ]; then
     && git commit -q -m "[results] SPO-GBT depth 6 with P = F projections (*_fullproj), box $BOX
 
 Claude-Session: https://claude.ai/code/session_01R4q8nNbev2HUa6WD56ciQm" \
-    && (git push -q origin rebased-main || (git stash -q; git fetch -q origin && git rebase -q origin/rebased-main && git push -q origin rebased-main; git stash pop -q))
+    && (git push -q origin main || (git stash -q; git fetch -q origin && git rebase -q origin/main && git push -q origin main; git stash pop -q))
   echo "[gbtfp box$BOX] $(date -u +%FT%TZ) git push exit $?" | tee -a "$L"
 fi
 echo "[gbtfp box$BOX] $(date -u +%FT%TZ) ALL DONE -> $OUT" | tee -a "$L"

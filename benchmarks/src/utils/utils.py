@@ -232,7 +232,7 @@ def build_binary(args, chrono_mode):
     finished_cmd.append("--ui_event_filters=-warning")
 
     # Pin Intel oneAPI ICX regardless of branch: main's .bazelrc auto-detects gcc
-    # and rebased-main's needs oneAPI sourced. An absolute path here makes both
+    # and main's needs oneAPI sourced. An absolute path here makes both
     # build with icx without shell prep.
     _icx = "/opt/intel/oneapi/compiler/latest/bin/icx"
     _icpx = "/opt/intel/oneapi/compiler/latest/bin/icpx"

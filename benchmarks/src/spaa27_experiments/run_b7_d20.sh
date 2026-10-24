@@ -36,7 +36,7 @@ if [ "${COMMIT:-0}" = 1 ]; then
     && git commit -q -m "[results] SPO-RF depth 20 on the depth-table grid, box $BOX
 
 Claude-Session: https://claude.ai/code/session_01R4q8nNbev2HUa6WD56ciQm" \
-    && (git push -q origin rebased-main || (git stash -q; git fetch -q origin && git rebase -q origin/rebased-main && git push -q origin rebased-main; git stash pop -q))
+    && (git push -q origin main || (git stash -q; git fetch -q origin && git rebase -q origin/main && git push -q origin main; git stash pop -q))
   echo "[d20 box$BOX] $(date -u +%FT%TZ) git push exit $?" | tee -a "$L"
 fi
 echo "[d20 box$BOX] $(date -u +%FT%TZ) ALL DONE -> $OUT" | tee -a "$L"
