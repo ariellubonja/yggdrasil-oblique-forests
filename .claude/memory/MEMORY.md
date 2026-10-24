@@ -1,0 +1,5 @@
+- [Always VQSort, never std::sort](always-vqsort-not-std-sort.md) — user directive 2026-10-22; applies to new kernels incl. the distributed oblique finder
+- [No dataset slicing](no-dataset-slicing.md) — no head/tail prefixes of real datasets; pick a whole smaller set or generate a trunk
+- [Trunk >= 256 columns](trunk-min-256-columns.md) — user directive 2026-10-22; shrink rows not columns to fit a time budget
+- [Directives go in repo CLAUDE.md](directives-go-in-repo-claude-md.md) — user directive 2026-10-22; write every standing rule into git-tracked CLAUDE.md the same turn
+- [Test split = last 10 %](test-split-last-10-percent.md) — user directive 2026-10-24; datasets without an explicit test set use the last 10 % of rows
