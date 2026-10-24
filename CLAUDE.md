@@ -22,10 +22,10 @@ below directly; the user should never have to relay between them.
 - **Priorities** — Claude Code artifact "Priorities",
   https://claude.ai/code/artifact/5e6cba26-c7a9-4ef5-ae0b-8474286de890. Self-publishing
   tier list; state is the JSON in `<script id="appdata">` (boards → items
-  `{t, tier: S/A/B/C/D/Done, k}`). At session start read the project boards
-  ("Vec Adaptive - Results", "Vec Adaptive - Writing", "Distributed GBT", "SPO Future
-  Work") and act on the highest tier in scope. When an item lands, republish with it
-  marked Done or add the follow-up item. "Jobs", "PhD" and Daily are personal — leave them.
+  `{t, tier: S/A/B/C/D/Done, k}`). **Do not read it at session start; read or republish
+  it only when the user asks (user directive, 2026-10-24).** When asked, the project boards
+  are "Vec Adaptive - Results", "Vec Adaptive - Writing", "Distributed GBT", "SPO Future
+  Work". "Jobs", "PhD" and Daily are personal — leave them.
   **Read-only snapshot, no live watch (user directive 2026-09-17, reaffirmed 2026-09-18):**
   read it once with the Artifact tool's `action: "read"` and never call
   `ArtifactComments action: "watch"` on it. A publish to it arms a watch, and `--resume`
