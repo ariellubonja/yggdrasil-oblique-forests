@@ -3,3 +3,4 @@
 - [Trunk >= 256 columns](trunk-min-256-columns.md) — user directive 2026-10-22; shrink rows not columns to fit a time budget
 - [Directives go in repo CLAUDE.md](directives-go-in-repo-claude-md.md) — user directive 2026-10-22; write every standing rule into git-tracked CLAUDE.md the same turn
 - [Test split = last 10 %](test-split-last-10-percent.md) — user directive 2026-10-24; datasets without an explicit test set use the last 10 % of rows
+- [Vertex machine: n2-highmem-32 for everything](vertex-machine-n2-highmem-32.md) — user decision 2026-10-24; warn before a dataset that needs >180 GB per worker at W=1
