@@ -235,7 +235,23 @@ Define $F_{\text{node}} \coloneqq \sqrt{\mathbf{F}}$ as the number of columns st
 \captionof{figure}{Weak and Strong scaling results on Vertex AI.}
 \label{fig:vertex-scaling}
 \vspace{1em}
-\input{tables/table_vertex_scaling}
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\captionof{table}{Weak scaling on Vertex AI: tree-training time (setup excluded) and test accuracy. \TODO{AL: I think slope is caused by sort?}}
+\label{tab:vertex-weak-scaling}
+\input{tables/table_vertex_weak_body}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\captionof{table}{Strong scaling on Vertex AI: tree-training time, speedup over one worker, and test accuracy at 1.6M rows, 32 columns.}
+\label{tab:vertex-strong-scaling}
+\input{tables/table_vertex_strong_body}
+\end{minipage}
 \vspace{1em}
 }]
 
@@ -253,7 +269,17 @@ Frequently-selected columns \TODO{plot this}, Correlation-based, Information per
 
 \section{Evaluation}
 
+If a dataset has no explicit test set, the last 10\% of the dataset is used for test
 
+\TODO{these results are on n2-highmem-2 w/o SPO in-node parallelism!}
+
+\begin{table*}[t]
+\centering\footnotesize\setlength{\tabcolsep}{3.5pt}
+\caption{Planned wall time per cell (setup + 50 trees), AA / SPO, by dataset and worker count $W$. OOM: per-worker memory above 70\,\% of worker RAM. $P$ = total SPO projections per node.}
+\label{tab:planned-runtime}
+\input{tables/table_planned_runtime_body}
+\par\smallskip\footnotesize Minutes per cell on n2-highmem-4 workers and manager (4 vCPU, 32\,GB each); W=32 needs 132 vCPUs, W=48 needs 196. Single-file inputs (Epsilon, YouTube-8M, HIGGS, SUSY) build the dataset cache on one worker, which sets their floor. For $W > P$ each worker evaluates one projection, so the total projection count grows with $W$.
+\end{table*}
 
 \subsection{In-worker Projection Sampling}
 
@@ -263,9 +289,18 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 
 \subsubsection{\texttt{MULTI\_THREAD} results on m7i.metal-24x}
 
-% Runtime results share one float page, accuracy results the next.
-% \clearpage
-\input{tables/table_dist_runtime}
+\subsection{In-node Parallelism}
+\label{sec:in-node-parallelism}
+
+% One float page per topic: runtime, accuracy, in-node parallelism.
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Training time in seconds of sparse oblique (SPO) and axis-aligned (AA) GBT (50 trees, depth 6), in single-machine and distributed with $W$ workers. \texttt{MULTI\_THREAD} mode. Default n. threads used for Distributed (6 per worker).}
+\label{tab:dist-runtime}
+\input{tables/table_dist_runtime_body}
+\end{table*}
 \begin{figure*}[t]
     \centering
     \includegraphics[width=0.75\textwidth]{figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf}
@@ -273,11 +308,47 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
     \label{fig:placeholder}
 \end{figure*}
 \clearpage
-\input{tables/table_dist_accuracy}
-\input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_delta}
-\input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean}
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test ROC AUC of single-machine and distributed GBT with $W$ workers (300 trees, depth 6), for sparse oblique (SPO) and axis-aligned (AA). Cells are the mean $\pm$ std over 5 CV folds. Single chronological holdouts have no std. Single-machine SPO-GBT samples $F$ projections per node; distributed SPO-GBT workers \TODO{sample $F/W$ projections from their $F/W$ columns.}}
+\label{tab:dist-accuracy}
+\input{tables/table_dist_accuracy_body}
+\end{table*}
+\begin{figure*}[t]
+\centering
+\input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_delta_body}
+\caption{ROC AUC delta ($\times 10^{-3}$) of distributed GBT with $W$ workers vs. single-machine. Illustrates Table~\ref{tab:dist-accuracy}.}
+\Description{Heatmap of per-dataset AUC differences between distributed and single-machine GBT, SPO and AA, for each worker count.}
+\label{fig:dist-accuracy-delta}
+\end{figure*}
+\begin{figure*}[t]
+\centering
+\input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body}
+\caption{Mean test ROC AUC over the datasets of Table~\ref{tab:dist-accuracy}.}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}
+\label{fig:dist-accuracy-mean}
+\end{figure*}
 \clearpage
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+% (10 trees, depth 6, exact splits)
+\caption{Training time in seconds of single-machine SPO-GBT  with $T$ threads. SPO in-node sequential evaluates a node's $P$ projections in $\min(T,\lceil P/10\rceil)$ jobs, i.e.\ one job when $P\le 10$; SPO in-node parallel uses $\min(T,P)$ jobs. Speedup $=$ sequential\,/\,parallel. $P=\lceil\sqrt{F}\rceil$ projections per node. At $T{=}1$ both arms train the same model.}
+\label{tab:in-node-threads}
+\input{tables/table_in_node_threads_body}
+\end{table*}
 
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Tree-training time in seconds (speedup over the sequential arm) of distributed SPO-GBT with one worker and $T$ worker threads on APSFailure ($F{=}170$, $P{=}F$ projections per node, 20 trees, depth 6). SPO in-node sequential runs one job per node, so a node's projections are evaluated on one thread; SPO in-node parallel splits each node's projections into chunks over the worker's thread pool. All arms train byte-identical models.}
+\label{tab:in-node-distributed}
+\input{tables/table_in_node_distributed_body}
+\end{table*}
 \clearpage
 
 \appendix
@@ -324,6 +395,8 @@ Google Colab Gemini is not agentic and not smart - too slow to iterate. Use loca
     \item Skew to reach barrier
 \end{enumerate}
 
+At some point we need datasets that dont fit on 1 machine
+
 \textbf{\textit{Measure accuracy cost of parititioning columns: }}
 
 \begin{enumerate}
@@ -356,6 +429,23 @@ Extend this to: 1) put globally most important columns in all nodes.
     \item sample features w. replacement per worker. Ensure each column is in at least 1 worker.
     \item  \href{https://github.com/google/yggdrasil-decision-forests/commit/2fe3a7fae5a3e8646401cd98f5c0a2a9d5d81653}{Richard's new} AA + SPO scan.
 \end{todolist}
+
+
+22-Oct-26: \textbf{Added In-node parallelism in SPO-GBT}. single machine gives 2x. Need to update \& rerun above results. Currently also running HIGGS and EPSILON to confirm
+
+Single-machine GBT, SUSY 4.5M, depth 6, exact finder, 10 trees:
+
+\begin{center}
+\begin{tabular}{rrrp{3.7cm}}
+\hline
+threads & HEAD & new & model \\
+\hline
+1  & 22.3\,s & 22.4\,s & identical \\
+8  & 22.2\,s & 11.1\,s (2.0$\times$) & differs (1 job $\rightarrow$ 5 jobs), as thread count already did \\
+48 & 22.6\,s & 11.5\,s (2.0$\times$) & same as 8 threads \\
+\hline
+\end{tabular}
+\end{center}
 
 
 \subsection{Full Implementation Code}

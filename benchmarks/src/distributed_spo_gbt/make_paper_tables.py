@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Emit the Distributed SPO-GBT paper's runtime and accuracy tables (LaTeX).
+"""Emit the Distributed SPO-GBT paper's runtime and accuracy table BODIES (tabular only) and the accuracy figures.
+Table/figure environments, captions and labels live in main.tex, which \\input{}s the bodies.
 Runtime: 50-tree grid (results.csv, binary weights) vs same-boot single-machine anchors (anchors.csv).
 Accuracy: Table-9-style AUC suite (suite_results.csv) vs the SPAA paper's single-machine GBT arms."""
 import argparse, pathlib
@@ -26,11 +27,9 @@ def runtime_table(trees=50, workers=(1, 4)):
     heads = []
     for fam, _, _ in AXES:
         heads += [col(f"{fam} single machine")] + [col(f"{fam} dist.\\ $W{{=}}{w}$") for w in workers]
-    lines = [HDR, r"\begin{table*}[t]", r"\centering", r"\footnotesize", r"\setlength{\tabcolsep}{4pt}",
-             rf"\caption{{Training time in seconds of sparse oblique (SPO) and axis-aligned (AA) GBT ({trees} trees, depth 6), in single-machine and distributed with $W$ workers. \texttt{{MULTI\_THREAD}} mode. Default n. threads used for Distributed (6 per worker).}}",
+    lines = [HDR,
              "% Threads: single machine = harness default (all cores); distributed = "
              + ", ".join(f"W={w}: {int(d[d.workers == w].threads_per_worker.iloc[0])}/worker" for w in workers) + ".",
-             r"\label{tab:dist-runtime}",
              r"\begin{tabular}{l" + ("r" * (1 + len(workers)) + "|") * (len(AXES) - 1) + "r" * (1 + len(workers)) + "}",
              r"\toprule", "Dataset & " + " & ".join(heads) + r" \\", r"\midrule"]
     for ds in NAMES:
@@ -47,7 +46,7 @@ def runtime_table(trees=50, workers=(1, 4)):
                 if i and ref: s += f" ({v / ref:.1f}$\\times$)"
                 cells.append(rf"\textbf{{{s}}}" if v == best else s)
         lines.append(NAMES[ds] + " & " + " & ".join(cells) + r" \\")
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
+    lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
 
@@ -74,10 +73,7 @@ def accuracy_stats(metric="test_auc"):
 def accuracy_table(metric="test_auc"):
     stats, done, nfolds = accuracy_stats(metric)
     fams = [f for f, _, _ in AXES]
-    lines = [HDR, r"\begin{table*}[t]", r"\centering", r"\scriptsize", r"\setlength{\tabcolsep}{2pt}",
-             r"\caption{Test ROC AUC of single-machine and distributed GBT with $W$ workers (300 trees, depth 6), for sparse oblique (SPO) and axis-aligned (AA). Cells are the mean $\pm$ std over 5 CV folds. Single chronological holdouts have no std. Single-machine SPO-GBT samples $F$ projections per node; distributed SPO-GBT workers \TODO{sample $F/W$ projections from their $F/W$ columns.}}",
-             rf"% {len(done)}/{nfolds.size} datasets complete when generated; the rest are still running.",
-             r"\label{tab:dist-accuracy}",
+    lines = [HDR,
              r"\begin{tabular}{l" + "|".join("r" * sum(f == fam for f, _, _ in stats) for fam in fams) + "}",
              r"\toprule", "Dataset & " + " & ".join(col(lab) for _, lab, _ in stats) + r" \\", r"\midrule"]
     means = {lab: [] for _, lab, _ in stats}
@@ -97,7 +93,7 @@ def accuracy_table(metric="test_auc"):
         lines.append(ds.replace("_", r"\_") + " & " + " & ".join(cells) + r" \\")
     lines += [r"\midrule", "Mean & " + " & ".join(f"{sum(means[lab]) / len(means[lab]):.4f}"[1:] + r"\phantom{$_{\pm.0000}$}"
                                                  for _, lab, _ in stats) + r" \\",
-              r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
+              r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
 
@@ -117,13 +113,13 @@ def _diverge(v, cap=15.0):
 
 
 def accuracy_delta_heatmap(metric="test_auc"):
-    """Distributed minus single-machine mean AUC (x1e3) per dataset and W, as a colored table."""
+    """Distributed minus single-machine mean AUC (x1e3) per dataset and W, as a colored table (figure body only)."""
     stats, done, _ = accuracy_stats(metric)
     fams = [f for f, _, _ in AXES]
     blocks = {f: [(lab, s) for g, lab, s in stats if g == f] for f in fams}
     nw = len(blocks[fams[0]]) - 1
     ws = [lab.split("W{=}")[1].rstrip("$") for lab, _ in blocks[fams[0]][1:]]
-    lines = [HDR, r"\begin{figure*}[t]", r"\centering", r"\scriptsize", r"\setlength{\tabcolsep}{3pt}",
+    lines = [HDR, r"\scriptsize", r"\setlength{\tabcolsep}{3pt}",
              r"\renewcommand{\arraystretch}{1.1}",
              r"\begin{tabular}{l" + "|".join("c" * nw for _ in fams) + "}", r"\toprule",
              " & " + " & ".join(rf"\multicolumn{{{nw}}}{{c}}{{{f}}}" for f in fams) + r" \\",
@@ -141,19 +137,16 @@ def accuracy_delta_heatmap(metric="test_auc"):
                 deltas[(f, i)].append(v); cells.append(cell(v))
         lines.append(ds.replace("_", r"\_") + " & " + " & ".join(cells) + r" \\")
     lines += [r"\midrule", "Mean & " + " & ".join(cell(sum(deltas[(f, i)]) / len(done)) for f in fams for i in range(nw)) + r" \\",
-              r"\bottomrule", r"\end{tabular}",
-              r"\caption{Change in test ROC AUC ($\times 10^{-3}$) of distributed GBT with $W$ workers relative to single-machine GBT, for sparse oblique (SPO) and axis-aligned (AA). Blue: distributed is higher; red: lower. Same runs as Table~\ref{tab:dist-accuracy}.}",
-              r"\Description{Heatmap of per-dataset AUC differences between distributed and single-machine GBT, SPO and AA, for each worker count.}",
-              r"\label{fig:dist-accuracy-delta}", r"\end{figure*}"]
+              r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
 
 def accuracy_mean_figure(metric="test_auc"):
-    """The table's Mean row as one line per family over single machine, W=1..."""
+    """The table's Mean row as one line per family over single machine, W=1... (tikzpicture only)."""
     stats, done, _ = accuracy_stats(metric)
     xs = ["Single"] + [lab.split("W{=}")[1].rstrip("$") for f, lab, _ in stats if f == AXES[0][0] and "W{=}" in lab]
     xl = ["single", *(f"$W{{=}}{w}$" for w in xs[1:])]
-    lines = [HDR, r"\begin{figure*}[t]", r"\centering", r"\begin{tikzpicture}",
+    lines = [HDR, r"\begin{tikzpicture}",
              r"\begin{axis}[width=0.5\textwidth, height=4.6cm, symbolic x coords={" + ",".join(xs) + "}, xtick=data,",
              "  xticklabels={" + ",".join(xl) + r"}, ylabel={Mean test ROC AUC},",
              r"  yticklabel style={/pgf/number format/fixed, /pgf/number format/precision=3, /pgf/number format/fixed zerofill},",
@@ -164,19 +157,16 @@ def accuracy_mean_figure(metric="test_auc"):
         style = "" if mark == "*" else ", dashed"
         lines += [rf"\addplot[color={_rgb(colors[1])}, mark={mark}, thick{style}] coordinates {{"
                   + " ".join(f"({x},{v:.4f})" for x, v in zip(xs, m)) + "};", rf"\addlegendentry{{{f}-GBT}}"]
-    lines += [r"\end{axis}", r"\end{tikzpicture}",
-              r"\caption{Mean test ROC AUC over the datasets of Table~\ref{tab:dist-accuracy}, single machine and distributed with $W$ workers, for sparse oblique (SPO) and axis-aligned (AA) GBT.}",
-              r"\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}",
-              r"\label{fig:dist-accuracy-mean}", r"\end{figure*}"]
+    lines += [r"\end{axis}", r"\end{tikzpicture}"]
     return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--out", default=str(OUT)); args = ap.parse_args()
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
-    (out / "table_dist_runtime.tex").write_text(runtime_table())
-    (out / "table_dist_accuracy.tex").write_text(accuracy_table())
-    fig = out.parent / "figures"; fig.mkdir(exist_ok=True)
-    (fig / "fig_dist_accuracy_delta.tex").write_text(accuracy_delta_heatmap())
-    (fig / "fig_dist_accuracy_mean.tex").write_text(accuracy_mean_figure())
-    print(f"wrote {out}/table_dist_runtime.tex, table_dist_accuracy.tex")
+    (out / "table_dist_runtime_body.tex").write_text(runtime_table())
+    (out / "table_dist_accuracy_body.tex").write_text(accuracy_table())
+    fig = out.parent / "figures/evaluation/multi_thread_m7i_metal_24x"; fig.mkdir(parents=True, exist_ok=True)
+    (fig / "fig_dist_accuracy_delta_body.tex").write_text(accuracy_delta_heatmap())
+    (fig / "fig_dist_accuracy_mean_body.tex").write_text(accuracy_mean_figure())
+    print(f"wrote {out}/table_dist_runtime_body.tex, table_dist_accuracy_body.tex")

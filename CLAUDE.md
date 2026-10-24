@@ -272,22 +272,23 @@ results.** Structural edits are fine: figure/table environments, includes, label
 cross-references, captions that state what a panel shows. Prose that explains, interprets or
 argues from the numbers is the user's to write, and only when they explicitly ask.
 
-## Replacing a figure: start from the Overleaf caption (user directive, 2026-09-24)
+## Generators emit only the table body, never the caption (user directive, 2026-10-24)
 
-**Before touching any figure environment, read its current caption from Overleaf** (MCP
-`read_file` on the .tex that holds it, or the MCP clone `/private/tmp/overleaf-<id>`) and edit
-*that* text. Never rebuild the caption from the repo snapshot `paper/<venue>/`, from memory or
-from an earlier session: the user edits captions directly in Overleaf and those edits have been
-overwritten several times. Keep the user's wording and only change what the new figure requires
-(panel list, dataset list, axes, generator note); when the user asks for new caption text, add
-it to their version rather than replacing it. Same rule for `\Description` and `\label`.
-
-**Pull hand-edited captions into the generators first (user directive, 2026-09-25).** Before
-modifying or re-running any caption-emitting generator (`analyze.py`, `make_overall_depth_table.py`,
-`make_paper_accuracy_tables.py`, `make_table4_speedup_figures.py`, …) or pushing a generated
-table/figure, `git pull` the MCP clone, diff every Overleaf `\caption`/`\Description`/`\label`
-against what the generator emits, and copy the user's wording (TODOs included) into the script.
-Only then regenerate — otherwise the push overwrites their edits.
+**Every new table/figure generator writes only the data part**: `tables/<name>_body.tex` holding
+just `\begin{tabular}...\end{tabular}`, and for pgfplots a `.dat` file read by `\addplot table`.
+The `\begin{table}`/`\begin{figure}` environment, `\caption`, `\Description` and `\label` live in
+hand-owned LaTeX (`main.tex` or a wrapper `.tex` that `\input`s the body) and are never emitted by a
+script. Reason: generators that owned the caption overwrote the user's Overleaf edits several times
+(2026-09-24/25); with the split, a regenerate-and-push can only ever change numbers.
+**Forward-only:** apply to new generators and new tables/figures, which includes any generator or
+table still uncommitted or only on the current feature branch; do not migrate the SPAA27 paper's
+existing generators (`make_paper_accuracy_tables.py`, `make_overall_depth_table.py`,
+`make_table4_speedup_figures.py`, `analyze.py`, ...). The KDD27 distributed SPO-GBT paper is fully
+migrated (2026-10-24): every table is a `tables/*_body.tex` input from an environment in `main.tex`.
+**Legacy rule for those caption-emitting generators:** before re-running one or touching a figure
+environment, `git pull` the MCP clone, read the live Overleaf `\caption`/`\Description`/`\label`,
+copy the user's wording (TODOs included) into the script, and only then regenerate and push. Never
+rebuild a caption from the repo snapshot `paper/<venue>/`, from memory or from an earlier session.
 
 ## Compile the Overleaf clone locally before every push (user directive, 2026-10-22)
 

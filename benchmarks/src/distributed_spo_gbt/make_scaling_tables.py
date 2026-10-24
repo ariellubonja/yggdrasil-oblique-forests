@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Emit the Vertex AI weak/strong scaling tables (LaTeX, side by side, non-floating: \\input it inside the \\twocolumn[...] block under the scaling figure) from a vertex_scaling run's results.csv.
+"""Emit the Vertex AI weak/strong scaling table BODIES (tabular only) from a vertex_scaling run's results.csv.
+The side-by-side minipages, captions and labels live in main.tex (\\twocolumn[...] block under the scaling figure), which \\input{}s the bodies.
 Times = tree_training_s (setup excluded); strong-scaling speedup = T(1 worker) / T(W)."""
 import argparse, pathlib
 import pandas as pd
@@ -15,15 +16,13 @@ def hdr(label):
     return r"\multicolumn{1}{c}{" + label + "}"
 
 
-def table(df, label, caption, strong):
+def table(df, strong):
     ws = sorted(df.workers.unique())
     g = {arm: df[df.arm == arm].set_index("workers").reindex(ws) for arm, _ in ARMS}
     lead = ["$W$"] + (["Rows"] if not strong else [])
     top = " & ".join(hdr(c) for c in lead) + r" & \multicolumn{2}{c|}{" + ("Time (s), speedup" if strong else "Time (s)") + r"} & \multicolumn{2}{c}{Test accuracy} \\"
     sub = " & ".join([""] * len(lead) + [hdr(n) for _, n in ARMS] * 2) + r" \\"
-    lines = [r"\begin{minipage}[t]{0.48\textwidth}", r"\centering", r"\footnotesize", r"\setlength{\tabcolsep}{4pt}",
-             r"\captionof{table}{" + caption + "}", r"\label{" + label + "}",
-             r"\begin{tabular}{" + "r" * (2 if not strong else 1) + "|rr|rr}", r"\toprule",
+    lines = [r"\begin{tabular}{" + "r" * (2 if not strong else 1) + "|rr|rr}", r"\toprule",
              top, sub, r"\midrule"]
     for w in ws:
         row = [str(w)] + ([f"{int(g['aa'].loc[w, 'rows']) // 1000}k"] if not strong else [])
@@ -32,26 +31,21 @@ def table(df, label, caption, strong):
             row.append(f"{t:.0f}" + (f" ({g[arm].loc[ws[0], 'tree_training_s'] / t:.1f}$\\times$)" if strong else ""))
         row += [f"{g[arm].loc[w, 'accuracy']:.4f}" for arm, _ in ARMS]
         lines.append(" & ".join(row) + r" \\")
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{minipage}"]
+    lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
 
 def scaling_tables(run=RUN):
+    """-> (weak body, strong body)."""
     df = pd.read_csv(run / "results.csv")
     weak = df[df.rows == 100_000 * df.workers]
     strong = df[df.rows == df.rows.max()]
-    cols = int(df.cols.iloc[0])
-    return HDR + "\n" + table(
-        weak, "tab:vertex-weak-scaling",
-        f"Weak scaling on Vertex AI: tree-training time (setup excluded) and test accuracy at 100k rows per worker, {cols} columns.",
-        strong=False) + r"\hfill" + "\n" + table(
-        strong, "tab:vertex-strong-scaling",
-        f"Strong scaling on Vertex AI: tree-training time, speedup over one worker, and test accuracy at {strong.rows.iloc[0] / 1e6:.1f}M rows, {cols} columns.",
-        strong=True)
+    return HDR + "\n" + table(weak, strong=False), HDR + "\n" + table(strong, strong=True)
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--run", default=str(RUN)); ap.add_argument("--out", default=str(OUT))
     a = ap.parse_args(); out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    (out / "table_vertex_scaling.tex").write_text(scaling_tables(pathlib.Path(a.run)))
-    print(f"wrote {out}/table_vertex_scaling.tex")
+    weak, strong = scaling_tables(pathlib.Path(a.run))
+    (out / "table_vertex_weak_body.tex").write_text(weak); (out / "table_vertex_strong_body.tex").write_text(strong)
+    print(f"wrote {out}/table_vertex_weak_body.tex, table_vertex_strong_body.tex")
