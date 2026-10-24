@@ -389,13 +389,19 @@ calls that, so pass `--sparse_oblique_weights BINARY` (the driver default) expli
 mistake and are not comparable to the paper on accuracy (`results.csv` rows with trees==300 and
 extra==""); every later run is binary.
 
-## Vertex AI machine type: n2-highmem-32 for every experiment (user decision, 2026-10-24)
+## Vertex AI machine type: one type per comparison; n2-highmem-4 for now (user decisions, 2026-10-24)
 
-**All Vertex distributed GBT cells, every dataset and arm, run on `n2-highmem-32` (32 vCPU, 256 GB)
-for both the manager and the worker pool.** Never mix machine types across the cells or datasets of
-a comparison; the n2-highmem-4 Epsilon barrier grid (run 20261024T003657Z) predates this rule and is
-re-run. Reason: one instance type behind every reported number. 256 GB fits every current dataset at
-W=1 by the MEMORY_BUDGET.md formula (largest: Criteo SPO 119 GB, Numerai SPO 98 GB, YouTube-8M SPO
-59 GB). Quota: 96 N2 vCPUs in us-east1 = 3 nodes = W <= 2 per cell (192 requested = W <= 5).
-**Warn the user before launching when a new dataset's W=1 per-worker need exceeds ~70 % of 256 GB
-(180 GB)** — that is when the machine choice must be revisited, and it is their decision.
+**Never mix machine types across the cells or datasets of a comparison** (manager = worker type); one
+instance type stands behind every reported number. The user first chose `n2-highmem-32` (256 GB fits
+every dataset at W=1), then **reverted to `n2-highmem-4` (4 vCPU, 32 GB) the same day** because the
+N2 training quota (96 vCPUs in us-east1; 192 pending, 256 auto-denied) allows only W <= 2 on -32 but
+W <= 16 on -4 (68 vCPUs), and the scaling curve W = 1 .. 16 (.. 32, 48 once quota allows: 132 / 196 vCPUs)
+matters more than the W=1 reference. Cells whose per-worker need (MEMORY_BUDGET.md formula) exceeds
+70 % of 32 GB = 22.4 GB are not run and are shown as OOM in the planned-runtime table
+(`paper/distributed_spo_gbt_kdd27/tables/table_planned_runtime.tex`, also in Overleaf): YouTube-8M
+W <= 2, Numerai W <= 4, Criteo W <= 4, Jane Street W <= 2 (SPO one step further). Thread count per
+worker stays the YDF default (`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
+**Warn the user before launching anything that would change the machine type**, e.g. a dataset that
+needs a W=1 or W=2 reference that only fits a bigger node — that is their decision. The in-node SPO
+parallelism branch (`in-node-parallelism-SPOGBT`, cherry-picked onto `time-barriers-innode`) is compared
+against the baseline on the same -4 grid (SPO arm only; the distributed AA path is unchanged).
