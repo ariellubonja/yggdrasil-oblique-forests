@@ -388,3 +388,14 @@ calls that, so pass `--sparse_oblique_weights BINARY` (the driver default) expli
 `CONTINUOUS`. The seven 300-tree distributed oblique cells of 2026-10-11 ran continuous by
 mistake and are not comparable to the paper on accuracy (`results.csv` rows with trees==300 and
 extra==""); every later run is binary.
+
+## Vertex AI machine type: n2-highmem-32 for every experiment (user decision, 2026-10-24)
+
+**All Vertex distributed GBT cells, every dataset and arm, run on `n2-highmem-32` (32 vCPU, 256 GB)
+for both the manager and the worker pool.** Never mix machine types across the cells or datasets of
+a comparison; the n2-highmem-4 Epsilon barrier grid (run 20261024T003657Z) predates this rule and is
+re-run. Reason: one instance type behind every reported number. 256 GB fits every current dataset at
+W=1 by the MEMORY_BUDGET.md formula (largest: Criteo SPO 119 GB, Numerai SPO 98 GB, YouTube-8M SPO
+59 GB). Quota: 96 N2 vCPUs in us-east1 = 3 nodes = W <= 2 per cell (192 requested = W <= 5).
+**Warn the user before launching when a new dataset's W=1 per-worker need exceeds ~70 % of 256 GB
+(180 GB)** — that is when the machine choice must be revisited, and it is their decision.
