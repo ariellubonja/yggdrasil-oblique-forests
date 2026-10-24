@@ -31,6 +31,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/span.h"
+#include "hwy/base.h"
+#include "hwy/contrib/sort/vqsort.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/oblique_types.h"
@@ -54,6 +56,71 @@ struct ColumnAndWeight {
   const float* column;
   float weight;
 };
+
+// Sort record of the exact scan: one projected value and its example index.
+// Default: packed as a sort-monotone unsigned key next to the row and sorted
+// with Highway VQSort, as the single-machine finder does (K32V32).
+// --config=exact_std_sort keeps the pre-VQSort std::sort on (value, row) pairs.
+#ifdef EXACT_STD_SORT
+struct SortRecordTraits {
+  using Record = std::pair<float, ExampleIndex>;
+  static Record Pack(const float value, const ExampleIndex row) {
+    return {value, row};
+  }
+  static float Value(const Record& record) { return record.first; }
+  static ExampleIndex Row(const Record& record) { return record.second; }
+  static void Sort(Record* const begin, const size_t num_records) {
+    std::sort(begin, begin + num_records,
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+  }
+};
+#else
+template <size_t kIndexBytes>
+struct HighwaySortRecordTraits;
+
+template <>
+struct HighwaySortRecordTraits<4> {
+  using Record = hwy::K32V32;
+  static Record Pack(const float value, const ExampleIndex row) {
+    Record record;
+    record.key = decision_tree::internal::FloatToUintForSort(value);
+    record.value = static_cast<uint32_t>(row);
+    return record;
+  }
+  static float Value(const Record& record) {
+    return decision_tree::internal::UintToFloatFromSort(record.key);
+  }
+  static ExampleIndex Row(const Record& record) {
+    return static_cast<ExampleIndex>(record.value);
+  }
+  static void Sort(Record* const begin, const size_t num_records) {
+    hwy::VQSort(begin, num_records, hwy::SortAscending());
+  }
+};
+
+template <>
+struct HighwaySortRecordTraits<8> {
+  using Record = hwy::K64V64;
+  static Record Pack(const float value, const ExampleIndex row) {
+    Record record;
+    record.key = decision_tree::internal::FloatToUintForSort(value);
+    record.value = static_cast<uint64_t>(row);
+    return record;
+  }
+  static float Value(const Record& record) {
+    return decision_tree::internal::UintToFloatFromSort(
+        static_cast<uint32_t>(record.key));
+  }
+  static ExampleIndex Row(const Record& record) {
+    return static_cast<ExampleIndex>(record.value);
+  }
+  static void Sort(Record* const begin, const size_t num_records) {
+    hwy::VQSort(begin, num_records, hwy::SortAscending());
+  }
+};
+
+using SortRecordTraits = HighwaySortRecordTraits<sizeof(ExampleIndex)>;
+#endif  // EXACT_STD_SORT
 
 template <typename Initializer>
 absl::StatusOr<std::vector<Initializer>> CreateInitializers(
@@ -107,7 +174,7 @@ absl::Status FindBestObliqueSplitForNode(
                          static_cast<uint32_t>(node_idx)};
   utils::RandomEngine random(seed_seq);
 
-  std::vector<std::pair<float, ExampleIndex>> value_and_row(num_examples);
+  std::vector<SortRecordTraits::Record> value_and_row(num_examples);
   std::vector<ColumnAndWeight> terms;
   Projection projection;
   int8_t monotonic_direction;
@@ -145,10 +212,9 @@ absl::Status FindBestObliqueSplitForNode(
       for (const auto& term : terms) {
         value += term.column[row] * term.weight;
       }
-      value_and_row[i] = {value, row};
+      value_and_row[i] = SortRecordTraits::Pack(value, row);
     }
-    std::sort(value_and_row.begin(), value_and_row.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    SortRecordTraits::Sort(value_and_row.data(), num_examples);
 
     // Exact scan, mirroring FillNumericalAccumulator: all examples start on
     // the positive side and move to the negative side in value order.
@@ -158,9 +224,9 @@ absl::Status FindBestObliqueSplitForNode(
     ExampleIndex num_pos = num_examples;
     const ExampleIndex max_num_pos = num_examples - min_num_examples;
     for (ExampleIndex i = 0; i < num_examples; i++) {
-      const float value = value_and_row[i].first;
-      const ExampleIndex row = value_and_row[i].second;
-      if (i > 0 && value != value_and_row[i - 1].first &&
+      const float value = SortRecordTraits::Value(value_and_row[i]);
+      const ExampleIndex row = SortRecordTraits::Row(value_and_row[i]);
+      if (i > 0 && value != SortRecordTraits::Value(value_and_row[i - 1]) &&
           num_pos >= min_num_examples && num_pos <= max_num_pos) {
         const double score = decision_tree::Score<>(
             initializer, weighted_num_examples, pos, neg);
@@ -169,7 +235,8 @@ absl::Status FindBestObliqueSplitForNode(
           found = true;
           best_projection = projection;
           best_threshold =
-              decision_tree::MidThreshold(value_and_row[i - 1].first, value);
+              decision_tree::MidThreshold(
+                  SortRecordTraits::Value(value_and_row[i - 1]), value);
           best_num_pos = num_pos;
           best_pos = pos;
         }
