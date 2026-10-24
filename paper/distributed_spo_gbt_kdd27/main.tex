@@ -281,6 +281,14 @@ If a dataset has no explicit test set, the last 10\% of the dataset is used for 
 \par\smallskip\footnotesize Minutes per cell on n2-highmem-4 workers and manager (4 vCPU, 32\,GB each); W=32 needs 132 vCPUs, W=48 needs 196. Single-file inputs (Epsilon, YouTube-8M, HIGGS, SUSY) build the dataset cache on one worker, which sets their floor. For $W > P$ each worker evaluates one projection, so the total projection count grows with $W$.
 \end{table*}
 
+\begin{table*}[t]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Tree-training time in seconds (dataset-cache setup excluded) and test accuracy of distributed axis-aligned (AA) and sparse-oblique (SPO) GBT with $W$ workers; 50 trees, depth 6. SPO in-node: the in-worker oblique finder evaluates a node's projections as chunked jobs over the worker's thread pool (and sorts with VQSort); AA and SPO are the baseline worker. $P=\lceil\sqrt{F}\rceil$ total projections per node, $\max(1, \lfloor P/W \rfloor)$ per worker. ``--'': not run yet.}
+\label{tab:vertex-hm4-runtime}
+\input{tables/table_vertex_hm4_body}
+\par\smallskip\footnotesize All cells on n2-highmem-4 manager and workers (4 vCPU, 32\,GB), default YDF threads (4 per worker). Runs 20261024T162251Z/162321Z/162440Z (baseline) and 20261024T224943Z (in-node); more cells land as the quota queue drains.
+\end{table*}
+
 \subsection{In-worker Projection Sampling}
 
 Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{However, for Youtube, AA is a lot slower than SPO}}
@@ -336,7 +344,7 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 % (10 trees, depth 6, exact splits)
-\caption{Training time in seconds of single-machine SPO-GBT  with $T$ threads. SPO in-node sequential evaluates a node's $P$ projections in $\min(T,\lceil P/10\rceil)$ jobs, i.e.\ one job when $P\le 10$; SPO in-node parallel uses $\min(T,P)$ jobs. Speedup $=$ sequential\,/\,parallel. $P=\lceil\sqrt{F}\rceil$ projections per node. At $T{=}1$ both arms train the same model.}
+\caption{Fixing limited SPO in-node parallelism. Training time in seconds of SPO-GBT with $T$ threads on a single \texttt{m7i.24x}. SPO in-node sequential evaluates the $P$ projections in $\min(T,\lceil P/10\rceil)$ jobs, \TODO{i.e.\ one job when $P\le 10$}; SPO in-node parallel uses $\min(T,P)$ jobs. This table uses $P=\lceil\sqrt{F}\rceil$ projections per node; the other GBT results use $P=F$.}
 \label{tab:in-node-threads}
 \input{tables/table_in_node_threads_body}
 \end{table*}
@@ -345,7 +353,7 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\caption{Tree-training time in seconds (speedup over the sequential arm) of distributed SPO-GBT with one worker and $T$ worker threads on APSFailure ($F{=}170$, $P{=}F$ projections per node, 20 trees, depth 6). SPO in-node sequential runs one job per node, so a node's projections are evaluated on one thread; SPO in-node parallel splits each node's projections into chunks over the worker's thread pool. All arms train byte-identical models.}
+\caption{Tree-training time in seconds of one-worker distributed SPO-GBT with $T$ worker threads on APSFailure ($F{=}170$, $P{=}F$, 20 trees, depth 6). SPO in-node parallel splits each node's projections over the worker's thread pool. Trained models are byte-identical.}
 \label{tab:in-node-distributed}
 \input{tables/table_in_node_distributed_body}
 \end{table*}

@@ -121,8 +121,11 @@ ABSL_FLAG(int, max_num_projections, 1000,
           "Maximum number of projections for oblique splits.");
 ABSL_FLAG(float, projection_density_factor, 1.5f,
           "Projection density factor.");
-ABSL_FLAG(float, num_projections_exponent, .5,
-          "Exponent to determine number of projections.");
+ABSL_FLAG(float, num_projections_exponent, -1.f,
+          "Exponent e of the per-node projection budget ceil(F^e) (also the "
+          "axis-aligned candidate count when --num_candidate_attributes=0). "
+          "-1 = harness default: 0.5 for Bagging (P = sqrt(F)), 1 for "
+          "Boosting (P = F).");
 ABSL_FLAG(int, dynamic_split_threshold, -2,
           "When using dynamic histogram splits, switch to exact splitting if "
           "the number of examples at a node is below this threshold. "
@@ -1308,6 +1311,15 @@ int main(int argc, char** argv) {
                                : (ensemble_method == "Boosting" ? 5 : 1));
   }
 
+  // Projection budget: RF samples sqrt(F) projections per node, GBT samples F
+  // (user directive 2026-10-24). An explicit flag value overrides both.
+  const float exponent_flag = absl::GetFlag(FLAGS_num_projections_exponent);
+  const float num_projections_exponent =
+      exponent_flag >= 0 ? exponent_flag
+                         : (ensemble_method == "Boosting" ? 1.f : .5f);
+  LOG(INFO) << "num_projections_exponent = " << num_projections_exponent
+            << (exponent_flag >= 0 ? " (from flag)" : " (harness default)");
+
   const auto growing_strategy = absl::GetFlag(FLAGS_growing_strategy);
   if (growing_strategy == "GlobalBestFirst") {
     dt_config->mutable_growing_strategy_best_first_global()->set_max_num_nodes(-1);
@@ -1327,8 +1339,7 @@ int main(int argc, char** argv) {
         absl::GetFlag(FLAGS_max_num_projections));
     sos->set_projection_density_factor(
         absl::GetFlag(FLAGS_projection_density_factor));
-    sos->set_num_projections_exponent(
-        absl::GetFlag(FLAGS_num_projections_exponent));
+    sos->set_num_projections_exponent(num_projections_exponent);
     const int dyn_thr = ResolveDynamicSplitThreshold();
     LOG(INFO) << "dynamic_split_threshold = " << dyn_thr
               << (absl::GetFlag(FLAGS_dynamic_split_threshold) == -2
@@ -1341,7 +1352,7 @@ int main(int argc, char** argv) {
     // This does NOT enable oblique splits - it just sets params for the calculation
     auto* sos = dt_config->mutable_sparse_oblique_split();
     sos->set_max_num_projections(absl::GetFlag(FLAGS_max_num_projections));
-    sos->set_num_projections_exponent(absl::GetFlag(FLAGS_num_projections_exponent));
+    sos->set_num_projections_exponent(num_projections_exponent);
 
     int num_numerical_features = 0;
     for (int i = 0; i < data_spec.columns_size(); ++i) {

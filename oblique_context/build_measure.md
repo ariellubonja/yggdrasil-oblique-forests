@@ -133,7 +133,7 @@ not a global Lorenz curve. Every 5th depth plus all of d≤12 reaches ~48 % of A
 Defaults that define the benchmark protocol: `--feature_split_type=Oblique`,
 `--numerical_split_type="Dynamic Random Histogram"`, `--histogram_num_bins=64`,
 `--dynamic_split_threshold=250`, `--max_num_projections=1000`,
-`--num_projections_exponent=.5`, `--projection_density_factor=1.5`,
+`--num_projections_exponent=-1` (= 0.5 for Bagging, 1 for Boosting since 2026-10-24; `--max_num_projections=1000` still caps P), `--projection_density_factor=1.5`,
 `--growing_strategy=Local`, `--ensemble_method=Bagging`,
 `--bootstrap_training_dataset=true`, `--num_threads=1` (runtime.sh uses `-1` = all),
 `--num_trees=240` (runtime.sh overrides), `--seed=1234`, `--tree_depth=-1`, `--min_examples=1`

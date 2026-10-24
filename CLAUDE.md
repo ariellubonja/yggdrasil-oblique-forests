@@ -390,6 +390,17 @@ calls that, so pass `--sparse_oblique_weights BINARY` (the driver default) expli
 mistake and are not comparable to the paper on accuracy (`results.csv` rows with trees==300 and
 extra==""); every later run is binary.
 
+## Harness projection budget: sqrt(F) for RF, F for GBT (user directive, 2026-10-24)
+
+`examples/train_oblique_forest.cc --num_projections_exponent` defaults to `-1` = **0.5 for
+`--ensemble_method Bagging` (P = ceil(sqrt(F))) and 1 for `Boosting` (P = F)**; an explicit value
+overrides both. Reason: the paper's GBT results use P = F since 2026-10-11 (Table 9 `_fullproj` arms,
+distributed in-worker budget), but the 2026-10-22 single-machine in-node thread sweep ran the old
+default 0.5 unnoticed; its table is kept as run and its caption says so. `--max_num_projections`
+stays 1000, so P = F is capped at 1000 above F = 1000 unless the run lifts the cap (the Table 9
+`_fullproj` arms pass INT_MAX). Axis-aligned GBT arms are unaffected: `arms.py` passes
+`--num_candidate_attributes -1` explicitly.
+
 ## Vertex AI machine type: one type per comparison; n2-highmem-4 for now (user decisions, 2026-10-24)
 
 **Never mix machine types across the cells or datasets of a comparison** (manager = worker type); one
