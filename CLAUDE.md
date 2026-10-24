@@ -75,6 +75,16 @@ below directly; the user should never have to relay between them.
   follow them. Every standing rule the user states in a session is appended here (dated, with the
   reason) in the same turn it is given; memory files may mirror it but CLAUDE.md is the copy of record.
 
+## Intel performance skills are vendored in the repo (user directive, 2026-10-23)
+
+`intel/intel-performance-skills` (MIT) is vendored as project skills `linux-perf`,
+`performance-patterns`, `phoronix-test-suite` under `.claude/skills/` (tracked by git), so every
+agent, account and box that clones this repo has them; no install step. Use `linux-perf` /
+`performance-patterns` for profiling and kernel work on the hot path. Refresh with
+`bash .claude/skills/_vendor/sync_intel_skills.sh [ref]` (pinned rev in `_vendor/intel_skills.rev`).
+Never hand-edit the vendored files. A same-named skill in `~/.claude/skills/` overrides the project
+copy, so keep personal copies in sync or delete them.
+
 ## No Co-Authored-By trailer in commits (user directive, standing)
 
 **Never add `Co-Authored-By: Claude ...` (or any Claude/Anthropic co-author line) to git
