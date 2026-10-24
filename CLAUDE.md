@@ -239,6 +239,16 @@ This includes new code such as the distributed in-worker oblique finder
 several times faster on (key, value) pairs; every arm must be measured on the same sort so speedups
 compare the method, not the sort. Before finishing a kernel change, grep the diff for `std::sort`.
 
+## Experiment outputs never in /tmp (user directive, 2026-10-24)
+
+Run logs, saved models, timing CSVs, benchmark binaries and agent run logs go to a persistent folder on
+the root disk (`ariel_notes/results/<date>_<topic>/`, gitignored, or `benchmarks/results/...` when
+tracked), never to `/tmp`, the Claude session scratchpad or any other reboot-wiped path; name that path
+in every run script and every subagent brief that runs experiments. Throwaway scripts may stay in the
+scratchpad. Reason: the m7i auto-stops after 1.5 h of inactivity and a stop/start wipes `/tmp`; on
+2026-10-23/24 that lost the raw logs, models and binaries of the 2026-10-22 SPO-GBT thread sweep (numbers
+survived only because they had been printed in chat).
+
 ## Times in chat: US Eastern (user directive, 2026-09-24)
 
 When telling the user a clock time (start, ETA, finish), give it in US Eastern time
