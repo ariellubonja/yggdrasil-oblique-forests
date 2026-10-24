@@ -343,6 +343,10 @@ refresh is a manual re-upload — not worth repeating per data correction.
   signal mu_j = 1/sqrt(j+1) on the first 256 columns, so fewer columns changes the problem. To shorten a
   run reduce rows or trees, never columns below 256 (quick distributed smoke: 100k rows x 256 cols,
   4 workers = 64 cols each).
+- **No explicit test set → last 10 % of the file is the test set (user directive, 2026-10-24).** Datasets
+  that ship a split (CC18 train/test folders, Epsilon, ClimSim, YouTube-8M) keep it. Otherwise the first
+  90 % of rows train and the last 10 % test (header on both). This is a split, not budget slicing, so the
+  no-slicing rule above does not apply to it.
 
 ## Adding a dataset to the overall depth table (recipe, 2026-09-24)
 
