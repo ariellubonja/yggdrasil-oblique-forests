@@ -397,10 +397,13 @@ every dataset at W=1), then **reverted to `n2-highmem-4` (4 vCPU, 32 GB) the sam
 N2 training quota (96 vCPUs in us-east1; 192 pending, 256 auto-denied) allows only W <= 2 on -32 but
 W <= 16 on -4 (68 vCPUs), and the scaling curve W = 1 .. 16 (.. 32, 48 once quota allows: 132 / 196 vCPUs)
 matters more than the W=1 reference. Cells whose per-worker need (MEMORY_BUDGET.md formula) exceeds
-70 % of 32 GB = 22.4 GB are not run and are shown as OOM in the planned-runtime table
-(`paper/distributed_spo_gbt_kdd27/tables/table_planned_runtime.tex`, also in Overleaf): YouTube-8M
-W <= 2, Numerai W <= 4, Criteo W <= 4, Jane Street W <= 2 (SPO one step further). Thread count per
-worker stays the YDF default (`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
+~70 % of 32 GB are shown as OOM in the planned-runtime table
+(`paper/distributed_spo_gbt_kdd27/tables/table_planned_runtime.tex`, also in Overleaf). **That 70 % line
+is an agent heuristic from one 16 GB failure (SPO 1.6M x 512, predicted 12.6 GB, killed), not a user
+decision; the user asked for it to be calibrated on 32 GB (2026-10-24)**: Criteo aa_w4 (predicted
+25.7 GB = 80 %) is run as the probe. If it survives, the OOM marks move one W step left; if the worker
+is killed, 70 % stands with evidence. Record the outcome here. Thread count per worker stays the YDF
+default (`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
 **Warn the user before launching anything that would change the machine type**, e.g. a dataset that
 needs a W=1 or W=2 reference that only fits a bigger node — that is their decision. The in-node SPO
 parallelism branch (`in-node-parallelism-SPOGBT`, cherry-picked onto `time-barriers-innode`) is compared
