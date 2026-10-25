@@ -1,5 +1,5 @@
 # Vertex AI training image: the fork's ydf wheel (built by wheel/Dockerfile) + train.py.
-FROM us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo/ydf-wheel:cb81b53d AS wheel
+FROM us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo/ydf-wheel:47fe64fa AS wheel
 FROM python:3.12
 WORKDIR /root
 COPY --from=wheel /wheel/ydf-*.whl /tmp/
