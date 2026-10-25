@@ -2,6 +2,9 @@
 
 Be concise.
 
+**Responses under 100 words unless the user explicitly asks for more (user directive, 2026-10-24).**
+Reason: ADHD-friendly output; long replies get skipped.
+
 All work in this repo targets one thing: making `ProjectionEvaluator::Evaluate()`
 (ApplyProjection) in `yggdrasil_decision_forests/learner/decision_tree/oblique.cc`
 faster. This is the standing context — follow it.
