@@ -370,25 +370,24 @@ calls that, so pass `--sparse_oblique_weights BINARY` (the driver default) expli
 mistake and are not comparable to the paper on accuracy (`results.csv` rows with trees==300 and
 extra==""); every later run is binary.
 
-## Vertex AI machine type: one type per comparison; n2-highmem-4 for now (user decisions, 2026-10-24)
+## Vertex AI machine type: one type per comparison; n2-highmem-16 (user decision, 2026-10-25)
 
-**Never mix machine types across the cells or datasets of a comparison** (manager = worker type); one
-instance type stands behind every reported number. The user first chose `n2-highmem-32` (256 GB fits
-every dataset at W=1), then **reverted to `n2-highmem-4` (4 vCPU, 32 GB) the same day** because the
-N2 training quota (96 vCPUs in us-east1; 192 pending, 256 auto-denied) allows only W <= 2 on -32 but
-W <= 16 on -4 (68 vCPUs), and the scaling curve W = 1 .. 16 (.. 32, 48 once quota allows: 132 / 196 vCPUs)
-matters more than the W=1 reference. Cells whose per-worker need (MEMORY_BUDGET.md formula) exceeds
-~70 % of 32 GB are shown as OOM in the planned-runtime table
-(`paper/distributed_spo_gbt_kdd27/tables/table_planned_runtime.tex`, also in Overleaf). **That 70 % line
-is an agent heuristic from one 16 GB failure (SPO 1.6M x 512, predicted 12.6 GB, killed), not a user
-decision; the user asked for it to be calibrated on 32 GB (2026-10-24)**: Criteo aa_w4 (predicted
-25.7 GB = 80 %) is run as the probe. If it survives, the OOM marks move one W step left; if the worker
-is killed, 70 % stands with evidence. Record the outcome here. Thread count per worker stays the YDF
-default (`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
-**Warn the user before launching anything that would change the machine type**, e.g. a dataset that
-needs a W=1 or W=2 reference that only fits a bigger node — that is their decision. The in-node SPO
-parallelism branch (`in-node-parallelism-SPOGBT`, cherry-picked onto `time-barriers-innode`) is compared
-against the baseline on the same -4 grid (SPO arm only; the distributed AA path is unchanged).
+**Every distributed run uses `n2-highmem-16` (16 vCPU, 128 GB), manager = worker** (user directive
+2026-10-25, replacing the n2-highmem-4 choice of 2026-10-24, which itself replaced a same-day
+n2-highmem-32 choice). **Never mix machine types across the cells or datasets of a comparison**; one
+instance type stands behind every reported number. The -4 grids of 2026-10-24 are a different type and
+are not mixed with -16 cells. N2 training quota in us-east1 is 96 vCPUs (192 pending, 256 auto-denied):
+on -16 that is W <= 5 per cell (W=16 needs 272). Thread count per worker stays the YDF default
+(`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
+**Warn the user before launching anything that would change the machine type** — that is their decision.
+The in-node SPO parallelism branch (`in-node-parallelism-SPOGBT`, cherry-picked onto
+`time-barriers-innode`) is compared against the baseline on the same -16 grid (SPO arm only; the
+distributed AA path is unchanged).
+
+**No "70 % of RAM = OOM" rule (user directive, 2026-10-25).** That line was an agent heuristic from one
+16 GB failure, never a user decision; the user dropped it and the Criteo aa_w4 calibration probe with it.
+Do not mark cells OOM in the planned-runtime table from a RAM-fraction threshold and do not gate launches
+on one; a cell is OOM only when a worker was actually killed.
 
 ## Real distributed runs only on Vertex AI; local = smoke tests (user directive, 2026-10-25)
 
@@ -402,3 +401,7 @@ never report an in-process number as "distributed". Reason: the paper's distribu
 (`results.csv`), accuracy suite (`suite_results.csv`) and the 2026-10-22 APSFailure in-node/sort table
 were all m7i in-process runs and were mistaken for cluster runs; a Vertex re-run on HIGGS was ordered on
 2026-10-24. Everything in `results.csv` / `suite_results.csv` recorded before this date is in-process.
+
+## Chat replies under 50 words (user directive, 2026-10-25)
+
+Every chat reply stays under 50 words. Plans, confirmations, results: one line each. Detail goes in files, not chat.

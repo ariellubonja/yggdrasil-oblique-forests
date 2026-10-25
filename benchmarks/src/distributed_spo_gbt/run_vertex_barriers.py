@@ -46,7 +46,7 @@ ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDe
 ap.add_argument("--dataset", required=True, choices=sorted(DATASETS))
 ap.add_argument("--workers", default="1,2,4,8")
 ap.add_argument("--arms", default="aa,spo")
-ap.add_argument("--machine", default="n2-highmem-4", help="worker machine type")
+ap.add_argument("--machine", default="n2-highmem-16", help="worker machine type")
 ap.add_argument("--manager_machine", default=None, help="manager machine type; default = --machine (it only holds the test set)")
 ap.add_argument("--trees", type=int, default=50)
 ap.add_argument("--p_total", type=int, default=None, help="total SPO projections per node over all workers; default ceil(sqrt(cols))")
