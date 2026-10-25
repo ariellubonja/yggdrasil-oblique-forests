@@ -420,6 +420,15 @@ decision; the user asked for it to be calibrated on 32 GB (2026-10-24)**: Criteo
 is killed, 70 % stands with evidence. Record the outcome here. Thread count per worker stays the YDF
 default (`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
 **Warn the user before launching anything that would change the machine type**, e.g. a dataset that
-needs a W=1 or W=2 reference that only fits a bigger node — that is their decision. The in-node SPO
-parallelism branch (`in-node-parallelism-SPOGBT`, cherry-picked onto `time-barriers-innode`) is compared
-against the baseline on the same -4 grid (SPO arm only; the distributed AA path is unchanged).
+needs a W=1 or W=2 reference that only fits a bigger node — that is their decision.
+
+## In-node SPO parallelism branch dropped (user decision, 2026-10-25)
+
+The in-node SPO parallelism branches (`in-node-parallelism-SPOGBT` @ 08c31fd0, `time-barriers-innode` @
+4df36453) are **dropped** (delete local + origin; the SHAs stay recoverable from reflog). The idea
+(min(threads, P) oblique jobs per node) **only applies when P = ceil(sqrt F), i.e. fewer than 10 projections
+on the paper datasets (F <= 100)**: with P < 10 a node can occupy at most P threads, so the per-node pool is
+nearly idle and the single-thread-per-node timings stand. Do not revive it for the sqrt(F) regime; reconsider
+only if a run uses a projection count >> threads (`num_projections_exponent` > 0.5 or wide trunks with P in
+the hundreds). The distributed flat-chunk + VQSort worker fix is a separate change and keeps the
+"always VQSort" rule.
