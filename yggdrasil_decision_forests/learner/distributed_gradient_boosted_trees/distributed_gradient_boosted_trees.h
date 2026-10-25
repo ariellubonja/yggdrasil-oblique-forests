@@ -40,7 +40,10 @@
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DISTRIBUTED_GRADIENT_BOOSTED_TREES_DISTRIBUTED_GRADIENT_BOOSTED_TREES_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DISTRIBUTED_GRADIENT_BOOSTED_TREES_DISTRIBUTED_GRADIENT_BOOSTED_TREES_H_
 
+#include <fstream>
 #include <memory>
+#include <utility>
+#include <vector>
 #include <optional>
 
 #include "absl/container/flat_hash_map.h"
@@ -158,8 +161,14 @@ class Monitoring {
   std::string InlineLogs();
   void BeginStage(Stages stage);
   void EndStage(Stages stage);
-  void NewIter();
+  void NewIter(int iter_idx = -1);
   void FindSplitWorkerReplyTime(int worker_idx, absl::Duration delay);
+  // Barrier recorder (env DGBT_BARRIER_CSV=<path>): one CSV row per request
+  // round, with manager-clock timestamps and worker self-reported runtimes.
+  void SetLayer(int layer_idx) { layer_idx_ = layer_idx; }
+  void SendBegin();
+  void DispatchDone(int num_requests, size_t bytes_out);
+  void WorkerReply(int worker_idx, double runtime_seconds, size_t bytes_in);
   absl::string_view StageName(Stages stage);
 
  private:
@@ -204,6 +213,22 @@ class Monitoring {
   // Starting time of the first iteration i.e. ~ start of the training.
   absl::Time time_first_iter_;
   absl::Time begin_current_iter_;
+
+  // Barrier recorder state (see SendBegin/DispatchDone/WorkerReply).
+  void FlushBarrier(absl::Time now);
+  int iter_idx_ = -1;
+  int layer_idx_ = -1;
+  int round_ = 0;
+  bool pending_barrier_ = false;
+  absl::Time origin_ = absl::Now();
+  absl::Time barrier_begin_, send_begin_, dispatch_done_, first_reply_,
+      last_reply_;
+  int num_requests_ = 0;
+  size_t bytes_out_ = 0;
+  size_t bytes_in_ = 0;
+  std::vector<std::pair<int, double>> reply_runtimes_;
+  std::unique_ptr<std::ofstream> barrier_csv_;
+  bool barrier_csv_probed_ = false;
 };
 
 // Aggregates partial evaluations (evaluation of the weak models trained in a

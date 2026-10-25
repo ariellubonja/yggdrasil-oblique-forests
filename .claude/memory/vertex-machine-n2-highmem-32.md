@@ -1,6 +1,6 @@
 ---
 name: vertex-machine-n2-highmem-32
-description: Vertex AI machine policy — one machine type per comparison; n2-highmem-4 for the W=1..16 grids (user decision 2026-10-24, superseding the same-day n2-highmem-32 choice); the 70 % RAM "OOM" line is an agent heuristic under calibration, not a user rule
+description: Vertex AI machine policy — one machine type per comparison; n2-highmem-16 since 2026-10-25 (after -32 and -4 on 2026-10-24); no 70 % RAM OOM rule (user dropped it 2026-10-25)
 metadata:
   node_type: memory
   type: feedback
@@ -30,3 +30,8 @@ by hand. W=32 needs 132 vCPUs, W=48 needs 196 (a 200 request). Planned-runtime t
 Epsilon -4 grid 20261024T003657Z; AA on tall data runs 2-3x above its 89 ns/cell/tree anchor, recalibrate
 from the finished cells). **Warn the user before any launch that would change the machine type.**
 Related: [[trunk-min-256-columns]], [[no-dataset-slicing]], [[directives-go-in-repo-claude-md]].
+
+**Update 2026-10-25 (user decision):** every distributed run now uses **n2-highmem-16** (16 vCPU, 128 GB),
+manager = worker; quota 96 vCPUs ⇒ W ≤ 5 per cell. The -4 grids of 2026-10-24 are not mixed with -16 cells.
+The 70 % RAM OOM heuristic and the Criteo aa_w4 probe were dropped by the user; a cell is OOM only when a
+worker was actually killed. `run_vertex_barriers.py --machine` defaults to n2-highmem-16.

@@ -38,9 +38,12 @@ Dataset-cache creation (per-column sort on the workers) stays below the training
 | TabArena APSFailure | 0.08M x 170 | 11.0 | **0.1** / **0.2** | **0.1** / **0.1** | **0.0** / **0.1** | **0.0** / **0.0** | **0.0** / **0.0** | 1 / 1 |
 
 Notes
-- Real datasets live on the m7i (`benchmarks/data`), not in `gs://ariel_ydf_bucket` (only trunks and
-  run outputs are there as of 2026-10-15); using one on Vertex means uploading it as CSV shards
-  (16 shards like `gen_trunk.py`) and pointing `vertex_build/train.py` at `csv:gs://.../shard_*.csv`.
+- Already in `gs://ariel_ydf_bucket/big/` (uploaded from the m7i, checked 2026-10-24): EPSILON
+  (`epsilon_normalized_train.csv` 15.7 GB + `epsilon_test_100k.csv`), HIGGS (`HIGGS_train_10500k.csv` +
+  `HIGGS_test_500k_floatlabel.csv`), SUSY (same layout), YOUTUBE8M (train 56 GB + validate 16 GB, label
+  sidecars). `folds/` holds 33 small suite datasets as fold CSVs. Everything else (ClimSim, Numerai,
+  Criteo, taxi, Airline, Jane Street, weather) lives only on the m7i; upload as CSV shards (16 like
+  `gen_trunk.py`, `vertex_build/shard_csv.sh`) and point `vertex_build/train.py` at `csv:gs://.../shard_*.csv`.
 - Width matters for the distributed story: HIGGS / SUSY / taxi / Criteo / Airline give < 3 columns
   per worker at W = 16; Epsilon, YouTube-8M, Numerai, ClimSim, homecredit-default are the wide ones.
 - Candidates that *need* >= 2 workers on 16 GB (a real strong-scaling story): Epsilon (SPO),
