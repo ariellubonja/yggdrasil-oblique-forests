@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "benchmarks" / "src" / "spo_vs_gbt"))
+sys.path.insert(0, str(ROOT / "benchmarks" / "src" / "spaa27_experiments"))
 import make_overall_depth_table as tbl  # noqa: E402  (shared cell loader)
 
 OUT_DIR = ROOT / "paper" / "vectorized_adaptive_spaa27" / "figures" / "results"

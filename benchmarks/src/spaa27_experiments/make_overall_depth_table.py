@@ -138,6 +138,9 @@ def load_cells(max_reps: int = 0, family: str = "rf") -> tuple[pd.DataFrame, int
     for k, f in enumerate(files, 1):
         d = pd.read_csv(f)
         d = d[(d.status == "OK") & (d.min_examples == min_ex) & (d.family == family)]
+        if family == "gbt":  # SPO-GBT reads the P = F runs (arms.py *_fullproj, directive 2026-10-24)
+            d = d[d.arm.str.endswith("_fullproj")]
+            d = d.assign(arm=d.arm.str.removesuffix("_fullproj"))
         d = d.assign(rep=k)
         parts.append(d[["dataset", "arm", "max_depth", "train_s", "rep"]])
     df = pd.concat(parts)
