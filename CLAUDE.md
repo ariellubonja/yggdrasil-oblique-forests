@@ -402,6 +402,6 @@ never report an in-process number as "distributed". Reason: the paper's distribu
 were all m7i in-process runs and were mistaken for cluster runs; a Vertex re-run on HIGGS was ordered on
 2026-10-24. Everything in `results.csv` / `suite_results.csv` recorded before this date is in-process.
 
-## Chat replies under 50 words (user directive, 2026-10-25)
+## Chat replies under 100 words (user directive, 2026-10-25; was 50)
 
-Every chat reply stays under 50 words. Plans, confirmations, results: one line each. Detail goes in files, not chat.
+Every chat reply stays under 100 words unless the user explicitly asks for more. Plans, confirmations, results: one line each. Detail goes in files, not chat.
