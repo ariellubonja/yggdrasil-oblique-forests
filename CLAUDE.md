@@ -389,3 +389,16 @@ default (`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
 needs a W=1 or W=2 reference that only fits a bigger node — that is their decision. The in-node SPO
 parallelism branch (`in-node-parallelism-SPOGBT`, cherry-picked onto `time-barriers-innode`) is compared
 against the baseline on the same -4 grid (SPO arm only; the distributed AA path is unchanged).
+
+## Real distributed runs only on Vertex AI; local = smoke tests (user directive, 2026-10-25)
+
+**Every reported distributed SPO-GBT / AA-GBT number comes from Vertex AI CustomJobs** (one node per
+manager and per worker, `run_vertex_barriers.py` or the scaling notebook; threads = the node's vCPUs,
+one N2 machine type per comparison). The in-process driver `examples/train_distributed_gbt`
+(`--num_workers`, `--num_threads`, workers as threads in one process) and the scripts on top of it
+(`run_dgbt.sh`, `run_dgbt_suite.sh`, `run_barrier_cell.sh`) are **smoke tests only**: correctness,
+bit-identity, build checks, small shapes. Never run them as an experiment whose numbers get reported, and
+never report an in-process number as "distributed". Reason: the paper's distributed runtime table
+(`results.csv`), accuracy suite (`suite_results.csv`) and the 2026-10-22 APSFailure in-node/sort table
+were all m7i in-process runs and were mistaken for cluster runs; a Vertex re-run on HIGGS was ordered on
+2026-10-24. Everything in `results.csv` / `suite_results.csv` recorded before this date is in-process.

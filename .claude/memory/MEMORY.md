@@ -4,3 +4,4 @@
 - [Directives go in repo CLAUDE.md](directives-go-in-repo-claude-md.md) — user directive 2026-10-22; write every standing rule into git-tracked CLAUDE.md the same turn
 - [Test split = last 10 %](test-split-last-10-percent.md) — user directive 2026-10-24; datasets without an explicit test set use the last 10 % of rows
 - [Vertex machine policy: one type per comparison, n2-highmem-4 for now](vertex-machine-n2-highmem-32.md) — user decisions 2026-10-24; the 70 % RAM OOM line is an agent heuristic under calibration (Criteo aa_w4), not a user rule
+- [Distributed runs only on Vertex AI](distributed-runs-only-on-vertex.md) — user directive 2026-10-25; in-process train_distributed_gbt = smoke tests only, never reported numbers
