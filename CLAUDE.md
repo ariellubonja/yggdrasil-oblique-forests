@@ -303,6 +303,12 @@ Overleaf lacks (and vice versa). On 2026-10-22 a push referenced a PDF the user 
 upload by hand; it never landed and the project broke. The MCP is text-only, but the clone's
 git remote accepts binaries: `git add` + commit + `git push origin main` from the clone uploads
 a PDF — do that instead of asking the user to upload.
+**Check the page layout too, not just rc=0 (user directive, 2026-10-26).** After adding or moving any
+figure/table/section, render the affected pages (`pdfjam` + `qlmanage`) and map labels to pages from
+`main.aux`: every float on or right after its section's page, no half-empty pages from stray
+`\clearpage`, no heading stranded beside a float. Full-width figure*/table* never land on the page
+they are written; to pin one next to its heading use a `\twocolumn[{\floatblock ...}]` block with
+`\noindent\begin{minipage}{\textwidth}\captionsetup{type=...}` (the KDD27 preamble defines `\floatblock`).
 
 ## Don't commit paper figure/table edits to this repo (user directive, 2026-09-25)
 

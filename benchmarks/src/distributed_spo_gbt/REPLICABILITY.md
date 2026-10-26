@@ -7,7 +7,7 @@ not the harness. **Only family A yields numbers the paper may report as "distrib
 
 | Family | Where it runs | Driver | Results |
 |---|---|---|---|
-| A. Vertex AI grids on natural datasets (GRPC, one VM per manager and per worker) | GCP project `ydf-distributed-spo-gbt`, `us-east1` | `run_vertex_barriers.py` + `vertex_build/` | `barriers/vertex/p_F/<RUN_ID>_<dataset>/<arm>_w<W>/` (P = F) and `barriers/vertex/p_sqrtF/...` (2026-10-24, P = ceil(sqrt F)) |
+| A. Vertex AI grids on natural datasets (GRPC, one VM per manager and per worker) | GCP project `ydf-distributed-spo-gbt`, `us-east1` | `run_vertex_barriers.py` + `vertex_build/` | `barriers/vertex/p_F/<RUN_ID>_<dataset>/<arm>_w<W>/` (P = F) |
 | B. Vertex AI weak/strong scaling on trunk data (2026-10-15) | same project, `n2-highmem-2` | the two notebooks + `vertex_build/` | `vertex_scaling/<RUN_ID>_<cols>c/`; removed from `main.tex` on 2026-10-26 |
 | C. Single box, workers as threads in one process | AWS `m7i.metal-24xl` | `examples/train_distributed_gbt` via `run_dgbt*.sh`, `queue*.sh` | `results.csv`, `anchors.csv`, `suite_results.csv`, `in_node_parallelism_2026-10-22/`; smoke tests since 2026-10-25 |
 
@@ -31,19 +31,21 @@ worker = the node's vCPUs (YDF default). SPO arms: binary weights, density 1.5, 
 (`--p_total F`; the per-W exponent is recorded in `eval.json["learner_kwargs"]`). The 2026-10-24 grids
 predate both rules (n2-highmem-4, P = ceil(sqrt F)).
 
-### Runs so far (`barriers/vertex/`, reorganised 2026-10-26 into `p_sqrtF/` and `p_F/`)
+### Runs so far (`barriers/vertex/`, all P = F since 2026-10-26)
 
 | Folders | Date | Machine | Trees | SPO budget | Cells | Feeds |
 |---|---|---|---|---|---|---|
-| `p_sqrtF/20261024T162251Z_epsilon`, `..162321Z_youtube8m`, `..162440Z_{higgs,susy}` | 10-24 | n2-highmem-4 | 50 | ceil(sqrt F) | aa, spo; W = 1..8 (16 where run) | AA/SPO rows of `tables/table_vertex_hm4_body.tex` via `make_vertex_hm4_table.py`; hm4 column of the setup-cost table |
 | `p_F/pfw1{base,vqsort,parstd,innode}20261025_{epsilon,higgs,susy}` | 10-25 | n2-highmem-16 | 10 | F | W = 1: aa + four SPO workers (`0e37d40d` main before the fix, `1a1934fa` VQSort only, `4df36453-stdsort` chunk jobs only, `4df36453` both) | `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` |
-| `p_F/pfhm4_20261025_*`, `p_F/pfgrid20261025_*` | 10-25 | n2-highmem-4 / n2-highmem-16 | 10 | F | aa, spo (parallel worker on `main`); W = 1..16 / 1..4; Epsilon, HIGGS, SUSY, YouTube-8M | `tables/table_vertex_hm4_hm16_pf_body.tex` (the paper's main runtime table); hm16 column of the setup-cost table |
+| `p_F/pfhm4_20261025_*`, `p_F/pfgrid20261025_*` | 10-25 | n2-highmem-4 / n2-highmem-16 | 10 | F | aa, spo (parallel worker on `main`); W = 1..16 / 1..4; Epsilon, HIGGS, SUSY, YouTube-8M | `tables/table_vertex_hm4_hm16_pf_body.tex` (the paper's main runtime table); both columns of the setup-cost table |
 | `p_F/pfhm4bar20261025_*` | 10-25 | n2-highmem-4 | 10 | F | aa, spo at W = 16 with the barrier recorder on | `make_barrier_figs.py` -> the YouTube-8M barrier figures |
 
 Deleted on 2026-10-26 (recoverable from commits 9cb1fc0f / 88b70553): `20261024T003657Z_epsilon` (duplicate
 of `162251Z`), `20261024T225254Z_criteo` (2-tree probe), `20261024T224943Z_*` (dropped in-node branch at
 P = ceil(sqrt F); the "SPO in-node" rows of `table_vertex_hm4_body.tex` came from it, so that body can no
-longer be regenerated with those rows). The `pf*` cells and the three generators were fetched from the m7i
+longer be regenerated with those rows). The rest of the 2026-10-24 sqrt(F) data went the same day with the paper's
+`tab:vertex-hm4-runtime` table: `p_sqrtF/` (n2-highmem-4, 50 trees: `20261024T162251Z_epsilon`, `..162321Z_youtube8m`,
+`..162440Z_{higgs,susy}`), `make_vertex_hm4_table.py` and `table_vertex_hm4_body.tex` (recoverable from commit 54e79671).
+The setup-cost table's n2-highmem-4 column now reads the P = F n2-highmem-4 cells (setup does not depend on P or trees). The `pf*` cells and the three generators were fetched from the m7i
 on 2026-10-26 (box commits ea4dc48e, 44cad8d7 = local branch `m7i-main`; the paired-grid version of
 `make_pf_grid_table.py` and `make_barrier_figs.py` were uncommitted there). OOM marks in the hm4 grid come
 from `p_F/pfhm4_20261025_youtube8m/launcher.log` (`--oom_logs`), reconstructed from the launcher's stdout.
@@ -138,12 +140,11 @@ Generators emit the tabular body only; `main.tex` owns the environments and capt
 |---|---|---|---|
 | `tables/table_vertex_hm4_hm16_pf_body.tex` | `make_pf_grid_table.py --run_prefix pfhm4_20261025 --machine n2-highmem-4 --w 1,2,4,8,16 --oom_logs 'barriers/vertex/p_F/pfhm4_20261025_youtube8m/launcher.log' --right_run_prefix pfgrid20261025 --right_machine n2-highmem-16 --right_w 1,2,4` | `barriers/vertex/p_F/pfhm4_20261025*`, `pfgrid20261025*` | A |
 | `figures/evaluation/grcp_n2/fig_yt8m_barriers_{totals,layers}_body.tex` + `yt8m_barriers/*.dat` | `make_barrier_figs.py` (writes in place) | `barriers/vertex/p_F/pfhm4bar20261025_youtube8m/{aa,spo}_w16/barriers.csv` | A |
-| `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` | `make_pf_ablation_tables.py` (writes in place) | ablation: `p_F/pfw1*`; setup cost: every hm4 50-tree cell (`p_sqrtF`) and every hm16 cell (`p_F`) | A |
+| `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` | `make_pf_ablation_tables.py` (writes in place) | ablation: `p_F/pfw1*`; setup cost: every n2-highmem-4 and n2-highmem-16 cell in `p_F` | A |
 
 Regenerated locally on 2026-10-26 from the fetched cells: every body reproduced byte-for-byte except `table_setup_cost_body.tex`,
 whose hm16 ranges now include the `pfgrid` W = 1..4 cells (the Overleaf copy was made from the `pfw1` W = 1 cells alone) and whose
-Epsilon hm4 range lost the deleted duplicate grid; the new numbers are in the repo, not yet on Overleaf.
-| `tables/table_vertex_hm4_body.tex` | `make_vertex_hm4_table.py` | `barriers/vertex/p_sqrtF/*/*/eval.json` (n2-highmem-4, 50 trees); its "SPO in-node" rows have no source since the 2026-10-26 deletion | A (2026-10-24 grids) |
+hm4 column now reads the P = F n2-highmem-4 cells (`pfhm4*`) instead of the deleted sqrt(F) grids; pushed to Overleaf 2026-10-26.
 | `tables/table_dist_runtime_body.tex` | `make_paper_tables.py` (body header says in-process) | `results.csv` (trees == 50; `extra` tags `in_process_m7i`) + `anchors.csv` | C |
 | `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_{delta,mean}_body.tex` | `make_paper_tables.py` | `suite_results.csv` vs `speedup_map_by_dataset/suite_results.csv` | C |
 | `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `in_node_parallelism_2026-10-22/` | C |
@@ -157,5 +158,5 @@ and `figures/evaluation/grcp_n2/strong_weak_scaling.pdf` (family B), `tables/tab
 
 Rerun order for a full refresh: (1) family A cells on Vertex (`run_vertex_barriers.py`, n2-highmem-16,
 `--p_total F`), (2) the three m7i-only generators once they are back in the repo, then
-`make_vertex_hm4_table.py` and `make_paper_tables.py`, (3) push the `.tex` bodies to Overleaf after
+`make_paper_tables.py`, (3) push the `.tex` bodies to Overleaf after
 compiling the pulled MCP clone locally (CLAUDE.md).

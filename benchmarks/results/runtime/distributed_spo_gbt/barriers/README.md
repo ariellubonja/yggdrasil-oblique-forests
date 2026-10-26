@@ -104,12 +104,12 @@ flushed and RestoreCheckpoint gets its own row.
 
 Run list, machine-type rules and what is still missing from the repo:
 `benchmarks/src/distributed_spo_gbt/REPLICABILITY.md` section A. `vertex/p_F/` holds the P = F runs
-(the paper's), `vertex/p_sqrtF/` the 2026-10-24 P = ceil(sqrt F) grids. Each cell
+(the paper's); the 2026-10-24 P = ceil(sqrt F) grids (`vertex/p_sqrtF/`) were deleted 2026-10-26, recoverable from commit 54e79671. Each cell
 `<RUN_ID>_<dataset>/<arm>_w<W>/` holds `barriers.csv` (same columns as above, manager clock),
 `eval.json`, `manager.log` and `summary.txt` (`summarize_barriers.py` output; the 9 `pfw1{base,parstd,vqsort}*`
 summaries were regenerated locally on 2026-10-26, the box had no pandas).
 
-What GRPC changed vs. the in-process measurement above (`p_sqrtF/` n2-highmem-4 grids, 50 trees,
+What GRPC changed vs. the in-process measurement above (`p_sqrtF/` n2-highmem-4 grids, 50 trees, deleted 2026-10-26, recoverable from commit 54e79671,
 P = ceil(sqrt F), read from each cell's `summary.txt`; wall = first stage begin to last stage end):
 
 | cell | wall | comm residual (% of wall) | idle (% of worker time) |

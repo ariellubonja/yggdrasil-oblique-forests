@@ -1,4 +1,10 @@
-\documentclass[sigconf,screen]{acmart}
+\documentclass[sigconf]{acmart}
+
+% KDD 2027 (https://kdd2027.kdd.org)
+\copyrightyear{2027}
+\acmYear{2027}
+\acmConference[KDD '27]{Proceedings of the 33rd ACM SIGKDD Conference on Knowledge Discovery and Data Mining}{August 1--5, 2027}{San Jose, CA, USA}
+\acmBooktitle{Proceedings of the 33rd ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD '27), August 1--5, 2027, San Jose, CA, USA}
 \usepackage{hyperref}
 \usepackage{mathtools}
 \usepackage{enumitem}
@@ -40,9 +46,87 @@
 
 \newcommand{\TODO}[1]{\textbf{\textcolor{red}{#1}}}
 
-\title{Distributed SPO-GBT}
+\title{A Method for Distributed Random Projection Tree Computation}
 \author{Ariel Lubonja}
-% \affiliation
+\email{ariel@cs.jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Jungsang Yoon}
+\email{jyoon72@jh.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Haoyin Xu}
+\email{hx@jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Richard Stotz}
+\email{richardstotz@google.com}
+\affiliation{
+  \institution{Google}
+  \city{Zurich}
+  \country{Switzerland}
+}
+
+\author{Jeffrey Hetherly}
+\email{hetherly@google.com}
+\affiliation{
+  \institution{Google}
+  \city{San Francisco}
+  \state{California}
+  \country{USA}
+}
+
+\author{Mathieu Guillame-Bert}
+\email{gbm@google.com}
+\affiliation{
+  \institution{Google}
+  \city{Zurich}
+  \country{Switzerland}
+}
+
+\author{Vladimir Braverman}
+\email{vova@cs.jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Joshua T. Vogelstein}
+\email{jovo@jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Randal Burns}
+\email{randal@cs.jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\renewcommand{\shortauthors}{Lubonja et al.}
 
 \begin{document}
 
@@ -64,18 +148,8 @@ YDF has support for distributed training GBTs: the distribution is among the fea
 Distributed training has 0 support for Sparse oblique splits; mainly because it's nontrivial to implement: Workers would need to store the pseudo-features, or store enough features to construct the pseudo-features efficiently, without moving features around too much. 
 Distributed sparse oblique splits has not been done by anyone AFAIK, so this would by really something novel. YDF has all the primitives and the GBT implementation ready.
 
-\section{Challenges}
 
-Distributed training has 0 support for Sparse oblique splits; mainly because it's nontrivial to implement: Workers would need to store the pseudo-features, or store enough features to construct the pseudo-features efficiently, without moving features around too much. 
-Distributed sparse oblique splits has not been done by anyone AFAIK, so this would by really something novel.YDF has all the primitives and the GBT implementation ready
-
-
-\section{Related Work}
-
-Summarize \href{https://claude.ai/chat/4ce221a7-529f-4914-9230-8ac7a33c1371}{Claude}'s research
-
-
-\section{Current Distributed GBT}
+\subsection{Current YDF Distributed GBT}
 
 \textbf{Different workers handle different features}. This is very scalable, as each worker needs $\sim O(2N)$ memory.
 
@@ -93,16 +167,16 @@ YDF Distributed training requires:
  \begin{figure*}[t]
     \centering
     \includegraphics[width=.72\linewidth]{figures/method/distributed_gbt_training_loop_barrier.pdf}
-    \caption{Distributed GBT Training Loop. Bottom: the manager barrier that ends steps \textcircled{\scriptsize 1}, \textcircled{\scriptsize 3} and \textcircled{\scriptsize 5} -- $W$ requests fanned out, $W$ replies popped from one answer queue; the next stage starts only after the last reply (dashed line).}
+    \caption{Distributed GBT Training Loop and manager barrier.}
     \label{fig:ydf-dist-gbt-training-loop}
 \end{figure*}
 
-\subsection{Load-balanced Data Sharding}
+\subsubsection{Load-balanced Data Sharding}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{figures/method/distributed_gbt_column_partitioning.pdf}
-    \caption{Data Sharding illustration. Dataset is split by column, presorted, then round-robin-ed in a load-balancing way to workers.}
+    \caption{Data Sharding illustration. Dataset is split by column, presorted, then round-robined in a load-balancing way.}
     \label{fig:ydf-dist-gbt-load-balancing}
 \end{figure}
 
@@ -114,21 +188,20 @@ Feature columns are weighed by their expected compute expense : numerical featur
             \item 1 column to 1 worker. No replication.
             \item \textbf{Main issue}: how to shard these once in SPO when they're sampled per node?
         \end{itemize}
-    \item Presort Columns. \textbf{Issue 2: Not possible in SPO. Will be skipped}
+    \item Presort Columns. \textbf{Not possible in SPO}
     \item Load-balanced column round-robin to workers, by compute intensity: 5 for Numeric, 1 for Discretized. \textbf{Issue 3. No fixed columns in SPO}
     \item Train
 \end{enumerate}
 
-\subsection{Training}
+\subsubsection{Training}
 
-
-\texttt{for depth in tree }\{
+\paragraph{for depth in tree:}
 
 \begin{enumerate}
     \item Workers scan their column subset, computing local \texttt{BestSplit} for nodes at a depth $d$ (in \texttt{FindBestSplitsWithThreadPool}). Local maxes are sent to Manager.
     \item Manager computes global Max in \texttt{MergeBestSplits}. Update manager's tree structure \texttt{ApplySplitToTree}.
     \item Manager broadcasts global winning split - \texttt{EmitEvaluateSplits}
-    \item Worker who owns Winning Column creates \textbf{bitmap} of examples : left-right. There is 1 winner per node at this depth
+    \item Worker who owns Winning Column creates \textbf{bitmap} of examples to split into left-right. There is 1 winner per node at this depth
         \begin{lstlisting}
 for (auto value : values) {
   const auto node_idx = example_to_node[example_idx];
@@ -141,9 +214,16 @@ for (auto value : values) {
     \item Monitor workload for skew. Work-steal.
 \end{enumerate}
 
-\}
 
-Steps 1, 3 and 5 each end in a manager barrier (Figure~\ref{fig:ydf-dist-gbt-training-loop}, bottom); so do the per-tree \texttt{StartNewIter} and \texttt{EndIter} stages.
+\subsection{Approximate Splits}
+
+\TODO{check if this is being used}
+
+\textbf{Consider using approximate splits} to further improve training speed. Very often, this can speed up training by 2x-5x without negative impact on quality. Set hyperparameter\\ \textbf{force\_numerical\_discretization=True} to enable approximate splits for distributed training.
+
+\section{Related Work}
+
+\TODO{summarize}
 
 
 \section{Method: Column Distribution Strategies on Distributed SPO-GBT}
@@ -151,6 +231,8 @@ Steps 1, 3 and 5 each end in a manager barrier (Figure~\ref{fig:ydf-dist-gbt-tra
 Partitioning function should be done when loading data - where VerticalDataset is created. Still TODO: decide partitioning fn.
 
 \subsection{All Columns on Every Worker}
+
+\TODO{What does this experiment tell us?}
 
 In GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike RF and SPO-RF, which sample $\sqrt{\mathbf{F}} \sim \mathbf{F}$. \newline
 
@@ -163,12 +245,12 @@ In GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike RF and SP
 
 % Also applicable to bivariate and other random subset-based tree kernels
 
-\begin{figure}
-    \centering
-    \includegraphics[width=.6\linewidth]{figures/method/in_node_spo_sampling.pdf}
-    \caption{V1 works identically to Distributed GBT, but features are sampled only within a worker.}
-    \label{fig:simple-in-worker-column-sampling}
-\end{figure}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=.6\linewidth]{figures/method/in_node_spo_sampling.pdf}
+%     \caption{V1 works identically to Distributed GBT, but features are sampled only within a worker.}
+%     \label{fig:simple-in-worker-column-sampling}
+% \end{figure}
 
 % \begin{figure}[t]
 % \begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
@@ -210,7 +292,7 @@ Each worker holds and samples from a small subset of columns.
 
 \textbf{\textit{How many features should each worker hold?}}
 
-Define $F_{\text{node}} \coloneqq \sqrt{\mathbf{F}}$ as the number of columns stored at each worker.
+Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at each worker.
 
 
 
@@ -224,50 +306,23 @@ Define $F_{\text{node}} \coloneqq \sqrt{\mathbf{F}}$ as the number of columns st
 \begin{description}
     \item[\textit{Cost}:]
     \begin{itemize}
-        \item Smaller search space than sampling $\sqrt{F} \sim \mathbf{F}$.
-        \item Each worker still needs to hold $\sqrt{F}$ features instead of 1.
+        \item Smaller search space than sampling $F \sim \mathbf{F}$.
+        \item Each worker still needs to hold $F$ features instead of 1.
     \end{itemize}
 \end{description}
-
-% New page with the scaling figure pinned full-width at its top (non-floating).
-\twocolumn[{%
-\centering
-\includegraphics[width=0.95\textwidth]{figures/evaluation/grcp_n2/strong_weak_scaling.pdf}
-\captionof{figure}{Weak and Strong scaling results on Vertex AI.}
-\label{fig:vertex-scaling}
-\vspace{1em}
-\begin{minipage}[t]{0.48\textwidth}
-\centering
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\captionof{table}{Weak scaling on Vertex AI: tree-training time (setup excluded) and test accuracy. AL: Slope is caused by sort making work non-linear}
-\label{tab:vertex-weak-scaling}
-\input{tables/table_vertex_weak_body}
-\end{minipage}
-\hfill
-\begin{minipage}[t]{0.48\textwidth}
-\centering
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\captionof{table}{Strong scaling on Vertex AI: tree-training time, speedup over one worker, and test accuracy at 1.6M rows, 32 columns.}
-\label{tab:vertex-strong-scaling}
-\input{tables/table_vertex_strong_body}
-\end{minipage}
-\vspace{1em}
-}]
 
 
 \subsection{Random Column Assignment}
 
-\subsection{$C_2$ Permutations}
+\subsection{$C_2$ Combinations}
 
 \subsection{Smart Column Assignments}
 
 Frequently-selected columns \TODO{plot this}, Correlation-based, Information per column, Vova sketching
 
-\TODO{measure accuracy of each}
+measure accuracy of each
 
-Figure~\ref{fig:cc18-tree1-pareto} shows which features the first tree of an axis-aligned GBT splits on.
+Figure~\ref{fig:cc18-tree1-pareto} shows which features the trees of an axis-aligned GBT split on.
 
 \begin{figure*}[t]
 \centering
@@ -275,6 +330,15 @@ Figure~\ref{fig:cc18-tree1-pareto} shows which features the first tree of an axi
 \caption{Features split on by the first tree of a AA-GBT. Top: most Pareto-like. Bottom: least-pareto like. \TODO{does this remain the same for latter GBTs? Tradeoff of Extra memory vs. Accuracy}}
 \Description{Six bar charts of per-feature split share in the first GBT tree, sorted descending, for three concentrated and three flat datasets.}
 \label{fig:cc18-tree1-pareto}
+\par\smallskip\raggedright\footnotesize pooled over the 10 cross-validation models of a dataset
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\input{figures/evaluation/cc18_tree_feature_hist_body}
+\caption{Same trees as Figure~\ref{fig:cc18-tree1-pareto} on a fixed x-axis: the dataset's features in header order (unused features at 0), so the feature set is identical across the tree blocks and only the distribution of splits moves. Same y range per dataset.}
+\Description{Bar charts of per-feature split share against feature index for the same six datasets and trees 1, 100, 200 and 300.}
+\label{fig:cc18-tree-feature-hist}
 \par\smallskip\raggedright\footnotesize pooled over the 10 cross-validation models of a dataset
 \end{figure*}
 
@@ -306,44 +370,23 @@ Figure~\ref{fig:cc18-tree1-pareto} shows which features the first tree of an axi
 \label{fig:yt8m-barriers}
 \end{figure*}
 
-If a dataset has no explicit test set, the last 10\% of the dataset is used for test
-
-\TODO{these results are on n2-highmem-2 w/o SPO in-node parallelism!}
-
-Testing whether 10 trees with our natural datasets is quick enough (<5min). so far, some results are $P=\sqrt{F}$ - hence AA is so much slower.
+If a dataset has no explicit test set, the last 10\% of the dataset is used as test.
 
 \subsection{In-worker Projection Sampling}
 
-Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{However, for Youtube, AA is a lot slower than SPO}}
-
 \subsubsection{Vertex AI Results on N2-highmem}
 
-\subsubsection{\texttt{MULTI\_THREAD} results on m7i.metal-24x}
-
-% One float page per topic: runtime, accuracy, in-node parallelism.
-\begin{table*}[t]
-\centering
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\caption{Training time in seconds of sparse oblique (SPO) and axis-aligned (AA) GBT (50 trees, depth 6), in single-machine and distributed with $W$ workers. \texttt{MULTI\_THREAD} mode. Default n. threads used for Distributed (6 per worker).}
-\label{tab:dist-runtime}
-\input{tables/table_dist_runtime_body}
-% Figure shares the table's float so both land on one page.
-\vspace{1em}
-    \captionsetup{type=figure}
-    \includegraphics[width=0.75\textwidth]{figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf}
-    \caption{Training time of Dist-GBT (\texttt{MULTI\_THREAD}) vs. Local}
-    \label{fig:placeholder}
-\end{table*}
-\clearpage
 \begin{table*}[t]
 \centering
 \scriptsize
 \setlength{\tabcolsep}{2pt}
-\caption{Test ROC AUC of single-machine and distributed GBT with $W$ workers (300 trees, depth 6), for sparse oblique (SPO) and axis-aligned (AA). Cells are the mean $\pm$ std over 5 CV folds. Single chronological holdouts have no std. Single-machine SPO-GBT samples $F$ projections per node; distributed SPO-GBT workers \TODO{sample $F/W$ projections from their $F/W$ columns.}}
+\caption{Mean \& std. test ROC AUC of single-machine and distributed GBT with $W$ workers, for SPO and AA over 5 CV folds. Single chronological holdouts have no std. Single-machine SPO-GBT samples $F$ projections per node, distributed SPO-GBT workers sample $F/W$ projections from their $F/W$ columns.}
 \label{tab:dist-accuracy}
 \input{tables/table_dist_accuracy_body}
+\par\smallskip\raggedright\footnotesize Distributed ran locally on \texttt{MULTI\_THREAD}. 300 trees.
 \end{table*}
+
+
 \begin{figure*}[t]
 \centering
 \input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_delta_body}
@@ -351,6 +394,43 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 \Description{Heatmap of per-dataset AUC differences between distributed and single-machine GBT, SPO and AA, for each worker count.}
 \label{fig:dist-accuracy-delta}
 \end{figure*}
+
+\appendix
+% Full-width page top so heading, table and figure share one page.
+\twocolumn[{%
+
+\section{Appendix}
+
+\subsection{Evaluation}
+
+\subsubsection{\texttt{MULTI\_THREAD} results on m7i.metal-24x}
+
+% One float page per topic: runtime, accuracy, in-node parallelism.
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\captionsetup{type=table}
+\caption{Training time in seconds of sparse oblique (SPO) and axis-aligned (AA) GBT (50 trees, depth 6), in single-machine and distributed with $W$ workers. \texttt{MULTI\_THREAD} mode. Default n. threads used for Distributed (6 per worker).}
+\label{tab:dist-runtime}
+\input{tables/table_dist_runtime_body}
+\vspace{1em}
+    \captionsetup{type=figure}
+    \includegraphics[width=0.75\textwidth]{figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf}
+    \caption{Training time of Dist-GBT (\texttt{MULTI\_THREAD}) vs. Local}
+    \label{fig:placeholder}
+\end{center}
+}]
+\clearpage
+
+\subsection{In-node Dist-SPO Parallelism}
+\label{sec:in-node-parallelism}
+
+See results at \ref{tab:in-node-dist-vqsort-ablation}, \ref{tab:in-node-dist-vqsort-vertex}
+
+Local SPO only parallelizes in-node when >10 projections. If you see this, ensure $P=F$. Dist SPO-GBT parallel + VQSort implemented 25-Oct-2026
+
+22-Oct-26: \textbf{Added In-node parallelism in SPO-GBT}. single machine gives 2x. Need to update \& rerun above results. Currently also running HIGGS and EPSILON to confirm
+
 \begin{figure*}[t]
 \centering
 \input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body}
@@ -364,29 +444,10 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \caption{Benefit of VQSort and distributed in-node parallelism. Tree-training time in seconds on Vertex AI \texttt{n2-highmem-16} ($P{=}F$), ablating Highway VQSort and in-worker parallelism. Models are train byte-identical models.}
-\label{tab:in-node-ablation}
+\label{tab:in-node-dist-vqsort-ablation}
 \input{tables/table_in_node_ablation_body}
 \par\smallskip\raggedright\footnotesize 10 trees
 \end{table*}
-
-\begin{table*}[t]
-\centering\footnotesize\setlength{\tabcolsep}{4pt}
-\caption{Distributed tree-training time in seconds on Vertex AI \texttt{n2-highmem-4}. $P=\lceil\sqrt{F}\rceil$ total projections for SPO and $P=F$ for AA, hence the difference.}
-\label{tab:vertex-hm4-runtime}
-\input{tables/table_vertex_hm4_body}
-\par\smallskip\raggedright\footnotesize 50 trees, setup excluded. VQSort used
-\end{table*}
-
-\clearpage
-
-\appendix
-
-\section{Appendix}
-
-\subsection{In-node Dist-SPO Parallelism}
-\label{sec:in-node-parallelism}
-
-Local SPO only parallelizes in-node when >10 projections. If you see this, ensure $P=F$. Dist SPO-GBT parallel + VQSort implemented 25-Oct-2026
 
 \begin{table*}[t]
 \centering
@@ -395,7 +456,7 @@ Local SPO only parallelizes in-node when >10 projections. If you see this, ensur
 % (10 trees, depth 6, exact splits)
 \caption{Fixing limited SPO in-node parallelism. Training time in seconds of SPO-GBT with $T$ threads on a single \texttt{m7i.24x}. SPO in-node sequential evaluates the $P$ projections in $\min(T,\lceil P/10\rceil)$ threads, i.e.\ single-threaded when $P\le 10$. SPO in-node parallel uses $\min(T,P)$. Existing method was due to PR 403 overhead, which is now gone. TODO $P=F$}
 % Used $P=\lceil\sqrt{F}\rceil$.
-\label{tab:in-node-threads}
+\label{tab:in-node-dist-vqsort-vertex}
 \input{tables/table_in_node_threads_body}
 \end{table*}
 
@@ -413,16 +474,9 @@ distributed_gbt.cc::TrainWithStatusImpl()
 \end{lstlisting}
 \end{minipage}
 
-\subsection{Approximate Splits}
 
-\TODO{check if this is being used}
+\subsection{Setup cost}
 
-\textbf{Consider using approximate splits} to further improve training speed. Very often, this can speed up training by 2x-5x without negative impact on quality. Set hyperparameter\\ \textbf{force\_numerical\_discretization=True} to enable approximate splits for distributed training.
-
-
-\subsection{Using GCP and Vertex AI}
-
-\paragraph{Setup cost}
 Training a distributed model includes \emph{setup}: the time from job start until the manager logs \texttt{Start tree training} (noted based on whether included). Setup covers reading the CSV from Cloud Storage, building the distributed dataset cache in the shared directory (one file per column, numerical columns presorted) and waiting until every worker has loaded its column partition. (Table~\ref{tab:setup-cost}).
 
 \begin{table}[H]
@@ -435,7 +489,7 @@ Training a distributed model includes \emph{setup}: the time from job start unti
 
 \input{listings/in_worker_oblique}
 
-\subsection{Work log - Weekly TODOs}
+\section{Work log - Weekly TODOs}
 
 \TODO{Ariel TODOs by Nov-10}
 
@@ -495,21 +549,7 @@ Extend this to: 1) put globally most important columns in all nodes.
 \end{todolist}
 
 
-22-Oct-26: \textbf{Added In-node parallelism in SPO-GBT}. single machine gives 2x. Need to update \& rerun above results. Currently also running HIGGS and EPSILON to confirm
 
-Single-machine GBT, SUSY 4.5M, depth 6, exact finder, 10 trees:
-
-\begin{center}
-\begin{tabular}{rrrp{3.7cm}}
-\hline
-threads & HEAD & new & model \\
-\hline
-1  & 22.3\,s & 22.4\,s & identical \\
-8  & 22.2\,s & 11.1\,s (2.0$\times$) & differs (1 job $\rightarrow$ 5 jobs), as thread count already did \\
-48 & 22.6\,s & 11.5\,s (2.0$\times$) & same as 8 threads \\
-\hline
-\end{tabular}
-\end{center}
 
 
 \subsection{Full Implementation Code}

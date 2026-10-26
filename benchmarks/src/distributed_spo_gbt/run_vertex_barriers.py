@@ -40,7 +40,7 @@ DATASETS = {  # label + numeric column count drive the projection exponent
                     test=f"csv:gs://{BUCKET}/big/AIRLINE/test/shard_*.csv", label="class", cols=43, rows=37_892_905),
 }
 QUOTA_IDS = {"n2": "CustomModelTrainingN2CPUsPerProjectPerRegion", "c2": "CustomModelTrainingC2CPUsPerProjectPerRegion"}
-RESULTS = os.path.join(HERE, "../../results/runtime/distributed_spo_gbt/barriers/vertex/p_F")  # every run is P = F (CLAUDE.md 2026-10-25); sqrt(F) history in ../p_sqrtF
+RESULTS = os.path.join(HERE, "../../results/runtime/distributed_spo_gbt/barriers/vertex/p_F")  # every run is P = F (CLAUDE.md 2026-10-25); sqrt(F) grids deleted, see commit 54e79671
 SUBMIT_LOCK = "/tmp/run_vertex_barriers.submit.lock"  # shared by every launcher on this host
 
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

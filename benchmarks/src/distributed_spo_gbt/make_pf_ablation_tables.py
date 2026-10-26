@@ -15,7 +15,7 @@ ARMS = [("pfw1base", "SPO baseline"), ("pfw1vqsort", "SPO + VQSort only"),
 
 def load():
     cells = []
-    for p in glob.glob(os.path.join(RESULTS, "*", "*", "*", "eval.json")):  # p_F/ (pfw1*) and p_sqrtF/ (hm4 50-tree setup cost)
+    for p in glob.glob(os.path.join(RESULTS, "*", "*", "*", "eval.json")):  # p_F/ only; setup cost is independent of P and tree count
         e = json.load(open(p)); e["run"] = p.split(os.sep)[-3]; cells.append(e)
     return cells
 
@@ -57,7 +57,7 @@ def setup_cost(cells):
     for d, n in DATASETS:
         cs = [c for c in cells if c["dataset"] == d]
         if not cs: continue
-        hm4 = [c["setup_s"] for c in cs if c["machine_type"] == "n2-highmem-4" and c["trees"] == 50]
+        hm4 = [c["setup_s"] for c in cs if c["machine_type"] == "n2-highmem-4"]
         hm16 = [c["setup_s"] for c in cs if c["machine_type"] == "n2-highmem-16"]
         L.append(f"{n} & {cs[0]['rows'] / 1e6:.1f}M $\\times$ {cs[0]['cols']} & {rng(hm4)} & {rng(hm16)} \\\\")
     L += [r"\bottomrule", r"\end{tabular}"]
