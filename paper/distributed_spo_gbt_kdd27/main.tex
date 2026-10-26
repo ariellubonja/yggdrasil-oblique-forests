@@ -4,6 +4,7 @@
 \usepackage{enumitem}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
 
 
 % \usepackage[letterpaper,margin=0.8in]{geometry}
@@ -147,9 +148,9 @@ Steps 1, 3 and 5 each end in a manager barrier (Figure~\ref{fig:ydf-dist-gbt-tra
 
 \section{Method: Column Distribution Strategies on Distributed SPO-GBT}
 
-\subsection{All Columns on Every Worker}
+Partitioning function should be done when loading data - where VerticalDataset is created. Still TODO: decide partitioning fn.
 
-\TODO{ensure matches accuracy of single-machine}
+\subsection{All Columns on Every Worker}
 
 In GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike RF and SPO-RF, which sample $\sqrt{\mathbf{F}} \sim \mathbf{F}$. \newline
 
@@ -239,7 +240,7 @@ Define $F_{\text{node}} \coloneqq \sqrt{\mathbf{F}}$ as the number of columns st
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\captionof{table}{Weak scaling on Vertex AI: tree-training time (setup excluded) and test accuracy. \TODO{AL: I think slope is caused by sort?}}
+\captionof{table}{Weak scaling on Vertex AI: tree-training time (setup excluded) and test accuracy. AL: Slope is caused by sort making work non-linear}
 \label{tab:vertex-weak-scaling}
 \input{tables/table_vertex_weak_body}
 \end{minipage}
@@ -266,38 +267,44 @@ Frequently-selected columns \TODO{plot this}, Correlation-based, Information per
 
 \TODO{measure accuracy of each}
 
-\paragraph{Which features does axis-aligned GBT split on}
-To measure how much of the feature set a GBT uses, we trained an axis-aligned YDF GBT with default settings (300 trees, maximum depth 6, i.e.\ five split levels, shrinkage 0.1, exact numeric splits, every attribute a candidate at every node) on the 34 binary OpenML-CC18 tasks with 10-fold cross-validation (340 models, 2.07\,M split nodes) and recorded the feature chosen at every internal node. Table~\ref{tab:cc18-feature-depth} gives the medians across datasets (median $F{=}21$). The root is the only concentrated level: its most common feature heads 20\% of the 300 trees (63\% among trees 1--30, 30\% among trees 271--300), and a model uses 15 distinct root features. From depth 1 on the choice is close to uniform over the feature set: the normalised entropy of the per-node feature distribution rises from 0.73 at the root to 0.93 at depth 4, where the most common feature takes 13\% of the splits. Nearly every feature gets used: 24 of 34 datasets split on 100\% of their features in every fold (29 of 34 pooled over folds), and madelon splits on all 500 of its features, 480 of which are noise; a single tree touches a median 10 distinct features. The trees are not oblivious: sibling nodes pick the same feature 9--11\% of the time, and a whole level shares one feature in 11\% of trees at depth 1 and under 1.5\% deeper. A tree has a median 19 of its 31 possible internal nodes.
+Figure~\ref{fig:cc18-tree1-pareto} shows which features the first tree of an axis-aligned GBT splits on.
 
-\begin{table}[t]
-\centering\footnotesize\setlength{\tabcolsep}{3pt}
-\caption{Feature choice of axis-aligned GBT by depth: median over the 34 binary OpenML-CC18 tasks, 10-fold CV, YDF defaults (300 trees, depth 6, shrinkage 0.1, exact splits, all $F$ attributes candidates at every node; median $F{=}21$). Splits: internal nodes at that depth over 300 trees. Distinct: features split on at that depth. Top-1/Top-3: share of those splits on the most common one/three features. $\hat{H}$: entropy of the feature distribution normalised by $\log F$. $F_{\mathrm{eff}}$: $\exp$ of the unnormalised entropy. Sibl.\ same: sibling nodes splitting on the same feature. Level same: trees whose whole level, with at least two internal nodes, splits on one feature.}
-\label{tab:cc18-feature-depth}
-\input{tables/table_cc18_feature_depth_body}
-\end{table}
+\begin{figure*}[t]
+\centering
+\input{figures/evaluation/cc18_tree1_pareto_body}
+\caption{Features split on by the first tree of a AA-GBT. Top: most Pareto-like. Bottom: least-pareto like. \TODO{does this remain the same for latter GBTs? Tradeoff of Extra memory vs. Accuracy}}
+\Description{Six bar charts of per-feature split share in the first GBT tree, sorted descending, for three concentrated and three flat datasets.}
+\label{fig:cc18-tree1-pareto}
+\par\smallskip\raggedright\footnotesize pooled over the 10 cross-validation models of a dataset
+\end{figure*}
 
 \section{Evaluation}
 
 \begin{table*}[t]
 \centering\footnotesize\setlength{\tabcolsep}{4pt}
-\caption{Distributed tree-training time in seconds on Vertex AI \texttt{n2-highmem-4} (4 vCPU, 32\,GB; manager and $W$ workers), 10 trees, depth 6, $P{=}F$ total projections for SPO ($\lfloor F/W\rfloor$ per worker, so SUSY and HIGGS get 16 at $W{=}16$); setup excluded, checkpointing included. OOM: a worker ran out of memory. Same image and settings as Table~\ref{tab:vertex-hm16-pf-runtime}.}
+\caption{Distributed tree-training time (s) on Vertex AI \texttt{n2-highmem-4} (left) and \texttt{n2-highmem-16} (right), $P{=}F$ projections}
 \label{tab:vertex-hm4-pf-runtime}
-\input{tables/table_vertex_hm4_pf_body}
+\input{tables/table_vertex_hm4_hm16_pf_body}
+\par\smallskip\raggedright\footnotesize In-node parallel + VQSort. $\lfloor F/W\rfloor$ per worker, so SUSY and HIGGS get 16 at $W{=}16$). 10 trees. setup excluded, checkpointing included.
 \end{table*}
 
-\begin{table*}[t]
-\centering\footnotesize\setlength{\tabcolsep}{4pt}
-\caption{Distributed tree-training time in seconds on Vertex AI \texttt{n2-highmem-16} (manager and $W$ workers), 10 trees, depth 6, $P{=}F$ total projections for SPO ($\lfloor F/W\rfloor$ per worker, sampled from its own columns); setup excluded, checkpointing included. SPO in-node: (node, projection-chunk) worker jobs + VQSort. $W{\ge}8$ exceeds the region's 96-vCPU training quota.}
-\label{tab:vertex-hm16-pf-runtime}
-\input{tables/table_vertex_hm16_pf_body}
-\end{table*}
-
-\begin{table*}[t]
-\centering\footnotesize\setlength{\tabcolsep}{4pt}
-\caption{Distributed tree-training time in seconds on Vertex AI \texttt{n2-highmem-4} (manager and $W$ workers), 50 trees, depth 6; setup excluded. SPO in-node: (node, projection-chunk) worker jobs + VQSort. $P=\lceil\sqrt{F}\rceil$ total projections for SPO and $P=F$ for AA, hence the difference. \TODO{SPO used $P=\sqrt{F}$; rerun with $P=F$, 10 trees.}}
-\label{tab:vertex-hm4-runtime}
-\input{tables/table_vertex_hm4_body}
-\end{table*}
+\begin{figure*}[t]
+\centering
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\input{figures/evaluation/grcp_n2/fig_yt8m_barriers_totals_body}
+\par\footnotesize (a) Time per barrier component, summed over the run
+\end{minipage}
+\hfill
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\input{figures/evaluation/grcp_n2/fig_yt8m_barriers_layers_body}
+\par\footnotesize (b) FindSplits per tree level (labels: idle \% of worker time)
+\end{minipage}
+\caption{Barrier timing of distributed AA-GBT and SPO-GBT on YouTube-8M with $W{=}16$ workers on Vertex AI \texttt{n2-highmem-4} (10 trees, depth 6, $P{=}F$). (a) Stacked bars sum the slowest worker's time per stage, plus checkpoints and manager--worker communication. (b) Bars span the per-call mean of the fastest to the slowest worker's FindSplits time, markers are the median worker, and labels give the idle share of worker time.}
+\Description{Two panels. Left: stacked bars of total time for AA-GBT and SPO-GBT, almost entirely FindSplits compute, annotated with the small non-FindSplits and communication totals. Right: per tree level, min-to-max range bars of FindSplits time for AA-GBT and SPO-GBT with median markers and idle percentages.}
+\label{fig:yt8m-barriers}
+\end{figure*}
 
 If a dataset has no explicit test set, the last 10\% of the dataset is used for test
 
@@ -321,13 +328,13 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 \caption{Training time in seconds of sparse oblique (SPO) and axis-aligned (AA) GBT (50 trees, depth 6), in single-machine and distributed with $W$ workers. \texttt{MULTI\_THREAD} mode. Default n. threads used for Distributed (6 per worker).}
 \label{tab:dist-runtime}
 \input{tables/table_dist_runtime_body}
-\end{table*}
-\begin{figure*}[t]
-    \centering
+% Figure shares the table's float so both land on one page.
+\vspace{1em}
+    \captionsetup{type=figure}
     \includegraphics[width=0.75\textwidth]{figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf}
     \caption{Training time of Dist-GBT (\texttt{MULTI\_THREAD}) vs. Local}
     \label{fig:placeholder}
-\end{figure*}
+\end{table*}
 \clearpage
 \begin{table*}[t]
 \centering
@@ -356,9 +363,18 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\caption{Tree-training time in seconds of one-worker distributed SPO-GBT on Vertex AI \texttt{n2-highmem-16} ($P{=}F$, 10 trees, depth 6), ablating the two in-node changes: Highway VQSort for the per-projection sort, and (node, projection-chunk) jobs on the worker thread pool instead of one job per node. Speedups are over the SPO baseline. The four SPO arms train byte-identical models; AA-GBT is shown for reference.}
+\caption{Benefit of VQSort and distributed in-node parallelism. Tree-training time in seconds on Vertex AI \texttt{n2-highmem-16} ($P{=}F$), ablating Highway VQSort and in-worker parallelism. Models are train byte-identical models.}
 \label{tab:in-node-ablation}
 \input{tables/table_in_node_ablation_body}
+\par\smallskip\raggedright\footnotesize 10 trees
+\end{table*}
+
+\begin{table*}[t]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Distributed tree-training time in seconds on Vertex AI \texttt{n2-highmem-4}. $P=\lceil\sqrt{F}\rceil$ total projections for SPO and $P=F$ for AA, hence the difference.}
+\label{tab:vertex-hm4-runtime}
+\input{tables/table_vertex_hm4_body}
+\par\smallskip\raggedright\footnotesize 50 trees, setup excluded. VQSort used
 \end{table*}
 
 \clearpage
@@ -367,10 +383,10 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 
 \section{Appendix}
 
-\subsection{In-node Parallelism}
+\subsection{In-node Dist-SPO Parallelism}
 \label{sec:in-node-parallelism}
 
-SPO only parallelizes in-node when >10 projections. If you see this, ensure $P=F$. Easy win available when few columns/projections: see table~\ref{tab:in-node-threads}.
+Local SPO only parallelizes in-node when >10 projections. If you see this, ensure $P=F$. Dist SPO-GBT parallel + VQSort implemented 25-Oct-2026
 
 \begin{table*}[t]
 \centering
@@ -399,33 +415,43 @@ distributed_gbt.cc::TrainWithStatusImpl()
 
 \subsection{Approximate Splits}
 
+\TODO{check if this is being used}
+
 \textbf{Consider using approximate splits} to further improve training speed. Very often, this can speed up training by 2x-5x without negative impact on quality. Set hyperparameter\\ \textbf{force\_numerical\_discretization=True} to enable approximate splits for distributed training.
 
 
 \subsection{Using GCP and Vertex AI}
 
 \paragraph{Setup cost}
-Every tree-training time in this paper excludes \emph{setup}: the time from job start until the manager logs \texttt{Start tree training}. Setup covers reading the CSV from Cloud Storage, building the distributed dataset cache in the shared directory (one file per column, numerical columns presorted) and waiting until every worker has loaded its column partition. It depends on dataset size, not on $W$ or on the split type, and for single-file inputs it is paid by the one worker that builds the cache (Table~\ref{tab:setup-cost}).
+Training a distributed model includes \emph{setup}: the time from job start until the manager logs \texttt{Start tree training} (noted based on whether included). Setup covers reading the CSV from Cloud Storage, building the distributed dataset cache in the shared directory (one file per column, numerical columns presorted) and waiting until every worker has loaded its column partition. (Table~\ref{tab:setup-cost}).
 
 \begin{table}[H]
 \centering\footnotesize\setlength{\tabcolsep}{4pt}
-\caption{Setup time in seconds (min--max over all runs) per dataset and Vertex AI machine type.}
+\caption{Setup time in seconds (min--max over all runs).}
 \label{tab:setup-cost}
 \input{tables/table_setup_cost_body}
 \end{table}
-
-Not all instance types are supported in Vertex AI Custom Jobs.
-
-Google Cloud Hyperdisk is Google's next-generation block storage service, designed to decouple storage performance from capacity. Unlike traditional persistent disks (Standard PD, Balanced PD, SSD PD), where storage performance (IOPS and throughput) scales based on the size of the disk, Hyperdisk allows you to provision performance independently of the disk's capacity.
-
-Google Colab Gemini is not agentic and not smart - too slow to iterate. Use local Claude with GCP CLI
 
 
 \input{listings/in_worker_oblique}
 
 \subsection{Work log - Weekly TODOs}
 
+\TODO{Ariel TODOs by Nov-10}
+
+\begin{enumerate}
+    \item Column Partitioning: Use a 1\% subset of rows, decide feature importance on this, then use this to distribute for the 100\% dataset
+\end{enumerate}
+
+
 \TODO{Ariel TODOs by Oct-26}
+
+Done:
+\begin{enumerate}
+    \item Implement VQSort and SPO in-node parallelism
+    \item Scale results to GRPC , two instances
+    \item Pareto of columns picked
+\end{enumerate}
 
 \textbf{\textit{Timing}}
 \begin{enumerate}
