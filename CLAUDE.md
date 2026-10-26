@@ -461,3 +461,13 @@ never report an in-process number as "distributed". Reason: the paper's distribu
 were all m7i in-process runs and were mistaken for cluster runs; a Vertex re-run on HIGGS was ordered on
 2026-10-24. Everything in `results.csv` / `suite_results.csv` recorded before this date is in-process.
 
+
+## Paper sources always land in the local repo (user directive, 2026-10-26)
+
+**Every paper source file is kept in the local clone, even when it was produced in an ssh session on a
+benchmark box:** the raw result cells a table reads, the generator script, and the generated `_body.tex`.
+Copy them back (git push from the box, or scp) in the same session that made them; a body pushed to
+Overleaf is not a copy. Reason: on 2026-10-26 the KDD27 paper's main runtime table and two others could
+not be regenerated or audited here — their cells (`pfhm4_20261025*`, `pfgrid20261025*`) and generators
+(`make_pf_grid_table.py`, `make_pf_ablation_tables.py`, `make_barrier_figs.py`) sat uncommitted on the
+m7i, which auto-stops and changes hostname.

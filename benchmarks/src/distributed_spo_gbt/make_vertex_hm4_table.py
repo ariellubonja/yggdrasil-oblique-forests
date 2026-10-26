@@ -8,7 +8,7 @@ Usage: make_vertex_hm4_table.py [--out BODY.tex] [--md]
 import argparse, glob, json, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RESULTS = os.path.join(HERE, "../../results/runtime/distributed_spo_gbt/barriers/vertex")
+RESULTS = os.path.join(HERE, "../../results/runtime/distributed_spo_gbt/barriers/vertex/p_sqrtF")  # 2026-10-24 grids, P = ceil(sqrt F)
 INNODE_TAG = "4df36453"           # wheel built from time-barriers-innode (in-node SPO parallelism + VQSort)
 MACHINE = "n2-highmem-4"
 W_LIST = [1, 2, 4, 8, 16]

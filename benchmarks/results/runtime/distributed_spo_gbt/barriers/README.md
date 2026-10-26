@@ -100,8 +100,33 @@ at W = 4 on one box. Network cost needs the GRPC/Vertex setting; the recorder wr
 there (manager clock only). Failure path: on an iteration restart the aborted stage's partial row is
 flushed and RestoreCheckpoint gets its own row.
 
+## Vertex AI runs (GRPC, one VM per manager and per worker; 2026-10-24/25)
+
+Run list, machine-type rules and what is still missing from the repo:
+`benchmarks/src/distributed_spo_gbt/REPLICABILITY.md` section A. `vertex/p_F/` holds the P = F runs
+(the paper's), `vertex/p_sqrtF/` the 2026-10-24 P = ceil(sqrt F) grids. Each cell
+`<RUN_ID>_<dataset>/<arm>_w<W>/` holds `barriers.csv` (same columns as above, manager clock),
+`eval.json`, `manager.log` and `summary.txt` (`summarize_barriers.py` output; the 9 `pfw1{base,parstd,vqsort}*`
+summaries were regenerated locally on 2026-10-26, the box had no pandas).
+
+What GRPC changed vs. the in-process measurement above (`p_sqrtF/` n2-highmem-4 grids, 50 trees,
+P = ceil(sqrt F), read from each cell's `summary.txt`; wall = first stage begin to last stage end):
+
+| cell | wall | comm residual (% of wall) | idle (% of worker time) |
+|---|---|---|---|
+| SUSY spo_w8 | 144 s | 0.8 | 12.9 |
+| SUSY aa_w8 | 206 s | 0.5 | 24.8 |
+| HIGGS spo_w4 | 344 s | 0.3 | 17.9 |
+| Epsilon spo_w8 | 48 s | 2.5 | 13.3 |
+| YouTube-8M spo_w16 | 222 s | 0.5 | 10.4 |
+| YouTube-8M aa_w8 | 8276 s | 0.0 | 7.3 |
+
+Transport (comm residual) stays below 1 % of wall except on the shortest cell (Epsilon W=8, 48 s);
+manager serial time and fan-out stay below 0.5 %. Straggler idle is the barrier cost that grew:
+7-25 % of worker time on the natural datasets vs 5-7 % in-process on the trunk, worst for AA on
+tall-narrow data (SUSY W=8). The identity sum(barrier + tail) + gaps = wall holds on every cell.
+
 ## Next
 
-1. Run the same two arms on Vertex (GRPC, 1 worker per VM) to put a number on `comm_residual_s`.
-2. Split `runtime_seconds` on the worker into Prepare I/O, AA pool, oblique pool, peer wait, apply.
-3. Per-job durations in the worker's oblique pool to attribute the 4-6 % skew to node imbalance.
+1. Split `runtime_seconds` on the worker into Prepare I/O, AA pool, oblique pool, peer wait, apply.
+2. Per-job durations in the worker's oblique pool to attribute the skew to node imbalance.

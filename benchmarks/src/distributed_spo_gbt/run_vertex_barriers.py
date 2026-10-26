@@ -9,7 +9,7 @@ summarized with summarize_barriers.py. Re-running with --run_id reuses finished 
 
   python run_vertex_barriers.py --dataset epsilon --workers 1,2,4,8 --arms aa,spo [--dry_run]
 """
-import argparse, datetime, hashlib, json, math, os, subprocess, sys, time
+import argparse, datetime, fcntl, hashlib, json, math, os, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT, REGION, BUCKET = "ydf-distributed-spo-gbt", "us-east1", "ariel_ydf_bucket"
@@ -40,7 +40,8 @@ DATASETS = {  # label + numeric column count drive the projection exponent
                     test=f"csv:gs://{BUCKET}/big/AIRLINE/test/shard_*.csv", label="class", cols=43, rows=37_892_905),
 }
 QUOTA_IDS = {"n2": "CustomModelTrainingN2CPUsPerProjectPerRegion", "c2": "CustomModelTrainingC2CPUsPerProjectPerRegion"}
-RESULTS = os.path.join(HERE, "../../results/runtime/distributed_spo_gbt/barriers/vertex")
+RESULTS = os.path.join(HERE, "../../results/runtime/distributed_spo_gbt/barriers/vertex/p_F")  # every run is P = F (CLAUDE.md 2026-10-25); sqrt(F) history in ../p_sqrtF
+SUBMIT_LOCK = "/tmp/run_vertex_barriers.submit.lock"  # shared by every launcher on this host
 
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument("--dataset", required=True, choices=sorted(DATASETS))
@@ -178,7 +179,11 @@ def in_use():
 
 while pending or running:
     for c in list(pending):
-        if in_use() + vcpus(c[1]) <= CPU_BUDGET:
+        # One submitter at a time across launchers: re-check the quota under the lock, let the new job list, then release.
+        with open(SUBMIT_LOCK, "w") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            if in_use() + vcpus(c[1]) > CPU_BUDGET:
+                continue
             job = make_job(*c)
             for attempt in range(10):
                 try:
@@ -186,6 +191,7 @@ while pending or running:
                 except Exception as e:  # noqa: BLE001
                     print(now(), "submit failed, retry", attempt, type(e).__name__); time.sleep(60)
             running[c] = job; pending.remove(c)
+            time.sleep(10)
             print(now(), "submitted", tag_of(*c), f"({vcpus(c[1])} vCPUs, {in_use()} in use)", job.resource_name.split("/")[-1])
     for c, job in list(running.items()):
         state = job_state(job)

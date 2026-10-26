@@ -105,6 +105,9 @@ def learner_kwargs():
   return kw
 
 
+BARRIER_CSV = "/tmp/barriers.csv"
+
+
 def gcs_upload(path, data, content_type):
   from google.cloud import storage  # only the manager needs it
   assert path.startswith("gs://"), path
@@ -149,6 +152,8 @@ def finish(model, timing, log_path, num_workers):
   eval_json = args.eval_json or args.model.rstrip("/") + "_eval.json"
   gcs_upload(eval_json, json.dumps(summary, indent=2), "application/json")
   gcs_upload(eval_json.rsplit("/", 1)[0] + "/manager.log", open(log_path).read(), "text/plain")
+  if os.path.exists(BARRIER_CSV):
+    gcs_upload(eval_json.rsplit("/", 1)[0] + "/barriers.csv", open(BARRIER_CSV).read(), "text/csv")
 
 
 def main_in_process():
@@ -170,6 +175,8 @@ def main_distributed():
     ydf.start_worker(cluster_config.port)
     return
 
+  # Manager-side barrier recorder (one CSV row per request round), uploaded next to eval.json.
+  os.environ["DGBT_BARRIER_CSV"] = BARRIER_CSV
   print("Train model with distribution on", args.train_ds)
   learner = ydf.DistributedGradientBoostedTreesLearner(
       label=args.label,
