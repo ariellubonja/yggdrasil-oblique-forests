@@ -19,6 +19,9 @@
 #include <cmath>
 #include <cstddef>
 #include <functional>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
 #include <memory>
 #include <optional>
 #include <random>
@@ -752,7 +755,7 @@ absl::Status RunIteration(
     distribute::AbstractManager* distribute_manager, utils::RandomEngine* rnd,
     internal::Monitoring* monitoring,
     PartialEvaluationAggregator* validation_aggregator) {
-  monitoring->NewIter();
+  monitoring->NewIter(iter_idx);
   ASSIGN_OR_RETURN(const auto weak_learner_label_statistics,
                    EmitStartNewIter(iter_idx, (*rnd)(), distribute_manager,
                                     monitoring, load_balancer));
@@ -776,6 +779,7 @@ absl::Status RunIteration(
   for (int layer_idx = 0;
        layer_idx < spe_config.gbt().decision_tree().max_depth() - 1;
        layer_idx++) {
+    monitoring->SetLayer(layer_idx);
     ASSIGN_OR_RETURN(
         const auto splits_per_weak_models,
         EmitFindSplits(spe_config, features, weak_models, distribute_manager,
@@ -815,6 +819,7 @@ absl::Status RunIteration(
                                     monitoring, load_balancer));
   }
 
+  monitoring->SetLayer(-1);
   const bool is_last_iteration = iter_idx == spe_config.gbt().num_trees() - 1;
 
   RETURN_IF_ERROR(EmitEndIter(
@@ -1132,11 +1137,15 @@ EmitStartNewIter(const int iter_idx,
   request.set_seed(seed);
 
   // TODO: Implement multicast operations.
+  monitoring->SendBegin();
   for (int worker_idx = 0; worker_idx < load_balancer->NumWorkers();
        worker_idx++) {
     RETURN_IF_ERROR(
         distribute->AsynchronousProtoRequest(generic_request, worker_idx));
   }
+  monitoring->DispatchDone(load_balancer->NumWorkers(),
+                           generic_request.ByteSizeLong() *
+                               load_balancer->NumWorkers());
 
   // TODO: No need for an answer.
   for (int reply_idx = 0; reply_idx < load_balancer->NumWorkers();
@@ -1144,6 +1153,9 @@ EmitStartNewIter(const int iter_idx,
     ASSIGN_OR_RETURN(
         const auto generic_result,
         distribute->NextAsynchronousProtoAnswer<proto::WorkerResult>());
+    monitoring->WorkerReply(generic_result.worker_idx(),
+                            generic_result.runtime_seconds(),
+                            generic_result.ByteSizeLong());
 
     if (generic_result.request_restart_iter()) {
       RETURN_IF_ERROR(SkipAsyncAnswers(
@@ -1200,6 +1212,8 @@ EmitFindSplits(
   }
 
   // Send the requests.
+  monitoring->SendBegin();
+  size_t bytes_out = 0;
   int num_requests = 0;
   for (int worker_idx = 0; worker_idx < load_balancer->NumWorkers();
        worker_idx++) {
@@ -1221,10 +1235,13 @@ EmitFindSplits(
     // worker's code for FindSplit is responsible to clear the local split
     // evaluation.
 
+    bytes_out += generic_request.ByteSizeLong();
     RETURN_IF_ERROR(
         distribute->AsynchronousProtoRequest(generic_request, worker_idx));
     num_requests++;
   }
+
+  monitoring->DispatchDone(num_requests, bytes_out);
 
   // Allocates the merged split objects.
   std::vector<distributed_decision_tree::SplitPerOpenNode>
@@ -1244,6 +1261,9 @@ EmitFindSplits(
     ASSIGN_OR_RETURN(
         const auto generic_result,
         distribute->NextAsynchronousProtoAnswer<proto::WorkerResult>());
+    monitoring->WorkerReply(generic_result.worker_idx(),
+                            generic_result.runtime_seconds(),
+                            generic_result.ByteSizeLong());
     if (generic_result.request_restart_iter()) {
       RETURN_IF_ERROR(
           SkipAsyncAnswers(num_requests - reply_idx - 1, distribute));
@@ -1310,17 +1330,24 @@ absl::Status EmitEvaluateSplits(
   }
 
   // TODO: Implement multicast operations.
+  monitoring->SendBegin();
   for (int worker_idx = 0; worker_idx < load_balancer->NumWorkers();
        worker_idx++) {
     RETURN_IF_ERROR(
         distribute->AsynchronousProtoRequest(generic_request, worker_idx));
   }
+  monitoring->DispatchDone(load_balancer->NumWorkers(),
+                           generic_request.ByteSizeLong() *
+                               load_balancer->NumWorkers());
 
   for (int reply_idx = 0; reply_idx < load_balancer->NumWorkers();
        reply_idx++) {
     ASSIGN_OR_RETURN(
         const auto generic_result,
         distribute->NextAsynchronousProtoAnswer<proto::WorkerResult>());
+    monitoring->WorkerReply(generic_result.worker_idx(),
+                            generic_result.runtime_seconds(),
+                            generic_result.ByteSizeLong());
     if (generic_result.request_restart_iter()) {
       RETURN_IF_ERROR(SkipAsyncAnswers(
           load_balancer->NumWorkers() - reply_idx - 1, distribute));
@@ -1358,20 +1385,27 @@ absl::Status EmitShareSplits(
 
   for (const auto& round : plan.rounds()) {
     // Send requests.
+    monitoring->SendBegin();
+    size_t bytes_out = 0;
     for (const auto& request : round.requests()) {
       proto::WorkerRequest generic_request;
       auto& share_split_request = *generic_request.mutable_share_splits();
       *share_split_request.mutable_request() = request.second;
 
+      bytes_out += generic_request.ByteSizeLong();
       RETURN_IF_ERROR(
           distribute->AsynchronousProtoRequest(generic_request, request.first));
     }
+    monitoring->DispatchDone(round.requests_size(), bytes_out);
 
     // Wait for the answer.
     for (int reply_idx = 0; reply_idx < round.requests_size(); reply_idx++) {
       ASSIGN_OR_RETURN(
           const auto generic_result,
           distribute->NextAsynchronousProtoAnswer<proto::WorkerResult>());
+      monitoring->WorkerReply(generic_result.worker_idx(),
+                              generic_result.runtime_seconds(),
+                              generic_result.ByteSizeLong());
       if (generic_result.request_restart_iter()) {
         RETURN_IF_ERROR(SkipAsyncAnswers(round.requests_size() - reply_idx - 1,
                                          distribute));
@@ -1415,6 +1449,8 @@ absl::Status EmitEndIter(int iter_idx, bool is_last_iteration,
   }
 
   // TODO: Implement multicast operations.
+  monitoring->SendBegin();
+  size_t bytes_out = 0;
   for (int worker_idx = 0; worker_idx < distribute->NumWorkers();
        worker_idx++) {
     if (worker_idx < load_balancer->NumWorkers()) {
@@ -1422,19 +1458,26 @@ absl::Status EmitEndIter(int iter_idx, bool is_last_iteration,
         // The first worker is in charge of computing the training loss.
         trainer_request.set_compute_training_loss(worker_idx == 0);
       }
+      bytes_out += generic_trainer_request.ByteSizeLong();
       RETURN_IF_ERROR(distribute->AsynchronousProtoRequest(
           generic_trainer_request, worker_idx));
     } else {
+      bytes_out += generic_evaluator_request.ByteSizeLong();
       RETURN_IF_ERROR(distribute->AsynchronousProtoRequest(
           generic_evaluator_request, worker_idx));
     }
   }
+
+  monitoring->DispatchDone(distribute->NumWorkers(), bytes_out);
 
   // TODO: No need for an answer.
   for (int reply_idx = 0; reply_idx < distribute->NumWorkers(); reply_idx++) {
     ASSIGN_OR_RETURN(
         const auto generic_result,
         distribute->NextAsynchronousProtoAnswer<proto::WorkerResult>());
+    monitoring->WorkerReply(generic_result.worker_idx(),
+                            generic_result.runtime_seconds(),
+                            generic_result.ByteSizeLong());
     if (generic_result.request_restart_iter()) {
       RETURN_IF_ERROR(SkipAsyncAnswers(distribute->NumWorkers() - reply_idx - 1,
                                        distribute));
@@ -1858,10 +1901,19 @@ void Monitoring::BeginStage(Monitoring::Stages stage) {
                  << " before the previous stage "
                  << StageName(static_cast<Monitoring::Stages>(current_stage_))
                  << " was marked as completed.";
-    return;
+    // Iteration restart: the aborted stage never reached EndStage. Flush its
+    // partial row and open the new stage so it gets its own row and stats.
+    FlushBarrier(absl::Now());
   }
   current_stage_ = stage;
   begin_current_stage_ = absl::Now();
+  barrier_begin_ = begin_current_stage_;
+  pending_barrier_ = false;
+  round_ = 0;
+  num_requests_ = 0;
+  bytes_out_ = 0;
+  bytes_in_ = 0;
+  reply_runtimes_.clear();
 
   if (verbose_) {
     LOG(INFO) << "Starting stage " << StageName(stage);
@@ -1874,7 +1926,9 @@ void Monitoring::EndStage(Monitoring::Stages stage) {
     LOG(WARNING) << "Invalid BeginStage > EndStage. stage=" << stage;
     return;
   }
-  const auto duration_current_stage = absl::Now() - begin_current_stage_;
+  const auto stage_end = absl::Now();
+  const auto duration_current_stage = stage_end - begin_current_stage_;
+  FlushBarrier(stage_end);
   stage_stats_[stage].count++;
   stage_stats_[stage].sum_duration += duration_current_stage;
 
@@ -1908,12 +1962,110 @@ void Monitoring::EndStage(Monitoring::Stages stage) {
   current_stage_ = -1;
 }
 
-void Monitoring::NewIter() {
+void Monitoring::NewIter(int iter_idx) {
+  iter_idx_ = iter_idx;
+  layer_idx_ = -1;
   begin_current_iter_ = absl::Now();
   if (num_iters_ == 0) {
     time_first_iter_ = begin_current_iter_;
   }
   num_iters_++;
+}
+
+void Monitoring::SendBegin() {
+  const auto now = absl::Now();
+  if (pending_barrier_) {
+    // Multi-round stage (ShareSplits): close the previous round first.
+    FlushBarrier(now);
+    barrier_begin_ = now;
+  }
+  send_begin_ = now;
+}
+
+void Monitoring::DispatchDone(int num_requests, size_t bytes_out) {
+  dispatch_done_ = absl::Now();
+  num_requests_ = num_requests;
+  bytes_out_ = bytes_out;
+  bytes_in_ = 0;
+  reply_runtimes_.clear();
+  pending_barrier_ = true;
+  round_++;
+}
+
+void Monitoring::WorkerReply(int worker_idx, double runtime_seconds,
+                             size_t bytes_in) {
+  const auto now = absl::Now();
+  if (reply_runtimes_.empty()) {
+    first_reply_ = now;
+  }
+  last_reply_ = now;
+  bytes_in_ += bytes_in;
+  reply_runtimes_.push_back({worker_idx, runtime_seconds});
+}
+
+void Monitoring::FlushBarrier(absl::Time now) {
+  if (!barrier_csv_probed_) {
+    barrier_csv_probed_ = true;
+    const char* path = std::getenv("DGBT_BARRIER_CSV");
+    if (path != nullptr && path[0] != '\0') {
+      barrier_csv_ = std::make_unique<std::ofstream>(
+          path, std::ios::out | std::ios::trunc);
+      if (!barrier_csv_->is_open()) {
+        LOG(WARNING) << "Cannot open DGBT_BARRIER_CSV=" << path;
+        barrier_csv_.reset();
+      } else {
+        *barrier_csv_ << std::setprecision(12);
+        *barrier_csv_
+            << "iter,layer,stage,round,t_begin_s,barrier_s,tail_s,"
+               "manager_serial_s,fanout_s,worker_max_s,worker_med_s,"
+               "worker_min_s,worker_sum_s,idle_s,comm_residual_s,"
+               "first_reply_s,num_replies,slowest_worker,bytes_out,bytes_in\n";
+      }
+    }
+  }
+  if (barrier_csv_ == nullptr) {
+    pending_barrier_ = false;
+    return;
+  }
+  const auto sec = [](absl::Duration d) { return absl::ToDoubleSeconds(d); };
+  const double t_begin = sec(barrier_begin_ - origin_);
+  double barrier_s = sec(now - barrier_begin_), tail_s = 0, manager_serial = 0,
+         fanout = 0, w_max = 0, w_med = 0, w_min = 0, w_sum = 0, idle = 0,
+         residual = 0, first_reply = 0;
+  int slowest = -1;
+  const int n = reply_runtimes_.size();
+  if (pending_barrier_ && n > 0) {
+    barrier_s = sec(last_reply_ - barrier_begin_);
+    tail_s = sec(now - last_reply_);
+    manager_serial = sec(send_begin_ - barrier_begin_);
+    fanout = sec(dispatch_done_ - send_begin_);
+    first_reply = sec(first_reply_ - dispatch_done_);
+    std::vector<double> rt;
+    rt.reserve(n);
+    for (const auto& [w, t] : reply_runtimes_) {
+      rt.push_back(t);
+      w_sum += t;
+      if (slowest < 0 || t > w_max) {
+        w_max = t;
+        slowest = w;
+      }
+    }
+    std::nth_element(rt.begin(), rt.begin() + n / 2, rt.end());
+    w_med = rt[n / 2];
+    w_min = *std::min_element(rt.begin(), rt.end());
+    idle = n * w_max - w_sum;
+    residual = barrier_s - manager_serial - fanout - w_max;
+  }
+  *barrier_csv_ << iter_idx_ << ',' << layer_idx_ << ','
+                << StageName(static_cast<Stages>(current_stage_)) << ','
+                << round_ << ',' << t_begin << ',' << barrier_s << ','
+                << tail_s << ',' << manager_serial << ',' << fanout << ','
+                << w_max << ',' << w_med << ',' << w_min << ',' << w_sum << ','
+                << idle << ',' << residual << ',' << first_reply << ',' << n
+                << ',' << slowest << ',' << bytes_out_ << ',' << bytes_in_
+                << '\n';
+  barrier_csv_->flush();
+  pending_barrier_ = false;
 }
 
 void Monitoring::FindSplitWorkerReplyTime(int worker_idx,

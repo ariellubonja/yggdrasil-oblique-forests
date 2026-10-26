@@ -2,7 +2,7 @@
 # Same recipe as upstream tools/{build_test_linux,package_linux}.sh, pinned to YDF_COMMIT.
 FROM quay.io/pypa/manylinux_2_28_x86_64
 ARG YDF_REPO=https://github.com/ariellubonja/yggdrasil-decision-forests
-ARG YDF_COMMIT=cb81b53da5e6783f317ea95f678fdb06b41d6f96
+ARG YDF_COMMIT=47fe64fa4a6fc8a4b0a0125a169f0df3f9a0c274
 ARG BAZEL_JOBS=24
 ADD https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-linux-amd64 /usr/local/bin/bazel
 RUN chmod +x /usr/local/bin/bazel

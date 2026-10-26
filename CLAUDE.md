@@ -375,6 +375,17 @@ timers masked. In chat, report each arm as speedup = exact_hwy / arm.
 figure captions.** The paper has a dedicated experimental-setup section for them. Captions state
 what the panel shows and the axes; the generator scripts must not emit spec text into captions.
 
+## Distributed GBT barrier timing (added 2026-10-22)
+
+The distributed GBT manager records one CSV row per request round when `DGBT_BARRIER_CSV=<path>`
+is set (`internal::Monitoring` in `learner/distributed_gradient_boosted_trees/`): stage, layer,
+barrier length, manager serial time before dispatch, fan-out, worker self-reported max/median/min
+runtime, idle worker-seconds, comm residual, bytes out/in. Off by default (no env var = no file; the hooks
+that stay on cost a few clock reads and proto size computations per round, below timing noise). Summarize with `benchmarks/src/distributed_spo_gbt/summarize_barriers.py`; the first
+measurement and the barrier taxonomy (comm barriers are not the only ones: stragglers, manager
+serial sections, in-worker joins, I/O) are in
+`benchmarks/results/runtime/distributed_spo_gbt/barriers/README.md`.
+
 ## Unspecified parameters: library defaults (user directive, 2026-10-12)
 
 For any parameter the user does not specify, use the library/driver default (YDF proto default,
@@ -404,23 +415,21 @@ stays 1000, so P = F is capped at 1000 above F = 1000 unless the run lifts the c
 `_fullproj` arms pass INT_MAX). Axis-aligned GBT arms are unaffected: `arms.py` passes
 `--num_candidate_attributes -1` explicitly.
 
-## Vertex AI machine type: one type per comparison; n2-highmem-4 for now (user decisions, 2026-10-24)
+## Vertex AI machine type: one type per comparison; n2-highmem-16 (user decision, 2026-10-25)
 
-**Never mix machine types across the cells or datasets of a comparison** (manager = worker type); one
-instance type stands behind every reported number. The user first chose `n2-highmem-32` (256 GB fits
-every dataset at W=1), then **reverted to `n2-highmem-4` (4 vCPU, 32 GB) the same day** because the
-N2 training quota (96 vCPUs in us-east1; 192 pending, 256 auto-denied) allows only W <= 2 on -32 but
-W <= 16 on -4 (68 vCPUs), and the scaling curve W = 1 .. 16 (.. 32, 48 once quota allows: 132 / 196 vCPUs)
-matters more than the W=1 reference. Cells whose per-worker need (MEMORY_BUDGET.md formula) exceeds
-~70 % of 32 GB are shown as OOM in the planned-runtime table
-(`paper/distributed_spo_gbt_kdd27/tables/table_planned_runtime.tex`, also in Overleaf). **That 70 % line
-is an agent heuristic from one 16 GB failure (SPO 1.6M x 512, predicted 12.6 GB, killed), not a user
-decision; the user asked for it to be calibrated on 32 GB (2026-10-24)**: Criteo aa_w4 (predicted
-25.7 GB = 80 %) is run as the probe. If it survives, the OOM marks move one W step left; if the worker
-is killed, 70 % stands with evidence. Record the outcome here. Thread count per worker stays the YDF
-default (`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
-**Warn the user before launching anything that would change the machine type**, e.g. a dataset that
-needs a W=1 or W=2 reference that only fits a bigger node — that is their decision.
+**Every distributed run uses `n2-highmem-16` (16 vCPU, 128 GB), manager = worker** (user directive
+2026-10-25, replacing the n2-highmem-4 choice of 2026-10-24, which itself replaced a same-day
+n2-highmem-32 choice). **Never mix machine types across the cells or datasets of a comparison**; one
+instance type stands behind every reported number. The -4 grids of 2026-10-24 are a different type and
+are not mixed with -16 cells. N2 training quota in us-east1 is 96 vCPUs (192 pending, 256 auto-denied):
+on -16 that is W <= 5 per cell (W=16 needs 272). Thread count per worker stays the YDF default
+(`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
+**Warn the user before launching anything that would change the machine type** — that is their decision.
+
+**No "70 % of RAM = OOM" rule (user directive, 2026-10-25).** That line was an agent heuristic from one
+16 GB failure, never a user decision; the user dropped it and the Criteo aa_w4 calibration probe with it.
+Do not mark cells OOM in the planned-runtime table from a RAM-fraction threshold and do not gate launches
+on one; a cell is OOM only when a worker was actually killed.
 
 ## In-node SPO parallelism branch dropped (user decision, 2026-10-25)
 
@@ -432,3 +441,23 @@ nearly idle and the single-thread-per-node timings stand. Do not revive it for t
 only if a run uses a projection count >> threads (`num_projections_exponent` > 0.5 or wide trunks with P in
 the hundreds). The distributed flat-chunk + VQSort worker fix is a separate change and keeps the
 "always VQSort" rule.
+**Update 2026-10-25 (Vertex ablation, P=F, W=1, n2-highmem-16, 10 trees):** the *distributed* worker was a
+different story — baseline `distributed_decision_tree/oblique.cc` ran one job per open node with all P
+projections serial inside it (root layer on one thread whatever P), so the (node, projection-chunk) worker
+fix + VQSort gives 8.8x / 7.9x / 12.6x on SUSY / HIGGS / Epsilon (chunk jobs alone 4.6–5.0x, VQSort alone
+2.3–3.4x; models byte-identical). That worker fix is merged on `main` (commit 4d059967); the
+single-machine `FindBestConditionConcurrentManager` stays as upstream (ceil(P/10) jobs).
+
+## Real distributed runs only on Vertex AI; local = smoke tests (user directive, 2026-10-25)
+
+**Every reported distributed SPO-GBT / AA-GBT number comes from Vertex AI CustomJobs** (one node per
+manager and per worker, `run_vertex_barriers.py` or the scaling notebook; threads = the node's vCPUs,
+one N2 machine type per comparison). The in-process driver `examples/train_distributed_gbt`
+(`--num_workers`, `--num_threads`, workers as threads in one process) and the scripts on top of it
+(`run_dgbt.sh`, `run_dgbt_suite.sh`, `run_barrier_cell.sh`) are **smoke tests only**: correctness,
+bit-identity, build checks, small shapes. Never run them as an experiment whose numbers get reported, and
+never report an in-process number as "distributed". Reason: the paper's distributed runtime table
+(`results.csv`), accuracy suite (`suite_results.csv`) and the 2026-10-22 APSFailure in-node/sort table
+were all m7i in-process runs and were mistaken for cluster runs; a Vertex re-run on HIGGS was ordered on
+2026-10-24. Everything in `results.csv` / `suite_results.csv` recorded before this date is in-process.
+
