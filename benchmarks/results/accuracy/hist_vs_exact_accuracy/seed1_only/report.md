@@ -1,270 +1,270 @@
 # Split-finder accuracy comparison: Random Histogram vs Exact
 
-Inputs: 51 CSVs, 36 datasets, seeds: [1]. Unit of analysis for all aggregate claims: the dataset (per-dataset mean of paired per-(seed,fold) deltas).
+Inputs: 54 CSVs, 36 datasets, seeds: [1]. Unit of analysis for all aggregate claims: the dataset (per-dataset mean of paired per-(seed,fold) deltas).
 
 ## SPO-GBT -- accuracy
 
 ### Dynamic_Random_Histogram_thresh250 vs Exact (positive delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: +0.00178 (median +0.00062, range [-0.01724, +0.04815])
-- 95% CI (t): [-0.00125, +0.00480]; 95% CI (bootstrap): [-0.00059, +0.00507]
-- Wilcoxon signed-rank p = 0.0864; paired t p = 0.2412
-- Win/tie/loss (|delta| <= 0.001 is a tie): 16/12/8 (raw sign: 19 up, 14 down)
-- TOST equivalence p at margins {0.001: 0.6971, 0.0025: 0.3150, 0.005: 0.0187, 0.01: 1.7e-06, 0.02: 1.7e-14}
+- Mean per-dataset delta: -0.00059 (median -0.00021, range [-0.02756, +0.03519])
+- 95% CI (t): [-0.00387, +0.00269]; 95% CI (bootstrap): [-0.00360, +0.00267]
+- Wilcoxon signed-rank p = 0.3884; paired t p = 0.7175
+- Win/tie/loss (|delta| <= 0.001 is a tie): 11/12/13 (raw sign: 11 up, 20 down)
+- TOST equivalence p at margins {0.001: 0.4004, 0.0025: 0.1225, 0.005: 0.0049, 0.01: 6.6e-07, 0.02: 2.8e-14}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0354, 0.0025: 0.0035, 0.005: 3.1e-05, 0.01: 1.4e-09, 0.02: 1.1e-16}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00045, 95% CI [-0.00097, +0.00188], TOST margin 0.0025, non-inf margin 0.001
+- Non-inferiority p at margins {0.001: 0.4004, 0.0025: 0.1225, 0.005: 0.0049, 0.01: 6.6e-07, 0.02: 2.8e-14}
+- **Non-inferior (no penalty worse than 0.005) at alpha=0.05**
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00161, 95% CI [-0.00423, +0.00101], TOST margin 0.005, non-inf margin 0.005
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random vs Exact (positive delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: +0.00094 (median -0.00000, range [-0.01690, +0.04074])
-- 95% CI (t): [-0.00190, +0.00378]; 95% CI (bootstrap): [-0.00138, +0.00390]
-- Wilcoxon signed-rank p = 0.8575; paired t p = 0.5064
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/14/12 (raw sign: 16 up, 18 down)
-- TOST equivalence p at margins {0.001: 0.4826, 0.0025: 0.1358, 0.005: 0.0032, 0.01: 9.0e-08, 0.02: 7.2e-16}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0872, 0.0025: 0.0095, 0.005: 7.6e-05, 0.01: 1.7e-09, 0.02: 0.0e+00}
+- Mean per-dataset delta: +0.00006 (median -0.00000, range [-0.01796, +0.03704])
+- 95% CI (t): [-0.00257, +0.00269]; 95% CI (bootstrap): [-0.00218, +0.00284]
+- Wilcoxon signed-rank p = 1.0000; paired t p = 0.9616
+- Win/tie/loss (|delta| <= 0.001 is a tie): 14/10/12 (raw sign: 16 up, 18 down)
+- TOST equivalence p at margins {0.001: 0.2373, 0.0025: 0.0342, 0.005: 0.0003, 0.01: 2.7e-09, 0.02: 1.9e-17}
+- **Equivalent (TOST) within +-0.0025 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.2089, 0.0025: 0.0280, 0.005: 0.0002, 0.01: 2.0e-09, 0.02: 0.0e+00}
 - **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00020, 95% CI [-0.00190, +0.00150], TOST margin 0.0025, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00099, 95% CI [-0.00257, +0.00058], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins128 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00124 (median +0.00000, range [-0.01382, +0.03889])
-- 95% CI (t): [-0.00141, +0.00389]; 95% CI (bootstrap): [-0.00087, +0.00406]
-- Wilcoxon signed-rank p = 0.5361; paired t p = 0.3495
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/16/8 (raw sign: 19 up, 13 down)
-- TOST equivalence p at margins {0.001: 0.5715, 0.0025: 0.1698, 0.005: 0.0034, 0.01: 5.8e-08, 0.02: 4.4e-16}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0477, 0.0025: 0.0036, 0.005: 1.7e-05, 0.01: 2.9e-10, 0.02: 0.0e+00}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00010, 95% CI [-0.00123, +0.00142], TOST margin 0.0025, non-inf margin 0.0025
+- Mean per-dataset delta: +0.00025 (median +0.00000, range [-0.01406, +0.02778])
+- 95% CI (t): [-0.00215, +0.00266]; 95% CI (bootstrap): [-0.00192, +0.00265]
+- Wilcoxon signed-rank p = 0.9615; paired t p = 0.8316
+- Win/tie/loss (|delta| <= 0.001 is a tie): 12/11/11 (raw sign: 15 up, 16 down)
+- TOST equivalence p at margins {0.001: 0.2662, 0.0025: 0.0332, 0.005: 0.0002, 0.01: 8.1e-10, 0.02: 5.9e-18}
+- **Equivalent (TOST) within +-0.0025 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.1485, 0.0025: 0.0131, 0.005: 4.7e-05, 0.01: 2.6e-10, 0.02: 0.0e+00}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00058, 95% CI [-0.00234, +0.00118], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins16 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00156 (median +0.00066, range [-0.02628, +0.04815])
-- 95% CI (t): [-0.00206, +0.00519]; 95% CI (bootstrap): [-0.00164, +0.00527]
-- Wilcoxon signed-rank p = 0.2539; paired t p = 0.3871
-- Win/tie/loss (|delta| <= 0.001 is a tie): 13/11/10 (raw sign: 20 up, 12 down)
-- TOST equivalence p at margins {0.001: 0.6229, 0.0025: 0.3014, 0.005: 0.0313, 0.01: 2.0e-05, 0.02: 3.5e-12}
+- Mean per-dataset delta: +0.00114 (median +0.00000, range [-0.02635, +0.03519])
+- 95% CI (t): [-0.00182, +0.00410]; 95% CI (bootstrap): [-0.00156, +0.00405]
+- Wilcoxon signed-rank p = 0.4540; paired t p = 0.4378
+- Win/tie/loss (|delta| <= 0.001 is a tie): 12/10/12 (raw sign: 16 up, 16 down)
+- TOST equivalence p at margins {0.001: 0.5386, 0.0025: 0.1785, 0.005: 0.0061, 0.01: 3.7e-07, 0.02: 8.3e-15}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0800, 0.0025: 0.0146, 0.005: 0.0004, 0.01: 1.2e-07, 0.02: 5.7e-14}
+- Non-inferiority p at margins {0.001: 0.0751, 0.0025: 0.0087, 0.005: 8.8e-05, 0.01: 4.0e-09, 0.02: 3.3e-16}
 - **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00015, 95% CI [-0.00214, +0.00244], TOST margin 0.0025, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00011, 95% CI [-0.00204, +0.00226], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins256 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00066 (median +0.00000, range [-0.01039, +0.03889])
-- 95% CI (t): [-0.00198, +0.00330]; 95% CI (bootstrap): [-0.00140, +0.00349]
-- Wilcoxon signed-rank p = 0.8754; paired t p = 0.6130
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/12/12 (raw sign: 16 up, 16 down)
-- TOST equivalence p at margins {0.001: 0.3984, 0.0025: 0.0832, 0.005: 0.0010, 0.01: 1.5e-08, 0.02: 1.7e-16}
+- Mean per-dataset delta: +0.00077 (median +0.00000, range [-0.01216, +0.04259])
+- 95% CI (t): [-0.00220, +0.00374]; 95% CI (bootstrap): [-0.00161, +0.00391]
+- Wilcoxon signed-rank p = 0.8393; paired t p = 0.6018
+- Win/tie/loss (|delta| <= 0.001 is a tie): 11/13/10 (raw sign: 15 up, 16 down)
+- TOST equivalence p at margins {0.001: 0.4379, 0.0025: 0.1224, 0.005: 0.0033, 0.01: 1.9e-07, 0.02: 5.5e-15}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.1046, 0.0025: 0.0102, 0.005: 6.0e-05, 0.01: 8.8e-10, 0.02: 0.0e+00}
+- Non-inferiority p at margins {0.001: 0.1172, 0.0025: 0.0160, 0.005: 0.0002, 0.01: 9.1e-09, 0.02: 6.7e-16}
 - **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00050, 95% CI [-0.00173, +0.00074], TOST margin 0.0025, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00050, 95% CI [-0.00202, +0.00103], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins32 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00079 (median +0.00027, range [-0.02158, +0.02407])
-- 95% CI (t): [-0.00143, +0.00301]; 95% CI (bootstrap): [-0.00134, +0.00287]
-- Wilcoxon signed-rank p = 0.1574; paired t p = 0.4733
-- Win/tie/loss (|delta| <= 0.001 is a tie): 13/14/7 (raw sign: 20 up, 11 down)
-- TOST equivalence p at margins {0.001: 0.4249, 0.0025: 0.0635, 0.005: 0.0003, 0.01: 4.7e-10, 0.02: 1.2e-18}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0550, 0.0025: 0.0024, 0.005: 3.7e-06, 0.01: 1.1e-11, 0.02: 0.0e+00}
+- Mean per-dataset delta: -0.00014 (median +0.00000, range [-0.02205, +0.02222])
+- 95% CI (t): [-0.00268, +0.00240]; 95% CI (bootstrap): [-0.00259, +0.00223]
+- Wilcoxon signed-rank p = 0.7611; paired t p = 0.9128
+- Win/tie/loss (|delta| <= 0.001 is a tie): 12/11/11 (raw sign: 15 up, 15 down)
+- TOST equivalence p at margins {0.001: 0.2474, 0.0025: 0.0337, 0.005: 0.0002, 0.01: 2.1e-09, 0.02: 1.6e-17}
+- **Equivalent (TOST) within +-0.0025 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.2474, 0.0025: 0.0337, 0.005: 0.0002, 0.01: 2.1e-09, 0.02: 0.0e+00}
 - **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00009, 95% CI [-0.00166, +0.00183], TOST margin 0.0025, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00082, 95% CI [-0.00302, +0.00139], TOST margin 0.005, non-inf margin 0.005
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Friedman over 34 datasets: chi2 = 6.14, p = 0.4073; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 3.38, Exact: 4.44, Random: 4.07, Random_bins128: 4.18, Random_bins16: 3.97, Random_bins256: 4.26, Random_bins32: 3.69
+- Friedman over 34 datasets: chi2 = 4.13, p = 0.6587; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 4.34, Exact: 3.88, Random: 4.09, Random_bins128: 4.32, Random_bins16: 3.68, Random_bins256: 3.59, Random_bins32: 4.10
 
 ## SPO-GBT -- auc
 
 ### Dynamic_Random_Histogram_thresh250 vs Exact (positive delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: +0.00112 (median +0.00000, range [-0.01206, +0.04264])
-- 95% CI (t): [-0.00169, +0.00394]; 95% CI (bootstrap): [-0.00107, +0.00417]
-- Wilcoxon signed-rank p = 0.8739; paired t p = 0.4234
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/16/10 (raw sign: 16 up, 17 down)
-- TOST equivalence p at margins {0.001: 0.5349, 0.0025: 0.1634, 0.005: 0.0041, 0.01: 1.1e-07, 0.02: 7.4e-16}
+- Mean per-dataset delta: +0.00052 (median -0.00016, range [-0.01036, +0.03842])
+- 95% CI (t): [-0.00205, +0.00310]; 95% CI (bootstrap): [-0.00152, +0.00334]
+- Wilcoxon signed-rank p = 0.5722; paired t p = 0.6831
+- Win/tie/loss (|delta| <= 0.001 is a tie): 9/16/11 (raw sign: 13 up, 20 down)
+- TOST equivalence p at margins {0.001: 0.3544, 0.0025: 0.0640, 0.005: 0.0006, 0.01: 4.8e-09, 0.02: 2.0e-17}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0673, 0.0025: 0.0065, 0.005: 4.6e-05, 0.01: 9.5e-10, 0.02: 0.0e+00}
+- Non-inferiority p at margins {0.001: 0.1191, 0.0025: 0.0114, 0.005: 5.6e-05, 0.01: 4.4e-10, 0.02: 0.0e+00}
 - **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00006, 95% CI [-0.00156, +0.00143], TOST margin 0.0025, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00056, 95% CI [-0.00194, +0.00082], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random vs Exact (positive delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: +0.00146 (median +0.00012, range [-0.01187, +0.02970])
-- 95% CI (t): [-0.00099, +0.00392]; 95% CI (bootstrap): [-0.00068, +0.00400]
-- Wilcoxon signed-rank p = 0.3215; paired t p = 0.2348
-- Win/tie/loss (|delta| <= 0.001 is a tie): 14/14/8 (raw sign: 18 up, 15 down)
-- TOST equivalence p at margins {0.001: 0.6476, 0.0025: 0.1982, 0.005: 0.0030, 0.01: 1.6e-08, 0.02: 2.1e-17}
+- Mean per-dataset delta: +0.00157 (median +0.00000, range [-0.01054, +0.06006])
+- 95% CI (t): [-0.00206, +0.00520]; 95% CI (bootstrap): [-0.00105, +0.00558]
+- Wilcoxon signed-rank p = 0.8050; paired t p = 0.3863
+- Win/tie/loss (|delta| <= 0.001 is a tie): 11/14/11 (raw sign: 17 up, 16 down)
+- TOST equivalence p at margins {0.001: 0.6240, 0.0025: 0.3032, 0.005: 0.0317, 0.01: 1.9e-05, 0.02: 1.9e-12}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0247, 0.0025: 0.0012, 0.005: 2.8e-06, 0.01: 1.7e-11, 0.02: 0.0e+00}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00066, 95% CI [-0.00123, +0.00254], TOST margin 0.0025, non-inf margin 0.001
+- Non-inferiority p at margins {0.001: 0.0799, 0.0025: 0.0146, 0.005: 0.0004, 0.01: 9.4e-08, 0.02: 2.6e-14}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00010, 95% CI [-0.00144, +0.00124], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins128 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00048 (median +0.00007, range [-0.00887, +0.01435])
-- 95% CI (t): [-0.00129, +0.00225]; 95% CI (bootstrap): [-0.00120, +0.00219]
-- Wilcoxon signed-rank p = 0.6636; paired t p = 0.5858
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/15/9 (raw sign: 17 up, 14 down)
-- TOST equivalence p at margins {0.001: 0.2774, 0.0025: 0.0134, 0.005: 5.3e-06, 0.01: 8.5e-13, 0.02: 7.9e-22}
+- Mean per-dataset delta: -0.00003 (median +0.00000, range [-0.00949, +0.01449])
+- 95% CI (t): [-0.00144, +0.00139]; 95% CI (bootstrap): [-0.00135, +0.00137]
+- Wilcoxon signed-rank p = 0.8696; paired t p = 0.9700
+- Win/tie/loss (|delta| <= 0.001 is a tie): 10/16/8 (raw sign: 15 up, 16 down)
+- TOST equivalence p at margins {0.001: 0.0853, 0.0025: 0.0006, 0.005: 1.7e-08, 0.01: 4.4e-16, 0.02: 2.8e-25}
 - **Equivalent (TOST) within +-0.0025 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0495, 0.0025: 0.0008, 0.005: 2.1e-07, 0.01: 6.7e-14, 0.02: 0.0e+00}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_9971_ilpd): mean +0.00006, 95% CI [-0.00154, +0.00166], TOST margin 0.0025, non-inf margin 0.0025
+- Non-inferiority p at margins {0.001: 0.0853, 0.0025: 0.0006, 0.005: 1.7e-08, 0.01: 4.4e-16, 0.02: 0.0e+00}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean -0.00047, 95% CI [-0.00160, +0.00066], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins16 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00142 (median +0.00000, range [-0.01991, +0.02629])
-- 95% CI (t): [-0.00167, +0.00452]; 95% CI (bootstrap): [-0.00152, +0.00444]
-- Wilcoxon signed-rank p = 0.4798; paired t p = 0.3567
-- Win/tie/loss (|delta| <= 0.001 is a tie): 14/10/10 (raw sign: 16 up, 15 down)
-- TOST equivalence p at margins {0.001: 0.6086, 0.0025: 0.2422, 0.005: 0.0125, 0.01: 1.4e-06, 0.02: 4.5e-14}
+- Mean per-dataset delta: +0.00081 (median +0.00019, range [-0.01634, +0.02603])
+- 95% CI (t): [-0.00131, +0.00292]; 95% CI (bootstrap): [-0.00114, +0.00291]
+- Wilcoxon signed-rank p = 0.0727; paired t p = 0.4419
+- Win/tie/loss (|delta| <= 0.001 is a tie): 10/20/4 (raw sign: 18 up, 13 down)
+- TOST equivalence p at margins {0.001: 0.4276, 0.0025: 0.0566, 0.005: 0.0002, 0.01: 1.6e-10, 0.02: 2.9e-19}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0605, 0.0025: 0.0073, 0.005: 9.0e-05, 0.01: 6.3e-09, 0.02: 8.9e-16}
-- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00067, 95% CI [-0.00211, +0.00345], TOST margin 0.005, non-inf margin 0.0025
+- Non-inferiority p at margins {0.001: 0.0455, 0.0025: 0.0016, 0.005: 1.6e-06, 0.01: 3.0e-12, 0.02: 0.0e+00}
+- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean +0.00004, 95% CI [-0.00143, +0.00152], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins256 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00118 (median +0.00000, range [-0.00717, +0.03165])
-- 95% CI (t): [-0.00112, +0.00348]; 95% CI (bootstrap): [-0.00073, +0.00357]
-- Wilcoxon signed-rank p = 0.6357; paired t p = 0.3052
-- Win/tie/loss (|delta| <= 0.001 is a tie): 11/13/10 (raw sign: 15 up, 16 down)
-- TOST equivalence p at margins {0.001: 0.5620, 0.0025: 0.1254, 0.005: 0.0009, 0.01: 2.7e-09, 0.02: 6.4e-18}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0314, 0.0025: 0.0013, 0.005: 2.4e-06, 0.01: 1.1e-11, 0.02: 0.0e+00}
+- Mean per-dataset delta: +0.00316 (median +0.00062, range [-0.00681, +0.06774])
+- 95% CI (t): [-0.00100, +0.00733]; 95% CI (bootstrap): [+0.00030, +0.00767]
+- Wilcoxon signed-rank p = 0.0305; paired t p = 0.1321
+- Win/tie/loss (|delta| <= 0.001 is a tie): 14/15/5 (raw sign: 20 up, 11 down)
+- TOST equivalence p at margins {0.001: 0.8507, 0.0025: 0.6260, 0.005: 0.1882, 0.01: 0.0011, 0.02: 8.6e-10}
+- **Equivalent (TOST) within +-0.01 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.0251, 0.0025: 0.0046, 0.005: 0.0002, 0.01: 1.4e-07, 0.02: 3.4e-13}
 - **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00025, 95% CI [-0.00112, +0.00163], TOST margin 0.0025, non-inf margin 0.001
+- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00121, 95% CI [-0.00006, +0.00248], TOST margin 0.0025, non-inf margin 0.001
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins32 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00126 (median +0.00000, range [-0.01548, +0.02218])
-- 95% CI (t): [-0.00129, +0.00381]; 95% CI (bootstrap): [-0.00111, +0.00378]
-- Wilcoxon signed-rank p = 0.4919; paired t p = 0.3212
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/16/8 (raw sign: 16 up, 15 down)
-- TOST equivalence p at margins {0.001: 0.5824, 0.0025: 0.1655, 0.005: 0.0027, 0.01: 2.9e-08, 0.02: 1.5e-16}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0401, 0.0025: 0.0025, 0.005: 9.4e-06, 0.01: 1.1e-10, 0.02: 0.0e+00}
+- Mean per-dataset delta: +0.00065 (median +0.00002, range [-0.01403, +0.01765])
+- 95% CI (t): [-0.00127, +0.00256]; 95% CI (bootstrap): [-0.00119, +0.00250]
+- Wilcoxon signed-rank p = 0.2724; paired t p = 0.4966
+- Win/tie/loss (|delta| <= 0.001 is a tie): 11/16/7 (raw sign: 18 up, 13 down)
+- TOST equivalence p at margins {0.001: 0.3551, 0.0025: 0.0287, 0.005: 2.8e-05, 0.01: 9.5e-12, 0.02: 1.1e-20}
+- **Equivalent (TOST) within +-0.0025 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.0447, 0.0025: 0.0010, 0.005: 4.8e-07, 0.01: 3.4e-13, 0.02: 0.0e+00}
 - **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_9971_ilpd): mean +0.00063, 95% CI [-0.00164, +0.00290], TOST margin 0.005, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00013, 95% CI [-0.00152, +0.00179], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Friedman over 34 datasets: chi2 = 1.63, p = 0.9503; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 3.94, Exact: 4.15, Random: 3.62, Random_bins128: 4.06, Random_bins16: 4.00, Random_bins256: 4.09, Random_bins32: 4.15
+- Friedman over 34 datasets: chi2 = 6.87, p = 0.3329; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 4.41, Exact: 4.24, Random: 4.12, Random_bins128: 4.15, Random_bins16: 3.76, Random_bins256: 3.26, Random_bins32: 4.06
 
 ## SPO-GBT -- logloss
 
 ### Dynamic_Random_Histogram_thresh250 vs Exact (negative delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: -0.00242 (median -0.00093, range [-0.05545, +0.06416])
-- 95% CI (t): [-0.00880, +0.00395]; 95% CI (bootstrap): [-0.00834, +0.00377]
-- Wilcoxon signed-rank p = 0.0752; paired t p = 0.4460
-- Win/tie/loss (|delta| <= 0.001 is a tie): 8/10/18 (raw sign: 12 up, 22 down)
-- TOST equivalence p at margins {0.001: 0.6731, 0.0025: 0.4900, 0.005: 0.2085, 0.01: 0.0106, 0.02: 1.3e-06}
-- **Equivalent (TOST) within +-0.01 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.1417, 0.0025: 0.0631, 0.005: 0.0119, 0.01: 0.0002, 0.02: 1.3e-08}
+- Mean per-dataset delta: -0.00002 (median +0.00000, range [-0.02891, +0.05840])
+- 95% CI (t): [-0.00517, +0.00514]; 95% CI (bootstrap): [-0.00455, +0.00526]
+- Wilcoxon signed-rank p = 0.3880; paired t p = 0.9952
+- Win/tie/loss (|delta| <= 0.001 is a tie): 10/10/16 (raw sign: 17 up, 17 down)
+- TOST equivalence p at margins {0.001: 0.3502, 0.0025: 0.1671, 0.005: 0.0287, 0.01: 0.0002, 0.02: 1.5e-09}
+- **Equivalent (TOST) within +-0.005 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.3457, 0.0025: 0.1642, 0.005: 0.0280, 0.01: 0.0002, 0.02: 1.4e-09}
 - **Non-inferior (no penalty worse than 0.005) at alpha=0.05**
-- Leave-one-out (drop task_29_credit-approval): mean -0.00432, 95% CI [-0.00955, +0.00090], TOST margin 0.01, non-inf margin 0.001
+- Leave-one-out (drop task_15_breast-w): mean -0.00168, 95% CI [-0.00568, +0.00231], TOST margin 0.01, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random vs Exact (negative delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: -0.00565 (median -0.00125, range [-0.06019, +0.06587])
-- 95% CI (t): [-0.01294, +0.00164]; 95% CI (bootstrap): [-0.01265, +0.00134]
-- Wilcoxon signed-rank p = 0.0187; paired t p = 0.1244
-- Win/tie/loss (|delta| <= 0.001 is a tie): 7/11/18 (raw sign: 12 up, 22 down)
-- TOST equivalence p at margins {0.001: 0.8983, 0.0025: 0.8071, 0.005: 0.5717, 0.01: 0.1172, 0.02: 0.0002}
-- **Equivalent (TOST) within +-0.02 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0362, 0.0025: 0.0147, 0.005: 0.0027, 0.01: 5.5e-05, 0.02: 1.2e-08}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_29_credit-approval): mean -0.00770, 95% CI [-0.01387, -0.00152], TOST margin 0.02, non-inf margin 0.001
+- Mean per-dataset delta: -0.00294 (median -0.00063, range [-0.07674, +0.05920])
+- 95% CI (t): [-0.01009, +0.00421]; 95% CI (bootstrap): [-0.00974, +0.00398]
+- Wilcoxon signed-rank p = 0.1126; paired t p = 0.4099
+- Win/tie/loss (|delta| <= 0.001 is a tie): 9/9/18 (raw sign: 15 up, 19 down)
+- TOST equivalence p at margins {0.001: 0.7072, 0.0025: 0.5493, 0.005: 0.2813, 0.01: 0.0265, 0.02: 1.3e-05}
+- **Equivalent (TOST) within +-0.01 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.1356, 0.0025: 0.0659, 0.005: 0.0153, 0.01: 0.0004, 0.02: 8.3e-08}
+- **Non-inferior (no penalty worse than 0.005) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean -0.00083, 95% CI [-0.00674, +0.00507], TOST margin 0.01, non-inf margin 0.005
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins128 vs Exact (negative delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: -0.00265 (median -0.00050, range [-0.04135, +0.05203])
-- 95% CI (t): [-0.00825, +0.00294]; 95% CI (bootstrap): [-0.00785, +0.00272]
-- Wilcoxon signed-rank p = 0.1658; paired t p = 0.3414
-- Win/tie/loss (|delta| <= 0.001 is a tie): 9/9/16 (raw sign: 13 up, 19 down)
-- TOST equivalence p at margins {0.001: 0.7242, 0.0025: 0.5221, 0.005: 0.1997, 0.01: 0.0058, 0.02: 1.9e-07}
+- Mean per-dataset delta: +0.00029 (median -0.00172, range [-0.06392, +0.05692])
+- 95% CI (t): [-0.00659, +0.00717]; 95% CI (bootstrap): [-0.00619, +0.00704]
+- Wilcoxon signed-rank p = 0.1438; paired t p = 0.9327
+- Win/tie/loss (|delta| <= 0.001 is a tie): 8/7/19 (raw sign: 12 up, 20 down)
+- TOST equivalence p at margins {0.001: 0.4172, 0.0025: 0.2588, 0.005: 0.0864, 0.01: 0.0035, 0.02: 8.0e-07}
 - **Equivalent (TOST) within +-0.01 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0965, 0.0025: 0.0348, 0.005: 0.0044, 0.01: 3.0e-05, 0.02: 8.1e-10}
-- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_29_credit-approval): mean -0.00431, 95% CI [-0.00892, +0.00029], TOST margin 0.01, non-inf margin 0.001
+- Non-inferiority p at margins {0.001: 0.4172, 0.0025: 0.2588, 0.005: 0.0864, 0.01: 0.0035, 0.02: 8.0e-07}
+- **Non-inferior (no penalty worse than 0.01) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean +0.00223, 95% CI [-0.00357, +0.00804], TOST margin 0.01, non-inf margin 0.01
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins16 vs Exact (negative delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: -0.01354 (median -0.00251, range [-0.12740, +0.08412])
-- 95% CI (t): [-0.02645, -0.00063]; 95% CI (bootstrap): [-0.02602, -0.00154]
-- Wilcoxon signed-rank p = 0.0205; paired t p = 0.0404
-- Win/tie/loss (|delta| <= 0.001 is a tie): 9/6/19 (raw sign: 11 up, 21 down)
-- TOST equivalence p at margins {0.001: 0.9717, 0.0025: 0.9544, 0.005: 0.9062, 0.01: 0.7096, 0.02: 0.1581}
+- Mean per-dataset delta: -0.01088 (median -0.00277, range [-0.15225, +0.05846])
+- 95% CI (t): [-0.02407, +0.00232]; 95% CI (bootstrap): [-0.02392, +0.00118]
+- Wilcoxon signed-rank p = 0.0253; paired t p = 0.1029
+- Win/tie/loss (|delta| <= 0.001 is a tie): 7/6/21 (raw sign: 8 up, 24 down)
+- TOST equivalence p at margins {0.001: 0.9314, 0.0025: 0.8973, 0.005: 0.8143, 0.01: 0.5534, 0.02: 0.0844}
 - **Not TOST-equivalent at any tested margin**
-- Non-inferiority p at margins {0.001: 0.0142, 0.0025: 0.0082, 0.005: 0.0031, 0.01: 0.0004, 0.02: 4.0e-06}
+- Non-inferiority p at margins {0.001: 0.0380, 0.0025: 0.0235, 0.005: 0.0099, 0.01: 0.0014, 0.02: 1.9e-05}
 - **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_9971_ilpd): mean -0.01009, 95% CI [-0.02128, +0.00110], TOST margin 0.02, non-inf margin 0.001
+- Leave-one-out (drop task_9971_ilpd): mean -0.00659, 95% CI [-0.01681, +0.00363], TOST margin 0.02, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins256 vs Exact (negative delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: -0.00103 (median +0.00025, range [-0.03764, +0.05882])
-- 95% CI (t): [-0.00672, +0.00466]; 95% CI (bootstrap): [-0.00618, +0.00447]
-- Wilcoxon signed-rank p = 0.9632; paired t p = 0.7148
-- Win/tie/loss (|delta| <= 0.001 is a tie): 13/10/11 (raw sign: 18 up, 14 down)
-- TOST equivalence p at margins {0.001: 0.5044, 0.0025: 0.3015, 0.005: 0.0826, 0.01: 0.0015, 0.02: 4.9e-08}
+- Mean per-dataset delta: -0.00283 (median -0.00123, range [-0.06060, +0.04903])
+- 95% CI (t): [-0.00921, +0.00354]; 95% CI (bootstrap): [-0.00890, +0.00320]
+- Wilcoxon signed-rank p = 0.1024; paired t p = 0.3728
+- Win/tie/loss (|delta| <= 0.001 is a tie): 9/7/18 (raw sign: 11 up, 21 down)
+- TOST equivalence p at margins {0.001: 0.7186, 0.0025: 0.5418, 0.005: 0.2469, 0.01: 0.0144, 0.02: 2.3e-06}
 - **Equivalent (TOST) within +-0.01 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.2364, 0.0025: 0.1078, 0.005: 0.0192, 0.01: 0.0002, 0.02: 6.0e-09}
-- **Non-inferior (no penalty worse than 0.005) at alpha=0.05**
-- Leave-one-out (drop task_29_credit-approval): mean -0.00284, 95% CI [-0.00732, +0.00163], TOST margin 0.01, non-inf margin 0.001
+- Non-inferiority p at margins {0.001: 0.1151, 0.0025: 0.0492, 0.005: 0.0088, 0.01: 0.0001, 0.02: 1.2e-08}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean -0.00108, 95% CI [-0.00654, +0.00438], TOST margin 0.01, non-inf margin 0.005
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
 ### Random_bins32 vs Exact (negative delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: -0.00951 (median -0.00176, range [-0.11230, +0.06759])
-- 95% CI (t): [-0.01940, +0.00038]; 95% CI (bootstrap): [-0.01926, -0.00042]
-- Wilcoxon signed-rank p = 0.0228; paired t p = 0.0590
-- Win/tie/loss (|delta| <= 0.001 is a tie): 9/8/17 (raw sign: 10 up, 22 down)
-- TOST equivalence p at margins {0.001: 0.9553, 0.0025: 0.9206, 0.005: 0.8198, 0.01: 0.4601, 0.02: 0.0192}
+- Mean per-dataset delta: -0.00573 (median -0.00280, range [-0.09427, +0.05801])
+- 95% CI (t): [-0.01514, +0.00368]; 95% CI (bootstrap): [-0.01462, +0.00324]
+- Wilcoxon signed-rank p = 0.0521; paired t p = 0.2242
+- Win/tie/loss (|delta| <= 0.001 is a tie): 8/4/22 (raw sign: 10 up, 22 down)
+- TOST equivalence p at margins {0.001: 0.8430, 0.0025: 0.7550, 0.005: 0.5621, 0.01: 0.1813, 0.02: 0.0020}
 - **Equivalent (TOST) within +-0.02 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0190, 0.0025: 0.0094, 0.005: 0.0027, 0.01: 0.0002, 0.02: 3.9e-07}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_9971_ilpd): mean -0.00639, 95% CI [-0.01423, +0.00144], TOST margin 0.02, non-inf margin 0.001
+- Non-inferiority p at margins {0.001: 0.0776, 0.0025: 0.0422, 0.005: 0.0133, 0.01: 0.0009, 0.02: 1.8e-06}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean -0.00305, 95% CI [-0.01096, +0.00487], TOST margin 0.01, non-inf margin 0.005
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Friedman over 34 datasets: chi2 = 20.92, p = 0.0019; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 4.00, Exact: 4.71, Random: 3.68, Random_bins128: 4.24, Random_bins16: 3.09, Random_bins256: 4.91, Random_bins32: 3.38
+- Friedman over 34 datasets: chi2 = 23.40, p = 0.0007; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 4.65, Exact: 4.79, Random: 4.24, Random_bins128: 4.32, Random_bins16: 2.94, Random_bins256: 3.88, Random_bins32: 3.18
 
 ## SPO-RF -- accuracy
 

@@ -1,306 +1,306 @@
 # Split-finder accuracy comparison: Random Histogram vs Exact
 
-Inputs: 87 CSVs, 36 datasets, seeds: [1, 2, 3]. Unit of analysis for all aggregate claims: the dataset (per-dataset mean of paired per-(seed,fold) deltas).
+Inputs: 90 CSVs, 36 datasets, seeds: [1, 2, 3]. Unit of analysis for all aggregate claims: the dataset (per-dataset mean of paired per-(seed,fold) deltas).
 
 ## SPO-GBT -- accuracy
 
 ### Dynamic_Random_Histogram_thresh250 vs Exact (positive delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: +0.00103 (median +0.00010, range [-0.01629, +0.02346])
-- 95% CI (t): [-0.00099, +0.00305]; 95% CI (bootstrap): [-0.00078, +0.00309]
-- Wilcoxon signed-rank p = 0.4882; paired t p = 0.3055
-- Win/tie/loss (|delta| <= 0.001 is a tie): 9/20/7 (raw sign: 18 up, 16 down)
-- TOST equivalence p at margins {0.001: 0.5139, 0.0025: 0.0749, 0.005: 0.0002, 0.01: 6.0e-11, 0.02: 2.3e-20}
+- Mean per-dataset delta: +0.00082 (median +0.00000, range [-0.01834, +0.03457])
+- 95% CI (t): [-0.00193, +0.00358]; 95% CI (bootstrap): [-0.00163, +0.00364]
+- Wilcoxon signed-rank p = 0.5965; paired t p = 0.5487
+- Win/tie/loss (|delta| <= 0.001 is a tie): 11/19/6 (raw sign: 16 up, 17 down)
+- TOST equivalence p at margins {0.001: 0.4482, 0.0025: 0.1123, 0.005: 0.0020, 0.01: 3.9e-08, 0.02: 2.5e-16}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0242, 0.0025: 0.0006, 0.005: 3.2e-07, 0.01: 2.6e-13, 0.02: 0.0e+00}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00039, 95% CI [-0.00120, +0.00199], TOST margin 0.0025, non-inf margin 0.001
-- Per-dataset Wilcoxon (Holm): 2 dataset(s) significant: task_219_electricity (delta -0.0163, p=6.2e-05); task_7592_adult (delta -0.0009, p=0.0497)
+- Non-inferiority p at margins {0.001: 0.0941, 0.0025: 0.0098, 0.005: 6.7e-05, 0.01: 1.1e-09, 0.02: 0.0e+00}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00014, 95% CI [-0.00214, +0.00186], TOST margin 0.0025, non-inf margin 0.0025
+- Per-dataset Wilcoxon (Holm): 2 dataset(s) significant: task_14954_cylinder-bands (delta +0.0346, p=0.0142); task_219_electricity (delta -0.0176, p=6.2e-05)
 
-- Seed yardstick (34 datasets): median |method gap| 0.00084 vs median Exact seed spread 0.00114 (ratio 1.09); method gap within 1 seed-spread on 50% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00098 vs median Exact seed spread 0.00148 (ratio 1.15); method gap within 1 seed-spread on 50% of datasets
 
 ### Random vs Exact (positive delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: +0.00108 (median +0.00036, range [-0.01671, +0.01975])
-- 95% CI (t): [-0.00083, +0.00299]; 95% CI (bootstrap): [-0.00070, +0.00294]
-- Wilcoxon signed-rank p = 0.1887; paired t p = 0.2575
-- Win/tie/loss (|delta| <= 0.001 is a tie): 13/15/8 (raw sign: 20 up, 13 down)
-- TOST equivalence p at margins {0.001: 0.5350, 0.0025: 0.0706, 0.005: 9.8e-05, 0.01: 1.7e-11, 0.02: 4.2e-21}
+- Mean per-dataset delta: +0.00066 (median +0.00006, range [-0.01866, +0.03642])
+- 95% CI (t): [-0.00182, +0.00315]; 95% CI (bootstrap): [-0.00142, +0.00334]
+- Wilcoxon signed-rank p = 0.4776; paired t p = 0.5920
+- Win/tie/loss (|delta| <= 0.001 is a tie): 11/17/8 (raw sign: 19 up, 15 down)
+- TOST equivalence p at margins {0.001: 0.3921, 0.0025: 0.0711, 0.005: 0.0006, 0.01: 3.0e-09, 0.02: 8.4e-18}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0167, 0.0025: 0.0003, 0.005: 9.5e-08, 0.01: 5.0e-14, 0.02: 0.0e+00}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00055, 95% CI [-0.00107, +0.00217], TOST margin 0.0025, non-inf margin 0.001
-- Per-dataset Wilcoxon (Holm): 2 dataset(s) significant: task_219_electricity (delta -0.0167, p=6.2e-05); task_3904_jm1 (delta -0.0036, p=0.0165)
+- Non-inferiority p at margins {0.001: 0.0916, 0.0025: 0.0071, 0.005: 2.5e-05, 0.01: 1.4e-10, 0.02: 0.0e+00}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00036, 95% CI [-0.00177, +0.00105], TOST margin 0.0025, non-inf margin 0.0025
+- Per-dataset Wilcoxon (Holm): 2 dataset(s) significant: task_14954_cylinder-bands (delta +0.0364, p=0.0105); task_219_electricity (delta -0.0187, p=6.2e-05)
 
-- Seed yardstick (34 datasets): median |method gap| 0.00174 vs median Exact seed spread 0.00114 (ratio 1.48); method gap within 1 seed-spread on 41% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00132 vs median Exact seed spread 0.00148 (ratio 1.16); method gap within 1 seed-spread on 47% of datasets
 
 ### Random_bins128 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00124 (median +0.00000, range [-0.01382, +0.03889])
-- 95% CI (t): [-0.00141, +0.00389]; 95% CI (bootstrap): [-0.00087, +0.00406]
-- Wilcoxon signed-rank p = 0.5361; paired t p = 0.3495
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/16/8 (raw sign: 19 up, 13 down)
-- TOST equivalence p at margins {0.001: 0.5715, 0.0025: 0.1698, 0.005: 0.0034, 0.01: 5.8e-08, 0.02: 4.4e-16}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0477, 0.0025: 0.0036, 0.005: 1.7e-05, 0.01: 2.9e-10, 0.02: 0.0e+00}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00010, 95% CI [-0.00123, +0.00142], TOST margin 0.0025, non-inf margin 0.0025
+- Mean per-dataset delta: +0.00025 (median +0.00000, range [-0.01406, +0.02778])
+- 95% CI (t): [-0.00215, +0.00266]; 95% CI (bootstrap): [-0.00192, +0.00265]
+- Wilcoxon signed-rank p = 0.9615; paired t p = 0.8316
+- Win/tie/loss (|delta| <= 0.001 is a tie): 12/11/11 (raw sign: 15 up, 16 down)
+- TOST equivalence p at margins {0.001: 0.2662, 0.0025: 0.0332, 0.005: 0.0002, 0.01: 8.1e-10, 0.02: 5.9e-18}
+- **Equivalent (TOST) within +-0.0025 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.1485, 0.0025: 0.0131, 0.005: 4.7e-05, 0.01: 2.6e-10, 0.02: 0.0e+00}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00058, 95% CI [-0.00234, +0.00118], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00112 vs median Exact seed spread 0.00114 (ratio 1.31); method gap within 1 seed-spread on 44% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00193 vs median Exact seed spread 0.00148 (ratio 1.61); method gap within 1 seed-spread on 26% of datasets
 
 ### Random_bins16 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00156 (median +0.00066, range [-0.02628, +0.04815])
-- 95% CI (t): [-0.00206, +0.00519]; 95% CI (bootstrap): [-0.00164, +0.00527]
-- Wilcoxon signed-rank p = 0.2539; paired t p = 0.3871
-- Win/tie/loss (|delta| <= 0.001 is a tie): 13/11/10 (raw sign: 20 up, 12 down)
-- TOST equivalence p at margins {0.001: 0.6229, 0.0025: 0.3014, 0.005: 0.0313, 0.01: 2.0e-05, 0.02: 3.5e-12}
+- Mean per-dataset delta: +0.00114 (median +0.00000, range [-0.02635, +0.03519])
+- 95% CI (t): [-0.00182, +0.00410]; 95% CI (bootstrap): [-0.00156, +0.00405]
+- Wilcoxon signed-rank p = 0.4540; paired t p = 0.4378
+- Win/tie/loss (|delta| <= 0.001 is a tie): 12/10/12 (raw sign: 16 up, 16 down)
+- TOST equivalence p at margins {0.001: 0.5386, 0.0025: 0.1785, 0.005: 0.0061, 0.01: 3.7e-07, 0.02: 8.3e-15}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0800, 0.0025: 0.0146, 0.005: 0.0004, 0.01: 1.2e-07, 0.02: 5.7e-14}
+- Non-inferiority p at margins {0.001: 0.0751, 0.0025: 0.0087, 0.005: 8.8e-05, 0.01: 4.0e-09, 0.02: 3.3e-16}
 - **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00015, 95% CI [-0.00214, +0.00244], TOST margin 0.0025, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00011, 95% CI [-0.00204, +0.00226], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00176 vs median Exact seed spread 0.00114 (ratio 1.66); method gap within 1 seed-spread on 38% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00162 vs median Exact seed spread 0.00148 (ratio 1.19); method gap within 1 seed-spread on 41% of datasets
 
 ### Random_bins256 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00066 (median +0.00000, range [-0.01039, +0.03889])
-- 95% CI (t): [-0.00198, +0.00330]; 95% CI (bootstrap): [-0.00140, +0.00349]
-- Wilcoxon signed-rank p = 0.8754; paired t p = 0.6130
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/12/12 (raw sign: 16 up, 16 down)
-- TOST equivalence p at margins {0.001: 0.3984, 0.0025: 0.0832, 0.005: 0.0010, 0.01: 1.5e-08, 0.02: 1.7e-16}
+- Mean per-dataset delta: +0.00077 (median +0.00000, range [-0.01216, +0.04259])
+- 95% CI (t): [-0.00220, +0.00374]; 95% CI (bootstrap): [-0.00161, +0.00391]
+- Wilcoxon signed-rank p = 0.8393; paired t p = 0.6018
+- Win/tie/loss (|delta| <= 0.001 is a tie): 11/13/10 (raw sign: 15 up, 16 down)
+- TOST equivalence p at margins {0.001: 0.4379, 0.0025: 0.1224, 0.005: 0.0033, 0.01: 1.9e-07, 0.02: 5.5e-15}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.1046, 0.0025: 0.0102, 0.005: 6.0e-05, 0.01: 8.8e-10, 0.02: 0.0e+00}
+- Non-inferiority p at margins {0.001: 0.1172, 0.0025: 0.0160, 0.005: 0.0002, 0.01: 9.1e-09, 0.02: 6.7e-16}
 - **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00050, 95% CI [-0.00173, +0.00074], TOST margin 0.0025, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00050, 95% CI [-0.00202, +0.00103], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00159 vs median Exact seed spread 0.00114 (ratio 1.51); method gap within 1 seed-spread on 32% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00159 vs median Exact seed spread 0.00148 (ratio 1.56); method gap within 1 seed-spread on 35% of datasets
 
 ### Random_bins32 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00079 (median +0.00027, range [-0.02158, +0.02407])
-- 95% CI (t): [-0.00143, +0.00301]; 95% CI (bootstrap): [-0.00134, +0.00287]
-- Wilcoxon signed-rank p = 0.1574; paired t p = 0.4733
-- Win/tie/loss (|delta| <= 0.001 is a tie): 13/14/7 (raw sign: 20 up, 11 down)
-- TOST equivalence p at margins {0.001: 0.4249, 0.0025: 0.0635, 0.005: 0.0003, 0.01: 4.7e-10, 0.02: 1.2e-18}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0550, 0.0025: 0.0024, 0.005: 3.7e-06, 0.01: 1.1e-11, 0.02: 0.0e+00}
+- Mean per-dataset delta: -0.00014 (median +0.00000, range [-0.02205, +0.02222])
+- 95% CI (t): [-0.00268, +0.00240]; 95% CI (bootstrap): [-0.00259, +0.00223]
+- Wilcoxon signed-rank p = 0.7611; paired t p = 0.9128
+- Win/tie/loss (|delta| <= 0.001 is a tie): 12/11/11 (raw sign: 15 up, 15 down)
+- TOST equivalence p at margins {0.001: 0.2474, 0.0025: 0.0337, 0.005: 0.0002, 0.01: 2.1e-09, 0.02: 1.6e-17}
+- **Equivalent (TOST) within +-0.0025 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.2474, 0.0025: 0.0337, 0.005: 0.0002, 0.01: 2.1e-09, 0.02: 0.0e+00}
 - **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00009, 95% CI [-0.00166, +0.00183], TOST margin 0.0025, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00082, 95% CI [-0.00302, +0.00139], TOST margin 0.005, non-inf margin 0.005
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00128 vs median Exact seed spread 0.00114 (ratio 1.06); method gap within 1 seed-spread on 47% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00194 vs median Exact seed spread 0.00148 (ratio 1.95); method gap within 1 seed-spread on 38% of datasets
 
-- Friedman over 34 datasets: chi2 = 3.47, p = 0.7478; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 3.99, Exact: 4.46, Random: 3.82, Random_bins128: 4.12, Random_bins16: 3.94, Random_bins256: 4.12, Random_bins32: 3.56
+- Friedman over 34 datasets: chi2 = 4.31, p = 0.6347; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 3.76, Exact: 4.28, Random: 3.93, Random_bins128: 4.40, Random_bins16: 3.60, Random_bins256: 3.76, Random_bins32: 4.26
 
 ## SPO-GBT -- auc
 
 ### Dynamic_Random_Histogram_thresh250 vs Exact (positive delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: +0.00041 (median -0.00004, range [-0.01168, +0.02657])
-- 95% CI (t): [-0.00152, +0.00234]; 95% CI (bootstrap): [-0.00121, +0.00245]
-- Wilcoxon signed-rank p = 0.6850; paired t p = 0.6685
-- Win/tie/loss (|delta| <= 0.001 is a tie): 8/17/11 (raw sign: 14 up, 19 down)
-- TOST equivalence p at margins {0.001: 0.2690, 0.0025: 0.0172, 0.005: 1.3e-05, 0.01: 3.2e-12, 0.02: 1.8e-21}
-- **Equivalent (TOST) within +-0.0025 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0732, 0.0025: 0.0021, 0.005: 9.6e-07, 0.01: 3.6e-13, 0.02: 0.0e+00}
+- Mean per-dataset delta: +0.00091 (median -0.00031, range [-0.01021, +0.05979])
+- 95% CI (t): [-0.00265, +0.00446]; 95% CI (bootstrap): [-0.00149, +0.00477]
+- Wilcoxon signed-rank p = 0.2011; paired t p = 0.6076
+- Win/tie/loss (|delta| <= 0.001 is a tie): 7/16/13 (raw sign: 12 up, 21 down)
+- TOST equivalence p at margins {0.001: 0.4791, 0.0025: 0.1848, 0.005: 0.0127, 0.01: 4.5e-06, 0.02: 4.3e-13}
+- **Equivalent (TOST) within +-0.005 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.1418, 0.0025: 0.0299, 0.005: 0.0009, 0.01: 1.9e-07, 0.02: 3.4e-14}
 - **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00034, 95% CI [-0.00156, +0.00089], TOST margin 0.0025, non-inf margin 0.0025
-- Per-dataset Wilcoxon (Holm): 4 dataset(s) significant: task_219_electricity (delta -0.0117, p=6.7e-08); task_3904_jm1 (delta -0.0049, p=0.0220); task_7592_adult (delta -0.0008, p=0.0058); task_9977_nomao (delta -0.0002, p=0.0008)
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00077, 95% CI [-0.00180, +0.00025], TOST margin 0.0025, non-inf margin 0.0025
+- Per-dataset Wilcoxon (Holm): 5 dataset(s) significant: task_14954_cylinder-bands (delta +0.0598, p=0.0019); task_14965_bank-marketing (delta +0.0010, p=0.0002); task_219_electricity (delta -0.0102, p=6.7e-08); task_3904_jm1 (delta -0.0072, p=0.0062); task_9977_nomao (delta -0.0002, p=0.0062)
 
-- Seed yardstick (34 datasets): median |method gap| 0.00132 vs median Exact seed spread 0.00113 (ratio 1.08); method gap within 1 seed-spread on 44% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00158 vs median Exact seed spread 0.00097 (ratio 1.38); method gap within 1 seed-spread on 38% of datasets
 
 ### Random vs Exact (positive delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: +0.00124 (median +0.00048, range [-0.01195, +0.02318])
-- 95% CI (t): [-0.00083, +0.00331]; 95% CI (bootstrap): [-0.00063, +0.00334]
-- Wilcoxon signed-rank p = 0.0970; paired t p = 0.2305
-- Win/tie/loss (|delta| <= 0.001 is a tie): 12/17/7 (raw sign: 22 up, 11 down)
-- TOST equivalence p at margins {0.001: 0.5937, 0.0025: 0.1128, 0.005: 0.0004, 0.01: 1.9e-10, 0.02: 7.0e-20}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0172, 0.0025: 0.0004, 0.005: 2.6e-07, 0.01: 3.0e-13, 0.02: 0.0e+00}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00062, 95% CI [-0.00106, +0.00230], TOST margin 0.0025, non-inf margin 0.001
-- Per-dataset Wilcoxon (Holm): 4 dataset(s) significant: task_219_electricity (delta -0.0119, p=6.7e-08); task_3904_jm1 (delta -0.0076, p=0.0062); task_7592_adult (delta -0.0008, p=0.0026); task_9977_nomao (delta -0.0002, p=0.0046)
+- Mean per-dataset delta: +0.00160 (median -0.00010, range [-0.01092, +0.07744])
+- 95% CI (t): [-0.00295, +0.00614]; 95% CI (bootstrap): [-0.00140, +0.00652]
+- Wilcoxon signed-rank p = 0.3669; paired t p = 0.4804
+- Win/tie/loss (|delta| <= 0.001 is a tie): 9/13/14 (raw sign: 12 up, 21 down)
+- TOST equivalence p at margins {0.001: 0.6043, 0.0025: 0.3445, 0.005: 0.0687, 0.01: 0.0003, 0.02: 5.5e-10}
+- **Equivalent (TOST) within +-0.01 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.1269, 0.0025: 0.0379, 0.005: 0.0028, 0.01: 4.6e-06, 0.02: 1.1e-11}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_14954_cylinder-bands): mean -0.00057, 95% CI [-0.00175, +0.00061], TOST margin 0.0025, non-inf margin 0.0025
+- Per-dataset Wilcoxon (Holm): 6 dataset(s) significant: task_14954_cylinder-bands (delta +0.0774, p=0.0011); task_14965_bank-marketing (delta +0.0009, p=0.0015); task_219_electricity (delta -0.0109, p=6.7e-08); task_3904_jm1 (delta -0.0075, p=0.0018); task_7592_adult (delta -0.0006, p=0.0103); task_9977_nomao (delta -0.0002, p=0.0002)
 
-- Seed yardstick (34 datasets): median |method gap| 0.00152 vs median Exact seed spread 0.00113 (ratio 1.01); method gap within 1 seed-spread on 53% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00147 vs median Exact seed spread 0.00097 (ratio 1.45); method gap within 1 seed-spread on 41% of datasets
 
 ### Random_bins128 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00048 (median +0.00007, range [-0.00887, +0.01435])
-- 95% CI (t): [-0.00129, +0.00225]; 95% CI (bootstrap): [-0.00120, +0.00219]
-- Wilcoxon signed-rank p = 0.6636; paired t p = 0.5858
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/15/9 (raw sign: 17 up, 14 down)
-- TOST equivalence p at margins {0.001: 0.2774, 0.0025: 0.0134, 0.005: 5.3e-06, 0.01: 8.5e-13, 0.02: 7.9e-22}
+- Mean per-dataset delta: -0.00003 (median +0.00000, range [-0.00949, +0.01449])
+- 95% CI (t): [-0.00144, +0.00139]; 95% CI (bootstrap): [-0.00135, +0.00137]
+- Wilcoxon signed-rank p = 0.8696; paired t p = 0.9700
+- Win/tie/loss (|delta| <= 0.001 is a tie): 10/16/8 (raw sign: 15 up, 16 down)
+- TOST equivalence p at margins {0.001: 0.0853, 0.0025: 0.0006, 0.005: 1.7e-08, 0.01: 4.4e-16, 0.02: 2.8e-25}
 - **Equivalent (TOST) within +-0.0025 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0495, 0.0025: 0.0008, 0.005: 2.1e-07, 0.01: 6.7e-14, 0.02: 0.0e+00}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_9971_ilpd): mean +0.00006, 95% CI [-0.00154, +0.00166], TOST margin 0.0025, non-inf margin 0.0025
+- Non-inferiority p at margins {0.001: 0.0853, 0.0025: 0.0006, 0.005: 1.7e-08, 0.01: 4.4e-16, 0.02: 0.0e+00}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean -0.00047, 95% CI [-0.00160, +0.00066], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00144 vs median Exact seed spread 0.00113 (ratio 1.45); method gap within 1 seed-spread on 41% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00107 vs median Exact seed spread 0.00097 (ratio 1.09); method gap within 1 seed-spread on 50% of datasets
 
 ### Random_bins16 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00142 (median +0.00000, range [-0.01991, +0.02629])
-- 95% CI (t): [-0.00167, +0.00452]; 95% CI (bootstrap): [-0.00152, +0.00444]
-- Wilcoxon signed-rank p = 0.4798; paired t p = 0.3567
-- Win/tie/loss (|delta| <= 0.001 is a tie): 14/10/10 (raw sign: 16 up, 15 down)
-- TOST equivalence p at margins {0.001: 0.6086, 0.0025: 0.2422, 0.005: 0.0125, 0.01: 1.4e-06, 0.02: 4.5e-14}
+- Mean per-dataset delta: +0.00081 (median +0.00019, range [-0.01634, +0.02603])
+- 95% CI (t): [-0.00131, +0.00292]; 95% CI (bootstrap): [-0.00114, +0.00291]
+- Wilcoxon signed-rank p = 0.0727; paired t p = 0.4419
+- Win/tie/loss (|delta| <= 0.001 is a tie): 10/20/4 (raw sign: 18 up, 13 down)
+- TOST equivalence p at margins {0.001: 0.4276, 0.0025: 0.0566, 0.005: 0.0002, 0.01: 1.6e-10, 0.02: 2.9e-19}
 - **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0605, 0.0025: 0.0073, 0.005: 9.0e-05, 0.01: 6.3e-09, 0.02: 8.9e-16}
-- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00067, 95% CI [-0.00211, +0.00345], TOST margin 0.005, non-inf margin 0.0025
+- Non-inferiority p at margins {0.001: 0.0455, 0.0025: 0.0016, 0.005: 1.6e-06, 0.01: 3.0e-12, 0.02: 0.0e+00}
+- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean +0.00004, 95% CI [-0.00143, +0.00152], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00318 vs median Exact seed spread 0.00113 (ratio 2.38); method gap within 1 seed-spread on 24% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00080 vs median Exact seed spread 0.00097 (ratio 0.67); method gap within 1 seed-spread on 62% of datasets
 
 ### Random_bins256 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00118 (median +0.00000, range [-0.00717, +0.03165])
-- 95% CI (t): [-0.00112, +0.00348]; 95% CI (bootstrap): [-0.00073, +0.00357]
-- Wilcoxon signed-rank p = 0.6357; paired t p = 0.3052
-- Win/tie/loss (|delta| <= 0.001 is a tie): 11/13/10 (raw sign: 15 up, 16 down)
-- TOST equivalence p at margins {0.001: 0.5620, 0.0025: 0.1254, 0.005: 0.0009, 0.01: 2.7e-09, 0.02: 6.4e-18}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0314, 0.0025: 0.0013, 0.005: 2.4e-06, 0.01: 1.1e-11, 0.02: 0.0e+00}
+- Mean per-dataset delta: +0.00316 (median +0.00062, range [-0.00681, +0.06774])
+- 95% CI (t): [-0.00100, +0.00733]; 95% CI (bootstrap): [+0.00030, +0.00767]
+- Wilcoxon signed-rank p = 0.0305; paired t p = 0.1321
+- Win/tie/loss (|delta| <= 0.001 is a tie): 14/15/5 (raw sign: 20 up, 11 down)
+- TOST equivalence p at margins {0.001: 0.8507, 0.0025: 0.6260, 0.005: 0.1882, 0.01: 0.0011, 0.02: 8.6e-10}
+- **Equivalent (TOST) within +-0.01 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.0251, 0.0025: 0.0046, 0.005: 0.0002, 0.01: 1.4e-07, 0.02: 3.4e-13}
 - **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00025, 95% CI [-0.00112, +0.00163], TOST margin 0.0025, non-inf margin 0.001
+- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00121, 95% CI [-0.00006, +0.00248], TOST margin 0.0025, non-inf margin 0.001
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00182 vs median Exact seed spread 0.00113 (ratio 1.33); method gap within 1 seed-spread on 38% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00137 vs median Exact seed spread 0.00097 (ratio 1.66); method gap within 1 seed-spread on 38% of datasets
 
 ### Random_bins32 vs Exact (positive delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: +0.00126 (median +0.00000, range [-0.01548, +0.02218])
-- 95% CI (t): [-0.00129, +0.00381]; 95% CI (bootstrap): [-0.00111, +0.00378]
-- Wilcoxon signed-rank p = 0.4919; paired t p = 0.3212
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/16/8 (raw sign: 16 up, 15 down)
-- TOST equivalence p at margins {0.001: 0.5824, 0.0025: 0.1655, 0.005: 0.0027, 0.01: 2.9e-08, 0.02: 1.5e-16}
-- **Equivalent (TOST) within +-0.005 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0401, 0.0025: 0.0025, 0.005: 9.4e-06, 0.01: 1.1e-10, 0.02: 0.0e+00}
+- Mean per-dataset delta: +0.00065 (median +0.00002, range [-0.01403, +0.01765])
+- 95% CI (t): [-0.00127, +0.00256]; 95% CI (bootstrap): [-0.00119, +0.00250]
+- Wilcoxon signed-rank p = 0.2724; paired t p = 0.4966
+- Win/tie/loss (|delta| <= 0.001 is a tie): 11/16/7 (raw sign: 18 up, 13 down)
+- TOST equivalence p at margins {0.001: 0.3551, 0.0025: 0.0287, 0.005: 2.8e-05, 0.01: 9.5e-12, 0.02: 1.1e-20}
+- **Equivalent (TOST) within +-0.0025 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.0447, 0.0025: 0.0010, 0.005: 4.8e-07, 0.01: 3.4e-13, 0.02: 0.0e+00}
 - **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_9971_ilpd): mean +0.00063, 95% CI [-0.00164, +0.00290], TOST margin 0.005, non-inf margin 0.0025
+- Leave-one-out (drop task_14954_cylinder-bands): mean +0.00013, 95% CI [-0.00152, +0.00179], TOST margin 0.0025, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00121 vs median Exact seed spread 0.00113 (ratio 1.10); method gap within 1 seed-spread on 50% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00115 vs median Exact seed spread 0.00097 (ratio 1.18); method gap within 1 seed-spread on 44% of datasets
 
-- Friedman over 34 datasets: chi2 = 1.20, p = 0.9769; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 4.00, Exact: 4.24, Random: 3.71, Random_bins128: 4.06, Random_bins16: 3.91, Random_bins256: 4.03, Random_bins32: 4.06
+- Friedman over 34 datasets: chi2 = 7.42, p = 0.2834; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 4.18, Exact: 3.88, Random: 4.47, Random_bins128: 4.26, Random_bins16: 3.94, Random_bins256: 3.21, Random_bins32: 4.06
 
 ## SPO-GBT -- logloss
 
 ### Dynamic_Random_Histogram_thresh250 vs Exact (negative delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: -0.00226 (median -0.00055, range [-0.03195, +0.06525])
-- 95% CI (t): [-0.00812, +0.00360]; 95% CI (bootstrap): [-0.00751, +0.00364]
-- Wilcoxon signed-rank p = 0.0941; paired t p = 0.4384
-- Win/tie/loss (|delta| <= 0.001 is a tie): 10/10/16 (raw sign: 13 up, 21 down)
-- TOST equivalence p at margins {0.001: 0.6677, 0.0025: 0.4675, 0.005: 0.1748, 0.01: 0.0056, 0.02: 2.5e-07}
+- Mean per-dataset delta: -0.00103 (median -0.00087, range [-0.02918, +0.05396])
+- 95% CI (t): [-0.00620, +0.00413]; 95% CI (bootstrap): [-0.00559, +0.00416]
+- Wilcoxon signed-rank p = 0.1012; paired t p = 0.6870
+- Win/tie/loss (|delta| <= 0.001 is a tie): 8/10/18 (raw sign: 14 up, 20 down)
+- TOST equivalence p at margins {0.001: 0.5053, 0.0025: 0.2842, 0.005: 0.0641, 0.01: 0.0006, 0.02: 5.0e-09}
 - **Equivalent (TOST) within +-0.01 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.1331, 0.0025: 0.0540, 0.005: 0.0083, 0.01: 7.6e-05, 0.02: 2.4e-09}
+- Non-inferiority p at margins {0.001: 0.2148, 0.0025: 0.0869, 0.005: 0.0117, 0.01: 5.9e-05, 0.02: 4.8e-10}
 - **Non-inferior (no penalty worse than 0.005) at alpha=0.05**
-- Leave-one-out (drop task_29_credit-approval): mean -0.00419, 95% CI [-0.00868, +0.00030], TOST margin 0.01, non-inf margin 0.001
-- Per-dataset Wilcoxon (Holm): 7 dataset(s) significant: task_146819_climate-model-simulation-crashes (delta -0.0320, p=0.0094); task_15_breast-w (delta +0.0269, p=1.2e-06); task_219_electricity (delta +0.0284, p=6.7e-08); task_29_credit-approval (delta +0.0652, p=2.0e-07); task_7592_adult (delta +0.0015, p=0.0058); task_9957_qsar-biodeg (delta -0.0276, p=0.0001); task_9977_nomao (delta +0.0022, p=2.0e-06)
+- Leave-one-out (drop task_15_breast-w): mean -0.00261, 95% CI [-0.00679, +0.00158], TOST margin 0.01, non-inf margin 0.001
+- Per-dataset Wilcoxon (Holm): 7 dataset(s) significant: task_14965_bank-marketing (delta -0.0013, p=0.0031); task_15_breast-w (delta +0.0540, p=7.2e-06); task_167141_churn (delta -0.0065, p=1.6e-05); task_219_electricity (delta +0.0274, p=6.7e-08); task_29_credit-approval (delta +0.0376, p=0.0009); task_3904_jm1 (delta +0.0036, p=0.0402); task_9977_nomao (delta +0.0015, p=0.0004)
 
-- Seed yardstick (34 datasets): median |method gap| 0.00361 vs median Exact seed spread 0.00155 (ratio 1.72); method gap within 1 seed-spread on 32% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00357 vs median Exact seed spread 0.00324 (ratio 1.40); method gap within 1 seed-spread on 38% of datasets
 
 ### Random vs Exact (negative delta = comparator better)
 
 - Datasets: 36
-- Mean per-dataset delta: -0.00689 (median -0.00352, range [-0.07695, +0.07672])
-- 95% CI (t): [-0.01492, +0.00113]; 95% CI (bootstrap): [-0.01444, +0.00096]
-- Wilcoxon signed-rank p = 0.0091; paired t p = 0.0901
-- Win/tie/loss (|delta| <= 0.001 is a tie): 8/7/21 (raw sign: 10 up, 24 down)
-- TOST equivalence p at margins {0.001: 0.9274, 0.0025: 0.8629, 0.005: 0.6823, 0.01: 0.2184, 0.02: 0.0011}
-- **Equivalent (TOST) within +-0.02 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0269, 0.0025: 0.0116, 0.005: 0.0024, 0.01: 7.0e-05, 0.02: 3.4e-08}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_9971_ilpd): mean -0.00489, 95% CI [-0.01202, +0.00224], TOST margin 0.02, non-inf margin 0.0025
-- Per-dataset Wilcoxon (Holm): 16 dataset(s) significant: task_10093_banknote-authentication (delta -0.0012, p=0.0296); task_146819_climate-model-simulation-crashes (delta -0.0409, p=0.0260); task_146820_wilt (delta -0.0043, p=0.0395); task_15_breast-w (delta +0.0259, p=3.7e-05); task_219_electricity (delta +0.0289, p=6.7e-08); task_29_credit-approval (delta +0.0767, p=1.3e-07); task_3902_pc4 (delta -0.0223, p=0.0023); task_3903_pc3 (delta -0.0183, p=0.0124); task_3904_jm1 (delta +0.0050, p=0.0065); task_3917_kc1 (delta -0.0097, p=0.0497); task_7592_adult (delta +0.0015, p=0.0002); task_9946_wdbc (delta -0.0149, p=0.0190); task_9952_phoneme (delta -0.0036, p=0.0410); task_9957_qsar-biodeg (delta -0.0403, p=2.7e-05); task_9971_ilpd (delta -0.0770, p=1.6e-05); task_9977_nomao (delta +0.0022, p=3.2e-05)
+- Mean per-dataset delta: -0.00377 (median -0.00260, range [-0.05856, +0.05828])
+- 95% CI (t): [-0.01077, +0.00324]; 95% CI (bootstrap): [-0.01020, +0.00315]
+- Wilcoxon signed-rank p = 0.0131; paired t p = 0.2826
+- Win/tie/loss (|delta| <= 0.001 is a tie): 7/8/21 (raw sign: 12 up, 22 down)
+- TOST equivalence p at margins {0.001: 0.7858, 0.0025: 0.6420, 0.005: 0.3613, 0.01: 0.0397, 0.02: 1.9e-05}
+- **Equivalent (TOST) within +-0.01 at alpha=0.05**
+- Non-inferiority p at margins {0.001: 0.0880, 0.0025: 0.0390, 0.005: 0.0078, 0.01: 0.0002, 0.02: 2.7e-08}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean -0.00220, 95% CI [-0.00863, +0.00423], TOST margin 0.01, non-inf margin 0.005
+- Per-dataset Wilcoxon (Holm): 13 dataset(s) significant: task_146820_wilt (delta -0.0047, p=0.0280); task_14965_bank-marketing (delta -0.0013, p=0.0035); task_15_breast-w (delta +0.0566, p=7.0e-06); task_167141_churn (delta -0.0041, p=0.0294); task_219_electricity (delta +0.0290, p=6.7e-08); task_29_credit-approval (delta +0.0583, p=1.3e-07); task_3902_pc4 (delta -0.0235, p=0.0065); task_3904_jm1 (delta +0.0038, p=0.0308); task_3917_kc1 (delta -0.0111, p=0.0412); task_7592_adult (delta +0.0010, p=0.0223); task_9957_qsar-biodeg (delta -0.0298, p=0.0110); task_9971_ilpd (delta -0.0586, p=0.0065); task_9977_nomao (delta +0.0019, p=6.6e-05)
 
-- Seed yardstick (34 datasets): median |method gap| 0.00950 vs median Exact seed spread 0.00155 (ratio 3.57); method gap within 1 seed-spread on 15% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00463 vs median Exact seed spread 0.00324 (ratio 2.80); method gap within 1 seed-spread on 29% of datasets
 
 ### Random_bins128 vs Exact (negative delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: -0.00265 (median -0.00050, range [-0.04135, +0.05203])
-- 95% CI (t): [-0.00825, +0.00294]; 95% CI (bootstrap): [-0.00785, +0.00272]
-- Wilcoxon signed-rank p = 0.1658; paired t p = 0.3414
-- Win/tie/loss (|delta| <= 0.001 is a tie): 9/9/16 (raw sign: 13 up, 19 down)
-- TOST equivalence p at margins {0.001: 0.7242, 0.0025: 0.5221, 0.005: 0.1997, 0.01: 0.0058, 0.02: 1.9e-07}
+- Mean per-dataset delta: +0.00029 (median -0.00172, range [-0.06392, +0.05692])
+- 95% CI (t): [-0.00659, +0.00717]; 95% CI (bootstrap): [-0.00619, +0.00704]
+- Wilcoxon signed-rank p = 0.1438; paired t p = 0.9327
+- Win/tie/loss (|delta| <= 0.001 is a tie): 8/7/19 (raw sign: 12 up, 20 down)
+- TOST equivalence p at margins {0.001: 0.4172, 0.0025: 0.2588, 0.005: 0.0864, 0.01: 0.0035, 0.02: 8.0e-07}
 - **Equivalent (TOST) within +-0.01 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0965, 0.0025: 0.0348, 0.005: 0.0044, 0.01: 3.0e-05, 0.02: 8.1e-10}
-- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
-- Leave-one-out (drop task_29_credit-approval): mean -0.00431, 95% CI [-0.00892, +0.00029], TOST margin 0.01, non-inf margin 0.001
+- Non-inferiority p at margins {0.001: 0.4172, 0.0025: 0.2588, 0.005: 0.0864, 0.01: 0.0035, 0.02: 8.0e-07}
+- **Non-inferior (no penalty worse than 0.01) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean +0.00223, 95% CI [-0.00357, +0.00804], TOST margin 0.01, non-inf margin 0.01
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00424 vs median Exact seed spread 0.00155 (ratio 1.86); method gap within 1 seed-spread on 35% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00378 vs median Exact seed spread 0.00324 (ratio 2.08); method gap within 1 seed-spread on 38% of datasets
 
 ### Random_bins16 vs Exact (negative delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: -0.01354 (median -0.00251, range [-0.12740, +0.08412])
-- 95% CI (t): [-0.02645, -0.00063]; 95% CI (bootstrap): [-0.02602, -0.00154]
-- Wilcoxon signed-rank p = 0.0205; paired t p = 0.0404
-- Win/tie/loss (|delta| <= 0.001 is a tie): 9/6/19 (raw sign: 11 up, 21 down)
-- TOST equivalence p at margins {0.001: 0.9717, 0.0025: 0.9544, 0.005: 0.9062, 0.01: 0.7096, 0.02: 0.1581}
+- Mean per-dataset delta: -0.01088 (median -0.00277, range [-0.15225, +0.05846])
+- 95% CI (t): [-0.02407, +0.00232]; 95% CI (bootstrap): [-0.02392, +0.00118]
+- Wilcoxon signed-rank p = 0.0253; paired t p = 0.1029
+- Win/tie/loss (|delta| <= 0.001 is a tie): 7/6/21 (raw sign: 8 up, 24 down)
+- TOST equivalence p at margins {0.001: 0.9314, 0.0025: 0.8973, 0.005: 0.8143, 0.01: 0.5534, 0.02: 0.0844}
 - **Not TOST-equivalent at any tested margin**
-- Non-inferiority p at margins {0.001: 0.0142, 0.0025: 0.0082, 0.005: 0.0031, 0.01: 0.0004, 0.02: 4.0e-06}
+- Non-inferiority p at margins {0.001: 0.0380, 0.0025: 0.0235, 0.005: 0.0099, 0.01: 0.0014, 0.02: 1.9e-05}
 - **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_9971_ilpd): mean -0.01009, 95% CI [-0.02128, +0.00110], TOST margin 0.02, non-inf margin 0.001
+- Leave-one-out (drop task_9971_ilpd): mean -0.00659, 95% CI [-0.01681, +0.00363], TOST margin 0.02, non-inf margin 0.0025
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00709 vs median Exact seed spread 0.00155 (ratio 6.36); method gap within 1 seed-spread on 18% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00919 vs median Exact seed spread 0.00324 (ratio 4.25); method gap within 1 seed-spread on 18% of datasets
 
 ### Random_bins256 vs Exact (negative delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: -0.00103 (median +0.00025, range [-0.03764, +0.05882])
-- 95% CI (t): [-0.00672, +0.00466]; 95% CI (bootstrap): [-0.00618, +0.00447]
-- Wilcoxon signed-rank p = 0.9632; paired t p = 0.7148
-- Win/tie/loss (|delta| <= 0.001 is a tie): 13/10/11 (raw sign: 18 up, 14 down)
-- TOST equivalence p at margins {0.001: 0.5044, 0.0025: 0.3015, 0.005: 0.0826, 0.01: 0.0015, 0.02: 4.9e-08}
+- Mean per-dataset delta: -0.00283 (median -0.00123, range [-0.06060, +0.04903])
+- 95% CI (t): [-0.00921, +0.00354]; 95% CI (bootstrap): [-0.00890, +0.00320]
+- Wilcoxon signed-rank p = 0.1024; paired t p = 0.3728
+- Win/tie/loss (|delta| <= 0.001 is a tie): 9/7/18 (raw sign: 11 up, 21 down)
+- TOST equivalence p at margins {0.001: 0.7186, 0.0025: 0.5418, 0.005: 0.2469, 0.01: 0.0144, 0.02: 2.3e-06}
 - **Equivalent (TOST) within +-0.01 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.2364, 0.0025: 0.1078, 0.005: 0.0192, 0.01: 0.0002, 0.02: 6.0e-09}
-- **Non-inferior (no penalty worse than 0.005) at alpha=0.05**
-- Leave-one-out (drop task_29_credit-approval): mean -0.00284, 95% CI [-0.00732, +0.00163], TOST margin 0.01, non-inf margin 0.001
+- Non-inferiority p at margins {0.001: 0.1151, 0.0025: 0.0492, 0.005: 0.0088, 0.01: 0.0001, 0.02: 1.2e-08}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean -0.00108, 95% CI [-0.00654, +0.00438], TOST margin 0.01, non-inf margin 0.005
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00344 vs median Exact seed spread 0.00155 (ratio 1.98); method gap within 1 seed-spread on 29% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00438 vs median Exact seed spread 0.00324 (ratio 1.86); method gap within 1 seed-spread on 32% of datasets
 
 ### Random_bins32 vs Exact (negative delta = comparator better)
 
 - Datasets: 34
-- Mean per-dataset delta: -0.00951 (median -0.00176, range [-0.11230, +0.06759])
-- 95% CI (t): [-0.01940, +0.00038]; 95% CI (bootstrap): [-0.01926, -0.00042]
-- Wilcoxon signed-rank p = 0.0228; paired t p = 0.0590
-- Win/tie/loss (|delta| <= 0.001 is a tie): 9/8/17 (raw sign: 10 up, 22 down)
-- TOST equivalence p at margins {0.001: 0.9553, 0.0025: 0.9206, 0.005: 0.8198, 0.01: 0.4601, 0.02: 0.0192}
+- Mean per-dataset delta: -0.00573 (median -0.00280, range [-0.09427, +0.05801])
+- 95% CI (t): [-0.01514, +0.00368]; 95% CI (bootstrap): [-0.01462, +0.00324]
+- Wilcoxon signed-rank p = 0.0521; paired t p = 0.2242
+- Win/tie/loss (|delta| <= 0.001 is a tie): 8/4/22 (raw sign: 10 up, 22 down)
+- TOST equivalence p at margins {0.001: 0.8430, 0.0025: 0.7550, 0.005: 0.5621, 0.01: 0.1813, 0.02: 0.0020}
 - **Equivalent (TOST) within +-0.02 at alpha=0.05**
-- Non-inferiority p at margins {0.001: 0.0190, 0.0025: 0.0094, 0.005: 0.0027, 0.01: 0.0002, 0.02: 3.9e-07}
-- **Non-inferior (no penalty worse than 0.001) at alpha=0.05**
-- Leave-one-out (drop task_9971_ilpd): mean -0.00639, 95% CI [-0.01423, +0.00144], TOST margin 0.02, non-inf margin 0.001
+- Non-inferiority p at margins {0.001: 0.0776, 0.0025: 0.0422, 0.005: 0.0133, 0.01: 0.0009, 0.02: 1.8e-06}
+- **Non-inferior (no penalty worse than 0.0025) at alpha=0.05**
+- Leave-one-out (drop task_9971_ilpd): mean -0.00305, 95% CI [-0.01096, +0.00487], TOST margin 0.01, non-inf margin 0.005
 - Per-dataset Wilcoxon (Holm-corrected across datasets): no dataset with p < 0.05
 
-- Seed yardstick (34 datasets): median |method gap| 0.00763 vs median Exact seed spread 0.00155 (ratio 3.12); method gap within 1 seed-spread on 18% of datasets
+- Seed yardstick (34 datasets): median |method gap| 0.00916 vs median Exact seed spread 0.00324 (ratio 3.29); method gap within 1 seed-spread on 15% of datasets
 
-- Friedman over 34 datasets: chi2 = 22.59, p = 0.0009; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 4.38, Exact: 4.91, Random: 3.44, Random_bins128: 4.18, Random_bins16: 3.12, Random_bins256: 4.68, Random_bins32: 3.29
+- Friedman over 34 datasets: chi2 = 19.16, p = 0.0039; average ranks (1 = best): Dynamic_Random_Histogram_thresh250: 4.41, Exact: 4.97, Random: 3.88, Random_bins128: 4.32, Random_bins16: 3.03, Random_bins256: 4.03, Random_bins32: 3.35
 
 ## SPO-RF -- accuracy
 

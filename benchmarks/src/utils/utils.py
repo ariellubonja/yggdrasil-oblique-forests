@@ -37,6 +37,9 @@ def get_base_parser():
     parser.add_argument("--num_trees", type=int, default=1)
     parser.add_argument("--projection_density_factor", type=int)
     parser.add_argument("--max_num_projections", type=int)
+    parser.add_argument("--num_projections_exponent", type=float,
+                        help="Harness --num_projections_exponent (P = ceil(F^exp)). Default None = "
+                             "harness default: 0.5 for Bagging, 1 for Boosting (directive 2026-10-24).")
     parser.add_argument("--sample_projection_mode", choices=["Fast", "Slow"], default="Fast") # TODO deprecate
     parser.add_argument("--fixed_1000_projections", action="store_true")
     parser.add_argument("--depthwise_1_pass", action="store_true",

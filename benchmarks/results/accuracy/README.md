@@ -117,3 +117,31 @@ Random/Dynamic are non-inferior to Exact within 0.001–0.005 accuracy
 `task_219_electricity` (−0.005…−0.017 depending on learner/arm), cylinder-bands
 is a large pro-Random outlier for RF (Exact degenerates on its missing values),
 and on HIGGS/SUSY at full scale all arms agree within 0.002 accuracy/AUC.
+
+## 2026-10-25: SPO-GBT half re-run with P = F projections
+
+The GBT runs above passed no projection flags, and on 2026-08-11 the harness
+default was `num_projections_exponent = 0.5` for both learners, so every
+`accuracy_hve_gbt_*` CSV and the GBT rows of `accuracy_hve_physics.csv`
+measured P = ceil(sqrt(F)) per node. The paper's GBT arms use P = F (user
+directive 2026-10-24; Table 9 `*_fullproj` arms), so the GBT half of this
+study was re-run by `benchmarks/src/run_hve_gbt_pf.sh` — the same protocol
+(accuracy.sh sweeps: {exact, rand, dyn} x seeds 1-3, bin ablation and scalar
+build at seed 1; HIGGS/SUSY held-out, 300 trees, seed 1) with
+`--num_projections_exponent 1 --max_num_projections 2147483647` added to
+EXTRA_TRAIN_ARGS (the cap matters for Bioresponse F=1776 and
+Internet-Advertisements F=1558). Everything else is the harness default.
+The RF half (P = sqrt(F)) is unchanged.
+
+- The sqrt(F) GBT files are preserved in `sqrtF_gbt_2026-08/` (all
+  `accuracy_hve_gbt_*` CSVs plus the mixed RF+GBT `accuracy_hve_physics*`
+  files and their log).
+- `accuracy_hve_physics.csv` is now split: `accuracy_hve_physics_rf*.csv`
+  (the unchanged RF rows, extracted from the 2026-08 file) and
+  `accuracy_hve_physics_gbt*.csv` (new P = F rows, log kept as
+  `accuracy_hve_physics_gbt.log`). `accuracy_stats.py` globs
+  `accuracy_hve_*.csv`, so both are picked up.
+- Build: current `main` with icx 2025.2 (the 2026-08 runs used `3a784958`);
+  the learner code paths for these arms are unchanged apart from the
+  projection count.
+- Driver log: `hve_gbt_pf.log`.

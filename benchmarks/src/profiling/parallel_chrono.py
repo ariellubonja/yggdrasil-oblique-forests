@@ -582,6 +582,8 @@ if __name__ == "__main__":
         cmd.append(f"--dynamic_split_threshold={a.dynamic_split_threshold}")
     if a.max_num_projections is not None:
         cmd.append(f"--max_num_projections={a.max_num_projections}")
+    if getattr(a, "num_projections_exponent", None) is not None:
+        cmd.append(f"--num_projections_exponent={a.num_projections_exponent}")
     if a.projection_density_factor is not None:
         cmd.append(f"--projection_density_factor={a.projection_density_factor}")
     if a.num_threads is not None:
