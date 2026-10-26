@@ -266,20 +266,44 @@ Frequently-selected columns \TODO{plot this}, Correlation-based, Information per
 
 \TODO{measure accuracy of each}
 
+\paragraph{Which features does axis-aligned GBT split on}
+To measure how much of the feature set a GBT uses, we trained an axis-aligned YDF GBT with default settings (300 trees, maximum depth 6, i.e.\ five split levels, shrinkage 0.1, exact numeric splits, every attribute a candidate at every node) on the 34 binary OpenML-CC18 tasks with 10-fold cross-validation (340 models, 2.07\,M split nodes) and recorded the feature chosen at every internal node. Table~\ref{tab:cc18-feature-depth} gives the medians across datasets (median $F{=}21$). The root is the only concentrated level: its most common feature heads 20\% of the 300 trees (63\% among trees 1--30, 30\% among trees 271--300), and a model uses 15 distinct root features. From depth 1 on the choice is close to uniform over the feature set: the normalised entropy of the per-node feature distribution rises from 0.73 at the root to 0.93 at depth 4, where the most common feature takes 13\% of the splits. Nearly every feature gets used: 24 of 34 datasets split on 100\% of their features in every fold (29 of 34 pooled over folds), and madelon splits on all 500 of its features, 480 of which are noise; a single tree touches a median 10 distinct features. The trees are not oblivious: sibling nodes pick the same feature 9--11\% of the time, and a whole level shares one feature in 11\% of trees at depth 1 and under 1.5\% deeper. A tree has a median 19 of its 31 possible internal nodes.
+
+\begin{table}[t]
+\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\caption{Feature choice of axis-aligned GBT by depth: median over the 34 binary OpenML-CC18 tasks, 10-fold CV, YDF defaults (300 trees, depth 6, shrinkage 0.1, exact splits, all $F$ attributes candidates at every node; median $F{=}21$). Splits: internal nodes at that depth over 300 trees. Distinct: features split on at that depth. Top-1/Top-3: share of those splits on the most common one/three features. $\hat{H}$: entropy of the feature distribution normalised by $\log F$. $F_{\mathrm{eff}}$: $\exp$ of the unnormalised entropy. Sibl.\ same: sibling nodes splitting on the same feature. Level same: trees whose whole level, with at least two internal nodes, splits on one feature.}
+\label{tab:cc18-feature-depth}
+\input{tables/table_cc18_feature_depth_body}
+\end{table}
 
 \section{Evaluation}
+
+\begin{table*}[t]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Distributed tree-training time in seconds on Vertex AI \texttt{n2-highmem-4} (4 vCPU, 32\,GB; manager and $W$ workers), 10 trees, depth 6, $P{=}F$ total projections for SPO ($\lfloor F/W\rfloor$ per worker, so SUSY and HIGGS get 16 at $W{=}16$); setup excluded, checkpointing included. OOM: a worker ran out of memory. Same image and settings as Table~\ref{tab:vertex-hm16-pf-runtime}.}
+\label{tab:vertex-hm4-pf-runtime}
+\input{tables/table_vertex_hm4_pf_body}
+\end{table*}
+
+\begin{table*}[t]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Distributed tree-training time in seconds on Vertex AI \texttt{n2-highmem-16} (manager and $W$ workers), 10 trees, depth 6, $P{=}F$ total projections for SPO ($\lfloor F/W\rfloor$ per worker, sampled from its own columns); setup excluded, checkpointing included. SPO in-node: (node, projection-chunk) worker jobs + VQSort. $W{\ge}8$ exceeds the region's 96-vCPU training quota.}
+\label{tab:vertex-hm16-pf-runtime}
+\input{tables/table_vertex_hm16_pf_body}
+\end{table*}
+
+\begin{table*}[t]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Distributed tree-training time in seconds on Vertex AI \texttt{n2-highmem-4} (manager and $W$ workers), 50 trees, depth 6; setup excluded. SPO in-node: (node, projection-chunk) worker jobs + VQSort. $P=\lceil\sqrt{F}\rceil$ total projections for SPO and $P=F$ for AA, hence the difference. \TODO{SPO used $P=\sqrt{F}$; rerun with $P=F$, 10 trees.}}
+\label{tab:vertex-hm4-runtime}
+\input{tables/table_vertex_hm4_body}
+\end{table*}
 
 If a dataset has no explicit test set, the last 10\% of the dataset is used for test
 
 \TODO{these results are on n2-highmem-2 w/o SPO in-node parallelism!}
 
-\begin{table*}[t]
-\centering\footnotesize\setlength{\tabcolsep}{4pt}
-\caption{Distributed training time in seconds. 50 trees, depth 6. SPO in-node: in-node parallel w/p 10-projection minimum. $P=\lceil\sqrt{F}\rceil$ for SPO and $P=F$ for AA, hence the difference.}
-\label{tab:vertex-hm4-runtime}
-\input{tables/table_vertex_hm4_body}
-\par\smallskip\footnotesize All cells on n2-highmem-4, with VQSort. Run
-\end{table*}
+Testing whether 10 trees with our natural datasets is quick enough (<5min). so far, some results are $P=\sqrt{F}$ - hence AA is so much slower.
 
 \subsection{In-worker Projection Sampling}
 
@@ -288,9 +312,6 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 \subsubsection{Vertex AI Results on N2-highmem}
 
 \subsubsection{\texttt{MULTI\_THREAD} results on m7i.metal-24x}
-
-\subsection{In-node Parallelism}
-\label{sec:in-node-parallelism}
 
 % One float page per topic: runtime, accuracy, in-node parallelism.
 \begin{table*}[t]
@@ -335,26 +356,32 @@ Single-machine results punish SPO, and more workers benefit AA. \textbf{\textit{
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-% (10 trees, depth 6, exact splits)
-\caption{Fixing limited SPO in-node parallelism. Training time in seconds of SPO-GBT with $T$ threads on a single \texttt{m7i.24x}. SPO in-node sequential evaluates the $P$ projections in $\min(T,\lceil P/10\rceil)$ threads, i.e.\ single-threaded when $P\le 10$. SPO in-node parallel uses $\min(T,P)$. Existing method was due to PR 403 overhead, which is now gone.}
-% Used $P=\lceil\sqrt{F}\rceil$.
-\label{tab:in-node-threads}
-\input{tables/table_in_node_threads_body}
+\caption{Tree-training time in seconds of one-worker distributed SPO-GBT on Vertex AI \texttt{n2-highmem-16} ($P{=}F$, 10 trees, depth 6), ablating the two in-node changes: Highway VQSort for the per-projection sort, and (node, projection-chunk) jobs on the worker thread pool instead of one job per node. Speedups are over the SPO baseline. The four SPO arms train byte-identical models; AA-GBT is shown for reference.}
+\label{tab:in-node-ablation}
+\input{tables/table_in_node_ablation_body}
 \end{table*}
 
-\begin{table*}[t]
-\centering
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\caption{Tree-training time in seconds of one-worker distributed SPO-GBT with $T$ worker threads on APSFailure ($F{=}170$, $P{=}F$, 20 trees, depth 6). Trained models are byte-identical.}
-\label{tab:in-node-distributed}
-\input{tables/table_in_node_distributed_body}
-\end{table*}
 \clearpage
 
 \appendix
 
 \section{Appendix}
+
+\subsection{In-node Parallelism}
+\label{sec:in-node-parallelism}
+
+SPO only parallelizes in-node when >10 projections. If you see this, ensure $P=F$. Easy win available when few columns/projections: see table~\ref{tab:in-node-threads}.
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+% (10 trees, depth 6, exact splits)
+\caption{Fixing limited SPO in-node parallelism. Training time in seconds of SPO-GBT with $T$ threads on a single \texttt{m7i.24x}. SPO in-node sequential evaluates the $P$ projections in $\min(T,\lceil P/10\rceil)$ threads, i.e.\ single-threaded when $P\le 10$. SPO in-node parallel uses $\min(T,P)$. Existing method was due to PR 403 overhead, which is now gone. TODO $P=F$}
+% Used $P=\lceil\sqrt{F}\rceil$.
+\label{tab:in-node-threads}
+\input{tables/table_in_node_threads_body}
+\end{table*}
 
 \subsection{Call Stack}
 
@@ -376,6 +403,16 @@ distributed_gbt.cc::TrainWithStatusImpl()
 
 
 \subsection{Using GCP and Vertex AI}
+
+\paragraph{Setup cost}
+Every tree-training time in this paper excludes \emph{setup}: the time from job start until the manager logs \texttt{Start tree training}. Setup covers reading the CSV from Cloud Storage, building the distributed dataset cache in the shared directory (one file per column, numerical columns presorted) and waiting until every worker has loaded its column partition. It depends on dataset size, not on $W$ or on the split type, and for single-file inputs it is paid by the one worker that builds the cache (Table~\ref{tab:setup-cost}).
+
+\begin{table}[H]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Setup time in seconds (min--max over all runs) per dataset and Vertex AI machine type.}
+\label{tab:setup-cost}
+\input{tables/table_setup_cost_body}
+\end{table}
 
 Not all instance types are supported in Vertex AI Custom Jobs.
 
