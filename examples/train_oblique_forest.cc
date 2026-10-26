@@ -89,7 +89,9 @@ ABSL_FLAG(std::string, model_out_dir, "",
           "Path to output trained model directory (optional)."
           " If empty, model is not saved.");
 ABSL_FLAG(int, num_threads, -1, "Number of threads to use.");
-ABSL_FLAG(int, num_trees, 240, "Number of trees in the random forest.");
+ABSL_FLAG(int, num_trees, -1,
+          "Number of trees. -1 keeps the harness default: 240 for Bagging, "
+          "30 for Boosting.");
 ABSL_FLAG(int, tree_depth, -1,
           "Maximum depth of trees (-1 for unlimited).");
 ABSL_FLAG(int, min_examples, -1,
@@ -1264,12 +1266,14 @@ int main(int argc, char** argv) {
   // Configure ensemble method: Bagging (RF) or Boosting (GBT/MART)
   const std::string ensemble_method = absl::GetFlag(FLAGS_ensemble_method);
   model::decision_tree::proto::DecisionTreeTrainingConfig* dt_config;
+  int num_trees = absl::GetFlag(FLAGS_num_trees);
+  if (num_trees == -1) num_trees = (ensemble_method == "Boosting") ? 30 : 240;
 
   if (ensemble_method == "Bagging") {
     train_config.set_learner("RANDOM_FOREST");
     auto& rf = *train_config.MutableExtension(
         model::random_forest::proto::random_forest_config);
-    rf.set_num_trees(absl::GetFlag(FLAGS_num_trees));
+    rf.set_num_trees(num_trees);
     rf.set_bootstrap_training_dataset(absl::GetFlag(FLAGS_bootstrap_training_dataset));
     rf.set_bootstrap_size_ratio(1.0);
     rf.set_winner_take_all_inference(false);
@@ -1280,7 +1284,7 @@ int main(int argc, char** argv) {
     train_config.set_learner("GRADIENT_BOOSTED_TREES");
     auto& gbt = *train_config.MutableExtension(
         model::gradient_boosted_trees::proto::gradient_boosted_trees_config);
-    gbt.set_num_trees(absl::GetFlag(FLAGS_num_trees));
+    gbt.set_num_trees(num_trees);
     gbt.set_shrinkage(absl::GetFlag(FLAGS_shrinkage));
     // Disable the validation split + early stopping so a clean AP A/B isn't
     // diluted by a withheld 10% of training data and per-tree validation
