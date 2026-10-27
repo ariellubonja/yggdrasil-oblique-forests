@@ -1,0 +1,224 @@
+% DSAI poster: Vectorized Dynamic Histograms for Sparse Oblique Forests.
+% A0 portrait, tikzposter. Text lifted from the paper (abstract, intro, results, conclusion).
+\documentclass[20pt, a0paper, portrait, margin=0mm, innermargin=18mm,
+               blockverticalspace=7mm, colspace=16mm, subcolspace=8mm]{tikzposter}
+
+\usepackage{lmodern}
+\renewcommand{\familydefault}{\rmdefault}
+\usepackage{amsmath, graphicx, multirow, booktabs, makecell}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
+\usepackage{enumitem}
+\usepackage{qrcode}
+\setlist[itemize]{leftmargin=1.2em, itemsep=2pt, topsep=4pt}
+
+% ---- JHU colours ----
+\definecolor{jhunavy}{HTML}{002D72}
+\definecolor{jhublue}{HTML}{68ACE5}
+\definecolor{jhupale}{HTML}{CFE3F5}
+\definecolor{jhutext}{HTML}{1A1A1A}
+
+\definecolorstyle{JHU}{}{
+  \colorlet{backgroundcolor}{white}
+  \colorlet{framecolor}{white}
+  \colorlet{titlefgcolor}{white}
+  \colorlet{titlebgcolor}{jhunavy}
+  \colorlet{blocktitlebgcolor}{white}
+  \colorlet{blocktitlefgcolor}{jhunavy}
+  \colorlet{blockbodybgcolor}{white}
+  \colorlet{blockbodyfgcolor}{jhutext}
+  \colorlet{innerblocktitlebgcolor}{jhupale}
+  \colorlet{innerblocktitlefgcolor}{jhunavy}
+  \colorlet{innerblockbodybgcolor}{white}
+  \colorlet{innerblockbodyfgcolor}{jhutext}
+  \colorlet{notefgcolor}{jhutext}
+  \colorlet{notebgcolor}{jhupale}
+  \colorlet{noteframecolor}{jhunavy}
+}
+\usetheme{Default}
+\usecolorstyle{JHU}
+\usebackgroundstyle{Empty}
+\usetitlestyle{Filled}
+
+% Block title: navy small caps with a pale blue underline bar, like the InDesign poster.
+\defineblockstyle{JHUBlock}{
+  titlewidthscale=1, bodywidthscale=1, titleleft, titleoffsetx=0pt, titleoffsety=0pt,
+  bodyoffsetx=0pt, bodyoffsety=0pt, bodyverticalshift=12mm, roundedcorners=0,
+  linewidth=0pt, titleinnersep=4mm, bodyinnersep=4mm
+}{
+  \draw[fill=jhublue, draw=none] ([yshift=-1mm]blocktitle.south west) rectangle
+       ([xshift=135mm, yshift=-5mm]blocktitle.south west);
+}
+\useblockstyle{JHUBlock}
+\settitle{%
+  \begin{minipage}{\linewidth}
+  \begin{minipage}[c]{0.20\linewidth}
+    \centering
+    \leftlogo
+  \end{minipage}%
+  \begin{minipage}[c]{0.60\linewidth}
+    \centering\color{white}
+    {\fontsize{74}{82}\selectfont\scshape Vectorized Dynamic Histograms\\[3mm] for Sparse Oblique Forests}\\[12mm]
+    {\fontsize{32}{38}\selectfont Ariel Lubonja, Jungsang Yoon, Haoyin Xu, Yue Wan, Yilin Xu,\\[2mm]
+     Richard Stotz$^{\dagger}$, Mathieu Guillame-Bert$^{\dagger}$, Joshua T. Vogelstein, Randal Burns}\\[6mm]
+    {\fontsize{26}{30}\selectfont Johns Hopkins University \quad $^{\dagger}$Google}\\[3mm]
+    {\fontsize{26}{30}\selectfont\ttfamily ariel@cs.jhu.edu}
+  \end{minipage}%
+  \begin{minipage}[c]{0.20\linewidth}
+    \centering
+    \includegraphics[width=1.1\linewidth]{logos/JHU.logo_vertical.white.pdf}
+  \end{minipage}
+  \end{minipage}}
+\newcommand{\leftlogo}{\includegraphics[height=0.085\paperheight]{logos/google_G.png}}
+\title{Vectorized Dynamic Histograms for Sparse Oblique Forests}
+\author{}
+\institute{}
+
+\tikzposterlatexaffectionproofoff
+\begin{document}
+\maketitle[width=\paperwidth, titletotopverticalspace=0mm, titletoblockverticalspace=18mm,
+           titlegraphictotitledistance=0pt, titletextscale=1]
+
+\begin{columns}
+% =============================== LEFT COLUMN ===============================
+\column{0.5}
+
+\block{Sparse Oblique Forests and Why They Train Slowly}{
+\begin{itemize}
+\item Sparse oblique (SPO) splits are a very powerful tree splitter, part of the top-ranked configuration in Google's Yggdrasil Decision Forests (YDF). They improve accuracy while keeping interpretability. In large datasets, these methods outperform LLMs, while using vastly less energy and resources.
+\item However, they are significantly more expensive than traditional tree splitters. Projections are sampled at runtime, so classic optimizations such as presorting cannot be used:
+      see figure.
+\item \textbf{We improve this runtime by up to 10$\times$}, with our novel approaches adding up to $2\times$ on top of our highly optimized fork of YDF, where we achieved $5\times$ speedup over the original library. We contribute this work to the open-source community as well as submitting to SPAA-27.
+\end{itemize}
+\vspace{4mm}
+\begin{center}
+\includegraphics[width=0.95\linewidth]{figures/double_sparsity_illustration.pdf}
+\end{center}
+{\small\itshape Per-node workflow: sparse row/column access, vector sum, histogram building, split evaluation.}
+}
+
+\block{Motivation: Training Time by Tree Depth}{
+\begin{center}
+\begin{minipage}{0.32\linewidth}\centering
+  \includegraphics[width=0.95\linewidth]{figures/Youtube-8m-spogbt-NodeTrain.pdf}\\ {\small SPO-GBT}
+\end{minipage}\hfill
+\begin{minipage}{0.32\linewidth}\centering
+  \includegraphics[width=0.95\linewidth]{figures/Youtube-8m-sporf-NodeTrain.pdf}\\ {\small SPO-RF}
+\end{minipage}\hfill
+\begin{minipage}{0.32\linewidth}\centering
+  \includegraphics[width=0.95\linewidth]{figures/Youtube-8m-aa-NodeTrain.pdf}\\ {\small AA-RF}
+\end{minipage}
+\end{center}
+{\small\itshape Training time by depth on YouTube-8M: Exact and Random Histogram (256 bins) vs.\ our
+Vectorized and Dynamic-Vectorized (256-bin) methods.}
+\begin{itemize}
+\item Contrary to prevalent understanding, \textbf{tree training time is not proportional to depth}. Very large nodes near the root cost due to the $O(n\log n)$ cost of sorting, but many small nodes at mid-depth also mount up: small per-node overhead compounds as n. nodes grows exponentially until about $\frac{1}{3}$ down the tree.
+\item GBTs train to depth~6; RFs to depth 16--24 or to purity. The two families stress opposite ends of the
+      depth range, so we contribute one optimization for each.
+\end{itemize}
+}
+
+\block{1. Vectorized Histogram Filling (AVX2 / AVX-512)}{
+\begin{itemize}
+\item Histogramming costs $O(n\log k)$ but has high startup cost, whereas sort costs $O(n\log n)$ but little startup. We target histograms, as they work best in the GBT (shallow) tree regime.
+\item We propose hierarchical vectorized histogram filling: a \textbf{two-pass vector compare instead of a binary search, reducing histogram cost to $O(n)$}. This leverages AVX2 and AVX-512 CPU vector instructions. 
+\end{itemize}
+\vspace{3mm}
+\begin{center}
+\begin{minipage}[c]{0.34\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{figures/binary_search_illustration.pdf}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.54\linewidth}\centering
+  \includegraphics[width=0.9\linewidth]{figures/vectorized_binary_search_illustration.pdf}
+\end{minipage}
+\end{center}
+{\small\itshape Mapping sample points to histogram bins with binary search (left) and our vectorized AVX2
+implementation (right).}
+}
+
+\block{2. Runtime-Dynamic Histograms}{
+\begin{itemize}
+\item In deep trees, the number of active nodes grows exponentially and peaks about halfway to purity.
+      These nodes hold few samples, yet histograms still pay the $O(k)$ bin generation. Our vectorized approach costs $O(n) + O(k)$.
+\item Dynamic switching picks vectorized histograms or exact splits based on the n. samples in the node
+      (breakeven $\approx$250 rows for AVX2/64 bins, $\approx$1000 for AVX-512/256 bins).
+\end{itemize}
+\vspace{3mm}
+\begin{center}
+\begin{minipage}[c]{0.44\linewidth}\centering
+  \includegraphics[width=\linewidth]{figures/dynamic_histogram_tree_illustration.pdf}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.54\linewidth}\centering
+  \input{figures/threshold_sensitivity_log}
+\end{minipage}
+\end{center}
+{\small\itshape Left: Exact vs.\ histogram chosen by node size. Right: speedup over Exact by\ threshold. Bands mark the AVX2 (dark) and AVX-512 (light) maxima.}
+}
+
+% =============================== RIGHT COLUMN ===============================
+\column{0.5}
+
+\block{Results: End-to-End Training Time}{
+\begin{center}
+\input{figures/e2e_normalized_grid}
+\end{center}
+{\small\itshape Training time normalized to Exact. Panels: SPO-GBT depth 6; SPO-RF depth 10, 20 and purity.}
+\vspace{4mm}
+\begin{center}
+\resizebox{\linewidth}{!}{\input{tables/train_time_natural_body}}
+\end{center}
+{\small\itshape End-to-end training time (s) on seven large natural datasets. Speedup over Exact in parentheses.}
+\begin{itemize}
+\item \textbf{Depth 6:} \textbf{Vectorized histograms outperform the original on every dataset}: 1.3--1.6$\times$ for SPO-GBT and 1.6--2.0$\times$ for SPO-RF.
+\item \textbf{Depth 16 to purity:} histogram-only methods start to fall behind Exact: \textbf{dynamic switching regains 1.2--1.6$\times$ on all 21 datasets}.
+\end{itemize}
+}
+
+\block{Scalability by Dataset Shape}{
+\begin{center}
+\input{figures/speedup_heatmap_rows_features}
+\end{center}
+{\small\itshape Speedup of SPO-RF Dyn-Vec over Exact by dataset dimensions, simulated with Trunk synthetic
+data (circles); natural datasets as squares.}
+}
+
+\block{Accuracy: No Detectable Effect}{
+\begin{center}
+\resizebox{\linewidth}{!}{\input{tables/accuracy_body}}
+\end{center}
+{\small\itshape Held-out test accuracy of histogram split finding vs.\ Exact over 36 datasets
+(34 OpenML CC18 binary tasks, 10-fold CV $\times$ 3 seeds, plus HIGGS and SUSY).
+$\Delta$ = method $-$ Exact in units of $10^{-3}$; W/T/L = wins/ties/losses.}
+}
+
+\block{Conclusions}{
+\begin{itemize}
+\item AVX2 / AVX-512 vectorized histogram filling outperforms the baseline on every dataset: 1.3--1.6$\times$ on depth-6 SPO-GBT, up to 2$\times$ on SPO-RF.
+\item Dynamic switching by node size: 1.2--1.6$\times$ from depth 16 to purity, with no detectable accuracy change.
+\item Together they bring SPO-RF training cost on par with YDF's traditional axis-aligned RF, while preserving the accuracy advantage of SPO.
+\item Fixes contributed upstream to YDF as a series of pull requests.
+\end{itemize}
+}
+
+\block{References}{
+\begin{minipage}[c]{0.80\linewidth}
+\footnotesize
+\begin{enumerate}[label={[\arabic*]}, leftmargin=2.2em, itemsep=1pt]
+\item T.~M.~Tomita, J.~Browne, C.~Shen, \emph{et al.} Sparse projection oblique randomer forests. \emph{JMLR}, 2020.
+\item M.~Guillame-Bert, S.~Bruch, R.~Stotz, J.~Pfeifer. Yggdrasil Decision Forests: a fast and extensible decision forests library. \emph{KDD}, 2023.
+\item J.~Wassenberg, M.~Blacher, J.~Giesen, P.~Sanders. Vectorized and performance-portable quicksort. \emph{Software: Practice and Experience}, 2022.
+\item L.~Breiman. Random forests. \emph{Machine Learning}, 45(1):5--32, 2001.
+\item T.~Chen, C.~Guestrin. XGBoost: a scalable tree boosting system. \emph{KDD}, 2016.
+\item G.~Ke, Q.~Meng, T.~Finley, \emph{et al.} LightGBM: a highly efficient gradient boosting decision tree. \emph{NeurIPS}, 2017.
+\end{enumerate}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.17\linewidth}\centering
+  \qrcode[height=0.85\linewidth, level=M]{https://arxiv.org/html/2603.00326v1}\\[3mm]
+  {\small\bfseries Read the paper}\\
+  {\footnotesize arXiv:2603.00326}
+\end{minipage}
+}
+
+\end{columns}
+\end{document}
