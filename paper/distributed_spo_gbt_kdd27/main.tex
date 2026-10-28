@@ -11,6 +11,7 @@
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
 \usepgfplotslibrary{groupplots}
+\usetikzlibrary{patterns}
 
 
 % \usepackage[letterpaper,margin=0.8in]{geometry}
@@ -152,27 +153,14 @@
 
 \textbf{\textit{Accuracy cost of parititioning columns: }}
 
-\begin{todolist}
-    \item Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs accuracy.
-    \item Column Partitioning: Use a 1\% subset of rows, decide feature importance on this, then use this to distribute for the 100\% dataset
-    \item All-pairs correlation / ±1 pair-uplift graph on a small dataset: input for Richard’s hypergraph partition.
-    \item (All Columns on Every Worker) What does this experiment tell us? Makes SPO very alike AA. How many projections per worker?
-    \item all Choose(2) permutations
-    \item[\done] \textcolor{cyan}{Plot frequently-selected columns. Does it remain the same for latter GBTs?}
-    
-    \item Smart partition strategies
-    \begin{itemize}
-        \item Correlated columns, put them: (together? apart?)
-        \item sample features w. replacement per worker. Ensure each column is in at least 1 worker.
-        \item by some column score
-        % \item Jovo informative columns
-        \item Columns that are split at most often. Usually same columns get picked. \textbf{Implement visualization of this} on natural data
-        \item Sample features w. replacement per worker. Ensure each column is in at least 1 worker.
-        % \item method X - vova?
-    \end{itemize}
-
-    \item Extend to: 1) put globally most important columns in all nodes. 2) v2: put columns that are together most important (i.e. projections) are most important - put them together
-\end{todolist}
+Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs accuracy. \TODO{4 plots}: $0\% \to 100\%$ replication, under column assignment method. \textbf{100\% replication is equivalent to local SPO}
+    \begin{todolist}
+        \item Random
+        \item Important columns in model trained on 1\% of the dataset
+        \item Correlation-based: ±1 all pairs uplift graph. Together? Apart?
+        \item Feature score/information
+        \item[\done] \textcolor{cyan}{Plot frequently-selected columns. Does it remain the same for latter GBTs?}
+    \end{todolist}
 
 \textbf{\textit{Procedural}}
 
@@ -180,9 +168,9 @@
     \item Add good ideas from 26-Oct meet
     \item how come SPO is faster even despite AA-Presort? Presort cost is measured inside Setup
     \item \TODO{Plot Barrier} results
-    \begin{itemize}
-        \item Baseline: SPO with cross-node communication
-    \end{itemize}
+    \begin{todolist}
+        \item Baseline: naive SPO with cross-node communication
+    \end{todolist}
     \stepcounter{enumi}\item[\done] \textcolor{gray}{(in-worker oblique) Replace std::sort with Highway VQSort}
     \item Multiple runs for Training and accuracy (seed)
     \item (Related Work) AL review
@@ -199,7 +187,7 @@
 
 Distributed Tree training offers two main advantages: training on very large data ($>$100m examples+) that does not fit in a single machine's memory, and distributed hyperparameter tuning. 
 
-No implementation of SPO-GBT distributed training exists, to our knowledge. This severely limits Sparse Oblique methods to datasets that are limited to a single machine. \textbf{AutoML frequently selects SPO-GBT as the best method}
+No implementation of SPO-GBT distributed training exists, to our knowledge. This severely limits Sparse Oblique methods to datasets that are limited to a single machine. AutoML frequently selects SPO-GBT as the best method.
 
 YDF has support for distributed training GBTs: the distribution is among the features, i.e. different workers handle different features. This allows us to train on very large (deep \& wide) datasets, because each worker just needs (roughly) enough memory to hold the label column and the feature column. 
 
@@ -327,7 +315,9 @@ AA-GBT offers approximate splits to further improve training speed. Very often, 
 
 \section{Method: Column Distribution Strategies on Distributed SPO-GBT}
 
-Partitioning function should be done when loading data - where VerticalDataset is created. Still TODO: decide partitioning fn.
+Partitioning function should be done when loading data - where VerticalDataset is created. 
+
+\textbf{There is a range of replication: from 0\% replication to 100\% replication}. 0\% replication is worst case: disjoint columns. 100\% replication is equivalent to local SPO-GBT but expensive.
 
 \subsection{All Columns on Every Worker}
 
@@ -457,17 +447,18 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 \centering
 \begin{minipage}[b]{0.48\textwidth}
 \centering
-\input{figures/evaluation/grcp_n2/fig_yt8m_barriers_totals_body}
-\par\footnotesize (a) Time per barrier component, summed over the run
+\input{figures/evaluation/grcp_n2/fig_yt8m_barriers_swimlane_body}
+\par\footnotesize (a) Timeline of one SPO-GBT tree
 \end{minipage}
 \hfill
 \begin{minipage}[b]{0.48\textwidth}
 \centering
-\input{figures/evaluation/grcp_n2/fig_yt8m_barriers_layers_body}
-\par\footnotesize (b) FindSplits per tree level (labels: idle \% of worker time)
+\input{figures/evaluation/grcp_n2/fig_yt8m_barriers_budget_body}
+\par\footnotesize (b) Time budget per arm, summed over the run
 \end{minipage}
-\caption{Barrier timing of distributed AA-GBT and SPO-GBT on YouTube-8M with $W{=}16$ workers on Vertex AI \texttt{n2-highmem-4}. (a) Stacked bars sum the slowest worker's time per stage, plus checkpoints and manager--worker communication. (b) Bars span the per-call mean of the fastest to the slowest worker's FindSplits time, markers are the median worker, and labels give the idle share of worker time.}
-\Description{Two panels. Left: stacked bars of total time for AA-GBT and SPO-GBT, almost entirely FindSplits compute, annotated with the small non-FindSplits and communication totals. Right: per tree level, min-to-max range bars of FindSplits time for AA-GBT and SPO-GBT with median markers and idle percentages.}
+\caption{Barrier timing of distributed AA-GBT and SPO-GBT on YouTube-8M with $W{=}16$ workers on Vertex AI \texttt{n2-highmem-4}. (b) Stacked bars sum the slowest worker's time per stage, plus checkpoints}
+% TODO(ariel): caption covers (b) only; (a) is the swimlane
+\Description{Two panels. Left: timeline of one SPO-GBT tree in four lanes (manager, slowest, median, fastest worker), above a zoom on tree level 0. Right: one horizontal 100\% stacked bar per arm, split into six time components, with the total seconds at its end.}
 \label{fig:yt8m-barriers}
 \par\smallskip\raggedright\footnotesize 10 trees, $P{=}F$
 \end{minipage}
