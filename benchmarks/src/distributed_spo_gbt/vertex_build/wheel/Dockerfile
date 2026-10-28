@@ -1,8 +1,8 @@
 # Builds the ydf wheel of the public fork (distributed SPO-GBT) from source.
 # Same recipe as upstream tools/{build_test_linux,package_linux}.sh, pinned to YDF_COMMIT.
 FROM quay.io/pypa/manylinux_2_28_x86_64
-ARG YDF_REPO=https://github.com/ariellubonja/yggdrasil-decision-forests
-ARG YDF_COMMIT=47fe64fa4a6fc8a4b0a0125a169f0df3f9a0c274
+ARG YDF_REPO=https://github.com/ariellubonja/yggdrasil-oblique-forests
+ARG YDF_COMMIT=34d64d3d4fbc5d19fced4736354b2f36dfc8322c
 ARG BAZEL_JOBS=24
 ADD https://github.com/bazelbuild/bazelisk/releases/download/v1.27.0/bazelisk-linux-amd64 /usr/local/bin/bazel
 RUN chmod +x /usr/local/bin/bazel
