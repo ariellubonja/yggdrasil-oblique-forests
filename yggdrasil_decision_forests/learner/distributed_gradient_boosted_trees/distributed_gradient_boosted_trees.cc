@@ -499,6 +499,20 @@ TrainWithCache(
                        input_features, num_train_workers, cache_metadata,
                        spe_config.load_balancer()));
 
+  // Static column replication for in-worker oblique splits.
+  if (spe_config.in_worker_oblique().column_replication() < 0 ||
+      spe_config.in_worker_oblique().column_replication() > 1) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "in_worker_oblique.column_replication must be in [0,1], got ",
+        spe_config.in_worker_oblique().column_replication()));
+  }
+  if (spe_config.gbt().decision_tree().has_sparse_oblique_split() &&
+      spe_config.in_worker_oblique().column_replication() > 0) {
+    RETURN_IF_ERROR(SetColumnReplicas(
+        spe_config.in_worker_oblique().column_replication(),
+        config.random_seed(), data_spec, input_features, &load_balancer));
+  }
+
   // Initializer the distribute manager.
   ASSIGN_OR_RETURN(auto distribute_manager,
                    InitializeDistributionManager(
@@ -1054,8 +1068,9 @@ InitializeDistributionManager(
       validation_dataset_per_worker.begin(),
       validation_dataset_per_worker.end()};
 
-  // Copy "load_balancer" to "welcome.feature_ownership()".
-  const auto feature_ownership = load_balancer.FeaturesPerWorkers();
+  // Copy "load_balancer" to "welcome.feature_ownership()". With column
+  // replication a worker loads its replicas too (owned + replicated).
+  const auto feature_ownership = load_balancer.HeldFeaturesPerWorkers();
   welcome.mutable_owned_features()->Reserve(feature_ownership.size());
   for (const auto& src : feature_ownership) {
     auto* dst = welcome.mutable_owned_features()->Add();
@@ -1257,9 +1272,14 @@ EmitFindSplits(
   // Number of workers doing pre-loading work.
   int num_worker_preloading = 0;
 
+  // Replies arrive in any order. They are merged below in worker order so
+  // that equal-score ties, which MergeBestSplits breaks by keeping the split
+  // already merged, come out the same in every run (two holders of a
+  // replicated column can propose the very same split).
+  std::vector<proto::WorkerResult> results(num_requests);
   for (int reply_idx = 0; reply_idx < num_requests; reply_idx++) {
     ASSIGN_OR_RETURN(
-        const auto generic_result,
+        auto generic_result,
         distribute->NextAsynchronousProtoAnswer<proto::WorkerResult>());
     monitoring->WorkerReply(generic_result.worker_idx(),
                             generic_result.runtime_seconds(),
@@ -1278,8 +1298,8 @@ EmitFindSplits(
     if (!generic_result.has_find_splits()) {
       return absl::InternalError("Unexpected answer. Expecting FindSplits");
     }
-    const auto& result = generic_result.find_splits();
-    if (result.split_per_weak_model_size() != weak_models.size()) {
+    if (generic_result.find_splits().split_per_weak_model_size() !=
+        weak_models.size()) {
       return absl::InternalError("Unexpected number of weak model splits");
     }
 
@@ -1288,6 +1308,17 @@ EmitFindSplits(
       num_worker_preloading++;
     }
 
+    const int worker_idx = generic_result.worker_idx();
+    if (worker_idx < 0 || worker_idx >= num_requests ||
+        results[worker_idx].has_find_splits()) {
+      return absl::InternalError(
+          absl::StrCat("Unexpected FindSplits reply from worker ", worker_idx));
+    }
+    results[worker_idx] = std::move(generic_result);
+  }
+
+  for (int worker_idx = 0; worker_idx < num_requests; worker_idx++) {
+    const auto& result = results[worker_idx].find_splits();
     for (int weak_model_idx = 0; weak_model_idx < weak_models.size();
          weak_model_idx++) {
       distributed_decision_tree::SplitPerOpenNode worker_splits;
@@ -1370,16 +1401,19 @@ absl::Status EmitShareSplits(
   monitoring->BeginStage(internal::Monitoring::kShareSplits);
 
   ASSIGN_OR_RETURN(const auto active_features,
-                   ActiveFeatures(splits_per_weak_models));
+                   ActiveFeatures(splits_per_weak_models, *load_balancer));
 
   std::vector<int> active_feature_idxs;
+  std::vector<int> src_workers;
   active_feature_idxs.reserve(active_features.size());
+  src_workers.reserve(active_features.size());
   for (const auto& active_feature : active_features) {
     active_feature_idxs.push_back(active_feature.first);
+    src_workers.push_back(active_feature.second.src_worker);
   }
 
-  ASSIGN_OR_RETURN(auto plan,
-                   load_balancer->MakeSplitSharingPlan(active_feature_idxs));
+  ASSIGN_OR_RETURN(auto plan, load_balancer->MakeSplitSharingPlan(
+                                  active_feature_idxs, src_workers));
 
   RETURN_IF_ERROR(SetSplitsInPlan(active_features, &plan));
 
@@ -1792,6 +1826,13 @@ absl::Status SampleInputFeatures(
           for (int worker_idx = 0; worker_idx < num_workers; worker_idx++) {
             (*samples)[worker_idx][weak_model_idx][node_idx].push_back(feature);
           }
+        } else if (load_balancer.HasReplicas()) {
+          // Replicated columns: every holder samples projections from it.
+          ASSIGN_OR_RETURN(const auto holders,
+                           load_balancer.FeatureHolders(feature));
+          for (const int worker_idx : holders) {
+            (*samples)[worker_idx][weak_model_idx][node_idx].push_back(feature);
+          }
         } else {
           // Select worker with load balancer.
           ASSIGN_OR_RETURN(const auto worker_idx,
@@ -1856,9 +1897,42 @@ absl::Status ExactSampledFeaturesForWorker(
   return absl::OkStatus();
 }
 
+absl::StatusOr<int> ObliqueSplitEvaluator(
+    const decision_tree::proto::Condition::Oblique& oblique,
+    const distributed_decision_tree::LoadBalancer& load_balancer) {
+  if (oblique.attributes_size() == 0) {
+    return absl::InternalError("Oblique condition without attributes");
+  }
+  ASSIGN_OR_RETURN(auto candidates,
+                   load_balancer.FeatureHolders(oblique.attributes(0)));
+  for (int i = 1; i < oblique.attributes_size() && !candidates.empty(); i++) {
+    ASSIGN_OR_RETURN(const auto holders,
+                     load_balancer.FeatureHolders(oblique.attributes(i)));
+    std::vector<int> kept;
+    for (const int worker : candidates) {
+      if (std::find(holders.begin(), holders.end(), worker) != holders.end()) {
+        kept.push_back(worker);
+      }
+    }
+    candidates = std::move(kept);
+  }
+  if (candidates.empty()) {
+    return absl::InternalError(
+        "No worker holds every attribute of an oblique split");
+  }
+  // Debug knob: ask the highest holder instead. Every holder recomputes the
+  // same bitmap from its own column copies, so the model must not change.
+  static const bool kPickLast = std::getenv("DGBT_OBLIQUE_EVALUATOR_LAST") != nullptr;
+  if (kPickLast) {
+    return *std::max_element(candidates.begin(), candidates.end());
+  }
+  return *std::min_element(candidates.begin(), candidates.end());
+}
+
 absl::StatusOr<ActiveFeaturesMap> ActiveFeatures(
     const std::vector<distributed_decision_tree::SplitPerOpenNode>&
-        splits_per_weak_models) {
+        splits_per_weak_models,
+    const distributed_decision_tree::LoadBalancer& load_balancer) {
   ActiveFeaturesMap active_features;
   for (int weak_model_idx = 0; weak_model_idx < splits_per_weak_models.size();
        weak_model_idx++) {
@@ -1868,13 +1942,78 @@ absl::StatusOr<ActiveFeaturesMap> ActiveFeatures(
       if (!IsSplitValid(split)) {
         continue;
       }
-      const auto feature = split.condition.attribute();
-      active_features[feature].splits.push_back(
-          {/*weak_model_idx=*/weak_model_idx,
-           /*split_idx=*/split_idx});
+      int key;
+      int src_worker;
+      if (split.condition.condition().has_oblique_condition()) {
+        // Served by the lowest worker holding every attribute (the proposer
+        // when columns are not replicated). Negative keys never collide with
+        // feature indices.
+        ASSIGN_OR_RETURN(
+            src_worker,
+            ObliqueSplitEvaluator(split.condition.condition().oblique_condition(),
+                                  load_balancer));
+        key = -1 - src_worker;
+      } else {
+        key = split.condition.attribute();
+        ASSIGN_OR_RETURN(src_worker, load_balancer.FeatureOwner(key));
+      }
+      auto& entry = active_features[key];
+      entry.src_worker = src_worker;
+      entry.splits.push_back({/*weak_model_idx=*/weak_model_idx,
+                              /*split_idx=*/split_idx});
     }
   }
   return active_features;
+}
+
+absl::Status SetColumnReplicas(
+    const float replication, const int64_t seed,
+    const dataset::proto::DataSpecification& data_spec,
+    const std::vector<int>& features,
+    distributed_decision_tree::LoadBalancer* load_balancer) {
+  if (replication < 0 || replication > 1) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "in_worker_oblique.column_replication must be in [0,1], got ",
+        replication));
+  }
+  const int num_workers = load_balancer->NumWorkers();
+  std::vector<std::vector<int>> replicas(num_workers);
+  std::string log;
+  for (int worker_idx = 0; worker_idx < num_workers; worker_idx++) {
+    // Numerical columns owned by the other workers, ascending.
+    std::vector<int> candidates;
+    int num_owned = 0;
+    for (const int feature : features) {
+      if (data_spec.columns(feature).type() !=
+          dataset::proto::ColumnType::NUMERICAL) {
+        continue;
+      }
+      ASSIGN_OR_RETURN(const int owner, load_balancer->FeatureOwner(feature));
+      if (owner != worker_idx) {
+        candidates.push_back(feature);
+      } else {
+        num_owned++;
+      }
+    }
+    const int num_replicas = static_cast<int>(
+        std::lround(static_cast<double>(replication) * candidates.size()));
+    // Own stream per (seed, worker): the training stream is left untouched.
+    std::seed_seq seed_seq{static_cast<uint32_t>(seed),
+                           static_cast<uint32_t>(seed >> 32),
+                           static_cast<uint32_t>(worker_idx), 0x7e91u};
+    utils::RandomEngine rnd(seed_seq);
+    std::shuffle(candidates.begin(), candidates.end(), rnd);
+    candidates.resize(num_replicas);
+    std::sort(candidates.begin(), candidates.end());
+    absl::SubstituteAndAppend(&log, "\tworker $0: $1 owned + $2 replicated\n",
+                              worker_idx, num_owned, num_replicas);
+    replicas[worker_idx] = std::move(candidates);
+  }
+  RETURN_IF_ERROR(load_balancer->SetReplicas(replicas));
+  LOG(INFO) << "Column replication " << replication
+            << " (numerical columns per worker):\n"
+            << log;
+  return absl::OkStatus();
 }
 
 void Monitoring::BeginTraining() {}

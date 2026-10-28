@@ -168,11 +168,41 @@ class LoadBalancer {
   absl::StatusOr<proto::SplitSharingPlan> MakeSplitSharingPlan(
       const std::vector<int>& feature_idxs);
 
+  // Same plan with an explicit source worker per entry of "feature_idxs"
+  // (parallel vectors). The entries are opaque keys for the caller: copied
+  // into the plan items, never looked up here.
+  absl::StatusOr<proto::SplitSharingPlan> MakeSplitSharingPlan(
+      const std::vector<int>& feature_idxs,
+      const std::vector<int>& src_workers);
+
+  // Static column replication (in-worker oblique splits): besides the features
+  // it owns, a worker can hold read-only copies of features owned by others.
+  // "replicas_per_worker[w]" lists the extra features of worker w; each must be
+  // an active feature not owned by w. Ownership is unchanged. Incompatible with
+  // dynamic balancing.
+  absl::Status SetReplicas(
+      const std::vector<std::vector<int>>& replicas_per_worker);
+
+  bool HasReplicas() const { return num_replicas_ > 0; }
+
+  // Replicas held by a worker (ascending).
+  const std::vector<int>& ReplicasPerWorker(int worker) const;
+
+  // Owned features plus replicas of a worker, ascending.
+  std::vector<int> HeldFeaturesPerWorker(int worker) const;
+  std::vector<std::vector<int>> HeldFeaturesPerWorkers() const;
+
+  // Workers holding a feature: its owner first, then its replicators ascending.
+  absl::StatusOr<std::vector<int>> FeatureHolders(int feature) const;
+
  private:
   // Data about a worker.
   struct Worker {
     // Features owned by this worker.
     std::vector<int> features;
+
+    // Features owned by other workers but also held by this one (ascending).
+    std::vector<int> replicas;
 
     // Time-series of measures. Each measure is a
     std::vector<Measure> measures;
@@ -189,6 +219,9 @@ class LoadBalancer {
 
     // Currently, owning worker.
     int worker = -1;
+
+    // Workers other than the owner holding a copy (ascending).
+    std::vector<int> replicators;
 
     // True the feature is used for training and should be assigned to a
     // worker.
@@ -271,6 +304,9 @@ class LoadBalancer {
 
   // Number of feature reassignment proposed so far.
   int num_unit_orders_ = 0;
+
+  // Total number of replicas over all the workers.
+  int num_replicas_ = 0;
 
   // Number of re-balancing optimizations done so far.
   int num_rebalances_ = 0;

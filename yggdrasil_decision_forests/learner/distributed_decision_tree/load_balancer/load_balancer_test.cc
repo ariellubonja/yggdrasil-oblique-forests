@@ -42,6 +42,66 @@ TEST(LoadBalancer, StaticBalancing) {
   EXPECT_THAT(balancer.WorkersPerFeatures(), ElementsAre(1, 0, 0, 1));
 }
 
+TEST(LoadBalancer, Replicas) {
+  distributed_decision_tree::dataset_cache::proto::CacheMetadata
+      cache_metadata = PARSE_TEST_PROTO(R"pb(
+        columns { categorical { num_values: 15 } }
+        columns { numerical { num_unique_values: 20 } }
+        columns { numerical { discretized: true num_discretized_values: 10 } }
+        columns { boolean {} }
+      )pb");
+  // Replicas need static ownership (the manager disables dynamic balancing in
+  // oblique mode).
+  const proto::LoadBalancerOptions options = PARSE_TEST_PROTO(
+      R"pb(
+        dynamic_balancing_frequency_iteration: -1
+        dynamic_balancing_frequency_seconds: -1
+      )pb");
+  auto balancer = LoadBalancer::Create(/*features=*/{0, 1, 2, 3},
+                                       /*num_workers=*/2, cache_metadata,
+                                       options)
+                      .value();
+  // Owners: worker 0 -> {1, 2}, worker 1 -> {0, 3}.
+  EXPECT_THAT(balancer.WorkersPerFeatures(), ElementsAre(1, 0, 0, 1));
+  EXPECT_FALSE(balancer.HasReplicas());
+  EXPECT_THAT(balancer.FeatureHolders(0).value(), ElementsAre(1));
+
+  // Invalid: replicating an owned feature, a duplicate, an unknown feature.
+  EXPECT_FALSE(balancer.SetReplicas({{1}, {}}).ok());
+  EXPECT_FALSE(balancer.SetReplicas({{0, 0}, {}}).ok());
+  EXPECT_FALSE(balancer.SetReplicas({{7}, {}}).ok());
+  EXPECT_FALSE(balancer.SetReplicas({{0}}).ok());
+
+  EXPECT_OK(balancer.SetReplicas({{3, 0}, {2}}));
+  EXPECT_TRUE(balancer.HasReplicas());
+  EXPECT_THAT(balancer.ReplicasPerWorker(0), ElementsAre(0, 3));
+  EXPECT_THAT(balancer.ReplicasPerWorker(1), ElementsAre(2));
+  EXPECT_THAT(balancer.HeldFeaturesPerWorker(0), ElementsAre(0, 1, 2, 3));
+  EXPECT_THAT(balancer.HeldFeaturesPerWorker(1), ElementsAre(0, 2, 3));
+  // Ownership is unchanged.
+  EXPECT_THAT(balancer.WorkersPerFeatures(), ElementsAre(1, 0, 0, 1));
+  EXPECT_THAT(balancer.FeaturesPerWorker(0), ElementsAre(1, 2));
+  // Holders: owner first, then replicators.
+  EXPECT_THAT(balancer.FeatureHolders(0).value(), ElementsAre(1, 0));
+  EXPECT_THAT(balancer.FeatureHolders(2).value(), ElementsAre(0, 1));
+  EXPECT_THAT(balancer.FeatureHolders(1).value(), ElementsAre(0));
+
+  // Explicit source workers: opaque keys are copied into the plan items.
+  const auto plan =
+      balancer.MakeSplitSharingPlan(/*feature_idxs=*/{-1, -2},
+                                    /*src_workers=*/{0, 1})
+          .value();
+  ASSERT_EQ(plan.rounds_size(), 2);
+  for (const auto& request : plan.rounds(0).requests()) {
+    for (const auto& item : request.second.items()) {
+      ASSERT_EQ(item.features_size(), 1);
+      EXPECT_EQ(item.features(0), -1 - item.src_worker());
+    }
+  }
+  EXPECT_FALSE(balancer.MakeSplitSharingPlan({-1}, {5}).ok());
+  EXPECT_FALSE(balancer.MakeSplitSharingPlan({-1, -2}, {0}).ok());
+}
+
 TEST(LoadBalancer, DynamicBalancing) {
   const dataset_cache::proto::CacheMetadata cache_metadata = PARSE_TEST_PROTO(
       R"pb(

@@ -691,7 +691,9 @@ absl::Status EvaluateObliqueSplits(
     return absl::InternalError("Wrong number of split evaluations");
   }
 
-  // Oblique splits proposed by this worker (it owns their first attribute).
+  // Oblique splits whose every attribute this worker holds: the proposer at
+  // least, plus any worker holding replicas of all of them (the manager asks
+  // the lowest such worker for the bitmaps). Others skip the split.
   std::vector<int> node_idx_to_active_node_idx(splits.size(), -1);
   std::vector<int> active_node_idxs;
   std::vector<int> needed_features;
@@ -702,21 +704,21 @@ absl::Status EvaluateObliqueSplits(
       continue;
     }
     const auto& oblique = split.condition.condition().oblique_condition();
-    if (oblique.attributes_size() == 0 ||
-        !dataset.has_feature(oblique.attributes(0))) {
+    if (oblique.attributes_size() == 0) {
       continue;
     }
+    bool holds_all = true;
     for (const int attribute : oblique.attributes()) {
       if (!dataset.has_feature(attribute)) {
-        return absl::InternalError(absl::Substitute(
-            "This worker owns attribute $0 of an oblique split but not "
-            "attribute $1. Feature ownership changed after the split was "
-            "found; dynamic load balancing is not supported with in-worker "
-            "oblique splits.",
-            oblique.attributes(0), attribute));
+        holds_all = false;
+        break;
       }
-      needed_features.push_back(attribute);
     }
+    if (!holds_all) {
+      continue;
+    }
+    needed_features.insert(needed_features.end(), oblique.attributes().begin(),
+                           oblique.attributes().end());
     node_idx_to_active_node_idx[split_idx] = active_node_idxs.size();
     active_node_idxs.push_back(split_idx);
   }

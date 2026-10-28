@@ -98,6 +98,18 @@ ABSL_FLAG(int, sparse_oblique_max_num_projections, 1000,
 ABSL_FLAG(bool, sparse_oblique_local_projection_count, false,
           "If true, F in ceil(F^exponent) is the worker's own numerical "
           "candidate count instead of the dataset's numerical feature count.");
+ABSL_FLAG(double, column_replication, 0.0,
+          "In-worker oblique: fraction in [0,1] of the numerical columns a "
+          "worker does not own that it also holds and samples projections "
+          "from. 0 = disjoint F/W columns per worker, 1 = every worker holds "
+          "all F columns.");
+ABSL_FLAG(int64_t, seed, -1,
+          "Training random seed (TrainingConfig.random_seed); <0 keeps the "
+          "library default.");
+ABSL_FLAG(bool, force_numerical_features, false,
+          "Dataspec guide: every non-label column is NUMERICAL and 0/1 columns "
+          "are not detected as BOOLEAN (the dataset policy's fully numeric "
+          "input). Fails on string columns.");
 ABSL_FLAG(std::string, model_out_dir, "",
           "If set, the trained model is saved there (for bit-identity checks "
           "between builds / thread counts).");
@@ -125,6 +137,11 @@ int main(int argc, char** argv) {
   auto* label_guide = guide.add_column_guides();
   label_guide->set_column_name_pattern(absl::StrCat("^", label, "$"));
   label_guide->set_type(ydf::dataset::proto::ColumnType::CATEGORICAL);
+  if (absl::GetFlag(FLAGS_force_numerical_features)) {
+    guide.set_detect_boolean_as_numerical(true);
+    guide.mutable_default_column_guide()->set_type(
+        ydf::dataset::proto::ColumnType::NUMERICAL);
+  }
   const auto data_spec = ydf::dataset::CreateDataSpec(train_path, guide).value();
   LOG(INFO) << "Dataspec:\n" << ydf::dataset::PrintHumanReadable(data_spec);
 
@@ -133,6 +150,9 @@ int main(int argc, char** argv) {
   train_config.set_learner("DISTRIBUTED_GRADIENT_BOOSTED_TREES");
   train_config.set_task(ydf::model::proto::Task::CLASSIFICATION);
   train_config.set_label(label);
+  if (absl::GetFlag(FLAGS_seed) >= 0) {
+    train_config.set_random_seed(absl::GetFlag(FLAGS_seed));
+  }
   auto* dgbt = train_config.MutableExtension(
       ydf::model::distributed_gradient_boosted_trees::proto::
           distributed_gradient_boosted_trees_config);
@@ -161,6 +181,8 @@ int main(int argc, char** argv) {
     }
     dgbt->mutable_in_worker_oblique()->set_num_projections_from_local_features(
         absl::GetFlag(FLAGS_sparse_oblique_local_projection_count));
+    dgbt->mutable_in_worker_oblique()->set_column_replication(
+        absl::GetFlag(FLAGS_column_replication));
   } else {
     QCHECK_EQ(split_axis, "AXIS_ALIGNED") << "Unknown --split_axis";
   }

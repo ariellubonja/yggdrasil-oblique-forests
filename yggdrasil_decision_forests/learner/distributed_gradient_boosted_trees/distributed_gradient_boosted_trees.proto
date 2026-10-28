@@ -78,6 +78,21 @@ message DistributedGradientBoostedTreesTrainingConfig {
     //   true:  GetNumProjections(number of numerical candidates the worker
     //          holds for that node).
     optional bool num_projections_from_local_features = 1 [default = false];
+
+    // Field 2 is reserved for the naive column-shipping baseline (branch
+    // naive-column-shipping).
+
+    // Static column replication, in [0, 1]. Besides its owned columns, every
+    // worker loads and samples projections from a uniform random fraction
+    // "column_replication" (rounded to nearest) of the NUMERICAL columns owned
+    // by the other workers, drawn once from (random_seed, worker index).
+    // 0: disjoint columns, F/W per worker (default). 1: every worker holds all
+    // F numerical columns. The projection count per worker is unchanged
+    // (num_projections_from_local_features=false keeps it at ceil(F^exponent)
+    // of the global F). Ownership, i.e. who answers axis-aligned splits, does
+    // not change; an oblique split is evaluated by the lowest-index worker
+    // holding all its attributes.
+    optional float column_replication = 3 [default = 0];
   }
 
   message Internal {
