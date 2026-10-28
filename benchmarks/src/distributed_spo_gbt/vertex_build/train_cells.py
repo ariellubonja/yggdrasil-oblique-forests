@@ -69,6 +69,13 @@ class LogTee:
 def run_cell(fs, cluster, dataset, level, out_cell):
   train = f"csv:{args.data}/{dataset}/train.csv"
   test = f"csv:{args.data}/{dataset}/test.csv"
+  # Stable work dir + resume_training=True: dataset_cache/ is built once per dataset and
+  # reused across levels. checkpoint/ must go, or the next level resumes this level's trees.
+  work_dir = f"{args.out.replace('/runs/', '/work/')}/{dataset}"
+  try:
+    fs.rm(f"{work_dir}/checkpoint"[5:], recursive=True)
+  except FileNotFoundError:
+    pass
   with fs.open(f"{args.data[5:]}/{dataset}/train.csv".replace("gs://", ""), "r") as f:
     header = f.readline().strip().split(",")
   feats = [(c, ydf.Semantic.NUMERICAL) for c in header if c != args.label]
@@ -92,7 +99,8 @@ def run_cell(fs, cluster, dataset, level, out_cell):
       random_seed=args.seed,
       worker_logs=False,
       workers=cluster.workers,
-      working_dir=f"{args.out.replace('/runs/', '/work/')}/{dataset}_r{level:.2f}_{int(time.time())}",
+      working_dir=work_dir,
+      resume_training=True,
       extra_training_config=tc,
   )
   t0 = time.time()
