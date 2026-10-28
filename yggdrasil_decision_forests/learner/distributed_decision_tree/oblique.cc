@@ -145,14 +145,17 @@ absl::StatusOr<std::vector<Initializer>> CreateInitializers(
   return initializers;
 }
 
-// Samples the projections of one open node, in order, from the node's own
-// random stream (derived from the base seed and the node index). Sampling is
-// the only consumer of that stream, so sampling all the projections up front
-// and scoring them in any order / on any thread yields the projections the
-// serial loop would have sampled.
+}  // namespace
+
+// Sampling is the only consumer of the node's stream, so sampling all the
+// projections up front and scoring them in any order / on any thread yields
+// the projections the serial loop would have sampled.
 std::vector<Projection> SampleNodeProjections(const ObliqueSplitArgs& args,
                                               const int node_idx) {
   const auto& features = args.numerical_features_per_open_node[node_idx];
+  if (features.empty()) {
+    return {};
+  }
   const auto& oblique_config = args.dt_config.sparse_oblique_split();
   const int count_basis = args.num_features_for_projection_count > 0
                               ? args.num_features_for_projection_count
@@ -179,6 +182,8 @@ std::vector<Projection> SampleNodeProjections(const ObliqueSplitArgs& args,
   }
   return projections;
 }
+
+namespace {
 
 // Best split found by one job over a range of a node's projections.
 template <typename Accumulator>
@@ -333,6 +338,10 @@ absl::Status TemplatedFindBestObliqueSplits(
   using Accumulator = typename LabelFiller::Accumulator;
   const int num_nodes = args.numerical_features_per_open_node.size();
   const auto rows_per_node = BuildRowsPerNode(args.example_to_node, num_nodes);
+  if (args.presampled_projections != nullptr &&
+      args.presampled_projections->size() != num_nodes) {
+    return absl::InternalError("Wrong number of pre-sampled projection sets");
+  }
 
   // Nodes with something to score, and their projections.
   std::vector<int> active_nodes;
@@ -351,7 +360,10 @@ absl::Status TemplatedFindBestObliqueSplits(
     if (num_examples < 2 || num_examples < 2 * min_num_examples) {
       continue;
     }
-    projections_per_node[node_idx] = SampleNodeProjections(args, node_idx);
+    projections_per_node[node_idx] =
+        args.presampled_projections != nullptr
+            ? (*args.presampled_projections)[node_idx]
+            : SampleNodeProjections(args, node_idx);
     if (projections_per_node[node_idx].empty()) {
       continue;
     }
@@ -533,7 +545,7 @@ absl::Status DenseNumericalColumns::Prepare(
     utils::concurrency::ThreadPool* thread_pool) {
   std::vector<int> missing;
   for (const int feature : features) {
-    if (!columns_.contains(feature)) {
+    if (!columns_.contains(feature) && !external_.contains(feature)) {
       missing.push_back(feature);
     }
   }
@@ -569,15 +581,28 @@ absl::Status DenseNumericalColumns::Prepare(
 
 const float* DenseNumericalColumns::data(const int feature) const {
   const auto it = columns_.find(feature);
-  if (it == columns_.end()) {
-    return nullptr;
+  if (it != columns_.end()) {
+    return it->second->data();
   }
-  return it->second->data();
+  const auto external_it = external_.find(feature);
+  if (external_it != external_.end()) {
+    return external_it->second->data();
+  }
+  return nullptr;
+}
+
+void DenseNumericalColumns::SetExternal(const int feature,
+                                        std::vector<float> values) {
+  DCHECK_EQ(values.size(), num_examples());
+  external_[feature] = std::make_unique<std::vector<float>>(std::move(values));
 }
 
 size_t DenseNumericalColumns::MemoryUsage() const {
   size_t usage = 0;
   for (const auto& column : columns_) {
+    usage += column.second->size() * sizeof(float);
+  }
+  for (const auto& column : external_) {
     usage += column.second->size() * sizeof(float);
   }
   return usage;
@@ -707,12 +732,12 @@ absl::Status EvaluateObliqueSplits(
       continue;
     }
     for (const int attribute : oblique.attributes()) {
-      if (!dataset.has_feature(attribute)) {
+      if (!dataset.has_feature(attribute) && !columns->is_external(attribute)) {
         return absl::InternalError(absl::Substitute(
-            "This worker owns attribute $0 of an oblique split but not "
-            "attribute $1. Feature ownership changed after the split was "
-            "found; dynamic load balancing is not supported with in-worker "
-            "oblique splits.",
+            "This worker owns attribute $0 of an oblique split but holds no "
+            "copy of attribute $1. Either feature ownership changed after the "
+            "split was found (dynamic load balancing is not supported with "
+            "in-worker oblique splits) or the column was not shipped.",
             oblique.attributes(0), attribute));
       }
       needed_features.push_back(attribute);

@@ -79,6 +79,14 @@ class DatasetAdult : public utils::TrainAndTestTester {
     oblique->mutable_continuous();
   }
 
+  // Naive cross-worker projections: columns shipped between workers.
+  void SetShipForeignColumns() {
+    train_config_
+        .MutableExtension(proto::distributed_gradient_boosted_trees_config)
+        ->mutable_in_worker_oblique()
+        ->set_ship_foreign_columns(true);
+  }
+
  private:
   void SetUp() override {
     train_config_ = PARSE_TEST_PROTO(R"pb(
@@ -125,6 +133,28 @@ TEST_F(DatasetAdult, SparseOblique_5workers) {
   TrainAndEvaluateModel();
   EXPECT_GT(NumObliqueConditions(*model_), 0);
   EXPECT_GT(metric::Accuracy(evaluation_), 0.84);
+}
+
+// Columns spread over 5 workers, projections sampled from all 6 numerical
+// features; the columns a worker lacks are shipped from their owners.
+TEST_F(DatasetAdult, SparseOblique_5workers_ShipColumns) {
+  SetNumWorkers(5);
+  SetSparseOblique();
+  SetShipForeignColumns();
+  TrainAndEvaluateModel();
+  EXPECT_GT(NumObliqueConditions(*model_), 0);
+  EXPECT_GT(metric::Accuracy(evaluation_), 0.84);
+}
+
+// One worker owns every column: shipping has nothing to fetch and the
+// training must behave like the plain sparse oblique mode.
+TEST_F(DatasetAdult, SparseOblique_1worker_ShipColumns) {
+  SetNumWorkers(1);
+  SetSparseOblique();
+  SetShipForeignColumns();
+  TrainAndEvaluateModel();
+  EXPECT_GT(NumObliqueConditions(*model_), 0);
+  EXPECT_GT(metric::Accuracy(evaluation_), 0.83);
 }
 
 // Axis-aligned reference on the same split (upstream expectation).

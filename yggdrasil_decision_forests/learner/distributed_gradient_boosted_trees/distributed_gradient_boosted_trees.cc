@@ -1257,6 +1257,14 @@ EmitFindSplits(
   // Number of workers doing pre-loading work.
   int num_worker_preloading = 0;
 
+  // Splits of each worker, merged below in worker-index order. MergeBestSplits
+  // keeps the first candidate when two splits tie on score AND attribute (two
+  // workers proposing mirrored projections of the same columns, possible when
+  // they sample from shared columns), so merging in arrival order would make
+  // the model depend on reply timing.
+  std::vector<std::vector<distributed_decision_tree::SplitPerOpenNode>>
+      splits_per_worker_and_weak_model(load_balancer->NumWorkers());
+
   for (int reply_idx = 0; reply_idx < num_requests; reply_idx++) {
     ASSIGN_OR_RETURN(
         const auto generic_result,
@@ -1264,6 +1272,13 @@ EmitFindSplits(
     monitoring->WorkerReply(generic_result.worker_idx(),
                             generic_result.runtime_seconds(),
                             generic_result.ByteSizeLong());
+    if (generic_result.has_column_shipping()) {
+      const auto& shipping = generic_result.column_shipping();
+      monitoring->WorkerShipping(shipping.bytes_in(), shipping.bytes_out(),
+                                 shipping.num_columns_in(),
+                                 shipping.ship_seconds(),
+                                 shipping.num_cross_worker_splits());
+    }
     if (generic_result.request_restart_iter()) {
       RETURN_IF_ERROR(
           SkipAsyncAnswers(num_requests - reply_idx - 1, distribute));
@@ -1293,9 +1308,19 @@ EmitFindSplits(
       distributed_decision_tree::SplitPerOpenNode worker_splits;
       ConvertFromProto(result.split_per_weak_model(weak_model_idx),
                        &worker_splits);
+      splits_per_worker_and_weak_model[generic_result.worker_idx()].push_back(
+          std::move(worker_splits));
+    }
+  }
 
+  for (const auto& worker_splits_per_weak_model :
+       splits_per_worker_and_weak_model) {
+    for (int weak_model_idx = 0;
+         weak_model_idx < worker_splits_per_weak_model.size();
+         weak_model_idx++) {
       RETURN_IF_ERROR(distributed_decision_tree::MergeBestSplits(
-          worker_splits, &splits_per_weak_models[weak_model_idx]));
+          worker_splits_per_weak_model[weak_model_idx],
+          &splits_per_weak_models[weak_model_idx]));
     }
   }
 
@@ -1348,6 +1373,13 @@ absl::Status EmitEvaluateSplits(
     monitoring->WorkerReply(generic_result.worker_idx(),
                             generic_result.runtime_seconds(),
                             generic_result.ByteSizeLong());
+    if (generic_result.has_column_shipping()) {
+      const auto& shipping = generic_result.column_shipping();
+      monitoring->WorkerShipping(shipping.bytes_in(), shipping.bytes_out(),
+                                 shipping.num_columns_in(),
+                                 shipping.ship_seconds(),
+                                 shipping.num_cross_worker_splits());
+    }
     if (generic_result.request_restart_iter()) {
       RETURN_IF_ERROR(SkipAsyncAnswers(
           load_balancer->NumWorkers() - reply_idx - 1, distribute));
@@ -1988,6 +2020,7 @@ void Monitoring::DispatchDone(int num_requests, size_t bytes_out) {
   bytes_out_ = bytes_out;
   bytes_in_ = 0;
   reply_runtimes_.clear();
+  round_shipping_ = ShippingStats();
   pending_barrier_ = true;
   round_++;
 }
@@ -2001,6 +2034,24 @@ void Monitoring::WorkerReply(int worker_idx, double runtime_seconds,
   last_reply_ = now;
   bytes_in_ += bytes_in;
   reply_runtimes_.push_back({worker_idx, runtime_seconds});
+}
+
+void Monitoring::WorkerShipping(const int64_t bytes_in, const int64_t bytes_out,
+                                const int num_columns_in,
+                                const double ship_seconds,
+                                const int num_cross_worker_splits) {
+  for (auto* stats : {&round_shipping_, &total_shipping_}) {
+    stats->bytes_in += bytes_in;
+    stats->bytes_out += bytes_out;
+    stats->num_columns_in += num_columns_in;
+    stats->ship_seconds_sum += ship_seconds;
+    stats->num_cross_worker_splits += num_cross_worker_splits;
+  }
+  if (ship_seconds > round_shipping_.ship_seconds_max) {
+    // Running max of the round; the round total is added in FlushBarrier.
+    total_ship_seconds_max_ += ship_seconds - round_shipping_.ship_seconds_max;
+    round_shipping_.ship_seconds_max = ship_seconds;
+  }
 }
 
 void Monitoring::FlushBarrier(absl::Time now) {
@@ -2019,7 +2070,9 @@ void Monitoring::FlushBarrier(absl::Time now) {
             << "iter,layer,stage,round,t_begin_s,barrier_s,tail_s,"
                "manager_serial_s,fanout_s,worker_max_s,worker_med_s,"
                "worker_min_s,worker_sum_s,idle_s,comm_residual_s,"
-               "first_reply_s,num_replies,slowest_worker,bytes_out,bytes_in\n";
+               "first_reply_s,num_replies,slowest_worker,bytes_out,bytes_in,"
+               "ship_bytes_in,ship_bytes_out,ship_cols_in,ship_s_max,"
+               "ship_s_sum,ship_cross_splits\n";
       }
     }
   }
@@ -2063,7 +2116,12 @@ void Monitoring::FlushBarrier(absl::Time now) {
                 << w_max << ',' << w_med << ',' << w_min << ',' << w_sum << ','
                 << idle << ',' << residual << ',' << first_reply << ',' << n
                 << ',' << slowest << ',' << bytes_out_ << ',' << bytes_in_
-                << '\n';
+                << ',' << round_shipping_.bytes_in << ','
+                << round_shipping_.bytes_out << ','
+                << round_shipping_.num_columns_in << ','
+                << round_shipping_.ship_seconds_max << ','
+                << round_shipping_.ship_seconds_sum << ','
+                << round_shipping_.num_cross_worker_splits << '\n';
   barrier_csv_->flush();
   pending_barrier_ = false;
 }
@@ -2120,6 +2178,20 @@ std::string Monitoring::InlineLogs() {
                             FormatDuration(last_max_split_reply_time_));
   absl::SubstituteAndAppend(&logs, " last-{slowest,fastest}-worker:$0 $1",
                             last_slowest_worker_idx_, last_fastest_worker_idx_);
+
+  if (total_shipping_.num_columns_in > 0 || total_shipping_.bytes_out > 0) {
+    // Worker-to-worker column shipping, summed over the training so far.
+    // ship-s-max sums the slowest worker of every round: the time the
+    // training spent blocked on shipping, worker-clock.
+    absl::SubstituteAndAppend(
+        &logs,
+        " column-shipping:{bytes-in:$0 bytes-out:$1 cols-in:$2 ship-s-max:$3 "
+        "ship-s-sum:$4 cross-worker-splits:$5}",
+        total_shipping_.bytes_in, total_shipping_.bytes_out,
+        total_shipping_.num_columns_in, total_ship_seconds_max_,
+        total_shipping_.ship_seconds_sum,
+        total_shipping_.num_cross_worker_splits);
+  }
 
   if (count_reply_times_ > 0) {
     absl::SubstituteAndAppend(

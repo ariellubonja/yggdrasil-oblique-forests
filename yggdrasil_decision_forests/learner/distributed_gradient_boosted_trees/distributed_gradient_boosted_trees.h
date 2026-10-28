@@ -169,6 +169,10 @@ class Monitoring {
   void SendBegin();
   void DispatchDone(int num_requests, size_t bytes_out);
   void WorkerReply(int worker_idx, double runtime_seconds, size_t bytes_in);
+  // Worker-to-worker column shipping reported in a reply
+  // (WorkerResult.column_shipping); summed per round and over the training.
+  void WorkerShipping(int64_t bytes_in, int64_t bytes_out, int num_columns_in,
+                      double ship_seconds, int num_cross_worker_splits);
   absl::string_view StageName(Stages stage);
 
  private:
@@ -229,6 +233,19 @@ class Monitoring {
   std::vector<std::pair<int, double>> reply_runtimes_;
   std::unique_ptr<std::ofstream> barrier_csv_;
   bool barrier_csv_probed_ = false;
+
+  // Column shipping, current round / whole training.
+  struct ShippingStats {
+    int64_t bytes_in = 0;
+    int64_t bytes_out = 0;
+    int num_columns_in = 0;
+    double ship_seconds_sum = 0;  // Summed over the workers.
+    double ship_seconds_max = 0;  // Slowest worker of the round.
+    int num_cross_worker_splits = 0;
+  };
+  ShippingStats round_shipping_;
+  ShippingStats total_shipping_;
+  double total_ship_seconds_max_ = 0;  // Sum over rounds of the round max.
 };
 
 // Aggregates partial evaluations (evaluation of the weak models trained in a

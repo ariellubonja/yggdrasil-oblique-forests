@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -183,17 +184,44 @@ absl::Status DistributedGradientBoostedTreesWorker::Setup(
       oblique_columns_ =
           std::make_unique<distributed_decision_tree::DenseNumericalColumns>(
               dataset_.get());
+      const auto is_numerical = [this](const int feature) {
+        return welcome_.dataspec().columns(feature).type() ==
+               dataset::proto::ColumnType::NUMERICAL;
+      };
       for (const int feature : welcome_.train_config_linking().features()) {
-        if (welcome_.dataspec().columns(feature).type() ==
-            dataset::proto::ColumnType::NUMERICAL) {
-          num_global_numerical_features_++;
+        if (is_numerical(feature)) {
+          global_numerical_features_.push_back(feature);
+        }
+      }
+      std::sort(global_numerical_features_.begin(),
+                global_numerical_features_.end());
+      num_global_numerical_features_ = global_numerical_features_.size();
+      for (const int feature : dataset_->features()) {
+        num_owned_numerical_features_ += is_numerical(feature);
+      }
+      ship_foreign_columns_ =
+          spe_config.in_worker_oblique().ship_foreign_columns();
+      if (ship_foreign_columns_) {
+        feature_owner_.assign(welcome_.dataspec().columns_size(), -1);
+        for (int worker_idx = 0; worker_idx < welcome_.owned_features_size();
+             worker_idx++) {
+          for (const int feature :
+               welcome_.owned_features(worker_idx).features()) {
+            feature_owner_[feature] = worker_idx;
+          }
         }
       }
       if (worker_logs_) {
         LOG(INFO) << "In-worker sparse oblique splits: worker owns "
-                  << dataset_->features().size() << " features; "
+                  << dataset_->features().size() << " features ("
+                  << num_owned_numerical_features_ << " numerical); "
                   << num_global_numerical_features_
-                  << " numerical features in the dataset";
+                  << " numerical features in the dataset"
+                  << (ship_foreign_columns_
+                          ? "; column shipping ON (projections over all "
+                            "numerical features, foreign columns fetched "
+                            "per layer)"
+                          : "");
       }
     }
 
@@ -404,6 +432,12 @@ DistributedGradientBoostedTreesWorker::RunRequestImp(
                                     result.mutable_get_split_value()));
       break;
 
+    case proto::WorkerRequest::kGetColumns:
+      RETURN_IF_ERROR(check_worker_type(WorkerType::kTRAINER));
+      RETURN_IF_ERROR(
+          GetColumns(request.get_columns(), result.mutable_get_columns()));
+      break;
+
     case proto::WorkerRequest::kEndIter:
       RETURN_IF_ERROR(EndIter(request.end_iter(), result.mutable_end_iter()));
       break;
@@ -434,6 +468,18 @@ DistributedGradientBoostedTreesWorker::RunRequestImp(
 
     case proto::WorkerRequest::TYPE_NOT_SET:
       return absl::InvalidArgumentError("Request without type");
+  }
+
+  // Column shipping report: what this request fetched, plus what the
+  // GetColumns thread served since the last report.
+  if (ship_foreign_columns_ &&
+      (request.type_case() == proto::WorkerRequest::kFindSplits ||
+       request.type_case() == proto::WorkerRequest::kEvaluateSplits)) {
+    auto* shipping = result.mutable_column_shipping();
+    *shipping = shipping_stats_;
+    shipping->set_bytes_out(shipped_bytes_out_.exchange(0));
+    shipping->set_num_requests_served(shipped_requests_served_.exchange(0));
+    shipping_stats_.Clear();
   }
 
   const auto runtime = absl::Now() - begin;
@@ -746,6 +792,10 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
         features.erase(numerical_begin, features.end());
         oblique_features_to_prepare.insert(oblique_features[node_idx].begin(),
                                            oblique_features[node_idx].end());
+        if (ship_foreign_columns_ && !oblique_features[node_idx].empty()) {
+          // Naive mode: sample from every numerical column of the dataset.
+          oblique_features[node_idx] = global_numerical_features_;
+        }
       }
     }
 
@@ -805,14 +855,20 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
   // In-worker oblique splits over the owned numerical columns. An oblique
   // split replaces the axis-aligned one of a node only with a higher score.
   if (oblique) {
+    // Projection count basis. Column shipping samples from all the numerical
+    // features, so the "local" basis is the worker's own numerical count: the
+    // per-worker budget stays the one of the disjoint-column mode.
     const int num_features_for_projection_count =
         spe_config.in_worker_oblique().num_projections_from_local_features()
-            ? 0
+            ? (ship_foreign_columns_ ? num_owned_numerical_features_ : 0)
             : num_global_numerical_features_;
-    for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
-         weak_model_idx++) {
+    using distributed_decision_tree::ObliqueSplitArgs;
+    using Projections =
+        std::vector<std::vector<decision_tree::internal::Projection>>;
+    const auto make_args = [&](const int weak_model_idx,
+                               const Projections* presampled) {
       auto& weak_model = weak_models_[weak_model_idx];
-      const distributed_decision_tree::ObliqueSplitArgs args{
+      return ObliqueSplitArgs{
           oblique_features_per_weak_models[weak_model_idx],
           weak_model.example_to_node,
           welcome_.dataspec(),
@@ -825,7 +881,52 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
           weak_model.label_accessor_type,
           num_features_for_projection_count,
           MixProjectionSeed(request.projection_seed(), WorkerIdx(),
-                            weak_model_idx)};
+                            weak_model_idx),
+          presampled};
+    };
+
+    // Column shipping: sample every node's projections first (same streams
+    // as the finder), fetch the foreign columns they touch, then score. Last
+    // layer's shipped columns are dropped: nothing is cached across layers.
+    std::vector<Projections> presampled(weak_models_.size());
+    if (ship_foreign_columns_) {
+      oblique_columns_->ClearExternal();
+      shipping_stats_.Clear();
+      const auto min_examples = dt_config.min_examples();
+      absl::flat_hash_set<int> foreign;
+      for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
+           weak_model_idx++) {
+        const auto args = make_args(weak_model_idx, nullptr);
+        const auto& weak_model = weak_models_[weak_model_idx];
+        const auto& features = oblique_features_per_weak_models[weak_model_idx];
+        presampled[weak_model_idx].resize(features.size());
+        for (int node_idx = 0; node_idx < features.size(); node_idx++) {
+          const auto num_examples =
+              weak_model.label_stats_per_node[node_idx].num_examples();
+          if (features[node_idx].empty() || num_examples < 2 ||
+              num_examples < 2 * min_examples) {
+            continue;
+          }
+          auto& projections = presampled[weak_model_idx][node_idx];
+          projections =
+              distributed_decision_tree::SampleNodeProjections(args, node_idx);
+          for (const auto& projection : projections) {
+            for (const auto& item : projection) {
+              if (!dataset_->has_feature(item.attribute_idx)) {
+                foreign.insert(item.attribute_idx);
+              }
+            }
+          }
+        }
+      }
+      RETURN_IF_ERROR(ShipForeignColumns({foreign.begin(), foreign.end()}));
+    }
+
+    for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
+         weak_model_idx++) {
+      const auto args = make_args(
+          weak_model_idx,
+          ship_foreign_columns_ ? &presampled[weak_model_idx] : nullptr);
       RETURN_IF_ERROR(distributed_decision_tree::FindBestObliqueSplits(
           args, thread_pool_.get(), &splits_per_weak_models[weak_model_idx]));
     }
@@ -862,7 +963,43 @@ absl::Status DistributedGradientBoostedTreesWorker::EvaluateSplits(
         weak_model.example_to_node, weak_model.last_splits,
         &weak_model.last_split_evaluation, dataset_.get(), thread_pool_.get()));
 
-    // Oblique splits proposed by this worker (all attributes are local).
+    // Column shipping: this worker evaluates the oblique splits whose first
+    // attribute it owns; fetch the attributes it lacks (the FindSplits round
+    // of this layer may already have shipped them).
+    if (ship_foreign_columns_ && oblique_columns_ != nullptr) {
+      if (weak_model_idx == 0) {
+        shipping_stats_.Clear();
+      }
+      std::vector<int> missing;
+      int num_cross_worker_splits = 0;
+      for (const auto& split : weak_model.last_splits) {
+        if (!distributed_decision_tree::IsSplitValid(split) ||
+            !split.condition.condition().has_oblique_condition()) {
+          continue;
+        }
+        const auto& oblique = split.condition.condition().oblique_condition();
+        if (oblique.attributes_size() == 0 ||
+            !dataset_->has_feature(oblique.attributes(0))) {
+          continue;
+        }
+        bool cross_worker = false;
+        for (const int attribute : oblique.attributes()) {
+          if (!dataset_->has_feature(attribute)) {
+            cross_worker = true;
+            if (!oblique_columns_->is_external(attribute)) {
+              missing.push_back(attribute);
+            }
+          }
+        }
+        num_cross_worker_splits += cross_worker;
+      }
+      RETURN_IF_ERROR(ShipForeignColumns(missing));
+      shipping_stats_.set_num_cross_worker_splits(
+          shipping_stats_.num_cross_worker_splits() + num_cross_worker_splits);
+    }
+
+    // Oblique splits proposed by this worker (all attributes are local, or
+    // shipped in just above).
     if (oblique_columns_ != nullptr) {
       RETURN_IF_ERROR(distributed_decision_tree::EvaluateObliqueSplits(
           weak_model.example_to_node, weak_model.last_splits, *dataset_,
@@ -1101,6 +1238,133 @@ DistributedGradientBoostedTreesWorker::SkipAsyncWorkerToWorkerAnswers(
     int num_skip) {
   for (int i = 0; i < num_skip; i++) {
     RETURN_IF_ERROR(NextAsynchronousAnswerFromOtherWorker().status());
+  }
+  return absl::OkStatus();
+}
+
+absl::Status DistributedGradientBoostedTreesWorker::GetColumns(
+    const proto::WorkerRequest::GetColumns& request,
+    proto::WorkerResult::GetColumns* answer) {
+  if (!ship_foreign_columns_ || oblique_columns_ == nullptr) {
+    return absl::FailedPreconditionError(
+        "Column shipping is not enabled on this worker");
+  }
+  answer->set_source_worker(WorkerIdx());
+  const size_t num_examples = oblique_columns_->num_examples();
+  const size_t column_bytes = num_examples * sizeof(float);
+  answer->mutable_features()->Reserve(request.features_size());
+  answer->mutable_values()->Reserve(request.features_size());
+  for (const int feature : request.features()) {
+    if (!dataset_->has_feature(feature)) {
+      return absl::InvalidArgumentError(absl::Substitute(
+          "Feature $0 is not owned by worker #$1", feature, WorkerIdx()));
+    }
+    // Owned columns only: they were materialized in StartTraining and are
+    // never written afterwards, so this read needs no lock.
+    const float* column = oblique_columns_->owned_data(feature);
+    if (column == nullptr) {
+      return absl::InternalError(absl::Substitute(
+          "Owned column $0 is not materialized on worker #$1", feature,
+          WorkerIdx()));
+    }
+    answer->add_features(feature);
+    answer->add_values()->assign(reinterpret_cast<const char*>(column),
+                                 column_bytes);
+  }
+  shipped_bytes_out_ += static_cast<int64_t>(column_bytes) *
+                        request.features_size();
+  shipped_requests_served_++;
+  return absl::OkStatus();
+}
+
+absl::Status DistributedGradientBoostedTreesWorker::ShipForeignColumns(
+    const std::vector<int>& features) {
+  // Missing columns grouped by owner.
+  std::vector<std::vector<int>> per_owner(welcome_.num_train_workers());
+  int num_requests = 0;
+  for (const int feature : features) {
+    if (dataset_->has_feature(feature) ||
+        oblique_columns_->is_external(feature)) {
+      continue;
+    }
+    const int owner = feature_owner_[feature];
+    if (owner < 0 || owner >= per_owner.size() || owner == WorkerIdx()) {
+      return absl::InternalError(absl::Substitute(
+          "No owner for feature $0 (owner=$1, this worker=$2)", feature, owner,
+          WorkerIdx()));
+    }
+    num_requests += per_owner[owner].empty();
+    per_owner[owner].push_back(feature);
+  }
+  if (num_requests == 0) {
+    return absl::OkStatus();
+  }
+
+  const auto begin = absl::Now();
+  for (int owner = 0; owner < per_owner.size(); owner++) {
+    auto& owner_features = per_owner[owner];
+    if (owner_features.empty()) {
+      continue;
+    }
+    std::sort(owner_features.begin(), owner_features.end());
+    proto::WorkerRequest generic_other_request;
+    *generic_other_request.mutable_get_columns()->mutable_features() = {
+        owner_features.begin(), owner_features.end()};
+    RETURN_IF_ERROR(
+        AsynchronousProtoRequestToOtherWorker(generic_other_request, owner));
+  }
+
+  // Drain every answer even after an error so the inter-worker queue is clean.
+  const size_t column_bytes = oblique_columns_->num_examples() * sizeof(float);
+  absl::Status status;
+  int64_t bytes_in = 0;
+  int num_columns_in = 0;
+  for (int reply_idx = 0; reply_idx < num_requests; reply_idx++) {
+    auto reply_or =
+        NextAsynchronousProtoAnswerFromOtherWorker<proto::WorkerResult>();
+    if (!reply_or.ok()) {
+      status.Update(reply_or.status());
+      continue;
+    }
+    auto& reply = reply_or.value();
+    if (!reply.has_get_columns()) {
+      status.Update(
+          absl::InternalError("Unexpected answer. Expecting GetColumns."));
+      continue;
+    }
+    auto* columns = reply.mutable_get_columns();
+    if (columns->features_size() != columns->values_size()) {
+      status.Update(absl::InternalError("Malformed GetColumns answer"));
+      continue;
+    }
+    for (int i = 0; i < columns->features_size(); i++) {
+      const std::string& blob = columns->values(i);
+      if (blob.size() != column_bytes) {
+        status.Update(absl::InternalError(absl::Substitute(
+            "Shipped column $0 has $1 bytes, expected $2", columns->features(i),
+            blob.size(), column_bytes)));
+        continue;
+      }
+      std::vector<float> values(oblique_columns_->num_examples());
+      std::memcpy(values.data(), blob.data(), blob.size());
+      oblique_columns_->SetExternal(columns->features(i), std::move(values));
+      bytes_in += blob.size();
+      num_columns_in++;
+    }
+  }
+  RETURN_IF_ERROR(status);
+
+  const double seconds = absl::ToDoubleSeconds(absl::Now() - begin);
+  shipping_stats_.set_bytes_in(shipping_stats_.bytes_in() + bytes_in);
+  shipping_stats_.set_num_columns_in(shipping_stats_.num_columns_in() +
+                                     num_columns_in);
+  shipping_stats_.set_num_requests_out(shipping_stats_.num_requests_out() +
+                                       num_requests);
+  shipping_stats_.set_ship_seconds(shipping_stats_.ship_seconds() + seconds);
+  if (worker_logs_) {
+    LOG(INFO) << "Worker #" << WorkerIdx() << " shipped in " << num_columns_in
+              << " columns (" << bytes_in / 1e6 << " MB) from " << num_requests
+              << " workers in " << seconds << " s";
   }
   return absl::OkStatus();
 }
@@ -1436,6 +1700,27 @@ absl::Status DistributedGradientBoostedTreesWorker::StartTraining(
   answer->set_num_loaded_features(dataset_num_features_loaded_);
   answer->set_feature_loading_time_seconds(
       absl::ToDoubleSeconds(dataset_feature_duration_));
+
+  // Column shipping: materialize every owned numerical column now. Other
+  // workers' GetColumns requests can arrive at any time afterwards and read
+  // them concurrently, so the owned store must not be written during training.
+  if (ship_foreign_columns_ && oblique_columns_ != nullptr) {
+    std::vector<int> owned_numerical;
+    for (const int feature : dataset_->features()) {
+      if (welcome_.dataspec().columns(feature).type() ==
+          dataset::proto::ColumnType::NUMERICAL) {
+        owned_numerical.push_back(feature);
+      }
+    }
+    RETURN_IF_ERROR(
+        oblique_columns_->Prepare(owned_numerical, thread_pool_.get()));
+    if (worker_logs_) {
+      LOG(INFO) << "Column shipping: worker #" << WorkerIdx()
+                << " materialized " << owned_numerical.size()
+                << " owned numerical columns ("
+                << oblique_columns_->MemoryUsage() / 1e6 << " MB)";
+    }
+  }
   return absl::OkStatus();
 }
 
