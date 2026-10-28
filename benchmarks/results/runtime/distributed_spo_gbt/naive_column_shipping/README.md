@@ -35,7 +35,12 @@ layer has a few nodes), i.e. ≈ (W − 1) dataset copies per layer across the c
   worker).
 - One barrier CSV per cell (`DGBT_BARRIER_CSV`, columns appended: `ship_bytes_in,
   ship_bytes_out, ship_cols_in, ship_s_max, ship_s_sum, ship_cross_splits`) under
-  `ariel_notes/results/20261028_naive_colship/logs/`.
+  `ariel_notes/results/20261028_naive_colship/logs/`. `ship_bytes_in` is exact per row;
+  `ship_bytes_out` is what a worker served since its previous reply, so bytes served while
+  idle land on a later row (totals match: Σin = Σout).
+- Projection budget: both arms give worker w P_w = (its owned numerical count)^exponent; this
+  equals the disjoint arm's per-node basis only when every feature is a candidate (GBT
+  default, the paper setting), not under `num_candidate_attributes` sampling.
 - `mode=inproc`: workers are threads of one process (MULTI_THREAD): shipping is an in-memory
   proto copy. `mode=grpc`: W `grpc_worker_main` processes on 127.0.0.1 (loopback TCP:
   real serialization + sockets, no network latency/bandwidth limit). Neither is a Vertex AI

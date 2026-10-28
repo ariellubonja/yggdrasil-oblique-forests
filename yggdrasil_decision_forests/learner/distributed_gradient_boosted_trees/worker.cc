@@ -1306,7 +1306,11 @@ absl::Status DistributedGradientBoostedTreesWorker::ShipForeignColumns(
     if (owner_features.empty()) {
       continue;
     }
+    // Callers may list a column once per split that uses it: ship it once.
     std::sort(owner_features.begin(), owner_features.end());
+    owner_features.erase(
+        std::unique(owner_features.begin(), owner_features.end()),
+        owner_features.end());
     proto::WorkerRequest generic_other_request;
     *generic_other_request.mutable_get_columns()->mutable_features() = {
         owner_features.begin(), owner_features.end()};

@@ -85,9 +85,11 @@ message DistributedGradientBoostedTreesTrainingConfig {
     // (worker-to-worker GetColumns) at every layer and dropped afterwards, so
     // nothing is cached across layers or trees. The projection count per
     // worker still follows num_projections_from_local_features (basis = the
-    // worker's own numerical features), so the total projection budget equals
-    // the disjoint-column mode. The owner of a split's first attribute
-    // evaluates it and ships the attributes it lacks.
+    // worker's owned numerical features; equal to the disjoint-column basis
+    // when every feature is a candidate, i.e. no num_candidate_attributes
+    // sampling), so the total projection budget equals the disjoint-column
+    // mode. The owner of a split's first attribute evaluates it and ships the
+    // attributes it lacks.
     optional bool ship_foreign_columns = 2 [default = false];
   }
 
