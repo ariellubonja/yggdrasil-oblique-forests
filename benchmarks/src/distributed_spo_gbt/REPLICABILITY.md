@@ -148,6 +148,7 @@ whose hm16 ranges now include the `pfgrid` W = 1..4 cells (the Overleaf copy was
 hm4 column now reads the P = F n2-highmem-4 cells (`pfhm4*`) instead of the deleted sqrt(F) grids; pushed to Overleaf 2026-10-26.
 | `tables/table_dist_runtime_body.tex` | `make_paper_tables.py` (body header says in-process) | `results.csv` (trees == 50; `extra` tags `in_process_m7i`) + `anchors.csv` | C |
 | `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_{delta,mean}_body.tex` | `make_paper_tables.py` | `suite_results.csv` vs `speedup_map_by_dataset/suite_results.csv` | C |
+| `figures/evaluation/cc18_tree_feature_hist_body.tex` + `cc18_tree_feature_hist/*.dat` | `../cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out paper/distributed_spo_gbt_kdd27 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6` (byte-identical, 2026-10-28) | `results/misc/cc18_gbt_feature_study/nodes_all.tar.gz` + CC18 headers from `benchmarks/data/download_cc18_datasets.py` | CC18 study |
 | `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `in_node_parallelism_2026-10-22/` | C |
 | `figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf` | none (made interactively in a chat session) | `results.csv` + `anchors.csv` | C |
 | `figures/method/*.pdf`, `listings/in_worker_oblique` | hand-made (SVG sources in `benchmarks/results/figures/`) | - | - |
