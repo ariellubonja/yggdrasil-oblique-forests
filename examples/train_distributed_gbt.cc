@@ -73,7 +73,7 @@ ABSL_FLAG(int64_t, dataspec_scan_rows, 1000000,
 ABSL_FLAG(std::string, work_dir, "/tmp/ydf_dgbt_demo",
           "Working directory: dataset cache, checkpoints, model.");
 ABSL_FLAG(int, num_workers, 4, "Number of in-process workers.");
-ABSL_FLAG(int, num_trees, 20, "Number of boosted trees.");
+ABSL_FLAG(int, num_trees, 30, "Number of boosted trees.");
 ABSL_FLAG(bool, worker_logs, true, "Print the per-worker logs.");
 ABSL_FLAG(bool, force_pure_serving, false, "Unused; kept for symmetry.");
 ABSL_FLAG(bool, fresh_train, true,
