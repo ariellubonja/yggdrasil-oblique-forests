@@ -30,6 +30,10 @@ parser.add_argument("--num_trees", type=int, default=None)
 # SPO projections per worker per node = ceil(F ** exponent); unset = learner defaults (exponent 2, density 2).
 parser.add_argument("--sparse_oblique_num_projections_exponent", type=float, default=None)
 parser.add_argument("--sparse_oblique_projection_density_factor", type=float, default=None)
+# AA numerical columns: cache keeps columns with <= this many unique values as lossless bins,
+# the rest presorted (default 16000); 1 = everything presorted. force = approximate bins everywhere.
+parser.add_argument("--max_unique_values_for_discretized_numerical", type=int, default=None)
+parser.add_argument("--force_numerical_discretization", action="store_true")
 # JSON object copied verbatim into eval.json (e.g. rows / workers / experiment tags).
 parser.add_argument("--meta", default="{}", type=str)
 # Where to write the evaluation summary (JSON). Defaults to <model>_eval.json.
@@ -102,18 +106,84 @@ def learner_kwargs():
         kw[k] = getattr(args, k)
   if args.num_trees is not None:
     kw["num_trees"] = args.num_trees
+  if args.max_unique_values_for_discretized_numerical is not None:
+    kw["max_unique_values_for_discretized_numerical"] = args.max_unique_values_for_discretized_numerical
+  if args.force_numerical_discretization:
+    kw["force_numerical_discretization"] = True
   return kw
 
 
 BARRIER_CSV = "/tmp/barriers.csv"
 
 
-def gcs_upload(path, data, content_type):
-  from google.cloud import storage  # only the manager needs it
+def gcs_upload(path, data, content_type, quiet=False):
+  from google.cloud import storage
   assert path.startswith("gs://"), path
   bucket, blob = path[5:].split("/", 1)
   storage.Client().bucket(bucket).blob(blob).upload_from_string(data, content_type=content_type)
-  print("Wrote", path)
+  if not quiet:
+    print("Wrote", path)
+
+
+def eval_dir():
+  return (args.eval_json or args.model.rstrip("/") + "_eval.json").rsplit("/", 1)[0]
+
+
+def _proc_stat():
+  """(busy, total) jiffies for the node and per vCPU from /proc/stat (idle+iowait count as idle)."""
+  agg, per = None, []
+  for line in open("/proc/stat"):
+    if not line.startswith("cpu"):
+      break
+    f = line.split()
+    v = [int(x) for x in f[1:]]
+    busy_total = (sum(v) - v[3] - v[4], sum(v))
+    if f[0] == "cpu":
+      agg = busy_total
+    else:
+      per.append(busy_total)
+  return agg, per
+
+
+def host_info():
+  """CPU model / cache line of /proc/cpuinfo: N2 VMs land on Cascade Lake or Ice Lake hosts."""
+  info = {}
+  for line in open("/proc/cpuinfo"):
+    if ":" in line:
+      k, v = line.split(":", 1)
+      k = k.strip()
+      if k in ("model name", "cache size", "cpu MHz") and k not in info:
+        info[k] = v.strip()
+  info["nproc"] = os.cpu_count()
+  return info
+
+
+def start_cpu_sampler(role, period=2.0, upload_every=20.0):
+  """Daemon thread: node busy fraction + vCPUs >50 % busy per period -> <eval dir>/cpu_<role>.json."""
+  dest = f"{eval_dir()}/cpu_{role}.json"
+  samples = []
+  host = host_info()
+  print("host:", json.dumps(host))
+
+  def run():
+    t0 = time.time()
+    prev, last_up = _proc_stat(), t0
+    while True:
+      time.sleep(period)
+      cur = _proc_stat()
+      db, dt = cur[0][0] - prev[0][0], cur[0][1] - prev[0][1]
+      busy_cpus = sum(1 for (b1, t1), (b0, t0_) in zip(cur[1], prev[1]) if t1 > t0_ and (b1 - b0) / (t1 - t0_) > 0.5)
+      samples.append([round(time.time() - t0, 1), round(db / max(dt, 1), 3), busy_cpus])
+      prev = cur
+      if time.time() - last_up >= upload_every:
+        last_up = time.time()
+        try:
+          gcs_upload(dest, json.dumps({"role": role, "ncpu": len(cur[1]), "period_s": period, "host": host, "samples": samples}),
+                     "application/json", quiet=True)
+        except Exception as e:  # noqa: BLE001  sampling must never kill training
+          print("cpu sampler upload failed:", type(e).__name__)
+
+  threading.Thread(target=run, daemon=True).start()
 
 
 def train(learner):
@@ -172,8 +242,10 @@ def main_distributed():
 
   if cluster_config.is_worker:
     # This machine is running a worker.
+    start_cpu_sampler("worker%d" % json.loads(os.environ.get("CLUSTER_SPEC", "{}")).get("task", {}).get("index", 0))
     ydf.start_worker(cluster_config.port)
     return
+  start_cpu_sampler("manager")
 
   # Manager-side barrier recorder (one CSV row per request round), uploaded next to eval.json.
   os.environ["DGBT_BARRIER_CSV"] = BARRIER_CSV

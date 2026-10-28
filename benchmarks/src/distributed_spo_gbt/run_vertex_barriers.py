@@ -53,6 +53,7 @@ ap.add_argument("--trees", type=int, default=50)
 ap.add_argument("--p_total", type=int, default=None, help="total SPO projections per node over all workers; default ceil(sqrt(cols))")
 ap.add_argument("--image", default=None, help="training image; default <AR>/train-ydf:<commit8>-<build hash> like the notebooks")
 ap.add_argument("--run_id", default="", help="reuse a run id: finished cells are skipped, active jobs adopted")
+ap.add_argument("--extra_args", default="", help="extra train.py args appended to every cell, e.g. '--max_unique_values_for_discretized_numerical=1'")
 ap.add_argument("--dry_run", action="store_true")
 args = ap.parse_args()
 
@@ -117,7 +118,8 @@ def make_job(arm, w):
     tag, out = tag_of(arm, w), f"{RUN_DIR}/{tag_of(arm, w)}"
     meta = {"dataset": args.dataset, "rows": ds["rows"], "cols": ds["cols"], "workers": w, "arm": arm, "machine_type": args.machine,
             "manager_machine_type": MGR_MACHINE, "tag": tag, "trees": args.trees, "image": IMAGE,
-            "projections_per_worker": P_TOTAL // w if arm == "spo" else None, "p_total": P_TOTAL if arm == "spo" else None}
+            "projections_per_worker": P_TOTAL // w if arm == "spo" else None, "p_total": P_TOTAL if arm == "spo" else None,
+            "extra_args": args.extra_args}
     # fresh cache per cell (never resume a stale one), under work/ so the bucket lifecycle rule deletes it after 2 days
     work_dir = f"gs://{BUCKET}/work/{RUN_ID}_{args.dataset}/{tag}_{datetime.datetime.now(datetime.timezone.utc).strftime('%H%M%S')}"
     a = [f"--train_ds={ds['train']}", f"--test_ds={ds['test']}", f"--model={out}/model", f"--work_dir={work_dir}",
@@ -125,6 +127,7 @@ def make_job(arm, w):
          f"--num_trees={args.trees}", f"--meta={json.dumps(meta)}"]
     if arm == "spo":
         a += [f"--sparse_oblique_num_projections_exponent={spo_exponent(w):.6f}", f"--sparse_oblique_projection_density_factor={SPO_DENSITY}"]
+    a += args.extra_args.split()
     pool = lambda n, m: {"machine_spec": {"machine_type": m}, "replica_count": n, "container_spec": {"image_uri": IMAGE, "args": a}}
     return aiplatform.CustomJob(display_name=f"bar-{args.dataset}-{tag}-{RUN_ID}", worker_pool_specs=[pool(1, MGR_MACHINE), pool(w, args.machine)])
 
@@ -145,6 +148,8 @@ def collect(arm, w):
     for f in ("eval.json", "manager.log", "barriers.csv"):
         if fs.exists(f"{cell_gcs}/{f}"):
             fs.get(f"{cell_gcs}/{f}", os.path.join(local, f))
+    for g in fs.glob(f"{cell_gcs}/cpu_*.json"):  # per-node CPU utilisation series written by train.py
+        fs.get(g, os.path.join(local, os.path.basename(g)))
     if os.path.exists(os.path.join(local, "barriers.csv")):
         with open(os.path.join(local, "summary.txt"), "w") as out:
             subprocess.run([sys.executable, os.path.join(HERE, "summarize_barriers.py"), os.path.join(local, "barriers.csv")], stdout=out, stderr=subprocess.STDOUT)

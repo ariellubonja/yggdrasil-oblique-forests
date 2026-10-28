@@ -139,6 +139,7 @@ Generators emit the tabular body only; `main.tex` owns the environments and capt
 | Input in `main.tex` | Generator | Data | Family |
 |---|---|---|---|
 | `tables/table_vertex_hm4_hm16_pf_body.tex` | `make_pf_grid_table.py --run_prefix pfhm4_20261025 --machine n2-highmem-4 --w 1,2,4,8,16 --oom_logs 'barriers/vertex/p_F/pfhm4_20261025_youtube8m/launcher.log' --right_run_prefix pfgrid20261025 --right_machine n2-highmem-16 --right_w 1,2,4` | `barriers/vertex/p_F/pfhm4_20261025*`, `pfgrid20261025*` | A |
+| `figures/evaluation/vertex_pf/fig_vertex_{hm4,hm16}_pf_body.tex` + `{hm4,hm16}.dat` | `make_pf_grid_fig.py` (writes in place; same cells/selection as the grid table, imports its `grid()`) | same as the grid table | A |
 | `figures/evaluation/grcp_n2/fig_yt8m_barriers_{totals,layers}_body.tex` + `yt8m_barriers/*.dat` | `make_barrier_figs.py` (writes in place) | `barriers/vertex/p_F/pfhm4bar20261025_youtube8m/{aa,spo}_w16/barriers.csv` | A |
 | `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` | `make_pf_ablation_tables.py` (writes in place) | ablation: `p_F/pfw1*`; setup cost: every n2-highmem-4 and n2-highmem-16 cell in `p_F` | A |
 
