@@ -19,7 +19,8 @@ PROJECT, REGION, BUCKET = "ydf-distributed-spo-gbt", "us-east1", "ariel_ydf_buck
 FIELDS = ["dataset", "seed", "replication", "workers", "threads", "trees", "max_depth", "rc",
           "test_acc", "test_auc", "test_logloss", "num_conditions", "num_oblique", "num_multi_col",
           "held_cols", "train_s", "wall_s", "cache_build_s", "workers_ready_s",
-          "checkpoints_s", "tree_training_s", "git", "log"]
+          "checkpoints_s", "tree_training_s", "ship_bytes_in", "ship_bytes_out", "ship_cols_in",
+          "ship_s_max", "ship_s_sum", "cross_worker_splits", "local_projection_count", "git", "log"]
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--image", required=True)
@@ -104,9 +105,13 @@ def job_state(job):
     return "JOB_STATE_FAILED"
 
 
+LAST = args.levels.split(",")[-1]
+LAST_TAG = "ship" if LAST == "ship" else f"r{float(LAST):.2f}"
+
+
 def seed_done(seed):
     return not fs.exists(f"{RUN_DIR[5:]}/s{seed}/FAILED.json") and bool(
-        fs.glob(f"{RUN_DIR[5:]}/s{seed}/*/r1.00/eval.json"))
+        fs.glob(f"{RUN_DIR[5:]}/s{seed}/*/{LAST_TAG}/eval.json"))
 
 
 pending, running, attempts, failed_seeds = list(SEEDS), {}, {s: 0 for s in SEEDS}, []
@@ -151,7 +156,7 @@ while pending or running:
 
 os.makedirs(args.out_root, exist_ok=True)
 rows = []
-for p in sorted(fs.glob(f"{RUN_DIR[5:]}/s*/*/r*/eval.json")):
+for p in sorted(fs.glob(f"{RUN_DIR[5:]}/s*/*/*/eval.json")):
     e = json.loads(fs.cat(p))
     rows.append({k: e.get(k, "") for k in FIELDS} | {
         "rc": 0, "threads": e.get("threads", VCPUS), "git": args.git,

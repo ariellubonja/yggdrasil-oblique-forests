@@ -133,6 +133,18 @@ class DistributedGradientBoostedTreesWorker
                            proto::WorkerResult::ShareSplits* answer,
                            proto::WorkerResult* generic_answer);
 
+  // Serves dense copies of owned numerical columns to another worker
+  // (in_worker_oblique.ship_foreign_columns). Runs concurrently with the
+  // manager-driven requests and only reads the owned columns.
+  absl::Status GetColumns(const proto::WorkerRequest::GetColumns& request,
+                          proto::WorkerResult::GetColumns* answer);
+
+  // Fetches from their owners the numerical columns of "features" that this
+  // worker neither owns nor already holds, and stores them as external columns
+  // of oblique_columns_. Blocks until every answer arrived. Accumulates
+  // shipping_stats_.
+  absl::Status ShipForeignColumns(const std::vector<int>& features);
+
   absl::Status GetSplitValue(const proto::WorkerRequest::GetSplitValue& request,
                              proto::WorkerResult::GetSplitValue* answer);
 
@@ -328,6 +340,20 @@ class DistributedGradientBoostedTreesWorker
   // Numerical input features in the whole dataset: the default basis of the
   // per-worker projection count (sqrt(F) with the 0.5 exponent).
   int num_global_numerical_features_ = 0;
+
+  // Column shipping (in_worker_oblique.ship_foreign_columns): projections are
+  // sampled from global_numerical_features_ and the columns this worker does
+  // not own are fetched from feature_owner_[feature] at every layer.
+  bool ship_foreign_columns_ = false;
+  std::vector<int> global_numerical_features_;  // Ascending.
+  int num_owned_numerical_features_ = 0;
+  std::vector<int> feature_owner_;  // Column -> training worker, -1 if none.
+  // Served to other workers since the last FindSplits/EvaluateSplits reply.
+  // Written by the GetColumns thread, read by the request thread.
+  std::atomic<int64_t> shipped_bytes_out_{0};
+  std::atomic<int32_t> shipped_requests_served_{0};
+  // Shipping done by the request in progress (request thread only).
+  proto::WorkerResult::ColumnShipping shipping_stats_;
 };
 
 // Extract the requested features in a FindSplits request.

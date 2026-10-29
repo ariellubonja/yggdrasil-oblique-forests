@@ -32,7 +32,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--data", required=True, help="gs:// root with <dataset>/{train,test}.csv")
 parser.add_argument("--out", required=True, help="gs:// run dir; cells at <out>/<dataset>/r<RR>/")
 parser.add_argument("--seed", type=int, required=True)
-parser.add_argument("--levels", default="0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1")
+parser.add_argument("--levels", default="0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1",
+                    help="replication levels; 'ship' = naive column shipping (r=0, foreign "
+                         "columns fetched per layer), cell dir ship/")
+parser.add_argument("--local_projection_count", action="store_true",
+                    help="num_projections_from_local_features=true: P per worker from its own "
+                         "column count (total P = F with exponent 1)")
 parser.add_argument("--datasets", default="", help="comma filter; empty = all under --data")
 parser.add_argument("--num_trees", type=int, default=10)
 parser.add_argument("--max_depth", type=int, default=6)
@@ -128,6 +133,10 @@ def phase_summary(tee):
 
 
 _DS_CACHE = {}
+
+
+def level_tag(level):
+  return "ship" if level == "ship" else f"r{level:.2f}"
 
 
 def dataset_ctx(fs, dataset):
@@ -228,8 +237,11 @@ def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
   # learner and only the GBT extension is copied back); the extra config merges after it.
   tc.random_seed = args.seed
   ext = tc.Extensions[dgbt_pb2.distributed_gradient_boosted_trees_config]
-  ext.in_worker_oblique.column_replication = level
-  ext.in_worker_oblique.num_projections_from_local_features = False
+  if level == "ship":
+    ext.in_worker_oblique.ship_foreign_columns = True
+  else:
+    ext.in_worker_oblique.column_replication = level
+  ext.in_worker_oblique.num_projections_from_local_features = args.local_projection_count
   if no_checkpoints:
     ext.create_checkpoints = False
   if reuse_reader:
@@ -270,7 +282,7 @@ def _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc
   train = f"csv:{args.data}/{dataset}/train.csv"
   barrier_path = None
   if args.barrier_csv:
-    barrier_path = f"/tmp/barriers_{dataset}_{level:.2f}.csv"
+    barrier_path = f"/tmp/barriers_{dataset}_{level_tag(level)}.csv"
     os.environ["DGBT_BARRIER_CSV"] = barrier_path
 
   learner = ydf.DistributedGradientBoostedTreesLearner(
@@ -300,6 +312,11 @@ def _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc
     ev = model.evaluate(f"csv:{loc}/test.csv", use_slow_engine=True)
   except TypeError:
     ev = model.evaluate(f"csv:{loc}/test.csv")
+  ship = re.findall(r"column-shipping:\{bytes-in:(\d+) bytes-out:(\d+) cols-in:(\d+) "
+                    r"ship-s-max:([0-9.e+-]+) ship-s-sum:([0-9.e+-]+) cross-worker-splits:(\d+)\}",
+                    tee.text())
+  ship = dict(zip(["ship_bytes_in", "ship_bytes_out", "ship_cols_in", "ship_s_max", "ship_s_sum",
+                   "cross_worker_splits"], map(float, ship[-1]))) if ship else {}
   held = ";".join(f"{o}+{r}" for o, r in
                   re.findall(r"worker \d+: (\d+) owned \+ (\d+) replicated", tee.text()))
   summary = {
@@ -309,7 +326,8 @@ def _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc
       "test_auc": ev.characteristics[0].roc_auc if ev.characteristics else None,
       "num_trees_trained": model.num_trees(), "held_cols": held, "train_s": train_s,
       "wall_s": round(time.time() - t0, 2), "ydf_version": ydf.__version__,
-      "variant": variant,
+      "variant": variant, "local_projection_count": args.local_projection_count,
+      **ship,
       "knobs": {"cache_root": args.cache_root, "no_checkpoints": no_checkpoints,
                 "reuse_reader": reuse_reader, "built_cache": building,
                 "cache_lock_wait_s": lock_wait_s},
@@ -320,7 +338,7 @@ def _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc
   fs.pipe(f"{out_cell}/manager.log"[5:], tee.text().encode())
   if barrier_path and os.path.exists(barrier_path):
     fs.put(barrier_path, f"{out_cell}/barriers.csv"[5:])
-  print(f"CELL_DONE {dataset} r={level:.2f} {variant} acc={ev.accuracy:.4f} {train_s}s "
+  print(f"CELL_DONE {dataset} {level_tag(level)} {variant} acc={ev.accuracy:.4f} {train_s}s "
         f"cache={summary['cache_build_s']} ready={summary['workers_ready_s']} "
         f"ckpt={summary['checkpoints_s']} trees={summary.get('tree_training_s')}", flush=True)
 
@@ -344,7 +362,7 @@ def main():
                     if fs.exists(p.rstrip("/") + "/train.csv"))
   if only:
     datasets = [d for d in datasets if any(o in d for o in only)]
-  levels = [float(x) for x in args.levels.split(",")]
+  levels = [x if x == "ship" else float(x) for x in args.levels.split(",")]
   variants = [v for v in args.variants.split(",") if v] or [""]
   cells = [(d, r, v, k) for d in datasets for r in levels for v in variants
            for k in range(args.repeat)]
@@ -352,7 +370,7 @@ def main():
         f"{len(variants)} variant(s) x {args.repeat} repeat(s), seed {args.seed}", flush=True)
 
   def cell_dir(d, r, v, k):
-    return f"{args.out}/{d}/r{r:.2f}" + (f"_{v}" if v else "") + (f"_rep{k}" if k else "")
+    return f"{args.out}/{d}/{level_tag(r)}" + (f"_{v}" if v else "") + (f"_rep{k}" if k else "")
 
   failed = {}
   for attempt in range(3):
@@ -375,11 +393,11 @@ def main():
       except Exception as e:  # noqa: BLE001  keep sweeping; retried next pass
         traceback.print_exc()
         failed[(d, r, v, k)] = f"{type(e).__name__}: {e}"
-        print(f"CELL_FAIL {d} r={r:.2f} {v} ({i}/{len(todo)})", flush=True)
+        print(f"CELL_FAIL {d} {level_tag(r)} {v} ({i}/{len(todo)})", flush=True)
         time.sleep(5)
   if failed:
     fs.pipe(f"{args.out}/FAILED.json"[5:],
-            json.dumps({f"{d}|r{r:.2f}|{v}|{k}": m for (d, r, v, k), m in failed.items()},
+            json.dumps({f"{d}|{level_tag(r)}|{v}|{k}": m for (d, r, v, k), m in failed.items()},
                        indent=2).encode())
     print(f"DONE_WITH_FAILURES {len(failed)}", flush=True)
     sys.exit(1)

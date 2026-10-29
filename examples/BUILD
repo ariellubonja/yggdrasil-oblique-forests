@@ -159,6 +159,7 @@ cc_binary(
         "//yggdrasil_decision_forests/utils:random",
         "//yggdrasil_decision_forests/utils/distribute:all_workers",
         "//yggdrasil_decision_forests/utils/distribute/implementations/multi_thread",
+        "//yggdrasil_decision_forests/utils/distribute/implementations/grpc:grpc_manager",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",

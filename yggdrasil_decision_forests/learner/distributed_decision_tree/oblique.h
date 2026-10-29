@@ -24,6 +24,11 @@
 // the bitmap sharing are unchanged: no extra communication versus the
 // axis-aligned protocol. Projections never cross workers.
 //
+// Naive baseline (in_worker_oblique.ship_foreign_columns, worker.cc): the
+// worker samples from ALL numerical features and fetches the columns it does
+// not own from their owners at every layer. Those shipped columns enter
+// DenseNumericalColumns as "external" columns; the kernel below is unchanged.
+//
 #ifndef YGGDRASIL_DECISION_FORESTS_LEARNER_DISTRIBUTED_DECISION_TREE_OBLIQUE_H_
 #define YGGDRASIL_DECISION_FORESTS_LEARNER_DISTRIBUTED_DECISION_TREE_OBLIQUE_H_
 
@@ -39,6 +44,7 @@
 #include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
 #include "yggdrasil_decision_forests/learner/abstract_learner.pb.h"
 #include "yggdrasil_decision_forests/learner/decision_tree/decision_tree.pb.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/oblique_types.h"
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache/dataset_cache_reader.h"
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/label_accessor.h"
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/splitter.h"
@@ -52,27 +58,56 @@ namespace distributed_decision_tree {
 // In-order fp32 copies of the numerical columns a worker owns. The dataset
 // cache keeps numerical columns pre-sorted or discretized; the projection
 // kernel needs plain col[row] gathers, so columns are materialized once here.
+//
+// "External" columns are copies received from other workers (column
+// shipping). They live next to the owned ones but in their own map, so the
+// owned map can be read concurrently by the thread serving GetColumns while
+// the request thread swaps external columns in and out. Thread safety rests on
+// the owned map being fully materialized before any shipping starts (the
+// worker does so in StartTraining) and never written afterwards.
 class DenseNumericalColumns {
  public:
   explicit DenseNumericalColumns(
       const dataset_cache::DatasetCacheReader* dataset)
       : dataset_(dataset) {}
 
-  // Materializes the columns of "features" that are not loaded yet.
+  // Materializes the owned columns of "features" that are not loaded yet.
+  // Features already present as external columns are skipped.
   absl::Status Prepare(absl::Span<const int> features,
                        utils::concurrency::ThreadPool* thread_pool);
 
-  // Values of "feature" ordered by example index. nullptr if not prepared.
+  // Values of "feature" ordered by example index (owned, then external).
+  // nullptr if not present.
   const float* data(int feature) const;
 
-  bool has(int feature) const { return columns_.contains(feature); }
-  void Clear() { columns_.clear(); }
+  // Same, owned columns only. Safe to call from another thread while
+  // external columns are being modified.
+  const float* owned_data(int feature) const {
+    const auto it = columns_.find(feature);
+    return it == columns_.end() ? nullptr : it->second->data();
+  }
+
+  // Stores a column received from another worker. "values" holds one value
+  // per example in example order.
+  void SetExternal(int feature, std::vector<float> values);
+  void ClearExternal() { external_.clear(); }
+  size_t num_external() const { return external_.size(); }
+  bool is_external(int feature) const { return external_.contains(feature); }
+
+  bool has(int feature) const {
+    return columns_.contains(feature) || external_.contains(feature);
+  }
+  void Clear() {
+    columns_.clear();
+    external_.clear();
+  }
   size_t num_examples() const { return dataset_->num_examples(); }
   size_t MemoryUsage() const;
 
  private:
   const dataset_cache::DatasetCacheReader* dataset_;
   absl::flat_hash_map<int, std::unique_ptr<std::vector<float>>> columns_;
+  absl::flat_hash_map<int, std::unique_ptr<std::vector<float>>> external_;
 };
 
 // Reads one numerical column of the cache in example order. Discretized
@@ -99,7 +134,20 @@ struct ObliqueSplitArgs {
   int num_features_for_projection_count;
   // Base seed. Each node derives an independent random stream from it.
   uint64_t seed;
+  // Optional: the projections of every open node, as SampleNodeProjections
+  // returns them (one entry per open node, inactive nodes may be empty). When
+  // set, the finder scores these instead of sampling; the result is the same
+  // since sampling is deterministic in (seed, node). Lets a caller learn which
+  // columns a layer needs before scoring (column shipping).
+  const std::vector<std::vector<decision_tree::internal::Projection>>*
+      presampled_projections = nullptr;
 };
+
+// Samples the projections of one open node, in order, from the node's own
+// random stream (derived from args.seed and the node index). Returns an empty
+// vector for a node without numerical candidates.
+std::vector<decision_tree::internal::Projection> SampleNodeProjections(
+    const ObliqueSplitArgs& args, int node_idx);
 
 // For each open node, samples projections from the node's local numerical
 // features, scores them like the axis-aligned distributed splitter and keeps
@@ -109,10 +157,10 @@ absl::Status FindBestObliqueSplits(const ObliqueSplitArgs& args,
                                    utils::concurrency::ThreadPool* thread_pool,
                                    SplitPerOpenNode* best_splits);
 
-// Writes the evaluation bitmaps of the oblique splits whose attributes are all
-// held by this worker (always the proposer; with column replication also any
-// worker holding copies of every attribute). Non-oblique splits and splits
-// with a missing attribute are left untouched.
+// Writes the evaluation bitmaps of the oblique splits whose first attribute
+// this worker holds and whose other attributes it holds or received as
+// external (shipped) columns. With column replication that is any worker
+// holding copies of every attribute. Other splits are left untouched.
 absl::Status EvaluateObliqueSplits(
     const ExampleToNodeMap& example_to_node, const SplitPerOpenNode& splits,
     const dataset_cache::DatasetCacheReader& dataset,

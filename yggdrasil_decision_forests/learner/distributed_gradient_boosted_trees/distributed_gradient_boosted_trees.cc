@@ -508,6 +508,12 @@ TrainWithCache(
         "in_worker_oblique.column_replication must be in [0,1], got ",
         spe_config.in_worker_oblique().column_replication()));
   }
+  if (spe_config.in_worker_oblique().ship_foreign_columns() &&
+      spe_config.in_worker_oblique().column_replication() > 0) {
+    return absl::InvalidArgumentError(
+        "in_worker_oblique: ship_foreign_columns and column_replication > 0 "
+        "are separate baselines and cannot be combined.");
+  }
   if (spe_config.gbt().decision_tree().has_sparse_oblique_split() &&
       spe_config.in_worker_oblique().column_replication() > 0) {
     RETURN_IF_ERROR(SetColumnReplicas(
@@ -833,8 +839,9 @@ absl::Status RunIteration(
     // Request for the workers to share the evaluation results,
     // update the tree structures, example->node mapping and label
     // statistics
-    RETURN_IF_ERROR(EmitShareSplits(splits_per_weak_models, distribute_manager,
-                                    monitoring, load_balancer));
+    RETURN_IF_ERROR(EmitShareSplits(
+        splits_per_weak_models, distribute_manager, monitoring, load_balancer,
+        spe_config.in_worker_oblique().ship_foreign_columns()));
   }
 
   monitoring->SetLayer(-1);
@@ -1288,6 +1295,13 @@ EmitFindSplits(
     monitoring->WorkerReply(generic_result.worker_idx(),
                             generic_result.runtime_seconds(),
                             generic_result.ByteSizeLong());
+    if (generic_result.has_column_shipping()) {
+      const auto& shipping = generic_result.column_shipping();
+      monitoring->WorkerShipping(shipping.bytes_in(), shipping.bytes_out(),
+                                 shipping.num_columns_in(),
+                                 shipping.ship_seconds(),
+                                 shipping.num_cross_worker_splits());
+    }
     if (generic_result.request_restart_iter()) {
       RETURN_IF_ERROR(
           SkipAsyncAnswers(num_requests - reply_idx - 1, distribute));
@@ -1383,6 +1397,13 @@ absl::Status EmitEvaluateSplits(
     monitoring->WorkerReply(generic_result.worker_idx(),
                             generic_result.runtime_seconds(),
                             generic_result.ByteSizeLong());
+    if (generic_result.has_column_shipping()) {
+      const auto& shipping = generic_result.column_shipping();
+      monitoring->WorkerShipping(shipping.bytes_in(), shipping.bytes_out(),
+                                 shipping.num_columns_in(),
+                                 shipping.ship_seconds(),
+                                 shipping.num_cross_worker_splits());
+    }
     if (generic_result.request_restart_iter()) {
       RETURN_IF_ERROR(SkipAsyncAnswers(
           load_balancer->NumWorkers() - reply_idx - 1, distribute));
@@ -1401,11 +1422,13 @@ absl::Status EmitShareSplits(
     const std::vector<distributed_decision_tree::SplitPerOpenNode>&
         splits_per_weak_models,
     distribute::AbstractManager* distribute, internal::Monitoring* monitoring,
-    distributed_decision_tree::LoadBalancer* load_balancer) {
+    distributed_decision_tree::LoadBalancer* load_balancer,
+    const bool ship_foreign_columns) {
   monitoring->BeginStage(internal::Monitoring::kShareSplits);
 
   ASSIGN_OR_RETURN(const auto active_features,
-                   ActiveFeatures(splits_per_weak_models, *load_balancer));
+                   ActiveFeatures(splits_per_weak_models, *load_balancer,
+                                  ship_foreign_columns));
 
   std::vector<int> active_feature_idxs;
   std::vector<int> src_workers;
@@ -1903,7 +1926,8 @@ absl::Status ExactSampledFeaturesForWorker(
 
 absl::StatusOr<int> ObliqueSplitEvaluator(
     const decision_tree::proto::Condition::Oblique& oblique,
-    const distributed_decision_tree::LoadBalancer& load_balancer) {
+    const distributed_decision_tree::LoadBalancer& load_balancer,
+    const bool ship_foreign_columns) {
   if (oblique.attributes_size() == 0) {
     return absl::InternalError("Oblique condition without attributes");
   }
@@ -1919,6 +1943,9 @@ absl::StatusOr<int> ObliqueSplitEvaluator(
       }
     }
     candidates = std::move(kept);
+  }
+  if (candidates.empty() && ship_foreign_columns) {
+    return load_balancer.FeatureOwner(oblique.attributes(0));
   }
   if (candidates.empty()) {
     return absl::InternalError(
@@ -1936,7 +1963,8 @@ absl::StatusOr<int> ObliqueSplitEvaluator(
 absl::StatusOr<ActiveFeaturesMap> ActiveFeatures(
     const std::vector<distributed_decision_tree::SplitPerOpenNode>&
         splits_per_weak_models,
-    const distributed_decision_tree::LoadBalancer& load_balancer) {
+    const distributed_decision_tree::LoadBalancer& load_balancer,
+    const bool ship_foreign_columns) {
   ActiveFeaturesMap active_features;
   for (int weak_model_idx = 0; weak_model_idx < splits_per_weak_models.size();
        weak_model_idx++) {
@@ -1955,7 +1983,7 @@ absl::StatusOr<ActiveFeaturesMap> ActiveFeatures(
         ASSIGN_OR_RETURN(
             src_worker,
             ObliqueSplitEvaluator(split.condition.condition().oblique_condition(),
-                                  load_balancer));
+                                  load_balancer, ship_foreign_columns));
         key = -1 - src_worker;
       } else {
         key = split.condition.attribute();
@@ -2131,6 +2159,7 @@ void Monitoring::DispatchDone(int num_requests, size_t bytes_out) {
   bytes_out_ = bytes_out;
   bytes_in_ = 0;
   reply_runtimes_.clear();
+  round_shipping_ = ShippingStats();
   pending_barrier_ = true;
   round_++;
 }
@@ -2144,6 +2173,24 @@ void Monitoring::WorkerReply(int worker_idx, double runtime_seconds,
   last_reply_ = now;
   bytes_in_ += bytes_in;
   reply_runtimes_.push_back({worker_idx, runtime_seconds});
+}
+
+void Monitoring::WorkerShipping(const int64_t bytes_in, const int64_t bytes_out,
+                                const int num_columns_in,
+                                const double ship_seconds,
+                                const int num_cross_worker_splits) {
+  for (auto* stats : {&round_shipping_, &total_shipping_}) {
+    stats->bytes_in += bytes_in;
+    stats->bytes_out += bytes_out;
+    stats->num_columns_in += num_columns_in;
+    stats->ship_seconds_sum += ship_seconds;
+    stats->num_cross_worker_splits += num_cross_worker_splits;
+  }
+  if (ship_seconds > round_shipping_.ship_seconds_max) {
+    // Running max of the round; the round total is added in FlushBarrier.
+    total_ship_seconds_max_ += ship_seconds - round_shipping_.ship_seconds_max;
+    round_shipping_.ship_seconds_max = ship_seconds;
+  }
 }
 
 void Monitoring::FlushBarrier(absl::Time now) {
@@ -2162,7 +2209,9 @@ void Monitoring::FlushBarrier(absl::Time now) {
             << "iter,layer,stage,round,t_begin_s,barrier_s,tail_s,"
                "manager_serial_s,fanout_s,worker_max_s,worker_med_s,"
                "worker_min_s,worker_sum_s,idle_s,comm_residual_s,"
-               "first_reply_s,num_replies,slowest_worker,bytes_out,bytes_in\n";
+               "first_reply_s,num_replies,slowest_worker,bytes_out,bytes_in,"
+               "ship_bytes_in,ship_bytes_out,ship_cols_in,ship_s_max,"
+               "ship_s_sum,ship_cross_splits\n";
       }
     }
   }
@@ -2206,7 +2255,12 @@ void Monitoring::FlushBarrier(absl::Time now) {
                 << w_max << ',' << w_med << ',' << w_min << ',' << w_sum << ','
                 << idle << ',' << residual << ',' << first_reply << ',' << n
                 << ',' << slowest << ',' << bytes_out_ << ',' << bytes_in_
-                << '\n';
+                << ',' << round_shipping_.bytes_in << ','
+                << round_shipping_.bytes_out << ','
+                << round_shipping_.num_columns_in << ','
+                << round_shipping_.ship_seconds_max << ','
+                << round_shipping_.ship_seconds_sum << ','
+                << round_shipping_.num_cross_worker_splits << '\n';
   barrier_csv_->flush();
   pending_barrier_ = false;
 }
@@ -2263,6 +2317,20 @@ std::string Monitoring::InlineLogs() {
                             FormatDuration(last_max_split_reply_time_));
   absl::SubstituteAndAppend(&logs, " last-{slowest,fastest}-worker:$0 $1",
                             last_slowest_worker_idx_, last_fastest_worker_idx_);
+
+  if (total_shipping_.num_columns_in > 0 || total_shipping_.bytes_out > 0) {
+    // Worker-to-worker column shipping, summed over the training so far.
+    // ship-s-max sums the slowest worker of every round: the time the
+    // training spent blocked on shipping, worker-clock.
+    absl::SubstituteAndAppend(
+        &logs,
+        " column-shipping:{bytes-in:$0 bytes-out:$1 cols-in:$2 ship-s-max:$3 "
+        "ship-s-sum:$4 cross-worker-splits:$5}",
+        total_shipping_.bytes_in, total_shipping_.bytes_out,
+        total_shipping_.num_columns_in, total_ship_seconds_max_,
+        total_shipping_.ship_seconds_sum,
+        total_shipping_.num_cross_worker_splits);
+  }
 
   if (count_reply_times_ > 0) {
     absl::SubstituteAndAppend(
