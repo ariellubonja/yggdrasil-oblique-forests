@@ -28,7 +28,8 @@ def load(run):
     parts = cell.split("_")
     e["_variant"] = next((x for x in parts[1:] if not x.startswith("rep")), "")
     e["_rep"] = next((int(x[3:]) for x in parts[1:] if x.startswith("rep")), 0)
-    e["_run"] = run.rstrip("/").rsplit("/", 1)[-1]
+    parts_run = [x for x in run.rstrip("/").split("/") if x and x != "cells"]
+    e["_run"] = parts_run[-1].replace("speed_", "")
     rows.append(e)
   return rows
 
