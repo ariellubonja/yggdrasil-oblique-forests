@@ -66,9 +66,33 @@ class LogTee:
     return "".join(self.lines)
 
 
+_DS_CACHE = {}
+
+
+def dataset_ctx(fs, dataset):
+  """Local CSV copies + dataspec, computed once per dataset (the cells differ only in r)."""
+  if dataset not in _DS_CACHE:
+    loc = f"/tmp/{dataset}"
+    os.makedirs(loc, exist_ok=True)
+    for f in ("train.csv", "test.csv"):
+      fs.get(f"{args.data[5:]}/{dataset}/{f}", f"{loc}/{f}")
+    header = open(f"{loc}/train.csv").readline().strip().split(",")
+    feats = [(c, ydf.Semantic.NUMERICAL) for c in header if c != args.label]
+    spec = None
+    try:
+      spec = ydf.create_vertical_dataset(
+          f"csv:{loc}/train.csv",
+          columns=feats + [(args.label, ydf.Semantic.CATEGORICAL)]).data_spec()
+    except Exception:  # noqa: BLE001  fall back to the learner's own GCS scan
+      traceback.print_exc()
+    _DS_CACHE.clear()  # keep one dataset resident
+    _DS_CACHE[dataset] = (feats, spec, loc)
+  return _DS_CACHE[dataset]
+
+
 def run_cell(fs, cluster, dataset, level, out_cell):
   train = f"csv:{args.data}/{dataset}/train.csv"
-  test = f"csv:{args.data}/{dataset}/test.csv"
+  feats, spec, loc = dataset_ctx(fs, dataset)
   # Stable work dir + resume_training=True: dataset_cache/ is built once per dataset and
   # reused across levels. checkpoint/ must go, or the next level resumes this level's trees.
   work_dir = f"{args.out.replace('/runs/', '/work/')}/{dataset}"
@@ -76,9 +100,6 @@ def run_cell(fs, cluster, dataset, level, out_cell):
     fs.rm(f"{work_dir}/checkpoint"[5:], recursive=True)
   except FileNotFoundError:
     pass
-  with fs.open(f"{args.data[5:]}/{dataset}/train.csv".replace("gs://", ""), "r") as f:
-    header = f.readline().strip().split(",")
-  feats = [(c, ydf.Semantic.NUMERICAL) for c in header if c != args.label]
 
   tc = abstract_learner_pb2.TrainingConfig()
   ext = tc.Extensions[dgbt_pb2.distributed_gradient_boosted_trees_config]
@@ -88,6 +109,7 @@ def run_cell(fs, cluster, dataset, level, out_cell):
   learner = ydf.DistributedGradientBoostedTreesLearner(
       label=args.label,
       features=feats,
+      data_spec=spec,
       split_axis="SPARSE_OBLIQUE",
       sparse_oblique_weights="BINARY",
       sparse_oblique_num_projections_exponent=1.0,
@@ -108,9 +130,9 @@ def run_cell(fs, cluster, dataset, level, out_cell):
     model = learner.train(train)
   train_s = round(time.time() - t0, 2)
   try:
-    ev = model.evaluate(test, use_slow_engine=True)
+    ev = model.evaluate(f"csv:{loc}/test.csv", use_slow_engine=True)
   except TypeError:
-    ev = model.evaluate(test)
+    ev = model.evaluate(f"csv:{loc}/test.csv")
   held = ";".join(f"{o}+{r}" for o, r in
                   re.findall(r"worker \d+: (\d+) owned \+ (\d+) replicated", tee.text()))
   summary = {
