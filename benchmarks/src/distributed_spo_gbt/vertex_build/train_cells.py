@@ -43,6 +43,9 @@ parser.add_argument("--cache_root", default="",
 parser.add_argument("--no_checkpoints", action="store_true")
 parser.add_argument("--reuse_reader", action="store_true")
 parser.add_argument("--barrier_csv", action="store_true")
+parser.add_argument("--variants", default="",
+                    help="comma list of knob sets run per (dataset, level) for in-job A/B: "
+                         "base | nockpt | reuse | all; cells land in r<RR>_<variant>/")
 parser.add_argument("--repeat", type=int, default=1,
                     help="run every cell this many times (timing); repeats land in r<RR>_rep<k>/")
 parser.add_argument("--force", action="store_true", help="rerun cells whose eval.json exists")
@@ -208,17 +211,24 @@ class CacheLock:
       self.held = False
 
 
-def run_cell(fs, cluster, dataset, level, out_cell):
+VARIANTS = {"base": set(), "nockpt": {"no_checkpoints"}, "reuse": {"reuse_reader"},
+            "all": {"no_checkpoints", "reuse_reader"}}
+
+
+def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
   train = f"csv:{args.data}/{dataset}/train.csv"
   feats, spec, loc = dataset_ctx(fs, dataset)
+  knobs = VARIANTS[variant] if variant else set()
+  no_checkpoints = args.no_checkpoints or "no_checkpoints" in knobs
+  reuse_reader = args.reuse_reader or "reuse_reader" in knobs
 
   tc = abstract_learner_pb2.TrainingConfig()
   ext = tc.Extensions[dgbt_pb2.distributed_gradient_boosted_trees_config]
   ext.in_worker_oblique.column_replication = level
   ext.in_worker_oblique.num_projections_from_local_features = False
-  if args.no_checkpoints:
+  if no_checkpoints:
     ext.create_checkpoints = False
-  if args.reuse_reader:
+  if reuse_reader:
     ext.reuse_dataset_cache_in_workers = True
 
   lock = None
@@ -290,8 +300,9 @@ def run_cell(fs, cluster, dataset, level, out_cell):
       "test_auc": ev.characteristics[0].roc_auc if ev.characteristics else None,
       "num_trees_trained": model.num_trees(), "held_cols": held, "train_s": train_s,
       "wall_s": round(time.time() - t0, 2), "ydf_version": ydf.__version__,
-      "knobs": {"cache_root": args.cache_root, "no_checkpoints": args.no_checkpoints,
-                "reuse_reader": args.reuse_reader, "built_cache": building,
+      "variant": variant,
+      "knobs": {"cache_root": args.cache_root, "no_checkpoints": no_checkpoints,
+                "reuse_reader": reuse_reader, "built_cache": building,
                 "cache_lock_wait_s": lock_wait_s},
       **phase_summary(tee),
       **json.loads(args.meta),
@@ -300,7 +311,7 @@ def run_cell(fs, cluster, dataset, level, out_cell):
   fs.pipe(f"{out_cell}/manager.log"[5:], tee.text().encode())
   if barrier_path and os.path.exists(barrier_path):
     fs.put(barrier_path, f"{out_cell}/barriers.csv"[5:])
-  print(f"CELL_DONE {dataset} r={level:.2f} acc={ev.accuracy:.4f} {train_s}s "
+  print(f"CELL_DONE {dataset} r={level:.2f} {variant} acc={ev.accuracy:.4f} {train_s}s "
         f"cache={summary['cache_build_s']} ready={summary['workers_ready_s']} "
         f"ckpt={summary['checkpoints_s']} trees={summary.get('tree_training_s')}", flush=True)
 
@@ -324,33 +335,34 @@ def main():
   if only:
     datasets = [d for d in datasets if any(o in d for o in only)]
   levels = [float(x) for x in args.levels.split(",")]
-  cells = [(d, r, k) for d in datasets for r in levels for k in range(args.repeat)]
+  variants = [v for v in args.variants.split(",") if v] or [""]
+  cells = [(d, r, v, k) for d in datasets for r in levels for v in variants
+           for k in range(args.repeat)]
   print(f"{len(cells)} cells: {len(datasets)} datasets x {len(levels)} levels x "
-        f"{args.repeat} repeat(s), seed {args.seed}", flush=True)
+        f"{len(variants)} variant(s) x {args.repeat} repeat(s), seed {args.seed}", flush=True)
 
-  def cell_dir(d, r, k):
-    return f"{args.out}/{d}/r{r:.2f}" + (f"_rep{k}" if k else "")
+  def cell_dir(d, r, v, k):
+    return f"{args.out}/{d}/r{r:.2f}" + (f"_{v}" if v else "") + (f"_rep{k}" if k else "")
 
   failed = {}
   for attempt in range(3):
-    todo = [(d, r, k) for d, r, k in cells
-            if (args.force and attempt == 0)
-            or not fs.exists(f"{cell_dir(d, r, k)}/eval.json"[5:])]
+    todo = [c for c in cells
+            if (args.force and attempt == 0) or not fs.exists(f"{cell_dir(*c)}/eval.json"[5:])]
     if not todo:
       break
     print(f"pass {attempt}: {len(todo)} cells to run", flush=True)
-    for i, (d, r, k) in enumerate(todo, 1):
+    for i, (d, r, v, k) in enumerate(todo, 1):
       try:
-        run_cell(fs, cluster, d, r, cell_dir(d, r, k))
-        failed.pop((d, r, k), None)
+        run_cell(fs, cluster, d, r, cell_dir(d, r, v, k), v)
+        failed.pop((d, r, v, k), None)
       except Exception as e:  # noqa: BLE001  keep sweeping; retried next pass
         traceback.print_exc()
-        failed[(d, r, k)] = f"{type(e).__name__}: {e}"
-        print(f"CELL_FAIL {d} r={r:.2f} ({i}/{len(todo)})", flush=True)
+        failed[(d, r, v, k)] = f"{type(e).__name__}: {e}"
+        print(f"CELL_FAIL {d} r={r:.2f} {v} ({i}/{len(todo)})", flush=True)
         time.sleep(5)
   if failed:
     fs.pipe(f"{args.out}/FAILED.json"[5:],
-            json.dumps({f"{d}|r{r:.2f}|{k}": m for (d, r, k), m in failed.items()},
+            json.dumps({f"{d}|r{r:.2f}|{v}|{k}": m for (d, r, v, k), m in failed.items()},
                        indent=2).encode())
     print(f"DONE_WITH_FAILURES {len(failed)}", flush=True)
     sys.exit(1)

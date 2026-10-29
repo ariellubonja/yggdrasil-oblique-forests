@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <numeric>
 #include <optional>
 #include <string>
@@ -61,9 +62,21 @@ namespace {
 // available RAM / CPU on each worker.
 constexpr int kNumParallelQueriesPerWorker = 5;
 
+// YDF_CACHE_LEGACY_IO=1 restores the serial manager-side object ops and the
+// historical sort parallelism (A/B switch; workers read the same variable).
+bool LegacyCacheIO() {
+  static const bool legacy = [] {
+    const char* v = std::getenv("YDF_CACHE_LEGACY_IO");
+    return v != nullptr && v[0] == '1';
+  }();
+  return legacy;
+}
+int NumManagerIOThreads() { return LegacyCacheIO() ? 1 : 32; }
+
 // Sort jobs per worker: a job holds one column as (float, idx) pairs, so allow
 // up to 20 jobs within ~2 GiB per worker; 5 (the historical value) at least.
 int NumParallelSortQueriesPerWorker(int64_t num_examples) {
+  if (LegacyCacheIO()) return kNumParallelQueriesPerWorker;
   const int64_t budget_bytes = int64_t{2} << 30;
   const int64_t per_job = std::max<int64_t>(1, num_examples) * 8;
   return std::clamp<int>(budget_bytes / per_job, kNumParallelQueriesPerWorker,
@@ -626,10 +639,10 @@ absl::Status SortNumericalColumns(
   {
     utils::concurrency::Mutex exist_mutex;
     utils::concurrency::ThreadPool pool(
-        std::min<int>(32, numerical_columns.size() + 1),
+        std::min<int>(NumManagerIOThreads(), numerical_columns.size() + 1),
         {.name_prefix = std::string("CheckSorted")});
     for (size_t i = 0; i < numerical_columns.size(); i++) {
-      pool.Schedule([&, i]() {
+      const auto check = [&, i]() {
         const auto metadata_path = file::JoinPath(
             IndexedColumnPath(cache_directory, numerical_columns[i]),
             kFilenamePresortedMetaData);
@@ -640,7 +653,12 @@ absl::Status SortNumericalColumns(
         } else {
           already_done[i] = exists.value();
         }
-      });
+      };
+      if (LegacyCacheIO()) {
+        check();
+      } else {
+        pool.Schedule(check);
+      }
     }
   }
   RETURN_IF_ERROR(exist_status);
@@ -704,12 +722,19 @@ absl::Status SortNumericalColumns(
               ->mutable_numerical();
       column_metadata->MergeFrom(result.metadata());
 
-      pool.Schedule([metadata_path, metadata, &write_mutex, &write_status]() {
+      const auto write = [metadata_path, metadata, &write_mutex,
+                          &write_status]() {
         const auto status =
             file::SetBinaryProto(metadata_path, metadata, file::Defaults());
         utils::concurrency::MutexLock l(write_mutex);
         write_status.Update(status);
-      });
+      };
+      if (LegacyCacheIO()) {
+        write();
+        RETURN_IF_ERROR(write_status);
+      } else {
+        pool.Schedule(write);
+      }
     }
   }
   return write_status;

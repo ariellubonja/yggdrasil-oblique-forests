@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 #include <string>
 #include <utility>
@@ -64,7 +65,11 @@ constexpr int kNumThreads = 10;
 // Object stores commit a file atomically at close, so the tmp + rename dance
 // (2 extra ops per file on GCS) is skipped there; wider I/O pool for latency.
 bool IsObjectStore(absl::string_view path) {
-  return absl::StartsWith(path, "gs://");
+  static const bool legacy = [] {
+    const char* v = std::getenv("YDF_CACHE_LEGACY_IO");
+    return v != nullptr && v[0] == '1';
+  }();
+  return !legacy && absl::StartsWith(path, "gs://");
 }
 int NumIOThreads(absl::string_view path) {
   return IsObjectStore(path) ? 32 : kNumThreads;
