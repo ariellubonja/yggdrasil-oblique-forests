@@ -37,7 +37,9 @@
 #include "yggdrasil_decision_forests/dataset/formats.h"
 #include "yggdrasil_decision_forests/dataset/types.h"
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache/dataset_cache_common.h"
+#include "yggdrasil_decision_forests/utils/concurrency.h"
 #include "yggdrasil_decision_forests/utils/distribute/core.h"
+#include "yggdrasil_decision_forests/utils/synchronization_primitives.h"
 #include "yggdrasil_decision_forests/utils/filesystem.h"
 #include "yggdrasil_decision_forests/utils/logging.h"
 #include "yggdrasil_decision_forests/utils/math.h"
@@ -58,6 +60,15 @@ namespace {
 // TODO: Parametrize or set automatically according to the amount of
 // available RAM / CPU on each worker.
 constexpr int kNumParallelQueriesPerWorker = 5;
+
+// Sort jobs per worker: a job holds one column as (float, idx) pairs, so allow
+// up to 20 jobs within ~2 GiB per worker; 5 (the historical value) at least.
+int NumParallelSortQueriesPerWorker(int64_t num_examples) {
+  const int64_t budget_bytes = int64_t{2} << 30;
+  const int64_t per_job = std::max<int64_t>(1, num_examples) * 8;
+  return std::clamp<int>(budget_bytes / per_job, kNumParallelQueriesPerWorker,
+                         20);
+}
 
 // Number of shards in the cache dataset. Increasing this value make the
 // creation of the dataset cache more robust to slow workers (good) but increase
@@ -493,7 +504,7 @@ absl::Status SeparateDatasetColumns(
       DeltaBitIdx(cache_metadata->num_examples()));
 
   RETURN_IF_ERROR(distribute_manager->SetParallelExecutionPerWorker(
-      kNumParallelQueriesPerWorker));
+      NumParallelSortQueriesPerWorker(cache_metadata->num_examples())));
 
   LOG(INFO) << "Column separation done. " << cache_metadata->num_examples()
             << " example(s) found";
@@ -600,19 +611,47 @@ absl::Status SortNumericalColumns(
   request.set_force_numerical_discretization(
       config.force_numerical_discretization());
 
-  int pending_requests = 0;
+  std::vector<int> numerical_columns;
   for (int column_idx : columns) {
-    const auto& column_spec = data_spec.columns(column_idx);
-    if (column_spec.type() != dataset::proto::ColumnType::NUMERICAL) {
-      continue;
+    if (data_spec.columns(column_idx).type() ==
+        dataset::proto::ColumnType::NUMERICAL) {
+      numerical_columns.push_back(column_idx);
     }
+  }
 
-    // Check if the job was already executed.
+  // Existence checks of the per-column resume markers, in parallel (one
+  // object op each; serial they dominated the stage on GCS).
+  std::vector<char> already_done(numerical_columns.size(), 0);
+  absl::Status exist_status;
+  {
+    utils::concurrency::Mutex exist_mutex;
+    utils::concurrency::ThreadPool pool(
+        std::min<int>(32, numerical_columns.size() + 1),
+        {.name_prefix = std::string("CheckSorted")});
+    for (size_t i = 0; i < numerical_columns.size(); i++) {
+      pool.Schedule([&, i]() {
+        const auto metadata_path = file::JoinPath(
+            IndexedColumnPath(cache_directory, numerical_columns[i]),
+            kFilenamePresortedMetaData);
+        const auto exists = file::FileExists(metadata_path);
+        utils::concurrency::MutexLock l(exist_mutex);
+        if (!exists.ok()) {
+          exist_status.Update(exists.status());
+        } else {
+          already_done[i] = exists.value();
+        }
+      });
+    }
+  }
+  RETURN_IF_ERROR(exist_status);
+
+  int pending_requests = 0;
+  for (size_t i = 0; i < numerical_columns.size(); i++) {
+    const int column_idx = numerical_columns[i];
     const auto metadata_path =
         file::JoinPath(IndexedColumnPath(cache_directory, column_idx),
                        kFilenamePresortedMetaData);
-    ASSIGN_OR_RETURN(const bool already_exist, file::FileExists(metadata_path));
-    if (already_exist) {
+    if (already_done[i]) {
       proto::SortedColumnMetadata metadata;
       RETURN_IF_ERROR(
           file::GetBinaryProto(metadata_path, &metadata, file::Defaults()));
@@ -637,31 +676,43 @@ absl::Status SortNumericalColumns(
     pending_requests++;
   }
 
-  // Receive and rename the results.
-  for (int result_idx = 0; result_idx < pending_requests; result_idx++) {
-    LOG_EVERY_N_SEC(INFO, 10) << "\tSorting numerical columns "
-                              << (result_idx + 1) << "/" << pending_requests;
+  // Receive the results; the per-column resume markers are written by a pool
+  // so the receive loop never waits on object-store latency.
+  absl::Status write_status;
+  {
+    utils::concurrency::Mutex write_mutex;
+    utils::concurrency::ThreadPool pool(
+        16, {.name_prefix = std::string("WriteSortedMeta")});
+    for (int result_idx = 0; result_idx < pending_requests; result_idx++) {
+      LOG_EVERY_N_SEC(INFO, 10) << "\tSorting numerical columns "
+                                << (result_idx + 1) << "/" << pending_requests;
 
-    ASSIGN_OR_RETURN(
-        const auto generic_result,
-        distribute_manager->NextAsynchronousProtoAnswer<proto::WorkerResult>());
-    const auto& result = generic_result.sort_numerical_column();
+      ASSIGN_OR_RETURN(const auto generic_result,
+                       distribute_manager
+                           ->NextAsynchronousProtoAnswer<proto::WorkerResult>());
+      const auto& result = generic_result.sort_numerical_column();
 
-    // Save the meta-data information.
-    const auto metadata_path =
-        file::JoinPath(IndexedColumnPath(cache_directory, result.column_idx()),
-                       kFilenamePresortedMetaData);
+      // Save the meta-data information.
+      const auto metadata_path = file::JoinPath(
+          IndexedColumnPath(cache_directory, result.column_idx()),
+          kFilenamePresortedMetaData);
 
-    proto::SortedColumnMetadata metadata;
-    *metadata.mutable_metadata() = result.metadata();
-    auto* column_metadata = cache_metadata->mutable_columns(result.column_idx())
-                                ->mutable_numerical();
-    column_metadata->MergeFrom(result.metadata());
+      proto::SortedColumnMetadata metadata;
+      *metadata.mutable_metadata() = result.metadata();
+      auto* column_metadata =
+          cache_metadata->mutable_columns(result.column_idx())
+              ->mutable_numerical();
+      column_metadata->MergeFrom(result.metadata());
 
-    RETURN_IF_ERROR(
-        file::SetBinaryProto(metadata_path, metadata, file::Defaults()));
+      pool.Schedule([metadata_path, metadata, &write_mutex, &write_status]() {
+        const auto status =
+            file::SetBinaryProto(metadata_path, metadata, file::Defaults());
+        utils::concurrency::MutexLock l(write_mutex);
+        write_status.Update(status);
+      });
+    }
   }
-  return absl::OkStatus();
+  return write_status;
 }
 
 absl::Status InitializeMetadata(

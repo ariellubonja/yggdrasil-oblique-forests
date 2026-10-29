@@ -54,6 +54,40 @@ namespace model {
 namespace distributed_decision_tree {
 namespace dataset_cache {
 
+absl::StatusOr<SharedDatasetCacheReader> GetOrCreateSharedDatasetCacheReader(
+    absl::string_view path, const proto::DatasetCacheReaderOptions& options) {
+  struct Registry {
+    utils::concurrency::Mutex mutex;
+    std::string key;
+    std::shared_ptr<DatasetCacheReader> reader;
+  };
+  static Registry* const registry = new Registry();
+
+  ASSIGN_OR_RETURN(const auto metadata_bytes,
+                   file::GetContent(file::JoinPath(path, kFilenameMetaData)));
+  const std::string key =
+      absl::StrCat(path, "\n", options.SerializeAsString(), "\n", metadata_bytes);
+  std::vector<int> wanted = {options.features().begin(),
+                             options.features().end()};
+  std::sort(wanted.begin(), wanted.end());
+
+  utils::concurrency::MutexLock l(registry->mutex);
+  if (registry->reader && registry->key == key &&
+      !registry->reader->IsNonBlockingLoadingInProgress() &&
+      (options.load_all_features() || registry->reader->features() == wanted)) {
+    LOG(INFO) << "Reusing the in-memory dataset cache reader on "
+              << registry->reader->features().size() << " feature(s)";
+    return SharedDatasetCacheReader{registry->reader, /*reused=*/true};
+  }
+  // Release the previous columns before loading the new ones (peak = max).
+  registry->reader.reset();
+  registry->key.clear();
+  ASSIGN_OR_RETURN(auto reader, DatasetCacheReader::Create(path, options));
+  registry->reader = std::move(reader);
+  registry->key = key;
+  return SharedDatasetCacheReader{registry->reader, /*reused=*/false};
+}
+
 std::string DatasetCacheReader::MetadataInformation() const {
   auto report = MetaDataReport(meta_data(), features_);
   absl::SubstituteAndAppend(&report, "Number of loaded columns: $0\n",

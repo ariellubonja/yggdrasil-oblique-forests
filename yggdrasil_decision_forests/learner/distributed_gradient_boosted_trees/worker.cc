@@ -160,12 +160,24 @@ absl::Status DistributedGradientBoostedTreesWorker::Setup(
     auto read_options = spe_config.dataset_reader_options();
     *read_options.mutable_features() = worker_features;
     read_options.set_load_all_features(false);
-    ASSIGN_OR_RETURN(
-        dataset_,
-        distributed_decision_tree::dataset_cache::DatasetCacheReader::Create(
-            welcome_.cache_path(), read_options));
+    bool reused = false;
+    if (spe_config.reuse_dataset_cache_in_workers() &&
+        welcome_.train_config().task() != model::proto::Task::RANKING) {
+      ASSIGN_OR_RETURN(auto shared,
+                       distributed_decision_tree::dataset_cache::
+                           GetOrCreateSharedDatasetCacheReader(
+                               welcome_.cache_path(), read_options));
+      dataset_ = std::move(shared.reader);
+      reused = shared.reused;
+    } else {
+      ASSIGN_OR_RETURN(
+          dataset_,
+          distributed_decision_tree::dataset_cache::DatasetCacheReader::Create(
+              welcome_.cache_path(), read_options));
+    }
 
-    dataset_feature_duration_ = dataset_->load_in_memory_duration();
+    dataset_feature_duration_ =
+        reused ? absl::ZeroDuration() : dataset_->load_in_memory_duration();
     dataset_num_features_loaded_ = dataset_->features().size();
 
     if (welcome_.train_config().task() == model::proto::Task::RANKING) {

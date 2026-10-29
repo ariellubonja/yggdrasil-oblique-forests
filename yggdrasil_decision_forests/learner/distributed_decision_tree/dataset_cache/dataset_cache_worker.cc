@@ -26,6 +26,7 @@
 
 #include "absl/log/log.h"
 #include "absl/status/status.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -59,6 +60,15 @@ using Blob = distribute::Blob;
 //
 // TODO: Parametrize.
 constexpr int kNumThreads = 10;
+
+// Object stores commit a file atomically at close, so the tmp + rename dance
+// (2 extra ops per file on GCS) is skipped there; wider I/O pool for latency.
+bool IsObjectStore(absl::string_view path) {
+  return absl::StartsWith(path, "gs://");
+}
+int NumIOThreads(absl::string_view path) {
+  return IsObjectStore(path) ? 32 : kNumThreads;
+}
 
 // Moves the files "filenames" from "src_dir" to "dst_dir". If anything goes
 // wrong, print a warning and continue.
@@ -211,7 +221,11 @@ absl::Status CreateDatasetCacheWorker::SeparateDatasetColumn(
     const int shard_idx, const int num_shards,
     const absl::string_view temp_directory,
     const absl::string_view output_directory) {
-  const auto temp_column_path = ColumnPath(temp_directory, column_idx);
+  const bool direct = IsObjectStore(output_directory);
+  const auto final_column_path =
+      RawColumnFilePath(output_directory, column_idx, shard_idx, num_shards);
+  const auto temp_column_path =
+      direct ? final_column_path : ColumnPath(temp_directory, column_idx);
 
   const auto& column_spec = dataset.data_spec().columns(column_idx);
   switch (column_spec.type()) {
@@ -238,11 +252,13 @@ absl::Status CreateDatasetCacheWorker::SeparateDatasetColumn(
                        " for columns \"", column_spec.name(), "\""));
   }
 
+  if (direct) {
+    return absl::OkStatus();
+  }
+
   // Move the file from the tmp to its final destination.
   RETURN_IF_ERROR(file::RecursivelyCreateDir(
       RawColumnFileDirectory(output_directory, column_idx), file::Defaults()));
-  const auto final_column_path =
-      RawColumnFilePath(output_directory, column_idx, shard_idx, num_shards);
 
   if (!file::Rename(temp_column_path, final_column_path, file::Defaults())
            .ok()) {
@@ -291,7 +307,8 @@ absl::Status CreateDatasetCacheWorker::SeparateDatasetColumns(
 
   {
     utils::concurrency::ThreadPool thread_pool(
-        kNumThreads, {.name_prefix = std::string("ExportColumns")});
+        NumIOThreads(request.output_directory()),
+        {.name_prefix = std::string("ExportColumns")});
     for (const auto column_idx : request.columns()) {
       thread_pool.Schedule([&, column_idx]() {
         {
@@ -316,7 +333,10 @@ absl::Status CreateDatasetCacheWorker::SeparateDatasetColumns(
     }
   }
 
-  RETURN_IF_ERROR(file::RecursivelyDelete(temp_directory, file::Defaults()));
+  if (!IsObjectStore(request.output_directory())) {
+    RETURN_IF_ERROR(
+        file::RecursivelyDelete(temp_directory, file::Defaults()));
+  }
 
   return worker_status;
 }
@@ -363,10 +383,13 @@ absl::Status CreateDatasetCacheWorker::SortNumericalColumn(
   LOG(INFO) << "Save sorted numerical values [column #" << request.column_idx()
             << "]";
 
-  const auto temp_directory = file::JoinPath(
-      request.output_directory(), kFilenameTmp, utils::GenUniqueId());
+  const bool direct = IsObjectStore(request.output_directory());
   const auto final_directory = file::JoinPath(
       IndexedColumnPath(request.output_directory(), request.column_idx()));
+  const auto temp_directory =
+      direct ? final_directory
+             : file::JoinPath(request.output_directory(), kFilenameTmp,
+                              utils::GenUniqueId());
   RETURN_IF_ERROR(file::RecursivelyCreateDir(temp_directory, file::Defaults()));
   RETURN_IF_ERROR(
       file::RecursivelyCreateDir(final_directory, file::Defaults()));
@@ -409,7 +432,10 @@ absl::Status CreateDatasetCacheWorker::SortNumericalColumn(
                                                 result));
   }
 
-  RETURN_IF_ERROR(file::RecursivelyDelete(temp_directory, file::Defaults()));
+  if (!direct) {
+    RETURN_IF_ERROR(
+        file::RecursivelyDelete(temp_directory, file::Defaults()));
+  }
 
   LOG(INFO) << "Done exporting column #" << request.column_idx() << " with "
             << num_unique_values << "/" << request.num_examples()
@@ -523,7 +549,9 @@ absl::Status CreateDatasetCacheWorker::ExportSortedNumericalColumn(
   }
 
   // Move the files to their final location.
-  MoveFilenamesNoFailures(temp_directory, final_directory, filenames);
+  if (temp_directory != final_directory) {
+    MoveFilenamesNoFailures(temp_directory, final_directory, filenames);
+  }
 
   return absl::OkStatus();
 }
@@ -663,7 +691,9 @@ absl::Status CreateDatasetCacheWorker::ExportSortedDiscretizedNumericalColumn(
   result->mutable_metadata()->set_num_discretized_shards(next_output_shard_idx);
 
   // Move the files to their final location.
-  MoveFilenamesNoFailures(temp_directory, final_directory, filenames);
+  if (temp_directory != final_directory) {
+    MoveFilenamesNoFailures(temp_directory, final_directory, filenames);
+  }
   return absl::OkStatus();
 }
 

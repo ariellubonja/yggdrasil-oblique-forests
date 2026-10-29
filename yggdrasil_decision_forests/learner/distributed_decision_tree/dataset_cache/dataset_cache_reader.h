@@ -47,6 +47,18 @@ namespace distributed_decision_tree {
 namespace dataset_cache {
 
 // Utility class to access a "dataset cache".
+class DatasetCacheReader;
+
+// Reader kept alive between successive trainings of one process. Returns the
+// previous reader when path, options, features and the cache metadata file
+// are unchanged (and no non-blocking loading is pending); else a new one.
+struct SharedDatasetCacheReader {
+  std::shared_ptr<DatasetCacheReader> reader;
+  bool reused = false;
+};
+absl::StatusOr<SharedDatasetCacheReader> GetOrCreateSharedDatasetCacheReader(
+    absl::string_view path, const proto::DatasetCacheReaderOptions& options);
+
 class DatasetCacheReader {
  public:
   // Creates the accessor utility class.
