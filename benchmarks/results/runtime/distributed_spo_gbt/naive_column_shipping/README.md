@@ -37,7 +37,9 @@ layer has a few nodes), i.e. ≈ (W − 1) dataset copies per layer across the c
   ship_bytes_out, ship_cols_in, ship_s_max, ship_s_sum, ship_cross_splits`) under
   `ariel_notes/results/20261028_naive_colship/logs/`. `ship_bytes_in` is exact per row;
   `ship_bytes_out` is what a worker served since its previous reply, so bytes served while
-  idle land on a later row (totals match: Σin = Σout).
+  idle land on a later row. Σin = Σout held in every run so far, but it is not guaranteed:
+  a column served after the owner's last FindSplits/EvaluateSplits reply of the run is
+  never reported. `ship_bytes_in` is the exact total.
 - Projection budget: both arms give worker w P_w = (its owned numerical count)^exponent; this
   equals the disjoint arm's per-node basis only when every feature is a candidate (GBT
   default, the paper setting), not under `num_candidate_attributes` sampling.
