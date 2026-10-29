@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
@@ -54,6 +55,72 @@ namespace model {
 namespace distributed_decision_tree {
 namespace dataset_cache {
 
+namespace {
+
+// Process-wide store of loaded columns: successive readers of one cache (one
+// per training, each with its own feature subset) load every column once.
+struct PooledColumn {
+  std::shared_ptr<InMemoryFloatColumnReaderFactory> in_order, presorted_unique;
+  std::shared_ptr<InMemoryIntegerColumnReaderFactory<ExampleIdxType>>
+      presorted_idx;
+  std::shared_ptr<
+      InMemoryIntegerColumnReaderFactory<DiscretizedIndexedNumericalType>>
+      discretized;
+  std::vector<float> boundaries;
+  std::shared_ptr<InMemoryIntegerColumnReaderFactory<CategoricalType>>
+      categorical;
+  std::shared_ptr<InMemoryIntegerColumnReaderFactory<BooleanType>> boolean;
+  std::shared_ptr<InMemoryIntegerColumnReaderFactory<HashType>> hash;
+  size_t memory_usage = 0;
+};
+
+struct ColumnPool {
+  utils::concurrency::Mutex mutex;
+  std::string identity;  // cache path + serialized cache metadata
+  absl::flat_hash_map<int, PooledColumn> columns;
+};
+
+ColumnPool& GetColumnPool() {
+  static ColumnPool* const pool = new ColumnPool();
+  return *pool;
+}
+
+}  // namespace
+
+absl::StatusOr<SharedDatasetCacheReader> GetOrCreateSharedDatasetCacheReader(
+    absl::string_view path, const proto::DatasetCacheReaderOptions& options) {
+  struct Registry {
+    utils::concurrency::Mutex mutex;
+    std::string key;
+    std::shared_ptr<DatasetCacheReader> reader;
+  };
+  static Registry* const registry = new Registry();
+
+  ASSIGN_OR_RETURN(const auto metadata_bytes,
+                   file::GetContent(file::JoinPath(path, kFilenameMetaData)));
+  const std::string key =
+      absl::StrCat(path, "\n", options.SerializeAsString(), "\n", metadata_bytes);
+  std::vector<int> wanted = {options.features().begin(),
+                             options.features().end()};
+  std::sort(wanted.begin(), wanted.end());
+
+  utils::concurrency::MutexLock l(registry->mutex);
+  if (registry->reader && registry->key == key &&
+      !registry->reader->IsNonBlockingLoadingInProgress() &&
+      (options.load_all_features() || registry->reader->features() == wanted)) {
+    LOG(INFO) << "Reusing the in-memory dataset cache reader on "
+              << registry->reader->features().size() << " feature(s)";
+    return SharedDatasetCacheReader{registry->reader, /*reused=*/true};
+  }
+  // Release the previous columns before loading the new ones (peak = max).
+  registry->reader.reset();
+  registry->key.clear();
+  ASSIGN_OR_RETURN(auto reader, DatasetCacheReader::Create(path, options));
+  registry->reader = std::move(reader);
+  registry->key = key;
+  return SharedDatasetCacheReader{registry->reader, /*reused=*/false};
+}
+
 std::string DatasetCacheReader::MetadataInformation() const {
   auto report = MetaDataReport(meta_data(), features_);
   absl::SubstituteAndAppend(&report, "Number of loaded columns: $0\n",
@@ -67,6 +134,8 @@ absl::StatusOr<std::unique_ptr<DatasetCacheReader>> DatasetCacheReader::Create(
   auto cache = absl::WrapUnique(new DatasetCacheReader(path, options));
   RETURN_IF_ERROR(file::GetBinaryProto(file::JoinPath(path, kFilenameMetaData),
                                        &cache->meta_data_, file::Defaults()));
+  cache->pool_identity_ =
+      absl::StrCat(path, "\n", cache->meta_data_.SerializeAsString());
 
   // List the features available to the reader.
   if (options.features().empty()) {
@@ -437,6 +506,60 @@ absl::Status DatasetCacheReader::UnloadInMemoryCacheColumn(
 absl::Status DatasetCacheReader::LoadInMemoryCacheColumn(int column_idx,
                                                          size_t* memory_usage) {
   *memory_usage = 0;
+  const auto& column = meta_data().columns(column_idx);
+  const bool pooled = options_.keep_columns_in_process();
+  if (pooled) {
+    auto& pool = GetColumnPool();
+    utils::concurrency::MutexLock l(pool.mutex);
+    if (pool.identity != pool_identity_) {
+      pool.columns.clear();
+      pool.identity = pool_identity_;
+    }
+    const auto it = pool.columns.find(column_idx);
+    if (it != pool.columns.end()) {
+      const auto& c = it->second;
+      in_memory_cache_.inorder_numerical_columns_[column_idx] = c.in_order;
+      in_memory_cache_.presorted_numerical_example_idx_columns_[column_idx] =
+          c.presorted_idx;
+      in_memory_cache_.presorted_numerical_unique_values_columns_[column_idx] =
+          c.presorted_unique;
+      in_memory_cache_.inorder_discretized_numerical_columns_[column_idx] =
+          c.discretized;
+      in_memory_cache_.boundaries_of_discretized_numerical_columns_[column_idx] =
+          c.boundaries;
+      in_memory_cache_.inorder_categorical_columns_[column_idx] = c.categorical;
+      in_memory_cache_.inorder_boolean_columns_[column_idx] = c.boolean;
+      in_memory_cache_.inorder_hash_columns_[column_idx] = c.hash;
+      *memory_usage = c.memory_usage;
+      return absl::OkStatus();
+    }
+  }
+  RETURN_IF_ERROR(LoadInMemoryCacheColumnFromDisk(column_idx, memory_usage));
+  if (pooled) {
+    auto& pool = GetColumnPool();
+    utils::concurrency::MutexLock l(pool.mutex);
+    if (pool.identity == pool_identity_) {
+      auto& c = pool.columns[column_idx];
+      c.in_order = in_memory_cache_.inorder_numerical_columns_[column_idx];
+      c.presorted_idx =
+          in_memory_cache_.presorted_numerical_example_idx_columns_[column_idx];
+      c.presorted_unique =
+          in_memory_cache_.presorted_numerical_unique_values_columns_[column_idx];
+      c.discretized =
+          in_memory_cache_.inorder_discretized_numerical_columns_[column_idx];
+      c.boundaries =
+          in_memory_cache_.boundaries_of_discretized_numerical_columns_[column_idx];
+      c.categorical = in_memory_cache_.inorder_categorical_columns_[column_idx];
+      c.boolean = in_memory_cache_.inorder_boolean_columns_[column_idx];
+      c.hash = in_memory_cache_.inorder_hash_columns_[column_idx];
+      c.memory_usage = *memory_usage;
+    }
+  }
+  return absl::OkStatus();
+}
+
+absl::Status DatasetCacheReader::LoadInMemoryCacheColumnFromDisk(
+    int column_idx, size_t* memory_usage) {
   const auto& column = meta_data().columns(column_idx);
   switch (column.type_case()) {
     case proto::CacheMetadata_Column::kCategorical: {

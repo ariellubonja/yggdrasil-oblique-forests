@@ -71,6 +71,20 @@ message DistributedGradientBoostedTreesTrainingConfig {
   // Dynamic load balancing is disabled in this mode.
   optional InWorkerOblique in_worker_oblique = 10;
 
+  // If false, no checkpoint is written (iteration 0, periodic, final); a
+  // worker or manager restart then fails the training instead of resuming it.
+  optional bool create_checkpoints = 11 [default = true];
+
+  // Dataset cache directory; default "<work directory>/dataset_cache". Lets
+  // trainings with different work directories (seeds, levels) share one
+  // deterministic cache. Only read once complete ("done" marker).
+  optional string dataset_cache_path = 12;
+
+  // Workers keep the last loaded dataset cache in memory after a training and
+  // reuse it when the next training asks for the same cache path, features
+  // and reader options (checked against the cache metadata file).
+  optional bool reuse_dataset_cache_in_workers = 13 [default = false];
+
   message InWorkerOblique {
     // Number of projections a worker tests per open node:
     //   false: GetNumProjections(number of numerical features in the dataset),
@@ -78,6 +92,21 @@ message DistributedGradientBoostedTreesTrainingConfig {
     //   true:  GetNumProjections(number of numerical candidates the worker
     //          holds for that node).
     optional bool num_projections_from_local_features = 1 [default = false];
+
+    // Field 2 is reserved for the naive column-shipping baseline (branch
+    // naive-column-shipping).
+
+    // Static column replication, in [0, 1]. Besides its owned columns, every
+    // worker loads and samples projections from a uniform random fraction
+    // "column_replication" (rounded to nearest) of the NUMERICAL columns owned
+    // by the other workers, drawn once from (random_seed, worker index).
+    // 0: disjoint columns, F/W per worker (default). 1: every worker holds all
+    // F numerical columns. The projection count per worker is unchanged
+    // (num_projections_from_local_features=false keeps it at ceil(F^exponent)
+    // of the global F). Ownership, i.e. who answers axis-aligned splits, does
+    // not change; an oblique split is evaluated by the lowest-index worker
+    // holding all its attributes.
+    optional float column_replication = 3 [default = 0];
   }
 
   message Internal {

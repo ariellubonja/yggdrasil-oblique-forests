@@ -1,0 +1,12 @@
+# gcloud builds submit vertex_build/wheel --config vertex_build/wheel/cloudbuild.yaml \
+#   --substitutions _YDF_COMMIT=<full sha>,_IMAGE=<wheel image uri>     (~13 min)
+steps:
+- name: gcr.io/cloud-builders/docker
+  args: ['build', '-t', '${_IMAGE}', '--build-arg', 'YDF_COMMIT=${_YDF_COMMIT}', '.']
+images: ['${_IMAGE}']
+timeout: 10800s
+options:
+  machineType: E2_HIGHCPU_32
+substitutions:
+  _YDF_COMMIT: '34d64d3d4fbc5d19fced4736354b2f36dfc8322c'
+  _IMAGE: 'us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo/ydf-wheel:dev'

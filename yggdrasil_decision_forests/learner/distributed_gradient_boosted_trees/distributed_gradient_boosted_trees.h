@@ -462,18 +462,42 @@ absl::StatusOr<WorkersToFeaturesMap> BuildActiveWorkers(
     const distributed_decision_tree::LoadBalancer& load_balancer,
     utils::RandomEngine* rnd);
 
-// Lists the features used in a set of splits.
+// Lists the features used in a set of splits, grouped by the worker that
+// serves their evaluation bitmaps. Axis-aligned splits are keyed by their
+// feature (served by its owner); oblique splits by "-1 - worker" where worker
+// is the lowest worker holding every attribute (the proposer without column
+// replication).
 struct ActiveFeature {
   struct Item {
     int weak_model_idx;
     int split_idx;
   };
   std::vector<Item> splits;
+  int src_worker = -1;
 };
 typedef absl::flat_hash_map<int, ActiveFeature> ActiveFeaturesMap;
 absl::StatusOr<ActiveFeaturesMap> ActiveFeatures(
     const std::vector<distributed_decision_tree::SplitPerOpenNode>&
-        splits_per_weak_models);
+        splits_per_weak_models,
+    const distributed_decision_tree::LoadBalancer& load_balancer);
+
+// Lowest worker holding every attribute of an oblique condition. Debug env var
+// DGBT_OBLIQUE_EVALUATOR_LAST=1 picks the highest one instead (the model must
+// not change; used by smoke_colrep.sh).
+absl::StatusOr<int> ObliqueSplitEvaluator(
+    const decision_tree::proto::Condition::Oblique& oblique,
+    const distributed_decision_tree::LoadBalancer& load_balancer);
+
+// Column replication for in-worker oblique splits: each worker additionally
+// holds a uniform random "replication" fraction (rounded to nearest) of the
+// NUMERICAL columns owned by the other workers, drawn from (seed, worker) so
+// the training random stream is untouched. 0 = disjoint columns, 1 = every
+// worker holds every numerical column.
+absl::Status SetColumnReplicas(
+    float replication, int64_t seed,
+    const dataset::proto::DataSpecification& data_spec,
+    const std::vector<int>& features,
+    distributed_decision_tree::LoadBalancer* load_balancer);
 
 // Sets the "weak learner" and "split idx" fields in a plan from the "feature"
 // field.

@@ -15,6 +15,9 @@
 
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/load_balancer/load_balancer.h"
 
+#include <algorithm>
+#include <utility>
+
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
@@ -165,11 +168,13 @@ absl::StatusOr<bool> LoadBalancer::AddWorkDurationMeasurement(
     auto& worker = workers_[worker_idx];
     const auto& measure = measure_per_workers[worker_idx];
 
-    if (measure.num_features > worker.features.size()) {
+    // A worker can be asked about every feature it holds (owned + replicas).
+    const size_t num_held = worker.features.size() + worker.replicas.size();
+    if (measure.num_features > num_held) {
       return absl::InternalError(absl::Substitute(
           "Measurement with $0 features received for worker #$1 with $2 "
           "features.",
-          measure.num_features, worker_idx, worker.features.size()));
+          measure.num_features, worker_idx, num_held));
     }
 
     if (measure.num_features == 0) {
@@ -184,7 +189,8 @@ absl::StatusOr<bool> LoadBalancer::AddWorkDurationMeasurement(
   }
 
   num_measures_++;
-  if (!HasPendingOrder()) {
+  // Replicated columns pin the ownership: never re-balance.
+  if (!HasPendingOrder() && !HasReplicas()) {
     const auto now = absl::Now();
 
     const bool run_balancing =
@@ -502,6 +508,83 @@ const std::vector<int>& LoadBalancer::FeaturesPerWorker(int worker) const {
   return workers_[worker].features;
 }
 
+absl::Status LoadBalancer::SetReplicas(
+    const std::vector<std::vector<int>>& replicas_per_worker) {
+  if (replicas_per_worker.size() != workers_.size()) {
+    return absl::InvalidArgumentError("One replica list per worker expected");
+  }
+  if (is_dynamic_balancing_active()) {
+    return absl::FailedPreconditionError(
+        "Column replication requires dynamic load balancing to be disabled");
+  }
+  // Reset.
+  for (auto& worker : workers_) {
+    worker.replicas.clear();
+  }
+  for (auto& feature : features_) {
+    feature.replicators.clear();
+  }
+  num_replicas_ = 0;
+
+  for (int worker_idx = 0; worker_idx < workers_.size(); worker_idx++) {
+    auto replicas = replicas_per_worker[worker_idx];
+    std::sort(replicas.begin(), replicas.end());
+    if (std::adjacent_find(replicas.begin(), replicas.end()) !=
+        replicas.end()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Duplicate replica on worker ", worker_idx));
+    }
+    for (const int feature : replicas) {
+      if (feature < 0 || feature >= features_.size() ||
+          !features_[feature].active) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Replica of non active feature ", feature));
+      }
+      if (features_[feature].worker == worker_idx) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Worker ", worker_idx, " already owns feature ", feature));
+      }
+      features_[feature].replicators.push_back(worker_idx);
+    }
+    num_replicas_ += replicas.size();
+    workers_[worker_idx].replicas = std::move(replicas);
+  }
+  // Replicators were appended in ascending worker order.
+  return absl::OkStatus();
+}
+
+const std::vector<int>& LoadBalancer::ReplicasPerWorker(int worker) const {
+  return workers_[worker].replicas;
+}
+
+std::vector<int> LoadBalancer::HeldFeaturesPerWorker(int worker) const {
+  const auto& w = workers_[worker];
+  std::vector<int> held;
+  held.reserve(w.features.size() + w.replicas.size());
+  held.insert(held.end(), w.features.begin(), w.features.end());
+  held.insert(held.end(), w.replicas.begin(), w.replicas.end());
+  std::sort(held.begin(), held.end());
+  return held;
+}
+
+std::vector<std::vector<int>> LoadBalancer::HeldFeaturesPerWorkers() const {
+  std::vector<std::vector<int>> result;
+  result.reserve(workers_.size());
+  for (int worker_idx = 0; worker_idx < workers_.size(); worker_idx++) {
+    result.push_back(HeldFeaturesPerWorker(worker_idx));
+  }
+  return result;
+}
+
+absl::StatusOr<std::vector<int>> LoadBalancer::FeatureHolders(
+    int feature) const {
+  ASSIGN_OR_RETURN(const int owner, FeatureOwner(feature));
+  std::vector<int> holders{owner};
+  const auto& replicators = features_[feature].replicators;
+  holders.insert(holders.end(), replicators.begin(), replicators.end());
+  return holders;
+}
+
 absl::StatusOr<double> LoadBalancer::CostPerFeatureType(
     int feature, const dataset_cache::proto::CacheMetadata& cache_metadata) {
   // TODO: Tune these costs.
@@ -554,15 +637,34 @@ int LoadBalancer::GetBestCandidateWallTime(
 
 absl::StatusOr<proto::SplitSharingPlan> LoadBalancer::MakeSplitSharingPlan(
     const std::vector<int>& feature_idxs) {
+  std::vector<int> src_workers;
+  src_workers.reserve(feature_idxs.size());
+  for (const auto feature_idx : feature_idxs) {
+    ASSIGN_OR_RETURN(const auto src_worker, FeatureOwner(feature_idx));
+    src_workers.push_back(src_worker);
+  }
+  return MakeSplitSharingPlan(feature_idxs, src_workers);
+}
+
+absl::StatusOr<proto::SplitSharingPlan> LoadBalancer::MakeSplitSharingPlan(
+    const std::vector<int>& feature_idxs,
+    const std::vector<int>& src_workers) {
+  if (src_workers.size() != feature_idxs.size()) {
+    return absl::InternalError("feature_idxs / src_workers size mismatch");
+  }
   proto::SplitSharingPlan plan;
   auto& round_1 = *plan.add_rounds();
   auto& round_2 = *plan.add_rounds();
 
-  // Group the features by ownership.
+  // Group the features by source worker.
   std::vector<std::vector<int>> workers_to_features(workers_.size());
-  for (auto feature_idx : feature_idxs) {
-    ASSIGN_OR_RETURN(auto src_worker, FeatureOwner(feature_idx));
-    workers_to_features[src_worker].push_back(feature_idx);
+  for (size_t i = 0; i < feature_idxs.size(); i++) {
+    const int src_worker = src_workers[i];
+    if (src_worker < 0 || src_worker >= workers_.size()) {
+      return absl::InternalError(
+          absl::StrCat("Invalid source worker ", src_worker));
+    }
+    workers_to_features[src_worker].push_back(feature_idxs[i]);
   }
 
   const int num_outputs_per_round =

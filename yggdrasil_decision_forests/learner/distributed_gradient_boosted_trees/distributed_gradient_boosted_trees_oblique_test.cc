@@ -127,6 +127,39 @@ TEST_F(DatasetAdult, SparseOblique_5workers) {
   EXPECT_GT(metric::Accuracy(evaluation_), 0.84);
 }
 
+// Column replication: every worker also holds half / all of the numerical
+// columns of the others and samples projections from them. Splits proposed
+// from replicated columns are evaluated by the lowest worker holding every
+// attribute, so training must complete without an iteration restart.
+TEST_F(DatasetAdult, SparseOblique_5workers_HalfReplication) {
+  SetNumWorkers(5);
+  SetSparseOblique();
+  train_config_
+      .MutableExtension(proto::distributed_gradient_boosted_trees_config)
+      ->mutable_in_worker_oblique()
+      ->set_column_replication(0.5f);
+  // The serving-engine consistency check of TrainAndEvaluateModel fails for
+  // every sparse-oblique GBT of this fork (SparseOblique_1worker on main too);
+  // these tests cover training, not serving.
+  check_model = false;
+  TrainAndEvaluateModel();
+  EXPECT_GT(NumObliqueConditions(*model_), 0);
+  EXPECT_GT(metric::Accuracy(evaluation_), 0.82);
+}
+
+TEST_F(DatasetAdult, SparseOblique_5workers_FullReplication) {
+  SetNumWorkers(5);
+  SetSparseOblique();
+  train_config_
+      .MutableExtension(proto::distributed_gradient_boosted_trees_config)
+      ->mutable_in_worker_oblique()
+      ->set_column_replication(1.0f);
+  check_model = false;
+  TrainAndEvaluateModel();
+  EXPECT_GT(NumObliqueConditions(*model_), 0);
+  EXPECT_GT(metric::Accuracy(evaluation_), 0.82);
+}
+
 // Axis-aligned reference on the same split (upstream expectation).
 TEST_F(DatasetAdult, AxisAligned_5workers) {
   SetNumWorkers(5);

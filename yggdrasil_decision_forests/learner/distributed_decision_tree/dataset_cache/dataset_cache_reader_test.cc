@@ -16,6 +16,9 @@
 #include "yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache/dataset_cache_reader.h"
 
 #include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -179,6 +182,51 @@ TEST_F(End2End, Adult) {
   }
 
   LOG(INFO) << reader->MetadataInformation();
+}
+
+// Reads every value of a float column iterator into a vector.
+template <typename Iterator>
+std::vector<float> Drain(Iterator&& it) {
+  std::vector<float> out;
+  while (true) {
+    CHECK_OK(it->Next());
+    const auto values = it->Values();
+    if (values.empty()) break;
+    out.insert(out.end(), values.begin(), values.end());
+  }
+  return out;
+}
+
+TEST_F(End2End, ColumnPoolAndSharedReader) {
+  Prepare("adult", "income", {});
+
+  proto::DatasetCacheReaderOptions plain;
+  auto reference = DatasetCacheReader::Create(cache_path_, plain).value();
+  const auto ref_col0 = Drain(reference->InOrderNumericalFeatureValueIterator(0).value());
+  const auto ref_col2 = Drain(reference->InOrderNumericalFeatureValueIterator(2).value());
+
+  // First pooled reader: columns {0}. Second: {0, 2}; column 0 comes from the pool.
+  proto::DatasetCacheReaderOptions pooled;
+  pooled.set_load_all_features(false);
+  pooled.set_keep_columns_in_process(true);
+  pooled.add_features(0);
+  auto first = GetOrCreateSharedDatasetCacheReader(cache_path_, pooled).value();
+  EXPECT_FALSE(first.reused);
+  EXPECT_EQ(Drain(first.reader->InOrderNumericalFeatureValueIterator(0).value()), ref_col0);
+
+  pooled.add_features(2);
+  auto second = GetOrCreateSharedDatasetCacheReader(cache_path_, pooled).value();
+  EXPECT_FALSE(second.reused);
+  EXPECT_NE(second.reader.get(), first.reader.get());
+  EXPECT_EQ(Drain(second.reader->InOrderNumericalFeatureValueIterator(0).value()), ref_col0);
+  EXPECT_EQ(Drain(second.reader->InOrderNumericalFeatureValueIterator(2).value()), ref_col2);
+  EXPECT_EQ(Drain(second.reader->PresortedNumericalFeatureExampleIterator(0).value()).size(),
+            ref_col0.size());
+
+  // Same path, options and metadata: the reader itself is reused.
+  auto third = GetOrCreateSharedDatasetCacheReader(cache_path_, pooled).value();
+  EXPECT_TRUE(third.reused);
+  EXPECT_EQ(third.reader.get(), second.reader.get());
 }
 
 TEST_F(End2End, SyntheticRanking) {

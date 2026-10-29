@@ -109,9 +109,10 @@ absl::Status FindBestObliqueSplits(const ObliqueSplitArgs& args,
                                    utils::concurrency::ThreadPool* thread_pool,
                                    SplitPerOpenNode* best_splits);
 
-// Writes the evaluation bitmaps of the oblique splits whose first attribute is
-// owned by this worker. All attributes must then be owned (projections never
-// cross workers). Non-oblique and foreign splits are left untouched.
+// Writes the evaluation bitmaps of the oblique splits whose attributes are all
+// held by this worker (always the proposer; with column replication also any
+// worker holding copies of every attribute). Non-oblique splits and splits
+// with a missing attribute are left untouched.
 absl::Status EvaluateObliqueSplits(
     const ExampleToNodeMap& example_to_node, const SplitPerOpenNode& splits,
     const dataset_cache::DatasetCacheReader& dataset,

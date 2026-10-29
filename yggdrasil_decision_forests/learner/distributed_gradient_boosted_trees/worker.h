@@ -227,7 +227,7 @@ class DistributedGradientBoostedTreesWorker
 
   // Training dataset. Initialized during the "setup" stage.
   // Only present if the worker is a training worker.
-  std::unique_ptr<distributed_decision_tree::dataset_cache::DatasetCacheReader>
+  std::shared_ptr<distributed_decision_tree::dataset_cache::DatasetCacheReader>
       dataset_;
 
   // Current training iteration. -1 before the training starts. Updated during
