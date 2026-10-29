@@ -50,6 +50,7 @@ parser.add_argument("--repeat", type=int, default=1,
                     help="run every cell this many times (timing); repeats land in r<RR>_rep<k>/")
 parser.add_argument("--force", action="store_true", help="rerun cells whose eval.json exists")
 args = parser.parse_args()
+args.data, args.out = args.data.rstrip("/"), args.out.rstrip("/")
 
 CACHE_KEY_VERSION = "v1"  # bump when the cache format or its config changes
 LOCK_STALE_S = 45 * 60
@@ -184,22 +185,23 @@ class CacheLock:
         return True
       except exceptions.PreconditionFailed:
         pass
-      age = None
+      # Fresh Blob per probe: a reloaded Blob pins its generation and would 404 forever
+      # once another process replaced the lock. self.lock keeps our own upload generation.
+      probe = self.bucket.blob(self.lock.name)
       try:
-        self.lock.reload()
-        age = time.time() - self.lock.updated.timestamp()
+        probe.reload()
+        age = time.time() - probe.updated.timestamp()
       except exceptions.NotFound:
-        continue  # the builder just finished or died between our two calls; retry at once
+        age = None  # released or taken over between our two calls
       if age is not None and age > LOCK_STALE_S:
         print(f"stale cache lock ({age:.0f}s) on {self.prefix}; taking over", flush=True)
         try:
-          self.lock.delete(if_generation_match=self.lock.generation)
+          probe.delete(if_generation_match=probe.generation)
         except (exceptions.PreconditionFailed, exceptions.NotFound):
           pass
-        continue
       if time.time() - t0 > 2 * LOCK_STALE_S:
         raise TimeoutError(f"cache {self.prefix} not built after {2 * LOCK_STALE_S}s")
-      time.sleep(5)
+      time.sleep(1 if age is None else 5)
 
   def release(self):
     from google.api_core import exceptions  # noqa: PLC0415
@@ -216,7 +218,6 @@ VARIANTS = {"base": set(), "nockpt": {"no_checkpoints"}, "reuse": {"reuse_reader
 
 
 def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
-  train = f"csv:{args.data}/{dataset}/train.csv"
   feats, spec, loc = dataset_ctx(fs, dataset)
   knobs = VARIANTS[variant] if variant else set()
   no_checkpoints = args.no_checkpoints or "no_checkpoints" in knobs
@@ -242,6 +243,11 @@ def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
     t_lock = time.time()
     building = lock.acquire_or_wait()
     lock_wait_s = round(time.time() - t_lock, 2)
+    try:
+      return _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc, ext,
+                         tc, work_dir, resume, building, lock_wait_s, no_checkpoints, reuse_reader)
+    finally:
+      lock.release()  # also on any failure after the lock was taken
   else:
     # Stable work dir + resume_training=True: dataset_cache/ is built once per dataset and
     # reused across levels. checkpoint/ must go, or the next level resumes this level's trees.
@@ -252,13 +258,17 @@ def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
       fs.rm(f"{work_dir}/checkpoint"[5:], recursive=True)
     except FileNotFoundError:
       pass
+    return _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc, ext, tc,
+                       work_dir, resume, building, lock_wait_s, no_checkpoints, reuse_reader)
 
+
+def _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc, ext, tc,
+                work_dir, resume, building, lock_wait_s, no_checkpoints, reuse_reader):
+  train = f"csv:{args.data}/{dataset}/train.csv"
   barrier_path = None
   if args.barrier_csv:
     barrier_path = f"/tmp/barriers_{dataset}_{level:.2f}.csv"
     os.environ["DGBT_BARRIER_CSV"] = barrier_path
-  else:
-    os.environ.pop("DGBT_BARRIER_CSV", None)
 
   learner = ydf.DistributedGradientBoostedTreesLearner(
       label=args.label,
@@ -280,12 +290,8 @@ def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
       extra_training_config=tc,
   )
   t0 = time.time()
-  try:
-    with LogTee() as tee:
-      model = learner.train(train)
-  finally:
-    if lock is not None:
-      lock.release()
+  with LogTee() as tee:
+    model = learner.train(train)
   train_s = round(time.time() - t0, 2)
   try:
     ev = model.evaluate(f"csv:{loc}/test.csv", use_slow_engine=True)

@@ -117,6 +117,7 @@ class FileOutputByteStream
   GCSPath cloud_path_;
   std::string buffer_;
   bool streaming_ = false;
+  bool failed_ = false;  // a failed Write must not let Close() upload a partial buffer
 };
 
 absl::Status FileInputByteStream::Open(absl::string_view path) {
@@ -194,6 +195,7 @@ absl::Status FileOutputByteStream::Open(absl::string_view path) {
   ASSIGN_OR_RETURN(cloud_path_, GetGCSPath(path));
   buffer_.clear();
   streaming_ = false;
+  failed_ = false;
   if (UseStreamingWrites()) {
     return StartStreaming();
   }
@@ -201,21 +203,36 @@ absl::Status FileOutputByteStream::Open(absl::string_view path) {
 }
 
 absl::Status FileOutputByteStream::Write(absl::string_view chunk) {
+  if (failed_) {
+    return absl::Status(absl::StatusCode::kUnknown, "Write after a failure");
+  }
   if (!streaming_) {
     if (buffer_.size() + chunk.size() <= kMaxBufferedWriteBytes) {
       buffer_.append(chunk.data(), chunk.size());
       return absl::OkStatus();
     }
-    RETURN_IF_ERROR(StartStreaming());
+    const auto status = StartStreaming();
+    if (!status.ok()) {
+      failed_ = true;
+      buffer_.clear();
+      return status;
+    }
   }
   gcs_stream_.write(chunk.data(), chunk.size());
   if (gcs_stream_.bad()) {
+    failed_ = true;
     return absl::Status(absl::StatusCode::kUnknown, "Failed to write chunk");
   }
   return absl::OkStatus();
 }
 
 absl::Status FileOutputByteStream::Close() {
+  if (failed_) {
+    buffer_.clear();
+    return absl::Status(absl::StatusCode::kUnknown,
+                        absl::StrCat("Not closing gs://", cloud_path_.bucket, "/",
+                                     cloud_path_.object, " after a failed write"));
+  }
   if (!streaming_) {
     // Whole object in memory: one InsertObject call.
     auto metadata = GetGCSClient().InsertObject(cloud_path_.bucket,
