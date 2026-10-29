@@ -149,11 +149,13 @@
 
 \section{Work log - Weekly TODOs}
 
+\TODO{GCP billing}
+
 \textit{Ariel TODOs by Nov-10}
 
 \textbf{\textit{Accuracy cost of parititioning columns: }}
 
-Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs accuracy. \TODO{4 plots}: $0\% \to 100\%$ replication, under column assignment method. \textbf{100\% replication is equivalent to local SPO}
+Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs accuracy. \textbf{4 plots}: $0\% \to 100\%$ replication, under column assignment method. \textbf{100\% replication is equivalent to local SPO}
     \begin{todolist}
         \item Random
         \item Important columns in model trained on 1\% of the dataset
@@ -167,7 +169,7 @@ Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs
 \begin{todolist}
     \item Add good ideas from 26-Oct meet
     \item how come SPO is faster even despite AA-Presort? Presort cost is measured inside Setup
-    \item \TODO{Plot Barrier} results
+    \item[\done] \textcolor{cyan}{Plot Barrier results}
     \begin{todolist}
         \item Baseline: naive SPO with cross-node communication
     \end{todolist}
@@ -460,7 +462,7 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 % TODO(ariel): caption covers (b) only; (a) is the swimlane
 \Description{Two panels. Left: timeline of one SPO-GBT tree in four lanes (manager, slowest, median, fastest worker), above a zoom on tree level 0. Right: one horizontal 100\% stacked bar per arm, split into six time components, with the total seconds at its end.}
 \label{fig:yt8m-barriers}
-\par\smallskip\raggedright\footnotesize 10 trees, $P{=}F$
+\par\smallskip\raggedright\footnotesize 10 trees, $P{=}F$, Disjoint columns (in
 \end{minipage}
 }]
 
@@ -486,6 +488,54 @@ If a dataset has no explicit test set, the last 10\% of the dataset is used as t
 \end{minipage}
 }]
 
+
+\twocolumn[{\floatblock%
+\subsection{Column Replication}
+% TODO(Ariel): text
+
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=table}
+\centering\footnotesize
+\caption{Test accuracy of distributed SPO-GBT ($W{=}4$) vs.\ column replication $r$: each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns. Mean over 34 CC18 datasets (5 seeds each); $\Delta$ and W/T/L vs.\ $r{=}0$; mean rank over the 11 levels.}
+\label{tab:column-replication}
+\input{tables/table_column_replication_body}
+\par\smallskip\raggedright\footnotesize pts = percentage points of test accuracy.
+\par\footnotesize \textbf{single} = single-machine SPO-GBT, same hyperparameters; $\Delta$ and W/T/L vs.\ distributed $r{=}0$; not ranked
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\input{figures/evaluation/fig_column_replication_body}
+\caption{Table~\ref{tab:column-replication} as charts. Top: mean $\Delta$ test accuracy vs.\ $r{=}0$, with 95\% bootstrap interval over the 34 datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). Right of the dotted line: single-machine SPO-GBT (green; dashed: its mean).}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
+\label{fig:column-replication}
+\par\smallskip\raggedright\footnotesize pts = percentage points of test accuracy. single = single-machine SPO-GBT, same hyperparameters. Bottom clipped to $\pm$5 pts (9 of 374 points outside)
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock%
+\subsection{Cross-network Projections}
+% TODO(Ariel): text
+
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Tree-training time, communication and test accuracy of in-worker vs.\ cross-network projections per CC18 dataset.}
+\label{tab:cross-network}
+\input{tables/table_cross_network_body}
+\par\smallskip\raggedright\footnotesize In-worker: each worker samples projections from its own $F/W$ columns. Cross-network: each worker samples from all $F$ columns and fetches the ones it lacks from their owners at every tree level. Speedup = in-worker time / cross-network time. GB: columns communicated between workers. Wait: time blocked on communication, slowest worker per round. Last row: sums, geomean speedup, mean accuracy. $W{=}4$, 300 trees, depth 6, $P{=}F$, 1 seed.
+\end{minipage}
+\vskip1em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=figure}
+\centering
+\input{figures/evaluation/fig_cross_network_body}
+\caption{Table~\ref{tab:cross-network} as charts: (a) speedup vs.\ dataset size, (b) time breakdown, (c) test accuracy.}
+\Description{Three panels in a row. Left: log-log scatter of speedup against rows times features, decreasing from about 1 to 0.29. Middle: horizontal stacked bars for eight datasets. Right: scatter of accuracies along the diagonal.}
+\label{fig:cross-network}
+\par\smallskip\raggedright\footnotesize (a) one point per dataset, log-log, dashed = parity. (b) cross-network time of the 8 datasets with the lowest speedup. (c) dashed = equal accuracy.
+\end{minipage}
+}]
 
 \appendix
 % Full-width page top so heading, table and figure share one page.

@@ -1,6 +1,8 @@
 # Distributed SPO-GBT: how to recreate the results
 
-Three families of runs live under `benchmarks/results/runtime/distributed_spo_gbt/`. They share the C++
+Families A-C live under `benchmarks/results/runtime/distributed_spo_gbt/` on `main`. Studies E and F keep
+their results (and the generators of their paper artifacts) on their own branch; `main` holds the code they ran,
+the paper bodies, and the pointers below. They share the C++
 learner (this fork's `learner/distributed_gradient_boosted_trees`, in-worker sparse-oblique kernel) but
 not the harness. **Only family A yields numbers the paper may report as "distributed"** (user directive
 2026-10-25); B is out of the paper and C is in-process on one box (smoke tests, kept as history).
@@ -10,6 +12,8 @@ not the harness. **Only family A yields numbers the paper may report as "distrib
 | A. Vertex AI grids on natural datasets (GRPC, one VM per manager and per worker) | GCP project `ydf-distributed-spo-gbt`, `us-east1` | `run_vertex_barriers.py` + `vertex_build/` | `barriers/vertex/p_F/<RUN_ID>_<dataset>/<arm>_w<W>/` (P = F) |
 | B. Vertex AI weak/strong scaling on trunk data (2026-10-15) | same project, `n2-highmem-2` | the two notebooks + `vertex_build/` | `vertex_scaling/<RUN_ID>_<cols>c/`; removed from `main.tex` on 2026-10-26 |
 | C. Single box, workers as threads in one process | AWS `m7i.metal-24xl` | `examples/train_distributed_gbt` via `run_dgbt*.sh`, `queue*.sh` | `results.csv`, `anchors.csv`, `suite_results.csv`, `in_node_parallelism_2026-10-22/`; smoke tests since 2026-10-25 |
+| E. Column replication on CC18 (Vertex, n2-highmem-4) | same project | `column_replication/run_vertex_colrep.py` + `vertex_build/train_cells.py` | **branch `column-replication`** (b64346ca), see §E |
+| F. Naive column shipping / cross-network (Vertex, n2-highmem-4) | same project | see the branch | **branch `cross-worker-col-comms`** (f4548d37), see §F |
 
 ## A. Vertex AI grids on natural datasets (`run_vertex_barriers.py`)
 
@@ -152,6 +156,8 @@ hm4 column now reads the P = F n2-highmem-4 cells (`pfhm4*`) instead of the dele
 | `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `in_node_parallelism_2026-10-22/` | C |
 | `figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf` | none (made interactively in a chat session) | `results.csv` + `anchors.csv` | C |
 | `figures/method/*.pdf`, `listings/in_worker_oblique` | hand-made (SVG sources in `benchmarks/results/figures/`) | - | - |
+| `tables/table_column_replication_body.tex`, `figures/evaluation/fig_column_replication_body.tex` + `column_replication/*.dat` | `make_column_replication_{table,fig}.py` (**branch `column-replication`**) | `benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex/` (that branch) | E |
+| `tables/table_cross_network_body.tex`, `figures/evaluation/fig_cross_network_body.tex` + `cross_network/*.dat` | `make_cross_network_{table,fig}.py` (**branch `cross-worker-col-comms`**) | `naive_column_shipping/vertex_hm4_20261029/results.csv` (that branch) | F |
 
 Generated files kept in the repo but not input by `main.tex` (2026-10-26): `tables/table_vertex_{weak,strong}_body.tex`
 and `figures/evaluation/grcp_n2/strong_weak_scaling.pdf` (family B), `tables/table_vertex_hm4_pf_body.tex`,
@@ -162,3 +168,47 @@ Rerun order for a full refresh: (1) family A cells on Vertex (`run_vertex_barrie
 `--p_total F`), (2) the three m7i-only generators once they are back in the repo, then
 `make_paper_tables.py`, (3) push the `.tex` bodies to Overleaf after
 compiling the pulled MCP clone locally (CLAUDE.md).
+
+## E. Column replication on CC18 (Vertex, 2026-10-28/29) - results on branch `column-replication`
+
+Question: how much accuracy the disjoint F/W column split costs. YDF assigns columns round-robin over
+cost-sorted features, and dynamic re-balancing is off for oblique splits. With `in_worker_oblique.column_replication = r`,
+each worker also holds a seeded random fraction r of the other workers' numerical columns; r = 1 means every worker
+holds all of them. On `main` since 8ddb03f7: the knob, `vertex_build/train_cells.py` (many cells per CustomJob,
+resumable), the launcher `column_replication/run_vertex_colrep.py`, `prep_cc18_fold0.py`, and the GCS/cache
+speedups that cut a 374-cell job from ~2 h to ~10 min (all bit-identical).
+
+**Results: branch `column-replication` @ b64346ca, `benchmarks/results/accuracy/distributed_spo_gbt/`.**
+`README.md` there indexes the folders:
+- the Vertex run (`column_replication_vertex/`, run `full20261029b`, 1870 cells);
+- the single-machine SPO-GBT baseline;
+- the seed-bug run (`full20261029`, all seeds ran as 123456; not reportable);
+- the EC2 in-process smoke sweep (not reportable);
+- the speed work (`benchmarks/results/runtime/distributed_spo_gbt/vertex_speed_2026-10-29/REPORT.md`).
+
+Raw cells: `gs://ariel_ydf_bucket/runs/colrep_full20261029b/`.
+
+Setup:
+- Cluster: n2-highmem-4, 1 manager + 4 workers.
+- Model: 10 trees, depth 6, P = F per worker, density 1.5, binary weights, all columns presorted.
+- Checkpoints off.
+- Data: CC18 fold 0, numeric (policy-encoded), seeds 1-5, r = 0, 0.1, ..., 1.
+
+Paper: KDD27 Table 2 (`tab:column-replication`) and the column-replication figure. Generators and cells are on the
+branch; they reproduce the bodies on `main` byte-for-byte.
+
+Known issue: the Python API's `random_seed` is dropped by the DGBT learner. The harness sets it through
+`extra_training_config`. The C++ fix is 713c70f7 on the branch, not on `main`. Bug brief:
+`vertex_speed_2026-10-29/BUG_dgbt_random_seed.md` on the branch.
+
+## F. Naive column shipping / cross-network communication - results on branch `cross-worker-col-comms`
+
+Baseline in which each worker samples projections over all columns and fetches foreign columns from their owners
+every layer. Branch `cross-worker-col-comms` @ f4548d37 (was `naive-column-shipping` / `colship-vertex`):
+- code;
+- `benchmarks/results/runtime/distributed_spo_gbt/naive_column_shipping/` (`README.md`, Vertex run
+  `vertex_hm4_20261029`: `results.csv`, `launch.sh`, raw eval.json + barrier CSVs);
+- generators `make_cross_network_{table,fig}.py` for KDD27 Table 3 / Fig. 9.
+
+That branch is not merged into `main` yet.
+

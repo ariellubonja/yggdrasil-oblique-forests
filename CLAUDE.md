@@ -375,6 +375,13 @@ timers masked. In chat, report each arm as speedup = exact_hwy / arm.
 
 - **64 bins → AVX-2; 256 bins → AVX-512.** Use that pairing for vectorized histogram runs.
 
+## Replicate the paper's caption and footnote style (user directive, 2026-10-29)
+
+**Before captioning a new figure/table, read the neighbouring floats in the live Overleaf clone and copy their
+style.** KDD27: one short sentence saying what is shown, then `\Description`, `\label`, and a setup footnote
+`\par\smallskip\raggedright\footnotesize <terse notes>` inside the float after the caption. The no-prose and
+no-machine-specs rules still apply.
+
 ## No machine specs in figure captions (user directive, 2026-09-18)
 
 **Never put hardware/run specs (CPU model, thread count, tree count, instance type) in Overleaf
