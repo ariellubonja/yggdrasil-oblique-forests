@@ -102,6 +102,9 @@ def run_cell(fs, cluster, dataset, level, out_cell):
     pass
 
   tc = abstract_learner_pb2.TrainingConfig()
+  # DGBT drops the generic random_seed hyperparameter (it is applied to a temporary GBT
+  # learner and only the GBT extension is copied back); the extra config merges after it.
+  tc.random_seed = args.seed
   ext = tc.Extensions[dgbt_pb2.distributed_gradient_boosted_trees_config]
   ext.in_worker_oblique.column_replication = level
   ext.in_worker_oblique.num_projections_from_local_features = False

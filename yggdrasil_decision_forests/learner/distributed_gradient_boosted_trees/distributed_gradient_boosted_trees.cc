@@ -113,6 +113,23 @@ absl::Status DistributedGradientBoostedTreesLearner::SetHyperParametersImpl(
   dgbt_config->mutable_gbt()->MergeFrom(
       gbt_learner.training_config().GetExtension(
           gradient_boosted_trees::proto::gradient_boosted_trees_config));
+  // The generic fields (random_seed, ...) were applied to the temporary GBT
+  // learner by AbstractLearner::SetHyperParametersImpl; copy them back.
+  const auto& gbt_tc = gbt_learner.training_config();
+  if (gbt_tc.has_random_seed()) {
+    training_config_.set_random_seed(gbt_tc.random_seed());
+  }
+  if (gbt_tc.has_maximum_training_duration_seconds()) {
+    training_config_.set_maximum_training_duration_seconds(
+        gbt_tc.maximum_training_duration_seconds());
+  }
+  if (gbt_tc.has_maximum_model_size_in_memory_in_bytes()) {
+    training_config_.set_maximum_model_size_in_memory_in_bytes(
+        gbt_tc.maximum_model_size_in_memory_in_bytes());
+  }
+  if (gbt_tc.has_pure_serving_model()) {
+    training_config_.set_pure_serving_model(gbt_tc.pure_serving_model());
+  }
 
   {
     const auto hparam = generic_hyper_params->Get(
