@@ -320,6 +320,7 @@ def main():
   cluster = ydf.util.get_vertex_ai_cluster_spec()
   print("cluster:", cluster, flush=True)
   if cluster.is_worker:
+    ydf.verbose(2)  # worker-side C++ logs (cache export, column loads) reach Cloud Logging
     while True:  # serve managers forever; restart if a training kills the worker loop
       try:
         ydf.start_worker(cluster.port)
