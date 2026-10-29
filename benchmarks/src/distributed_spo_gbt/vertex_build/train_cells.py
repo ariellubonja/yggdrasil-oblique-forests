@@ -346,8 +346,15 @@ def main():
 
   failed = {}
   for attempt in range(3):
+    # One listing instead of one HEAD request per cell (374 cells = ~40 s per pass).
+    done = set()
+    try:
+      fs.invalidate_cache(args.out[5:])
+      done = {f"gs://{p}" for p in fs.find(args.out[5:]) if p.endswith("/eval.json")}
+    except FileNotFoundError:
+      pass
     todo = [c for c in cells
-            if (args.force and attempt == 0) or not fs.exists(f"{cell_dir(*c)}/eval.json"[5:])]
+            if (args.force and attempt == 0) or f"{cell_dir(*c)}/eval.json" not in done]
     if not todo:
       break
     print(f"pass {attempt}: {len(todo)} cells to run", flush=True)

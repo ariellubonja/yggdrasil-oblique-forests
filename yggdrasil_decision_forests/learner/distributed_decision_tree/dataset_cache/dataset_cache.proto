@@ -308,6 +308,11 @@ message DatasetCacheReaderOptions {
 
   // Load an read the cache from memory, or read the cache from disk.
   optional bool load_cache_in_memory = 3 [default = true];
+
+  // Keep the loaded columns in a process-wide pool keyed by (cache path, cache
+  // metadata) so later readers of the same cache (other feature subsets, next
+  // training) skip the I/O for columns already in memory.
+  optional bool keep_columns_in_process = 5 [default = false];
 }
 
 // Partial metadata from a subset of observations of a given column obtained

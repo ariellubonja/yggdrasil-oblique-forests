@@ -163,6 +163,7 @@ absl::Status DistributedGradientBoostedTreesWorker::Setup(
     bool reused = false;
     if (spe_config.reuse_dataset_cache_in_workers() &&
         welcome_.train_config().task() != model::proto::Task::RANKING) {
+      read_options.set_keep_columns_in_process(true);
       ASSIGN_OR_RETURN(auto shared,
                        distributed_decision_tree::dataset_cache::
                            GetOrCreateSharedDatasetCacheReader(

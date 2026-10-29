@@ -237,8 +237,10 @@ class DatasetCacheReader {
   // Initialize the internal structure and load the feature columns in RAM.
   absl::Status InitializeAndLoadInMemoryCache();
 
-  // Loads a single column in RAM.
+  // Loads a single column in RAM (from the process-wide pool when enabled).
   absl::Status LoadInMemoryCacheColumn(int column_idx, size_t* memory_usage);
+  absl::Status LoadInMemoryCacheColumnFromDisk(int column_idx,
+                                               size_t* memory_usage);
 
   // Unloads a single column from RAM.
   absl::Status UnloadInMemoryCacheColumn(int column_idx);
@@ -254,6 +256,8 @@ class DatasetCacheReader {
   std::string path_;
   proto::CacheMetadata meta_data_;
   proto::DatasetCacheReaderOptions options_;
+  // Key of the process-wide column pool (options.keep_columns_in_process).
+  std::string pool_identity_;
 
   // Example weights. Empty is the examples are not weighted.
   std::vector<float> weights_;
@@ -294,16 +298,16 @@ class DatasetCacheReader {
 
   struct {
     // Sorted numerical.
-    std::vector<std::unique_ptr<InMemoryFloatColumnReaderFactory>>
+    std::vector<std::shared_ptr<InMemoryFloatColumnReaderFactory>>
         inorder_numerical_columns_;
     std::vector<
-        std::unique_ptr<InMemoryIntegerColumnReaderFactory<ExampleIdxType>>>
+        std::shared_ptr<InMemoryIntegerColumnReaderFactory<ExampleIdxType>>>
         presorted_numerical_example_idx_columns_;
-    std::vector<std::unique_ptr<InMemoryFloatColumnReaderFactory>>
+    std::vector<std::shared_ptr<InMemoryFloatColumnReaderFactory>>
         presorted_numerical_unique_values_columns_;
 
     // Discretized numerical
-    std::vector<std::unique_ptr<
+    std::vector<std::shared_ptr<
         InMemoryIntegerColumnReaderFactory<DiscretizedIndexedNumericalType>>>
         inorder_discretized_numerical_columns_;
     std::vector<std::vector<float>>
@@ -311,16 +315,16 @@ class DatasetCacheReader {
 
     // Categorical.
     std::vector<
-        std::unique_ptr<InMemoryIntegerColumnReaderFactory<CategoricalType>>>
+        std::shared_ptr<InMemoryIntegerColumnReaderFactory<CategoricalType>>>
         inorder_categorical_columns_;
 
     // Boolean.
     std::vector<
-        std::unique_ptr<InMemoryIntegerColumnReaderFactory<BooleanType>>>
+        std::shared_ptr<InMemoryIntegerColumnReaderFactory<BooleanType>>>
         inorder_boolean_columns_;
 
     // Hash
-    std::vector<std::unique_ptr<InMemoryIntegerColumnReaderFactory<HashType>>>
+    std::vector<std::shared_ptr<InMemoryIntegerColumnReaderFactory<HashType>>>
         inorder_hash_columns_;
   } in_memory_cache_;
 };
