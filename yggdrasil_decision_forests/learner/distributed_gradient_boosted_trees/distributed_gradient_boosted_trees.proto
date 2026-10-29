@@ -71,6 +71,20 @@ message DistributedGradientBoostedTreesTrainingConfig {
   // Dynamic load balancing is disabled in this mode.
   optional InWorkerOblique in_worker_oblique = 10;
 
+  // If false, no checkpoint is written (iteration 0, periodic, final); a
+  // worker or manager restart then fails the training instead of resuming it.
+  optional bool create_checkpoints = 11 [default = true];
+
+  // Dataset cache directory; default "<work directory>/dataset_cache". Lets
+  // trainings with different work directories (seeds, levels) share one
+  // deterministic cache. Only read once complete ("done" marker).
+  optional string dataset_cache_path = 12;
+
+  // Workers keep the last loaded dataset cache in memory after a training and
+  // reuse it when the next training asks for the same cache path, features
+  // and reader options (checked against the cache metadata file).
+  optional bool reuse_dataset_cache_in_workers = 13 [default = false];
+
   message InWorkerOblique {
     // Number of projections a worker tests per open node:
     //   false: GetNumProjections(number of numerical features in the dataset),

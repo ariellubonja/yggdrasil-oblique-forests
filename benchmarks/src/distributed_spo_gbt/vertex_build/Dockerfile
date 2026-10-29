@@ -1,5 +1,7 @@
 # Vertex AI training image: the fork's ydf wheel (built by wheel/Dockerfile) + train.py.
-FROM us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo/ydf-wheel:34d64d3d AS wheel
+# Wheel tag via cloudbuild.yaml (_WHEEL_TAG); default = the wheel of main's C++ (76c81faa).
+ARG WHEEL_TAG=76c81faa
+FROM us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo/ydf-wheel:${WHEEL_TAG} AS wheel
 FROM python:3.12
 WORKDIR /root
 COPY --from=wheel /wheel/ydf-*.whl /tmp/

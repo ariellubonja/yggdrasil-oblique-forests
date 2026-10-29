@@ -18,7 +18,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT, REGION, BUCKET = "ydf-distributed-spo-gbt", "us-east1", "ariel_ydf_bucket"
 FIELDS = ["dataset", "seed", "replication", "workers", "threads", "trees", "max_depth", "rc",
           "test_acc", "test_auc", "test_logloss", "num_conditions", "num_oblique", "num_multi_col",
-          "held_cols", "train_s", "wall_s", "git", "log"]
+          "held_cols", "train_s", "wall_s", "cache_build_s", "workers_ready_s",
+          "checkpoints_s", "tree_training_s", "git", "log"]
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--image", required=True)
@@ -35,6 +36,12 @@ ap.add_argument("--git", default="34d64d3d")
 ap.add_argument("--quota", type=int, default=96, help="N2 custom-training vCPUs in the region")
 ap.add_argument("--out_root", default=os.path.join(
     HERE, "../../../..", "ariel_notes/results/2026-10-28_column_replication/vertex_hm4"))
+ap.add_argument("--job_prefix", default="colrep",
+                help="display name <prefix>-s<seed>-<run_id>, outputs runs/<prefix>_<run_id>")
+ap.add_argument("--env", action="append", default=[],
+                help="KEY=VALUE set in every container (manager and workers); repeatable")
+ap.add_argument("--extra_args", default="",
+                help="extra train_cells.py flags, e.g. '--cache_root gs://b/work/cache --no_checkpoints'")
 ap.add_argument("--dry_run", action="store_true")
 args = ap.parse_args()
 
@@ -42,7 +49,7 @@ SEEDS = [int(s) for s in args.seeds.split(",")]
 VCPUS = int(args.machine.rsplit("-", 1)[1])
 JOB_VCPUS = (1 + args.workers) * VCPUS
 RUN_ID = args.run_id or datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-RUN_DIR = f"gs://{BUCKET}/runs/colrep_{RUN_ID}"
+RUN_DIR = f"gs://{BUCKET}/runs/{args.job_prefix}_{RUN_ID}"
 now = lambda: datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S")  # noqa: E731
 
 print(f"RUN_ID {RUN_ID} -> {RUN_DIR} | {len(SEEDS)} jobs x (1+{args.workers}) x {args.machine} "
@@ -65,10 +72,12 @@ def make_job(seed):
          f"--max_depth={args.max_depth}", f"--meta={json.dumps(meta)}"]
     if args.datasets:
         a.append(f"--datasets={args.datasets}")
+    a += args.extra_args.split()
+    env = [{"name": k, "value": v} for k, v in (e.split("=", 1) for e in args.env)]
     pool = lambda n: {"machine_spec": {"machine_type": args.machine}, "replica_count": n,  # noqa: E731
-                      "container_spec": {"image_uri": args.image,
+                      "container_spec": {"image_uri": args.image, "env": env,
                                          "command": ["python3", "train_cells.py"], "args": a}}
-    return aiplatform.CustomJob(display_name=f"colrep-s{seed}-{RUN_ID}",
+    return aiplatform.CustomJob(display_name=f"{args.job_prefix}-s{seed}-{RUN_ID}",
                                 worker_pool_specs=[pool(1), pool(args.workers)])
 
 
@@ -104,7 +113,7 @@ pending, running, attempts, failed_seeds = list(SEEDS), {}, {s: 0 for s in SEEDS
 active = {j.display_name: j for j in aiplatform.CustomJob.list(
     filter=" OR ".join(f'state="{s}"' for s in ACTIVE))}
 for s in list(pending):
-    if (job := active.get(f"colrep-s{s}-{RUN_ID}")) is not None:
+    if (job := active.get(f"{args.job_prefix}-s{s}-{RUN_ID}")) is not None:
         running[s] = job
         pending.remove(s)
         print(now(), "adopting", s, job.resource_name.split("/")[-1])

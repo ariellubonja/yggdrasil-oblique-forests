@@ -392,6 +392,16 @@ measurement and the barrier taxonomy (comm barriers are not the only ones: strag
 serial sections, in-worker joins, I/O) are in
 `benchmarks/results/runtime/distributed_spo_gbt/barriers/README.md`.
 
+## Distributed GBT checkpoints off in every harness (user directive, 2026-10-29)
+
+The proto keeps YDF's default `create_checkpoints = true`; every harness sets it to false:
+`vertex_build/train.py` (recorded as `create_checkpoints` in eval.json), `vertex_build/train_cells.py`
+(`--checkpoints` re-enables, A/B only) and `examples/train_distributed_gbt.cc`. Reason: checkpoints (iteration 0,
+every 10 min, final; model + every worker's per-row predictions to GCS while the manager waits) fall inside
+`tree_training_s`, i.e. I/O inside the headline time; jobs are not expected to fail. Cost: a restarted worker now
+fails the job instead of resuming. Vertex cells before 2026-10-29 ran with checkpoints on: never mix them with new
+cells in one comparison.
+
 ## Unspecified parameters: library defaults (user directive, 2026-10-12)
 
 For any parameter the user does not specify, use the library/driver default (YDF proto default,
@@ -421,14 +431,14 @@ stays 1000, so P = F is capped at 1000 above F = 1000 unless the run lifts the c
 `_fullproj` arms pass INT_MAX). Axis-aligned GBT arms are unaffected: `arms.py` passes
 `--num_candidate_attributes -1` explicitly.
 
-## Vertex AI machine type: one type per comparison; n2-highmem-16 (user decision, 2026-10-25)
+## Vertex AI machine type: one type per comparison; n2-highmem-4 (user decision, 2026-10-29)
 
-**Every distributed run uses `n2-highmem-16` (16 vCPU, 128 GB), manager = worker** (user directive
-2026-10-25, replacing the n2-highmem-4 choice of 2026-10-24, which itself replaced a same-day
-n2-highmem-32 choice). **Never mix machine types across the cells or datasets of a comparison**; one
-instance type stands behind every reported number. The -4 grids of 2026-10-24 are a different type and
-are not mixed with -16 cells. N2 training quota in us-east1 is 96 vCPUs (192 pending, 256 auto-denied):
-on -16 that is W <= 5 per cell (W=16 needs 272). Thread count per worker stays the YDF default
+**Every distributed run uses `n2-highmem-4` (4 vCPU, 32 GB), manager = worker** (user directive
+2026-10-29, replacing the n2-highmem-16 choice of 2026-10-25; the CC18 column-replication and Vertex speed
+runs of 2026-10-28/29 already ran on -4). **Never mix machine types across the cells or datasets of a
+comparison**; one instance type stands behind every reported number. Earlier -16 cells are a different type
+and are not mixed with -4 cells. N2 training quota in us-east1 is 96 vCPUs: on -4 a W=4 job takes 20 vCPUs,
+so 4 such jobs run at once. Thread count per worker stays the YDF default
 (`concurrency.determine_optimal_num_threads`, = vCPUs of the node).
 **Warn the user before launching anything that would change the machine type** — that is their decision.
 

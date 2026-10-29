@@ -294,7 +294,9 @@ DistributedGradientBoostedTreesLearner::TrainWithStatusImpl(
                    dataset::SplitTypeAndPath(typed_path));
 
   std::string dataset_cache_path =
-      file::JoinPath(work_directory, kFileNameDatasetCache);
+      spe_config.dataset_cache_path().empty()
+          ? file::JoinPath(work_directory, kFileNameDatasetCache)
+          : spe_config.dataset_cache_path();
   if (train_prefix == dataset::FORMAT_PARTIAL_DATASET_CACHE) {
     // The dataset is stored in the partially cache format.
     monitoring.BeginDatasetCacheCreation();
@@ -615,7 +617,8 @@ TrainWithCache(
   LOG(INFO) << "Start tree training";
   for (; iter_idx < spe_config.gbt().num_trees(); iter_idx++) {
     // Create a checkpoint.
-    if (iter_idx >= minimum_iter_for_new_checkpoint &&
+    if (spe_config.create_checkpoints() &&
+        iter_idx >= minimum_iter_for_new_checkpoint &&
         ShouldCreateCheckpoint(iter_idx, time_last_checkpoint, spe_config) &&
         (!last_checkpoint_idx.ok() || iter_idx > last_checkpoint_idx.value())) {
       time_last_checkpoint = absl::Now();
@@ -679,7 +682,8 @@ TrainWithCache(
     }
   }
 
-  if (!last_checkpoint_idx.ok() || iter_idx > last_checkpoint_idx.value()) {
+  if (spe_config.create_checkpoints() &&
+      (!last_checkpoint_idx.ok() || iter_idx > last_checkpoint_idx.value())) {
     // Create the final checkpoint
     RETURN_IF_ERROR(CreateCheckpoint(iter_idx, *model, work_directory,
                                      label_statistics, distribute_manager.get(),

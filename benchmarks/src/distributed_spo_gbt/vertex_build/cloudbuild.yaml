@@ -1,0 +1,9 @@
+# gcloud builds submit vertex_build --config vertex_build/cloudbuild.yaml \
+#   --substitutions _WHEEL_TAG=<wheel tag>,_IMAGE=<train image uri>
+steps:
+- name: gcr.io/cloud-builders/docker
+  args: ['build', '-t', '${_IMAGE}', '--build-arg', 'WHEEL_TAG=${_WHEEL_TAG}', '.']
+images: ['${_IMAGE}']
+substitutions:
+  _WHEEL_TAG: '34d64d3d'
+  _IMAGE: 'us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo/train-ydf:dev'

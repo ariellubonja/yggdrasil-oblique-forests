@@ -157,7 +157,7 @@ int main(int argc, char** argv) {
       ydf::model::distributed_gradient_boosted_trees::proto::
           distributed_gradient_boosted_trees_config);
   dgbt->set_worker_logs(absl::GetFlag(FLAGS_worker_logs));
-  dgbt->set_checkpoint_interval_trees(1000);  // No checkpointing in the demo.
+  dgbt->set_create_checkpoints(false);  // Checkpoint I/O is not training time.
   dgbt->mutable_gbt()->set_num_trees(absl::GetFlag(FLAGS_num_trees));
   auto* dt = dgbt->mutable_gbt()->mutable_decision_tree();
   dt->set_max_depth(absl::GetFlag(FLAGS_max_depth));
