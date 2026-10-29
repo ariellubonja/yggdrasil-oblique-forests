@@ -399,6 +399,13 @@ measurement and the barrier taxonomy (comm barriers are not the only ones: strag
 serial sections, in-worker joins, I/O) are in
 `benchmarks/results/runtime/distributed_spo_gbt/barriers/README.md`.
 
+## Study results live on their branch; main points to them (user directive, 2026-10-29)
+
+Each study branch commits its own code, its results (cells, logs, summaries, a README index) and the generators of
+its paper artifacts. `main` holds the merged code, the paper snapshot (`paper/<venue>/`, synced from Overleaf), and a
+`REPLICABILITY.md` section giving the branch @ commit, the results path and the raw-cell location (GCS).
+**Never delete a branch that REPLICABILITY.md points to** (currently `column-replication`, `cross-worker-col-comms`).
+
 ## Distributed GBT checkpoints off in every harness (user directive, 2026-10-29)
 
 The proto keeps YDF's default `create_checkpoints = true`; every harness sets it to false:
