@@ -190,9 +190,9 @@ absl::Status GRPCManager::WaitForAllWorkersToBeReady() {
       if (!ping_status.ok()) {
         if (verbosity_ >= 1) {
           LOG(INFO) << "Worker #" << worker->worker_idx
-                    << " is not yet available. Waiting 10s";
+                    << " is not yet available. Waiting 1s";
         }
-        absl::SleepFor(absl::Seconds(10));
+        absl::SleepFor(absl::Seconds(1));
         continue;
       }
       break;

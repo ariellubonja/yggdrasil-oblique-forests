@@ -260,12 +260,12 @@ class FileSystemImplementation : public FileSystemInterface {
     auto client = GetGCSClient();
 
     // The prefix is an efficient filter applies on the candidate server side
-    // (unlike the regex which is applied client side).
+    // (unlike the regex which is applied client side). Without a wildcard the
+    // whole object name is the prefix (an empty prefix listed the bucket).
     const auto end_of_prefix = cloud_path.object.find_first_of("?*[]");
-    std::string prefix;
-    if (end_of_prefix != -1) {
-      prefix = cloud_path.object.substr(0, end_of_prefix);
-    }
+    const std::string prefix = end_of_prefix == std::string::npos
+                                   ? cloud_path.object
+                                   : cloud_path.object.substr(0, end_of_prefix);
 
     auto candidates = client.ListObjects(
         cloud_path.bucket, google::cloud::storage::Prefix(prefix));
