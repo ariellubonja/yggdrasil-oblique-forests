@@ -1,6 +1,6 @@
 # Vertex AI training image: the fork's ydf wheel (built by wheel/Dockerfile) + train.py.
-# Wheel tag via cloudbuild.yaml (_WHEEL_TAG); default = the column-replication wheel.
-ARG WHEEL_TAG=34d64d3d
+# Wheel tag via cloudbuild.yaml (_WHEEL_TAG); default = the wheel of main's C++ (76c81faa).
+ARG WHEEL_TAG=76c81faa
 FROM us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo/ydf-wheel:${WHEEL_TAG} AS wheel
 FROM python:3.12
 WORKDIR /root

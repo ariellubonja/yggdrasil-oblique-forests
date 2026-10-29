@@ -392,6 +392,16 @@ measurement and the barrier taxonomy (comm barriers are not the only ones: strag
 serial sections, in-worker joins, I/O) are in
 `benchmarks/results/runtime/distributed_spo_gbt/barriers/README.md`.
 
+## Distributed GBT checkpoints off in every harness (user directive, 2026-10-29)
+
+The proto keeps YDF's default `create_checkpoints = true`; every harness sets it to false:
+`vertex_build/train.py` (recorded as `create_checkpoints` in eval.json), `vertex_build/train_cells.py`
+(`--checkpoints` re-enables, A/B only) and `examples/train_distributed_gbt.cc`. Reason: checkpoints (iteration 0,
+every 10 min, final; model + every worker's per-row predictions to GCS while the manager waits) fall inside
+`tree_training_s`, i.e. I/O inside the headline time; jobs are not expected to fail. Cost: a restarted worker now
+fails the job instead of resuming. Vertex cells before 2026-10-29 ran with checkpoints on: never mix them with new
+cells in one comparison.
+
 ## Unspecified parameters: library defaults (user directive, 2026-10-12)
 
 For any parameter the user does not specify, use the library/driver default (YDF proto default,

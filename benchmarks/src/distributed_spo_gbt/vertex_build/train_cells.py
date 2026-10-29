@@ -7,7 +7,7 @@ already exists in --out is skipped, so resubmitting the job resumes it.
 
 Speed knobs (all off = the 2026-10-28 behaviour; see ariel_notes/results/2026-10-29_vertex_speed):
   --cache_root     share one dataset cache per dataset across jobs/seeds (lock + done marker)
-  --no_checkpoints skip the iteration-0 and final checkpoints (create_checkpoints=false)
+  checkpoints are always off (create_checkpoints=false, CLAUDE.md 2026-10-29); --checkpoints re-enables (A/B)
   --reuse_reader   workers keep the loaded columns between trainings
   --barrier_csv    record the manager's per-round barrier CSV next to eval.json
 """
@@ -40,7 +40,8 @@ parser.add_argument("--label", default="label")
 parser.add_argument("--meta", default="{}")
 parser.add_argument("--cache_root", default="",
                     help="gs:// dir of shared dataset caches; empty = per-run cache under /work/")
-parser.add_argument("--no_checkpoints", action="store_true")
+parser.add_argument("--checkpoints", action="store_true", help="keep YDF checkpoints (A/B only)")
+parser.add_argument("--no_checkpoints", action="store_true", help="no-op: checkpoints are off by default")
 parser.add_argument("--reuse_reader", action="store_true")
 parser.add_argument("--barrier_csv", action="store_true")
 parser.add_argument("--variants", default="",
@@ -213,14 +214,14 @@ class CacheLock:
       self.held = False
 
 
-VARIANTS = {"base": set(), "nockpt": {"no_checkpoints"}, "reuse": {"reuse_reader"},
-            "all": {"no_checkpoints", "reuse_reader"}}
+VARIANTS = {"base": {"checkpoints"}, "nockpt": set(), "reuse": {"checkpoints", "reuse_reader"},
+            "all": {"reuse_reader"}}
 
 
 def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
   feats, spec, loc = dataset_ctx(fs, dataset)
   knobs = VARIANTS[variant] if variant else set()
-  no_checkpoints = args.no_checkpoints or "no_checkpoints" in knobs
+  no_checkpoints = not (args.checkpoints or "checkpoints" in knobs)
   reuse_reader = args.reuse_reader or "reuse_reader" in knobs
 
   tc = abstract_learner_pb2.TrainingConfig()

@@ -5,6 +5,10 @@ import sys
 import threading
 import time
 import ydf
+from yggdrasil_decision_forests.learner import abstract_learner_pb2
+from yggdrasil_decision_forests.learner.distributed_gradient_boosted_trees import (
+    distributed_gradient_boosted_trees_pb2 as dgbt_pb2,
+)
 
 parser = argparse.ArgumentParser()
 # Path to training dataset. Should be prefixed with the dataset type e.g. 'csv':.
@@ -207,6 +211,7 @@ def finish(model, timing, log_path, num_workers):
       "num_workers": num_workers,
       "model": args.model,
       "learner_kwargs": learner_kwargs(),
+      "create_checkpoints": None if num_workers == 0 else False,  # None = not distributed
       **timing,
       **json.loads(args.meta),
   }
@@ -233,6 +238,13 @@ def main_in_process():
   finish(*train(learner), num_workers=0)
 
 
+def no_checkpoints_config():
+  """Checkpoints off (CLAUDE.md 2026-10-29): their GCS I/O falls inside tree_training_s."""
+  tc = abstract_learner_pb2.TrainingConfig()
+  tc.Extensions[dgbt_pb2.distributed_gradient_boosted_trees_config].create_checkpoints = False
+  return tc
+
+
 def main_distributed():
   ydf.verbose(2)
 
@@ -255,6 +267,7 @@ def main_distributed():
       workers=cluster_config.workers,
       working_dir=args.work_dir,
       resume_training=True,
+      extra_training_config=no_checkpoints_config(),
       **learner_kwargs(),
   )
   finish(*train(learner), num_workers=len(cluster_config.workers))
