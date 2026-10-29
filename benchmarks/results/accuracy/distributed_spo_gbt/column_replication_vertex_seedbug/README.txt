@@ -1,0 +1,2 @@
+Vertex run full20261029 (image colrep-34d64d3d-v3, n2-highmem-4, 1+4 workers, 10 trees, depth 6, CC18 fold 0).
+BUG: the DGBT learner ignores the random_seed hyperparameter on the Python API (applied to a temporary GBT learner), so all 5 "seeds" are the proto default 123456 -> 1 seed x 5 identical copies. Kept as a determinism/reproduction reference only. Superseded by vertex_hm4/ (seeds via extra_training_config).
