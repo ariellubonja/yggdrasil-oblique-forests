@@ -11,7 +11,8 @@ set -u
 OUT=${1:?out_root}; BIN=${2:?train_distributed_gbt}; FOLDS=${3:?folds_dir}; shift 3
 VARIANTS=${*:-fullfix fullfix_numeric fullfix_rep parity}
 HERE=$(cd "$(dirname "$0")" && pwd)
-NCPU_TOTAL=$(nproc)
+# Threads per worker = NCPU / W change the model (block-wise root statistics): the recorded run used NCPU=16.
+NCPU=${NCPU:-16}
 A="1:SPO 4:SPO 8:SPO 16:SPO 32:SPO"
 for v in $VARIANTS; do
   mkdir -p $OUT/$v/bin; ln -sfn $FOLDS $OUT/$v/folds; cp $BIN $OUT/$v/bin/train_distributed_gbt
@@ -22,8 +23,8 @@ for v in $VARIANTS; do
                          ARMS="4:SPO 8:SPO 16:SPO 32:SPO" ;;
     *) echo "unknown variant $v"; exit 1 ;;
   esac
-  # Variants run concurrently; accuracy does not depend on the thread count, runtime is not measured here.
-  NCPU=$(( NCPU_TOTAL / $(echo $VARIANTS | wc -w) )) ARMS="$ARMS" DIST_EXTRA="$X" \
+  # Variants run concurrently (4 x 16 threads oversubscribes a 48-core box; only runtime suffers).
+  NCPU=$NCPU ARMS="$ARMS" DIST_EXTRA="$X" \
     $HERE/../run_table8_local.sh $OUT/$v > $OUT/$v/run.out 2>&1 &
 done
 wait

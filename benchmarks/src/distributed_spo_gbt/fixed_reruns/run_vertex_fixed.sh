@@ -11,8 +11,9 @@ OUT=${1:?out_root}; shift; STEPS=${*:-build table2 table2_split table3}
 HERE=$(cd "$(dirname "$0")" && pwd); REPO=$(cd $HERE/../../../.. && pwd)
 PY=${PY:-python3}
 R=us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo
-T2_COMMIT=${T2_COMMIT:-$(git -C $REPO rev-parse origin/dgbt-spo-full-fixes)}
-T3_COMMIT=${T3_COMMIT:-$(git -C $REPO rev-parse origin/fix-disc-colcomms)}
+# Recorded commits (images train-ydf:fullfix-10509539, colship-fullfix-1ad2062f already exist: skip `build`).
+T2_COMMIT=${T2_COMMIT:-105095395eff07222842ab6f93ca7bf72741077e}
+T3_COMMIT=${T3_COMMIT:-1ad2062f1e985d449b6574438e0e5c8113c08e68}
 CACHE=${CACHE:-gs://ariel_ydf_bucket/work/cache_cc18_fixed_$(date -u +%Y%m%d)}
 EXTRA="--cache_root $CACHE --no_checkpoints --reuse_reader"
 mkdir -p $OUT/src

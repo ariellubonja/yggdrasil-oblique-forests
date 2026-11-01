@@ -230,26 +230,34 @@ That branch is not merged into `main` yet.
 | 5e42cd20 | Slow path, generic fast engine and distributed scan let the compiler choose fma per file; on icx they differed at rows exactly on a threshold. Fix: `std::fma` everywhere. | None (all harnesses report the fast engine) |
 | 10509539 | `train_distributed_gbt` reused a cache in `--work_dir` built from another `--train_csv`. Fix: signature file. | None (harnesses use fresh work dirs) |
 
-Branches: `dgbt-spo-full-fixes` = 10509539 (all of the above, the code for Tables 2 and 8); `fix-disc-colcomms`
-1ad2062f = the bin, sort and fma fixes on `cross-worker-col-comms` (the code for Table 3). `kdd27-fixed-reruns` =
-`dgbt-spo-full-fixes` + `fixed_reruns/` + the results.
+Branches: the recorded Tables 2 and 8 ran at 10509539 (`dgbt-spo-full-fixes` has since gained 63d05422, a config
+guard that no reported run triggers); `fix-disc-colcomms` 1ad2062f = the bin, sort and fma fixes on
+`cross-worker-col-comms` (the code for Table 3). `kdd27-fixed-reruns` = `dgbt-spo-full-fixes` + `fixed_reruns/` +
+the results. Builds from either 10509539 or the branch head give identical models.
 
 ### Recreate
 
-Everything is deterministic with these commits: on the same platform, a rerun must reproduce the committed
-`results.csv` cell for cell (Table 8 checked: `fullfix` vs `fullfix_rep` 765/765 identical). Different CPU/compiler
-(e.g. Mac vs Linux, libc++ vs libstdc++ RNG) draws different projections; then compare means, not cells.
+Everything is deterministic with these commits: on the same platform **and the same threads per worker**, a rerun
+reproduces the committed `results.csv` cell for cell (checked by a fresh replication on 2026-11-01: Tables 2 and 3
+1870+1870+68 cells identical; Table 8 identical once NCPU matched). Threads per worker change the model (root
+statistics are summed in thread-count blocks): with NCPU=12 instead of 16, ~4% of Table 8 W<=8 cells moved by up to
+0.014 AUC. Different CPU/compiler (Mac vs Linux, libc++ vs libstdc++ RNG) draws different projections; then compare
+means, not cells.
 
 **1. Data.**
 - Table 8 (33 TabArena/TabReD binary datasets, 5 folds): pinned venv (`benchmarks/src/spaa27_experiments/REPLICABILITY.md` §4,
-  §10), then `python benchmarks/src/distributed_spo_gbt/rebuild_table8_data.py <folds_dir>`; it prints the sha256 check
-  against `speedup_map_by_dataset/MANIFEST/inputs.sha256` (all must match).
+  §10) **plus `pip install huggingface_hub`** (not in its freeze; 2.4.0 worked), then
+  `python benchmarks/src/distributed_spo_gbt/rebuild_table8_data.py <folds_dir>`; it prints the sha256 check against
+  `speedup_map_by_dataset/MANIFEST/inputs.sha256` (all 351 must match; it reports 12 `train_nan.csv` files, not the
+  13 that spaa27 §10 mentions, and the hashes still match).
 - Tables 2-3 (34 CC18 binary datasets, fold 0, fully numeric): already at `gs://ariel_ydf_bucket/cc18_fold0/`. To
   rebuild: `python benchmarks/data/download_cc18_datasets.py`, then
   `python benchmarks/src/distributed_spo_gbt/column_replication/prep_cc18_fold0.py --repo <repo> --out <dir>` and
   `gcloud storage cp -r <dir>/* gs://<bucket>/cc18_fold0/` (pass `--data` to the launcher if not the default bucket).
+  A venv with openml 0.15.1, pandas 3.1.0, numpy 2.5.4, scikit-learn 1.9.1 rebuilt the 68 CSVs byte-identical to GCS.
 
-**2. Table 8 (one Linux box; the paper used AWS m7i.metal-24xl, Xeon 8488C, Intel icx; ~45 min for 4 variants).**
+**2. Table 8 (one Linux box; the paper used AWS m7i.metal-24xl, Xeon 8488C, Intel icx; 45-60 min for 4 variants).**
+Keep the script's default `NCPU=16` (threads per worker = 16 / W, as recorded) to reproduce cells exactly.
 ```
 git checkout kdd27-fixed-reruns
 source /opt/intel/oneapi/setvars.sh            # icx toolchain; before any `set -u`
@@ -265,10 +273,13 @@ arms are unchanged by the fixes (their recorded cells in `speedup_map_by_dataset
 ```
 PY=~/vertex_venv/bin/python benchmarks/src/distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh <out>
 ```
-Builds `ydf-wheel:<commit8>` + `train-ydf:fullfix-<commit8>` (Table 2) and `train-ydf:colship-fullfix-<commit8>`
-(Table 3) on Cloud Build (~17 min), then runs `table2/fullfix`, `table2/fullfix_splitbudget` (1870 cells each, ~20 min)
+Defaults to the recorded commits (`T2_COMMIT` 10509539, `T3_COMMIT` 1ad2062f), whose images
+`train-ydf:fullfix-10509539` and `train-ydf:colship-fullfix-1ad2062f` already exist in the project's Artifact
+Registry: skip the build with `... <out> table2 table2_split table3`. The `build` step (~17 min on Cloud Build) is for
+another commit or project. It then runs `table2/fullfix`, `table2/fullfix_splitbudget` (1870 cells each, ~20 min)
 and `table3/fullfix` (68 cells). Steps can be run one at a time (`... <out> table3`). Uses a fresh cache root
-(`gs://ariel_ydf_bucket/work/cache_cc18_fixed_<date>`): **never reuse a cache root built before 7c0eebd3**, it holds
+(`gs://ariel_ydf_bucket/work/cache_cc18_fixed_<date>`; the recorded runs used `work/cache_cc18_discfix`, built
+after 7c0eebd3): **never reuse a cache root built before 7c0eebd3** (e.g. `work/cache_cc18`), it holds
 binned columns (SPO now refuses it with FAILED_PRECONDITION). Run it from a box that stays up (the
 `ariel Small VertexAI Orchestrator` EC2); each launcher blocks until its jobs finish.
 
@@ -294,6 +305,8 @@ Recreate the seed sweep on the Table 8 box with `fixed_reruns/run_seed_sweep.sh 
 (env `FOLDS`, `SINGLE`, `DIST` = binaries), then `fixed_reruns/analyze_seed_sweep.py <out>`. The split budget refuses
 `num_projections_from_local_features` at r < 1 (63d05422): that combination divided an already-local count by W.
 Analyses: `ariel_notes/results/2026-11-01_dist_vs_local_parity/report.md`, `.../2026-11-01_final_verify/report.md`. The Table 2 single-machine row
-(`paper_refs/table2_single_machine_spo_gbt.csv`, made by `paper_refs/table2_single_machine_run_local.sh` on an
-Apple-silicon Mac with the default thread count) is bit-reproducible only there: the single-machine finder's job split
-depends on the thread count.
+(`paper_refs/table2_single_machine_spo_gbt.csv`) was made at commit 2c0990f0 on an Apple-silicon Mac with the default
+thread count; rerun it with `fixed_reruns/run_single_machine_cc18.sh <train_oblique_forest built at 2c0990f0>
+<cc18_fold0 dir> <out>` (reproduced 170/170 cells on an M1 Pro). It is bit-reproducible only on such a Mac: the
+single-machine finder's job split depends on the thread count. (`paper_refs/table2_single_machine_run_local.sh` is
+the original, with paths from the author's machine.)
