@@ -184,3 +184,26 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "distributed_gradient_boosted_trees_seed_test",
+    size = "large",
+    srcs = ["distributed_gradient_boosted_trees_seed_test.cc"],
+    data = ["//yggdrasil_decision_forests/test_data"],
+    deps = [
+        ":dgbt",
+        ":dgbt_cc_proto",
+        ":worker",
+        "//yggdrasil_decision_forests/learner:abstract_learner",
+        "//yggdrasil_decision_forests/learner:abstract_learner_cc_proto",
+        "//yggdrasil_decision_forests/learner:learner_library",
+        "//yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache:dataset_cache_worker",
+        "//yggdrasil_decision_forests/metric",
+        "//yggdrasil_decision_forests/model:abstract_model",
+        "//yggdrasil_decision_forests/utils:filesystem",
+        "//yggdrasil_decision_forests/utils:test",
+        "//yggdrasil_decision_forests/utils:test_utils",
+        "//yggdrasil_decision_forests/utils/distribute/implementations/multi_thread",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
