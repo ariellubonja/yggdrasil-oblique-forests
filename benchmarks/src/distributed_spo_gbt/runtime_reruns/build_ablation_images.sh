@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Wheels + training images for the in-node ablation with the fixes backported (branches abl-*-fix):
-# base = 0e37d40d, vqsort = 1a1934fa, innode = 4df36453 (+ parstd = innode built with --config=exact_std_sort).
+# base = 0e37d40d, vqsort = 1a1934fa, innode = 4df36453 (+ parstd = innode built with -DEXACT_STD_SORT=1).
 set -uo pipefail
 export PATH=$HOME/google-cloud-sdk/bin:$PATH
 R=us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo
@@ -17,6 +17,6 @@ build() {  # name commit bazel_extra
 build base   2e4f45ab6c2efb0c63e318a05ffc0f281c64312e "" &
 build vqsort ae2fb273073e3986842f57c5c6f110b09271e672 "" &
 build innode b74385178c6c79a6999e96a4e09eee2e242282c3 "" &
-build parstd b74385178c6c79a6999e96a4e09eee2e242282c3 "--config=exact_std_sort" &
+build parstd b74385178c6c79a6999e96a4e09eee2e242282c3 "--cxxopt=-DEXACT_STD_SORT=1" &
 wait
 grep -H "^rc=" wheel_*.log train_*.log
