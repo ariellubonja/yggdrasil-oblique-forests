@@ -192,6 +192,36 @@ int main(int argc, char** argv) {
     QCHECK_EQ(split_axis, "AXIS_ALIGNED") << "Unknown --split_axis";
   }
 
+  // The cache is reused through its "done" marker alone, so a new --train_csv
+  // (or cache-shaping flag) in an old --work_dir trained on the old data.
+  // Drop the cache whenever this signature changes.
+  {
+    const std::string train_csv = absl::GetFlag(FLAGS_train_csv);
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(train_csv, ec);
+    QCHECK(!ec) << "Reading " << train_csv << ": " << ec.message();
+    const auto mtime = std::filesystem::last_write_time(train_csv, ec);
+    QCHECK(!ec) << "Reading " << train_csv << ": " << ec.message();
+    const std::string signature = absl::StrCat(
+        std::filesystem::absolute(train_csv).string(), " size=", size,
+        " mtime=", static_cast<int64_t>(mtime.time_since_epoch().count()),
+        " label=", label,
+        " force_numerical=", absl::GetFlag(FLAGS_force_numerical_features),
+        " scan_rows=", absl::GetFlag(FLAGS_dataspec_scan_rows),
+        " max_unique=",
+        absl::GetFlag(FLAGS_max_unique_values_for_discretized_numerical),
+        " axis=", split_axis, "\n");
+    const std::string signature_path =
+        file::JoinPath(work_dir, "cache_signature.txt");
+    const auto previous = file::GetContent(signature_path);
+    if (!previous.ok() || *previous != signature) {
+      std::filesystem::remove_all(file::JoinPath(work_dir, "cache"), ec);
+      QCHECK(!ec) << "Deleting stale cache: " << ec.message();
+      QCHECK_OK(file::SetContent(signature_path, signature));
+      LOG(INFO) << "Dataset cache signature changed: cache rebuilt";
+    }
+  }
+
   // 3. Deployment configuration: where the workers live. "MULTI_THREAD" runs
   // them as threads of this process; swapping in "GRPC" (see
   // examples/distributed_training.sh) is the only change needed for real
