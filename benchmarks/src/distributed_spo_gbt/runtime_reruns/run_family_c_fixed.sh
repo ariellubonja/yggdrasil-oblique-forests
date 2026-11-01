@@ -4,6 +4,9 @@
 source /opt/intel/oneapi/setvars.sh > /dev/null  # before set -u
 set -u
 O=~/runtime_fix/familyC; mkdir -p $O/bin $O/logs
+# Test copies with the label spelled like the train CSVs (run_dgbt.sh FIX dir; ariel-ydf-1 had lost them).
+D=~/yggdrasil-oblique-forests/benchmarks/data; FX=/home/ubuntu/dgbt_work/data; mkdir -p $FX
+for ds in HIGGS SUSY; do [ -s $FX/${ds}_test_500k_floatlabel.csv ] || awk -F, -v OFS=, 'NR>1{$1=($1==1?"1.000000000000000000e+00":"0.000000000000000000e+00")}1' $D/${ds}_test_500k.csv > $FX/${ds}_test_500k_floatlabel.csv; done
 cd ~/yggdrasil-oblique-forests && git fetch -q origin && (git worktree add --detach ~/wt_runtime origin/kdd27-runtime-reruns 2>/dev/null || true)
 cd ~/wt_runtime && git checkout -q --detach origin/kdd27-runtime-reruns && git log -1 --oneline > $O/bin/PROVENANCE.txt
 bazel build //examples:train_distributed_gbt > $O/build.log 2>&1 || { echo BUILD_FAILED; exit 1; }
