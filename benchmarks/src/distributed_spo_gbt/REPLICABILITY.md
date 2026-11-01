@@ -1,5 +1,9 @@
 # Distributed SPO-GBT: how to recreate the results
 
+**Accuracy numbers made before 2026-11-01 (KDD27 Tables 2, 3, 8 as first published) carry a bug** (distributed SPO
+trained on cache-bin representatives; plus nondeterministic tie order). §G has the fixes, the reruns, and how to
+recreate them; it supersedes §E/§F for accuracy.
+
 Families A-C live under `benchmarks/results/runtime/distributed_spo_gbt/` on `main`. Studies E and F keep
 their results (and the generators of their paper artifacts) on their own branch; `main` holds the code they ran,
 the paper bodies, and the pointers below. They share the C++
@@ -14,6 +18,7 @@ not the harness. **Only family A yields numbers the paper may report as "distrib
 | C. Single box, workers as threads in one process | AWS `m7i.metal-24xl` | `examples/train_distributed_gbt` via `run_dgbt*.sh`, `queue*.sh` | `results.csv`, `anchors.csv`, `suite_results.csv`, `in_node_parallelism_2026-10-22/`; smoke tests since 2026-10-25 |
 | E. Column replication on CC18 (Vertex, n2-highmem-4) | same project | `column_replication/run_vertex_colrep.py` + `vertex_build/train_cells.py` | **branch `column-replication`** (b64346ca), see §E |
 | F. Naive column shipping / cross-network (Vertex, n2-highmem-4) | same project | see the branch | **branch `cross-worker-col-comms`** (f4548d37), see §F |
+| G. Fixed reruns of Tables 2, 3, 8 + distributed-vs-single parity (2026-11-01) | Vertex (2, 3) and the m7i (8) | `fixed_reruns/` | **branch `kdd27-fixed-reruns`**, `benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01/`, see §G |
 
 ## A. Vertex AI grids on natural datasets (`run_vertex_barriers.py`)
 
@@ -212,3 +217,78 @@ every layer. Branch `cross-worker-col-comms` @ f4548d37 (was `naive-column-shipp
 
 That branch is not merged into `main` yet.
 
+
+## G. Fixed reruns of the accuracy tables (2026-11-01) - branch `kdd27-fixed-reruns`
+
+### Bugs fixed (each with a regression test or A/B; write-ups under `ariel_notes/results/2026-10-3*`/`2026-11-01_*`)
+
+| Commit | Bug | Effect on published accuracy |
+|---|---|---|
+| 7c0eebd3 (`fix-dgbt-spo-discretization`) | The dataset cache bins numerical columns with (distinct − 1) <= `max_unique_values_for_discretized_numerical` and keeps only bin indices; in-worker SPO turned them back into bin midpoints/edges (`MaterializeNumericalColumn`), inference used raw values. `=1` still binned every 2-valued column. Fix: SPO forces the threshold to 0; a binned non-constant column is an error. | Large: Table 2 r=0 +1.1 pts, Table 3 +2.8–3.1 pts (Internet-Ads .146 → .976); Table 8 ≤0.001 AUC |
+| ae5ed038 | Not a bug: new option `in_worker_oblique.split_projections_across_workers`. Without it, P = ceil(F^e) is per worker (W·F per node at r=1). | Parity only (see below) |
+| dc1a8494 | Exact-scan VQSort on key-only `K32V32` left tied projected values in a per-process random order → last-bit label sums → random choice among exactly tied candidate splits: same seed, different model, any W. Fix: whole-word keys (value << 32 \| row), still VQSort. | Variance only (paired over 40 seeds, all \|t\| < 2) |
+| 5e42cd20 | Slow path, generic fast engine and distributed scan let the compiler choose fma per file; on icx they differed at rows exactly on a threshold. Fix: `std::fma` everywhere. | None (all harnesses report the fast engine) |
+| 10509539 | `train_distributed_gbt` reused a cache in `--work_dir` built from another `--train_csv`. Fix: signature file. | None (harnesses use fresh work dirs) |
+
+Branches: `dgbt-spo-full-fixes` = 10509539 (all of the above, the code for Tables 2 and 8); `fix-disc-colcomms`
+1ad2062f = the bin, sort and fma fixes on `cross-worker-col-comms` (the code for Table 3). `kdd27-fixed-reruns` =
+`dgbt-spo-full-fixes` + `fixed_reruns/` + the results.
+
+### Recreate
+
+Everything is deterministic with these commits: on the same platform, a rerun must reproduce the committed
+`results.csv` cell for cell (Table 8 checked: `fullfix` vs `fullfix_rep` 765/765 identical). Different CPU/compiler
+(e.g. Mac vs Linux, libc++ vs libstdc++ RNG) draws different projections; then compare means, not cells.
+
+**1. Data.**
+- Table 8 (33 TabArena/TabReD binary datasets, 5 folds): pinned venv (`benchmarks/src/spaa27_experiments/REPLICABILITY.md` §4,
+  §10), then `python benchmarks/src/distributed_spo_gbt/rebuild_table8_data.py <folds_dir>`; it prints the sha256 check
+  against `speedup_map_by_dataset/MANIFEST/inputs.sha256` (all must match).
+- Tables 2-3 (34 CC18 binary datasets, fold 0, fully numeric): already at `gs://ariel_ydf_bucket/cc18_fold0/`. To
+  rebuild: `python benchmarks/data/download_cc18_datasets.py`, then
+  `python benchmarks/src/distributed_spo_gbt/column_replication/prep_cc18_fold0.py --repo <repo> --out <dir>` and
+  `gcloud storage cp -r <dir>/* gs://<bucket>/cc18_fold0/` (pass `--data` to the launcher if not the default bucket).
+
+**2. Table 8 (one Linux box; the paper used AWS m7i.metal-24xl, Xeon 8488C, Intel icx; ~45 min for 4 variants).**
+```
+git checkout kdd27-fixed-reruns
+source /opt/intel/oneapi/setvars.sh            # icx toolchain; before any `set -u`
+bazel build //examples:train_distributed_gbt
+benchmarks/src/distributed_spo_gbt/fixed_reruns/run_table8_fixed.sh <out> bazel-bin/examples/train_distributed_gbt <folds_dir>
+```
+Writes `<out>/{fullfix,fullfix_numeric,fullfix_rep,parity}/results.csv` (765/765/765/612 cells). Single-machine
+arms are unchanged by the fixes (their recorded cells in `speedup_map_by_dataset/suite_results.csv` stand);
+`run_table8_local.sh` with `ARMS="single:SPO single:AA"` reruns them.
+
+**3. Tables 2-3 (Vertex AI; ~1.5 h, a few dollars).** Needs `gcloud` authenticated to project
+`ydf-distributed-spo-gbt` and a Python with `google-cloud-aiplatform` (the orchestrator box uses `~/vertex_venv`).
+```
+PY=~/vertex_venv/bin/python benchmarks/src/distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh <out>
+```
+Builds `ydf-wheel:<commit8>` + `train-ydf:fullfix-<commit8>` (Table 2) and `train-ydf:colship-fullfix-<commit8>`
+(Table 3) on Cloud Build (~17 min), then runs `table2/fullfix`, `table2/fullfix_splitbudget` (1870 cells each, ~20 min)
+and `table3/fullfix` (68 cells). Steps can be run one at a time (`... <out> table3`). Uses a fresh cache root
+(`gs://ariel_ydf_bucket/work/cache_cc18_fixed_<date>`): **never reuse a cache root built before 7c0eebd3**, it holds
+binned columns (SPO now refuses it with FAILED_PRECONDITION). Run it from a box that stays up (the
+`ariel Small VertexAI Orchestrator` EC2); each launcher blocks until its jobs finish.
+
+**4. Compare.**
+`python benchmarks/src/distributed_spo_gbt/fixed_reruns/compare_fixed_reruns.py --results <dir>` where `<dir>` has the
+layout of `fixed_reruns_2026-11-01/` (copy your `<out>/table2`, `<out>/table3`, `<out>/table8` subfolders next to its
+`paper_refs/`). Prints Tables 2, 3, 8 (paper vs fixed) and the parity deltas.
+
+### Expected results (`fixed_reruns_2026-11-01/README.md` has the full tables)
+- Table 2 pooled accuracy, r = 0 / 0.5 / 1: paper .8449 / .8527 / .8518 → all fixes .8559 / .8586 / .8574.
+- Table 3 mean accuracy in-worker / cross-network: paper .8487 / .8474 → .8795 / .8752.
+- Table 8 mean AUC W = 1 / 4 / 16: paper .8312 / .8305 / .8272 → .8312 / .8299 / .8274 (W = 32: .8274).
+
+### Distributed vs single-machine parity
+Single-machine SPO-GBT (`train_oblique_forest`) evaluates P = ceil(F^e) projections per node over all F columns.
+Distributed SPO differs by (1) P per worker, i.e. W·P per node, unless `--split_budget` /
+`--sparse_oblique_split_budget`; (2) at r < 1 a projection only combines one worker's columns. With r = 1 and the split
+budget the two match: Table 2 Δacc −0.17 ± 0.12 pts, Δlogloss +0.0000 ± 0.0008 (paired by dataset, 5 seeds);
+Table 8 ΔAUC −0.0007 to −0.0009 at every W, equal to the W = 1 gap (−0.0009 ± 0.0007). Analysis:
+`ariel_notes/results/2026-11-01_dist_vs_local_parity/report.md`. The Table 2 single-machine row
+(`paper_refs/table2_single_machine_spo_gbt.csv`, made by `paper_refs/table2_single_machine_run_local.sh` on an
+Apple-silicon Mac with the default thread count) is bit-reproducible only there: the single-machine finder's job split
+depends on the thread count.
