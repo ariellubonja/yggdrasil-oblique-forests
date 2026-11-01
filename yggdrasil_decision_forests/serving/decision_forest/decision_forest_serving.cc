@@ -193,7 +193,9 @@ inline bool EvalCondition(const typename Model::NodeType* node,
         const auto attribute_value = examples.GetNumerical(
             example_idx, {attributes[projection_idx]}, model);
         const float weight = weights[projection_idx];
-        sum += weight * attribute_value;
+        // Explicit fma, as the slow path and the distributed trainer: an
+        // implicit "+= a * b" contracts or not per compiler / flags.
+        sum = std::fma(attribute_value, weight, sum);
       }
       return sum >= model.oblique_weights[node->oblique_projection_offset +
                                           num_projection];
