@@ -52,5 +52,14 @@ Internet-Advertisements .146 → .976 in both arms.
 | 16 | .8272 | .8274 | .8276 | .8315 |
 | 32 | — | .8274 | .8267 | .8314 |
 
-`fullfix` vs `fullfix_rep`: 765/765 cells identical. Parity: ΔAUC vs single −0.0007 to −0.0009 at every W, the same
-as W = 1 (−0.0009 ± 0.0007), so the distributed-specific gap is gone; the W-independent residual is an open question.
+`fullfix` vs `fullfix_rep`: 765/765 cells identical. Parity: against the paper's single-machine run (seed 1) ΔAUC is
+−0.0007 to −0.0009 at every W, the same as W = 1. That residual is seed noise: `table8/seed_sweep/` (single machine
+seeds 1-5, W = 1 seeds 1-4 + default, 1530 cells) gives W = 1 − single = +0.00001 ± 0.00028 AUC, and the parity arms
+vs the 5-seed single-machine mean are −0.00001 / −0.00022 / −0.00009 / −0.00021 (W = 4/8/16/32), all < 1 SE. The
+single-machine seed-1 run sits 0.0007 above its 5-seed mean, so parity claims need multi-seed single-machine numbers.
+
+Caveats (final verifier, `ariel_notes/results/2026-11-01_final_verify/report.md`):
+- The `git` column of the Table 8 CSVs is the runner script's worktree, not the binary; `PROVENANCE.txt` names the binary.
+- Single-machine `train_oblique_forest` still sorts key-only (`splitter_scanner.h`): repeatable on one CPU, but its
+  cells differ between CPU generations (Cascade Lake vs Sapphire Rapids: 9 datasets).
+- Parity arms share the default seed with W = 1, so W = 16 and W = 32 collapse to the same model whenever F <= W.

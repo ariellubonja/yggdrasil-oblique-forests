@@ -287,8 +287,13 @@ Single-machine SPO-GBT (`train_oblique_forest`) evaluates P = ceil(F^e) projecti
 Distributed SPO differs by (1) P per worker, i.e. W·P per node, unless `--split_budget` /
 `--sparse_oblique_split_budget`; (2) at r < 1 a projection only combines one worker's columns. With r = 1 and the split
 budget the two match: Table 2 Δacc −0.17 ± 0.12 pts, Δlogloss +0.0000 ± 0.0008 (paired by dataset, 5 seeds);
-Table 8 ΔAUC −0.0007 to −0.0009 at every W, equal to the W = 1 gap (−0.0009 ± 0.0007). Analysis:
-`ariel_notes/results/2026-11-01_dist_vs_local_parity/report.md`. The Table 2 single-machine row
+Table 8 ΔAUC vs the 5-seed single-machine mean −0.00001 / −0.00022 / −0.00009 / −0.00021 at W = 4/8/16/32, and
+W = 1 − single = +0.00001 ± 0.00028 (5 seeds each). Against the paper's single seed-1 run alone the gap looks like
+−0.0008, but that run sits 0.0007 above its own seed mean: compare against multi-seed single-machine numbers.
+Recreate the seed sweep on the Table 8 box with `fixed_reruns/run_seed_sweep.sh <single|w1> <seed> <threads> <out>`
+(env `FOLDS`, `SINGLE`, `DIST` = binaries), then `fixed_reruns/analyze_seed_sweep.py <out>`. The split budget refuses
+`num_projections_from_local_features` at r < 1 (63d05422): that combination divided an already-local count by W.
+Analyses: `ariel_notes/results/2026-11-01_dist_vs_local_parity/report.md`, `.../2026-11-01_final_verify/report.md`. The Table 2 single-machine row
 (`paper_refs/table2_single_machine_spo_gbt.csv`, made by `paper_refs/table2_single_machine_run_local.sh` on an
 Apple-silicon Mac with the default thread count) is bit-reproducible only there: the single-machine finder's job split
 depends on the thread count.

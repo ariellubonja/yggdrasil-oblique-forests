@@ -1,0 +1,59 @@
+cells per (seed, arm):
+ arm     single     w1
+seed                 
+1        153.0  153.0
+2        153.0  153.0
+3        153.0  153.0
+4        153.0  153.0
+5        153.0    NaN
+123456     NaN  153.0
+
+per-seed arm means (dataset-mean over 33 datasets):
+                test_auc  test_logloss  test_acc
+arm    seed                                    
+single 1        0.83231       0.35527   0.86634
+       2        0.83113       0.35726   0.86574
+       3        0.83076       0.35692   0.86540
+       4        0.83224       0.35570   0.86585
+       5        0.83171       0.35653   0.86595
+w1     1        0.83111       0.35735   0.86554
+       2        0.83141       0.35646   0.86533
+       3        0.83193       0.35588   0.86617
+       4        0.83232       0.35640   0.86601
+       123456   0.83143       0.35622   0.86586
+
+test_auc: w1 - single (mean of 5 vs 5 seeds) = +0.00001 +- 0.00028 (t=+0.04); seed-to-seed sd of arm means: single 0.00068, w1 0.00048
+   w1(mean) - single(seed 1) = -0.00067 +- 0.00044
+   w1(mean) - single(seed 2) = +0.00052 +- 0.00040
+   w1(mean) - single(seed 3) = +0.00088 +- 0.00067
+   w1(mean) - single(seed 4) = -0.00060 +- 0.00039
+   w1(mean) - single(seed 5) = -0.00007 +- 0.00036
+   w1(seed 1) - single(mean) = -0.00052 +- 0.00048
+   w1(seed 2) - single(mean) = -0.00022 +- 0.00041
+   w1(seed 3) - single(mean) = +0.00030 +- 0.00058
+   w1(seed 4) - single(mean) = +0.00069 +- 0.00035
+   w1(seed 123456) - single(mean) = -0.00020 +- 0.00056
+
+per-dataset (most negative first):
+                              single_mean  w1_mean    diff
+dataset                                                  
+seismic-bumps                     0.7266   0.7228 -0.0038
+Is-this-a-good-customer           0.6998   0.6964 -0.0035
+credit-g                          0.7798   0.7770 -0.0028
+Marketing_Campaign                0.9066   0.9045 -0.0020
+heloc                             0.7870   0.7853 -0.0017
+coil2000_insurance_policies       0.7157   0.7146 -0.0012
+Fitness_Club                      0.7674   0.7668 -0.0006
+Amazon_employee_access            0.8431   0.8425 -0.0006 
+...
+                                   single_mean  w1_mean    diff
+dataset                                                       
+in_vehicle_coupon_recommendation       0.8280   0.8292  0.0012
+jm1                                    0.7471   0.7486  0.0015
+ecom-offers                            0.6174   0.6193  0.0019
+blood-transfusion-service-center       0.6853   0.6872  0.0019
+homecredit-default                     0.8053   0.8104  0.0052
+
+test_logloss: w1 - single (mean of 5 vs 5 seeds) = +0.00013 +- 0.00035 (t=+0.36); seed-to-seed sd of arm means: single 0.00083, w1 0.00054
+
+test_acc: w1 - single (mean of 5 vs 5 seeds) = -0.00007 +- 0.00028 (t=-0.25); seed-to-seed sd of arm means: single 0.00034, w1 0.00034
