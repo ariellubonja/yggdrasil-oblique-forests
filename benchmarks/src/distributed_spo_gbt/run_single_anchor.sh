@@ -8,7 +8,7 @@ DATASET=$1; TREES=${2:-300}; SPLIT=${3:-Oblique}
 case $SPLIT in Oblique) ARM=spo_gbt_exact_hwy; FST=Oblique;; AxisAligned) ARM=aa_gbt_exact; FST='Axis Aligned';; *) echo bad split; exit 2;; esac
 REPO=/home/ubuntu/yggdrasil-oblique-forests
 BIN=${BIN:-/home/ubuntu/spo_vs_gbt/bin/default}
-OUT=$REPO/benchmarks/results/runtime/distributed_spo_gbt
+OUT=${OUT:-$REPO/benchmarks/results/runtime/distributed_spo_gbt}
 RESULTS=${RESULTS:-$OUT/anchors.csv}
 D=$REPO/benchmarks/data
 case $DATASET in

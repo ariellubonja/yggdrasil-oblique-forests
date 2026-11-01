@@ -15,8 +15,8 @@
 set -euo pipefail
 DATASET=$1; W=$2; AXIS=$3; TREES=$4; shift 4
 REPO=/home/ubuntu/yggdrasil-oblique-forests
-BIN=$REPO/bazel-bin/examples/train_distributed_gbt
-OUT=$REPO/benchmarks/results/runtime/distributed_spo_gbt
+BIN=${BIN:-$REPO/bazel-bin/examples/train_distributed_gbt}
+OUT=${OUT:-$REPO/benchmarks/results/runtime/distributed_spo_gbt}
 WORK=${WORK:-/home/ubuntu/dgbt_work}
 RESULTS=${RESULTS:-$OUT/results.csv}
 MAX_DEPTH=${MAX_DEPTH:-6}
@@ -37,7 +37,7 @@ STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 TAG="${DATASET}_W${W}_${AXIS}_T${TREES}_d${MAX_DEPTH}"
 LOG=$OUT/logs/${TAG}_${STAMP}.log
 mkdir -p "$OUT/logs" "$WORK/$DATASET"
-GITSHA=$(git -C "$REPO" rev-parse --short HEAD)
+GITSHA=${GITSHA:-$(git -C "$REPO" rev-parse --short HEAD)}
 echo "=== $STAMP $TAG threads/worker=$THREADS extra=[$*] git=$GITSHA" | tee "$LOG"
 T0=$(date +%s.%N)
 set +e
