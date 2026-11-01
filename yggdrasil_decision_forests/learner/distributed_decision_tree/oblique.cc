@@ -147,8 +147,7 @@ absl::Status FindBestObliqueSplitForNode(
       }
       value_and_row[i] = {value, row};
     }
-    std::sort(value_and_row.begin(), value_and_row.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::sort(value_and_row.begin(), value_and_row.end());  // (value, row): ties in row order
 
     // Exact scan, mirroring FillNumericalAccumulator: all examples start on
     // the positive side and move to the negative side in value order.
