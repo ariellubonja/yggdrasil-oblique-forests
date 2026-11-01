@@ -75,9 +75,9 @@ class DenseNumericalColumns {
   absl::flat_hash_map<int, std::unique_ptr<std::vector<float>>> columns_;
 };
 
-// Reads one numerical column of the cache in example order. Discretized
-// columns are mapped back through their bin boundaries (lossy); missing values
-// take the cache's replacement value.
+// Reads one numerical column of the cache in example order; missing values take
+// the cache's replacement value. Fails on a discretized non-constant column:
+// its bin indices do not give back the raw values that inference projects.
 absl::StatusOr<std::vector<float>> MaterializeNumericalColumn(
     const dataset_cache::DatasetCacheReader& dataset, int feature);
 

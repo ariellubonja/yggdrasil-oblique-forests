@@ -484,27 +484,16 @@ absl::StatusOr<std::vector<float>> MaterializeNumericalColumn(
   values.reserve(dataset.num_examples());
 
   if (column_meta.numerical().discretized()) {
-    const auto& boundaries =
-        dataset.DiscretizedNumericalFeatureBoundaries(feature);
-    ASSIGN_OR_RETURN(
-        auto it, dataset.InOrderDiscretizedNumericalFeatureValueIterator(feature));
-    while (true) {
-      RETURN_IF_ERROR(it->Next());
-      const auto chunk = it->Values();
-      if (chunk.empty()) {
-        break;
-      }
-      for (const auto discretized_value : chunk) {
-        if (discretized_value == dataset::kDiscretizedNumericalMissingValue ||
-            boundaries.empty()) {
-          values.push_back(replacement);
-        } else {
-          values.push_back(dataset_cache::DiscretizedNumericalToNumerical(
-              boundaries, discretized_value));
-        }
-      }
+    // Bin indices cannot be mapped back to the raw values that inference
+    // projects, so only constant (boundary-free) columns are accepted.
+    if (!dataset.DiscretizedNumericalFeatureBoundaries(feature).empty()) {
+      return absl::FailedPreconditionError(absl::Substitute(
+          "Feature $0 is discretized in the dataset cache; sparse oblique "
+          "splits need raw values (max_unique_values_for_discretized_numerical"
+          "=0, force_numerical_discretization=false)",
+          feature));
     }
-    RETURN_IF_ERROR(it->Close());
+    values.assign(dataset.num_examples(), replacement);
   } else {
     ASSIGN_OR_RETURN(auto it, dataset.InOrderNumericalFeatureValueIterator(feature));
     while (true) {
