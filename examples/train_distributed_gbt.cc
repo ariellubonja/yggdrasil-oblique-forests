@@ -98,6 +98,9 @@ ABSL_FLAG(int, sparse_oblique_max_num_projections, 1000,
 ABSL_FLAG(bool, sparse_oblique_local_projection_count, false,
           "If true, F in ceil(F^exponent) is the worker's own numerical "
           "candidate count instead of the dataset's numerical feature count.");
+ABSL_FLAG(bool, sparse_oblique_split_budget, false,
+          "If true, ceil(F^exponent) is the cluster total per node, split "
+          "across the workers (split_projections_across_workers).");
 ABSL_FLAG(double, column_replication, 0.0,
           "In-worker oblique: fraction in [0,1] of the numerical columns a "
           "worker does not own that it also holds and samples projections "
@@ -183,6 +186,8 @@ int main(int argc, char** argv) {
         absl::GetFlag(FLAGS_sparse_oblique_local_projection_count));
     dgbt->mutable_in_worker_oblique()->set_column_replication(
         absl::GetFlag(FLAGS_column_replication));
+    dgbt->mutable_in_worker_oblique()->set_split_projections_across_workers(
+        absl::GetFlag(FLAGS_sparse_oblique_split_budget));
   } else {
     QCHECK_EQ(split_axis, "AXIS_ALIGNED") << "Unknown --split_axis";
   }

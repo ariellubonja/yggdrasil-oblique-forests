@@ -107,6 +107,13 @@ message DistributedGradientBoostedTreesTrainingConfig {
     // not change; an oblique split is evaluated by the lowest-index worker
     // holding all its attributes.
     optional float column_replication = 3 [default = 0];
+
+    // If true, the projection count above is the cluster total per node, not
+    // a per-worker count: worker w samples floor(P/W) + (w < P mod W). With
+    // num_projections_from_local_features=false, a node gets the projections
+    // of single-machine SPO; with column_replication=1, from the same
+    // distribution (every worker samples over all F columns).
+    optional bool split_projections_across_workers = 4 [default = false];
   }
 
   message Internal {

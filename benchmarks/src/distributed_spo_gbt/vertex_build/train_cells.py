@@ -44,6 +44,8 @@ parser.add_argument("--checkpoints", action="store_true", help="keep YDF checkpo
 parser.add_argument("--no_checkpoints", action="store_true", help="no-op: checkpoints are off by default")
 parser.add_argument("--reuse_reader", action="store_true")
 parser.add_argument("--barrier_csv", action="store_true")
+parser.add_argument("--split_budget", action="store_true",
+                    help="in_worker_oblique.split_projections_across_workers: P is the cluster total per node")
 parser.add_argument("--variants", default="",
                     help="comma list of knob sets run per (dataset, level) for in-job A/B: "
                          "base | nockpt | reuse | all; cells land in r<RR>_<variant>/")
@@ -231,6 +233,7 @@ def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
   ext = tc.Extensions[dgbt_pb2.distributed_gradient_boosted_trees_config]
   ext.in_worker_oblique.column_replication = level
   ext.in_worker_oblique.num_projections_from_local_features = False
+  ext.in_worker_oblique.split_projections_across_workers = args.split_budget
   if no_checkpoints:
     ext.create_checkpoints = False
   if reuse_reader:

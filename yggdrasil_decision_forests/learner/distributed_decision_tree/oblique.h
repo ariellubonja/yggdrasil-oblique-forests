@@ -99,6 +99,10 @@ struct ObliqueSplitArgs {
   int num_features_for_projection_count;
   // Base seed. Each node derives an independent random stream from it.
   uint64_t seed;
+  // If num_workers > 1, GetNumProjections is the cluster total and this worker
+  // samples its share: floor(P/num_workers) + (worker_idx < P % num_workers).
+  int worker_idx = 0;
+  int num_workers = 1;
 };
 
 // For each open node, samples projections from the node's local numerical

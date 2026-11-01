@@ -822,6 +822,8 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
         spe_config.in_worker_oblique().num_projections_from_local_features()
             ? 0
             : num_global_numerical_features_;
+    const bool split_budget =
+        spe_config.in_worker_oblique().split_projections_across_workers();
     for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
          weak_model_idx++) {
       auto& weak_model = weak_models_[weak_model_idx];
@@ -838,7 +840,9 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
           weak_model.label_accessor_type,
           num_features_for_projection_count,
           MixProjectionSeed(request.projection_seed(), WorkerIdx(),
-                            weak_model_idx)};
+                            weak_model_idx),
+          split_budget ? WorkerIdx() : 0,
+          split_budget ? welcome_.num_train_workers() : 1};
       RETURN_IF_ERROR(distributed_decision_tree::FindBestObliqueSplits(
           args, thread_pool_.get(), &splits_per_weak_models[weak_model_idx]));
     }

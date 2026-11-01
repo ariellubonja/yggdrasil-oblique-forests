@@ -169,6 +169,23 @@ TEST_F(DatasetAdult, SparseOblique_5workers_FullReplication) {
   EXPECT_GT(metric::Accuracy(evaluation_), 0.82);
 }
 
+// The projection budget is the cluster total, split over the workers; with
+// full replication every worker samples single-machine projections.
+TEST_F(DatasetAdult, SparseOblique_5workers_SplitBudget) {
+  SetNumWorkers(5);
+  SetSparseOblique();
+  auto* in_worker =
+      train_config_
+          .MutableExtension(proto::distributed_gradient_boosted_trees_config)
+          ->mutable_in_worker_oblique();
+  in_worker->set_column_replication(1.0f);
+  in_worker->set_split_projections_across_workers(true);
+  check_model = false;
+  TrainAndEvaluateModel();
+  EXPECT_GT(NumObliqueConditions(*model_), 0);
+  EXPECT_GT(metric::Accuracy(evaluation_), 0.82);
+}
+
 // Axis-aligned reference on the same split (upstream expectation).
 TEST_F(DatasetAdult, AxisAligned_5workers) {
   SetNumWorkers(5);
