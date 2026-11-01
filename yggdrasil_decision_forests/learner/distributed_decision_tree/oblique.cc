@@ -57,19 +57,9 @@ struct ColumnAndWeight {
   float weight;
 };
 
-// Sort record of the exact scan: one projected value and its example index.
-//
-// Default: the value is packed as a sort-monotone unsigned key next to the
-// row and sorted with Highway VQSort, as the single-machine finder does
-// (FlatBucketTraits<..., hwy::K32V32> in splitter_scanner.h). Rows with equal
-// values may come out in a different order than with std::sort; the scan only
-// evaluates thresholds between distinct values, so the candidate splits are
-// the same, but the label accumulators then sum the tied rows in another
-// order and can differ in their last bits.
-//
-// --config=exact_std_sort keeps the pre-VQSort std::sort on (value, row)
-// pairs (both here and in the single-machine finder), i.e. the exact
-// arithmetic of the serial implementation.
+// Sort record of the exact scan: a projected value and its example index,
+// ordered by (value, row). Tied rows must come out in a fixed order: VQSort
+// seeds its pivots per process, and K32V32 left ties in a random order.
 #ifdef EXACT_STD_SORT
 struct SortRecordTraits {
   using Record = std::pair<float, ExampleIndex>;
@@ -79,49 +69,51 @@ struct SortRecordTraits {
   static float Value(const Record& record) { return record.first; }
   static ExampleIndex Row(const Record& record) { return record.second; }
   static void Sort(Record* const begin, const size_t num_records) {
-    std::sort(begin, begin + num_records,
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::sort(begin, begin + num_records);
   }
 };
 #else
 template <size_t kIndexBytes>
 struct HighwaySortRecordTraits;
 
+// Whole-word key: sort-monotone value bits above the row.
 template <>
 struct HighwaySortRecordTraits<4> {
-  using Record = hwy::K32V32;
+  using Record = uint64_t;
   static Record Pack(const float value, const ExampleIndex row) {
-    Record record;
-    record.key = decision_tree::internal::FloatToUintForSort(value);
-    record.value = static_cast<uint32_t>(row);
-    return record;
+    return (static_cast<uint64_t>(
+                decision_tree::internal::FloatToUintForSort(value))
+            << 32) |
+           static_cast<uint32_t>(row);
   }
   static float Value(const Record& record) {
-    return decision_tree::internal::UintToFloatFromSort(record.key);
+    return decision_tree::internal::UintToFloatFromSort(
+        static_cast<uint32_t>(record >> 32));
   }
   static ExampleIndex Row(const Record& record) {
-    return static_cast<ExampleIndex>(record.value);
+    return static_cast<ExampleIndex>(static_cast<uint32_t>(record));
   }
   static void Sort(Record* const begin, const size_t num_records) {
     hwy::VQSort(begin, num_records, hwy::SortAscending());
   }
 };
 
+// uint128_t compares both halves (K64V64 compares the key only).
 template <>
 struct HighwaySortRecordTraits<8> {
-  using Record = hwy::K64V64;
+  using Record = hwy::uint128_t;
   static Record Pack(const float value, const ExampleIndex row) {
     Record record;
-    record.key = decision_tree::internal::FloatToUintForSort(value);
-    record.value = static_cast<uint64_t>(row);
+    record.hi = decision_tree::internal::FloatToUintForSort(value);
+    record.lo = static_cast<uint64_t>(row);
     return record;
   }
   static float Value(const Record& record) {
     return decision_tree::internal::UintToFloatFromSort(
-        static_cast<uint32_t>(record.key));
+        static_cast<uint32_t>(record.hi));
   }
   static ExampleIndex Row(const Record& record) {
-    return static_cast<ExampleIndex>(record.value);
+    return static_cast<ExampleIndex>(record.lo);
   }
   static void Sort(Record* const begin, const size_t num_records) {
     hwy::VQSort(begin, num_records, hwy::SortAscending());
