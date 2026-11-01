@@ -357,6 +357,18 @@ absl::Status SetDefaultHyperParameters(
       balancer->set_dynamic_balancing_frequency_iteration(-1);
       balancer->set_dynamic_balancing_frequency_seconds(-1);
     }
+    // Projections need raw values; the cache counts distinct-1, so 0 bins
+    // constant columns only.
+    auto* cache = spe_config->mutable_create_cache();
+    if (cache->force_numerical_discretization()) {
+      return absl::InvalidArgumentError(
+          "Sparse oblique splits do not support "
+          "force_numerical_discretization=true");
+    }
+    if (cache->max_unique_values_for_discretized_numerical() != 0) {
+      LOG(INFO) << "Sparse oblique splits: numerical discretization disabled";
+      cache->set_max_unique_values_for_discretized_numerical(0);
+    }
   }
 
   return absl::OkStatus();
