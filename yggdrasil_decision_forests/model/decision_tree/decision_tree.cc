@@ -896,7 +896,8 @@ struct EvalConditionOblique {
         }
         value = na_replacements[item_idx];
       }
-      sum += value * weights[item_idx];
+      // Explicit fma: every oblique evaluator must round alike (see serving).
+      sum = std::fma(value, weights[item_idx], sum);
     }
     return sum >= threshold;
   }
@@ -1334,7 +1335,7 @@ absl::StatusOr<bool> EvalConditionFromColumn(
           DCHECK_EQ(oblique.na_replacements_size(), oblique.attributes_size());
           value = oblique.na_replacements(item_idx);
         }
-        sum += value * oblique.weights(item_idx);
+        sum = std::fma(value, oblique.weights(item_idx), sum);
       }
       return sum >= oblique.threshold();
     }
@@ -1502,7 +1503,7 @@ absl::StatusOr<bool> EvalCondition(const proto::NodeCondition& condition,
           DCHECK_EQ(oblique.na_replacements_size(), oblique.attributes_size());
           value = oblique.na_replacements(item_idx);
         }
-        sum += value * oblique.weights(item_idx);
+        sum = std::fma(value, oblique.weights(item_idx), sum);
       }
       return sum >= condition.condition().oblique_condition().threshold();
     }
