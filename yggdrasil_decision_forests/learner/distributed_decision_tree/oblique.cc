@@ -204,13 +204,13 @@ absl::Status FindBestObliqueSplitForNode(
       terms.push_back({column, item.weight});
     }
 
-    // ApplyProjection: rows outer, terms inner, scalar fp32 accumulator. Same
-    // order as ProjectionEvaluator::Evaluate and the model's EvalCondition.
+    // ApplyProjection: rows outer, terms inner, fp32 fma chain. Same order and
+    // rounding as the model's EvalCondition and the serving engine.
     for (ExampleIndex i = 0; i < num_examples; i++) {
       const ExampleIndex row = rows[i];
       float value = 0;
       for (const auto& term : terms) {
-        value += term.column[row] * term.weight;
+        value = std::fma(term.column[row], term.weight, value);
       }
       value_and_row[i] = SortRecordTraits::Pack(value, row);
     }
@@ -615,7 +615,7 @@ absl::Status EvaluateObliqueSplits(
     auto& active_node = active_nodes[active_node_idx];
     float value = 0;
     for (const auto& term : active_node.terms) {
-      value += term.column[example_idx] * term.weight;
+      value = std::fma(term.column[example_idx], term.weight, value);
     }
     active_node.writer.Write(value >= active_node.threshold);
   }
