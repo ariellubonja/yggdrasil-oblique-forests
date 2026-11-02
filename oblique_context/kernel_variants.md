@@ -125,7 +125,7 @@ always takes the single-thread branch.
 
 ## Kernel variants (this fork's experiments)
 
-Rule (`AGENTS.md` + ablation memory): **one idea = one `--config` = one branch; never stack
+Rule: **one idea = one `--config` = one branch; never stack
 ideas in a measurement.** Controls stay pure. On this branch:
 
 | Variant | Config | File / function | Status |
