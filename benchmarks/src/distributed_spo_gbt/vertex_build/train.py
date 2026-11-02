@@ -40,6 +40,8 @@ parser.add_argument("--max_unique_values_for_discretized_numerical", type=int, d
 parser.add_argument("--force_numerical_discretization", action="store_true")
 # JSON object copied verbatim into eval.json (e.g. rows / workers / experiment tags).
 parser.add_argument("--meta", default="{}", type=str)
+# Shared dataset cache dir (gs://.../dataset_cache); empty = <work_dir>/dataset_cache. Reused when its "done" exists.
+parser.add_argument("--dataset_cache_path", default="", type=str)
 # Where to write the evaluation summary (JSON). Defaults to <model>_eval.json.
 parser.add_argument("--eval_json", default="", type=str)
 args = parser.parse_args()
@@ -118,6 +120,7 @@ def learner_kwargs():
 
 
 BARRIER_CSV = "/tmp/barriers.csv"
+CACHE_REUSED = False
 
 
 def gcs_upload(path, data, content_type, quiet=False):
@@ -212,6 +215,8 @@ def finish(model, timing, log_path, num_workers):
       "model": args.model,
       "learner_kwargs": learner_kwargs(),
       "create_checkpoints": None if num_workers == 0 else False,  # None = not distributed
+      "dataset_cache_path": args.dataset_cache_path,
+      "dataset_cache_reused": CACHE_REUSED,
       **timing,
       **json.loads(args.meta),
   }
@@ -241,8 +246,20 @@ def main_in_process():
 def no_checkpoints_config():
   """Checkpoints off (CLAUDE.md 2026-10-29): their GCS I/O falls inside tree_training_s."""
   tc = abstract_learner_pb2.TrainingConfig()
-  tc.Extensions[dgbt_pb2.distributed_gradient_boosted_trees_config].create_checkpoints = False
+  ext = tc.Extensions[dgbt_pb2.distributed_gradient_boosted_trees_config]
+  ext.create_checkpoints = False
+  if args.dataset_cache_path:
+    ext.dataset_cache_path = args.dataset_cache_path
   return tc
+
+
+def cache_preexisting():
+  """True when the shared dataset cache was complete before training (setup_s then excludes its build)."""
+  if not args.dataset_cache_path:
+    return False
+  from google.cloud import storage
+  bucket, prefix = args.dataset_cache_path[5:].split("/", 1)
+  return storage.Client().bucket(bucket).blob(prefix.rstrip("/") + "/done").exists()
 
 
 def main_distributed():
@@ -258,6 +275,8 @@ def main_distributed():
     ydf.start_worker(cluster_config.port)
     return
   start_cpu_sampler("manager")
+  global CACHE_REUSED
+  CACHE_REUSED = cache_preexisting()
 
   # Manager-side barrier recorder (one CSV row per request round), uploaded next to eval.json.
   os.environ["DGBT_BARRIER_CSV"] = BARRIER_CSV

@@ -1,14 +1,12 @@
 # OBLIQUE_CONTEXT.md — the code map for ApplyProjection optimization (lean core)
 
-> **Purpose.** Always-loaded core for every session on this fork. The project is: **make
-> `ProjectionEvaluator::Evaluate()` (ApplyProjection) in `oblique.cc` faster**, under
-> research-grade constraints. This core keeps what most questions need — scope, call map, hot
+> **Purpose.** Always-loaded code map of the oblique split hot path
+> (`ProjectionEvaluator::Evaluate()` / ApplyProjection in `oblique.cc`). This core keeps what most questions need — scope, call map, hot
 > function, driver skeleton, invariants, measured facts. Deeper detail is **sharded** into
 > sibling files, read on demand via the router below, to keep the auto-loaded footprint small.
 >
-> **Division of labor:** `AGENTS.md` = the *workflow* (experiment loop, measurement rules,
-> logging contract); this file + its shards = the *code*; `E2E + Chrono coarse. Col-major -
-> m7i.metal-24x Bootstrapping.csv` = end-to-end timing.
+> **Division of labor:** `CLAUDE.md` = the rules; this file + its shards = the *code*;
+> `runs_and_datasets.md` = measured facts, datasets, recipes.
 >
 > Snapshots and `file:line` refs as of 2026-07-04, `main` @ `c80ffbf7`. Line numbers
 > drift; grep for the symbol if a ref misses.
@@ -23,6 +21,7 @@
 | A specific kernel variant (DW1, symmetric, subtree-gather) or the driver's full variant-`#ifdef` body | `oblique_context/kernel_variants.md` |
 | `VerticalDataset` layout source, row-major store, full `SampleProjection` / weight modes | `oblique_context/dataset_and_sampling.md` |
 | `.bazelrc` configs, env knobs, harness defaults, trunk generator, measurement tooling | `oblique_context/build_measure.md` |
+| Dataset inventory, what the timers measure, run recipes, history behind CLAUDE.md rules | `oblique_context/runs_and_datasets.md` |
 
 (Reference shards as plain paths — do **not** `@`-import them, or they auto-load and defeat the point.)
 
@@ -332,7 +331,7 @@ distinct rows. RF never sets `split_finder_processor` ⇒ single-thread split se
 
 ## 10. Kernel variants (this fork's experiments) — (details → `kernel_variants.md`)
 
-Rule (`AGENTS.md` + ablation memory): **one idea = one `--config` = one branch; never stack
+Rule: **one idea = one `--config` = one branch; never stack
 ideas in a measurement.** Controls stay pure. Variants **on this branch**:
 
 | Variant | Config | File / function | Status |
@@ -355,7 +354,7 @@ The `.bazelrc` configs, env knobs (`RM_MAX_ROWS`, `DW1_MIN_DEPTH`, `SYMMETRIC_MA
 `DW1_HOT_*`, `NODEWISE_*`), harness defaults (`examples/train_oblique_forest.cc`), input
 modes, the trunk generator, dataset shapes and the tooling (`runtime.sh`, `accuracy.sh`,
 `parallel_chrono.py`; **<15 % e2e = failed experiment**; Mac numbers don't count) are in the
-shard. The experiment *workflow* is in `AGENTS.md`.
+shard.
 
 ---
 

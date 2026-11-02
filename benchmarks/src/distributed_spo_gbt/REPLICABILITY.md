@@ -30,7 +30,11 @@ Finished cells are downloaded to
 summarized with `summarize_barriers.py`. Flags: `--dataset` (epsilon, higgs, susy, youtube8m, climsim,
 numerai, criteo, jane_street, airline), `--workers 1,2,4,8`, `--arms aa,spo`, `--machine` (default
 `n2-highmem-16`), `--trees` (default 50), `--p_total` (default ceil(sqrt F)), `--image`, `--run_id`
-(reuse: finished cells skipped, running jobs adopted), `--dry_run`.
+(reuse: finished cells skipped, running jobs adopted), `--dry_run`. Dataset cache: by default one shared cache per (image, dataset, arm,
+`--extra_args`, machine) under `gs://ariel_ydf_bucket/work/cache_barriers/` (2026-11-02; the cache does not depend on
+W), built by the first cell of that key while its siblings wait; `eval.json["dataset_cache_reused"]` marks cells whose
+`setup_s` excludes the build. `--fresh_cache` restores one cache per cell, and is required for images whose `train.py`
+predates `--dataset_cache_path` (everything before `train-ydf:fullfix-10509539-cache`).
 
     python run_vertex_barriers.py --dataset epsilon --workers 1,2,4 --arms aa,spo --trees 10 --p_total 2000
 
