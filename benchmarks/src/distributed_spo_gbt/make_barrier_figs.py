@@ -107,6 +107,8 @@ def main():
     ap.add_argument("--run_dir", default=str(RUN))
     RUN = Path(ap.parse_args().run_dir)
     (OUT / "yt8m_barriers").mkdir(parents=True, exist_ok=True)
+    if not any((load(sub).stage == "CreateCheckpoint").any() for _, sub in ARMS):  # checkpoints off (since 2026-10-29)
+        SEGS[4] = ("startend_ckpt", "Tree start/end", COL["StartNewIter"])
     tot = pd.DataFrame({arm: budget(load(sub)) for arm, sub in ARMS}).T[[c for c, _, _ in SEGS]]
     body, pct = budget_body(tot)
     dat = pd.concat([tot, pct.add_suffix("_pct")], axis=1).rename_axis("arm").reset_index()
