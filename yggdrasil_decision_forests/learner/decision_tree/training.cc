@@ -5828,7 +5828,9 @@ absl::Status GrowTreeLocalBFS(
           internal::SampleProjection(
               config_link.numerical_features(), dt_config,
               train_dataset.data_spec(), config_link, projection_density,
-              &all_node_projs[0][p], &all_node_mono[0][p], random);
+              &all_node_projs[0][p], &all_node_mono[0][p], random,
+                /*exclude_single_feature=*/
+                dt_config.sparse_oblique_split().include_axis_aligned_splits());
         }
         for (int n = 1; n < num_nodes; ++n) {
           all_node_projs[n] = all_node_projs[0];
@@ -5840,7 +5842,9 @@ absl::Status GrowTreeLocalBFS(
             internal::SampleProjection(
                 config_link.numerical_features(), dt_config,
                 train_dataset.data_spec(), config_link, projection_density,
-                &all_node_projs[n][p], &all_node_mono[n][p], random);
+                &all_node_projs[n][p], &all_node_mono[n][p], random,
+                /*exclude_single_feature=*/
+                dt_config.sparse_oblique_split().include_axis_aligned_splits());
           }
         }
 #endif
@@ -6136,7 +6140,9 @@ absl::Status GrowTreeLocalBFS(
         internal::SampleProjection(
             config_link.numerical_features(), dt_config,
             train_dataset.data_spec(), config_link, projection_density,
-            &shared_projections[p], &shared_monotonic[p], random);
+            &shared_projections[p], &shared_monotonic[p], random,
+                /*exclude_single_feature=*/
+                dt_config.sparse_oblique_split().include_axis_aligned_splits());
       }
 #if defined(CHRONO_PROFILE) && defined(SYMMETRIC_OPTIMIZED)
       CHRONO_END_COARSE(sample_projection,

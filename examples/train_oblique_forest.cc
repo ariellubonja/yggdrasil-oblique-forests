@@ -128,6 +128,16 @@ ABSL_FLAG(float, num_projections_exponent, -1.f,
           "axis-aligned candidate count when --num_candidate_attributes=0). "
           "-1 = harness default: 0.5 for Bagging (P = sqrt(F)), 1 for "
           "Boosting (P = F).");
+ABSL_FLAG(bool, oblique_also_axis_aligned, false,
+          "Oblique only: also scan every candidate numerical attribute for an "
+          "axis-aligned split next to the projections "
+          "(sparse_oblique_split.include_axis_aligned_splits); the best of both wins.");
+ABSL_FLAG(bool, ydf_defaults, false,
+          "Drop every harness hyperparameter choice: the ensemble config is "
+          "reset to the YDF learner/proto defaults (e.g. GBT: 300 trees, "
+          "10% validation + early stopping, EXACT, SPO exponent 2, max 6000 "
+          "projections, density 2). Kept: --ensemble_method, "
+          "--feature_split_type, --oblique_also_axis_aligned, seed, threads.");
 ABSL_FLAG(int, dynamic_split_threshold, -2,
           "When using dynamic histogram splits, switch to exact splitting if "
           "the number of examples at a node is below this threshold. "
@@ -1349,6 +1359,7 @@ int main(int argc, char** argv) {
               << (absl::GetFlag(FLAGS_dynamic_split_threshold) == -2
                       ? " (build default)" : " (from flag)");
     sos->set_dynamic_split_threshold(dyn_thr);
+    sos->set_include_axis_aligned_splits(absl::GetFlag(FLAGS_oblique_also_axis_aligned));
   } else if (feature_split_type == "Axis Aligned") {
     LOG(INFO) << "Using axis-aligned splits";
 
@@ -1455,6 +1466,27 @@ int main(int argc, char** argv) {
 
 
 
+
+  if (absl::GetFlag(FLAGS_ydf_defaults)) {
+    // Learner SetDefaultHyperParameters + proto defaults fill everything in.
+    if (ensemble_method == "Boosting") {
+      auto& gbt = *train_config.MutableExtension(
+          model::gradient_boosted_trees::proto::gradient_boosted_trees_config);
+      gbt.Clear();
+      dt_config = gbt.mutable_decision_tree();
+    } else {
+      auto& rf = *train_config.MutableExtension(
+          model::random_forest::proto::random_forest_config);
+      rf.Clear();
+      dt_config = rf.mutable_decision_tree();
+    }
+    if (feature_split_type == "Oblique") {
+      dt_config->mutable_sparse_oblique_split()->set_include_axis_aligned_splits(
+          absl::GetFlag(FLAGS_oblique_also_axis_aligned));
+    }
+    LOG(INFO) << "--ydf_defaults: hyperparameters reset to YDF defaults";
+  }
+  LOG(INFO) << "Final training config: " << train_config.ShortDebugString();
 
   // -----------Done Configuring Model. Start Training-----------
 
