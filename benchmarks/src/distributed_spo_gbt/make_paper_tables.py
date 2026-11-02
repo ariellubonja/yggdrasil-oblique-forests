@@ -107,8 +107,12 @@ def accuracy_table(metric="test_auc"):
                 else:
                     cells.append(mu + sd)
         lines.append(ds.replace("_", r"\_") + " & " + " & ".join(cells) + r" \\")
-    lines += [r"\midrule", "Mean & " + " & ".join(f"{sum(means[lab]) / len(means[lab]):.4f}"[1:] + r"\phantom{$_{\pm.0000}$}"
-                                                 for _, lab, _ in stats) + r" \\",
+    # Mean row: bold the best per family, compared at the printed 4 decimals
+    avg = {lab: round(sum(means[lab]) / len(means[lab]), 4) for _, lab, _ in stats}
+    top = {fam: max(avg[lab] for f, lab, _ in stats if f == fam) for fam in fams}
+    mcells = [(r"\textbf{%s}" if avg[lab] == top[f] else "%s") % f"{avg[lab]:.4f}"[1:] + r"\phantom{$_{\pm.0000}$}"
+              for f, lab, _ in stats]
+    lines += [r"\midrule", "Mean & " + " & ".join(mcells) + r" \\",
               r"\bottomrule", r"\end{tabular}}"]
     return "\n".join(lines) + "\n"
 
