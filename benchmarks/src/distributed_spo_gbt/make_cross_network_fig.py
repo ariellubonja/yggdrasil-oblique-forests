@@ -4,6 +4,7 @@
 (a) cross-network speedup (in-worker time / cross-network time) vs rows x features, log-log;
 (b) cross-network tree-training time split into in-worker time, communication wait and other extra,
     for the 8 datasets with the lowest speedup; (c) test accuracy, cross-network vs in-worker.
+With a seed column, every quantity is the mean over seeds.
   python make_cross_network_fig.py [results.csv] [paper_dir]
 """
 import csv
@@ -17,9 +18,22 @@ PAPER = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "../../../paper
 REL = "figures/evaluation/cross_network"
 os.makedirs(os.path.join(PAPER, REL), exist_ok=True)
 
-by = {}
-for r in csv.DictReader(open(SRC)):
-    by.setdefault(r["dataset"], {})[r["arm"]] = r
+def load(src):
+    """{dataset: {arm: row}}; with a seed column, each (dataset, arm) is the mean over its seeds."""
+    cells = {}
+    for r in csv.DictReader(open(src)):
+        cells.setdefault((r["dataset"], r["arm"]), []).append(r)
+    by = {}
+    for (ds, arm), rs in cells.items():
+        m = dict(rs[0])
+        if len(rs) > 1:
+            for k in ("tree_training_s", "ship_s_max", "ship_bytes_in", "test_acc"):
+                m[k] = sum(float(r[k]) for r in rs) / len(rs)
+        by.setdefault(ds, {})[arm] = m
+    return by, len(rs)
+
+
+by, NSEEDS = load(SRC)
 rows = []
 for name, v in by.items():
     a, b = v["in_worker"], v["cross_network"]

@@ -4,6 +4,7 @@
            -> make_column_replication_{table,fig}.py
   table3_results.csv  one row per (dataset, arm) like naive_column_shipping/.../results.csv, from table3/fullfix
            (rows/features copied from the paper run) -> make_cross_network_{table,fig}.py
+  table3_results_5seed.csv  same + seed column, seeds 1-5 from table3/fullfix_seeds (if present)
   table8_results.csv  run_table8_local.sh layout for make_paper_tables.py --accuracy_csv: SPO distributed arms from
            table8/fullfix (m7i); single-machine arms = the paper's m7i cells (speedup_map suite_results, unchanged by
            the fixes); AA distributed arms from table8_rerun_20261030 (AA is CPU-independent: 765/765 = paper cells)
@@ -30,23 +31,37 @@ def table2(res, out):
     shutil.copy(os.path.join(res, "paper_refs/table2_single_machine_spo_gbt.csv"), os.path.join(d, "single_machine_spo_gbt.csv"))
 
 
-def table3(res, out):
+def table3_cells(res, sub):
+    """table3/<sub>/g*/results.csv -> paper-run columns + seed, one row per (dataset, arm, seed)."""
     paper = pd.read_csv(os.path.join(res, "paper_refs/table3_results.csv"))
     size = paper.drop_duplicates("dataset").set_index("dataset")[["rows_train", "features"]]
-    n = pd.concat(pd.read_csv(f) for f in sorted(glob.glob(os.path.join(res, "table3/fullfix/g*/results.csv"))))
+    n = pd.concat(pd.read_csv(f) for f in sorted(glob.glob(os.path.join(res, f"table3/{sub}/g*/results.csv"))))
     n = n[n.rc == 0]
     task = n.dataset
     n["dataset"] = n.dataset.str.replace(r"^task_\d+_", "", regex=True)
     n["arm"] = n.replication.astype(str).map(lambda r: "cross_network" if r == "ship" else "in_worker")
     n = n.join(size, on="dataset")
-    assert n.rows_train.notna().all() and len(n) == len(paper), "dataset/arm mismatch with the paper run"
+    assert n.rows_train.notna().all() and (n.groupby("seed").size() == len(paper)).all(), \
+        "dataset/arm mismatch with the paper run"
     for c in ["ship_bytes_in", "ship_bytes_out", "ship_cols_in", "cross_worker_splits"]:
         n[c] = n[c].fillna(0).astype("int64")
     for c in ["ship_s_max", "ship_s_sum"]:
         n[c] = n[c].fillna(0)
     n["machine"], n["run_id"] = "n2-highmem-4", "fullfix20261101"
     n["cell"] = task + "/" + n.replication.astype(str).map(lambda r: "ship" if r == "ship" else f"r{float(r):.2f}")
-    n[paper.columns].sort_values(["dataset", "arm"]).to_csv(os.path.join(out, "table3_results.csv"), index=False)
+    return n[list(paper.columns) + ["seed"]].sort_values(["dataset", "arm", "seed"])
+
+
+def table3(res, out):
+    n = table3_cells(res, "fullfix")
+    n.drop(columns="seed").to_csv(os.path.join(out, "table3_results.csv"), index=False)
+
+
+def table3_seeds(res, out):
+    """5-seed cross-network input (seed column kept; the generators average over seeds)."""
+    n = table3_cells(res, "fullfix_seeds")
+    assert sorted(n.seed.unique()) == [1, 2, 3, 4, 5], sorted(n.seed.unique())
+    n.to_csv(os.path.join(out, "table3_results_5seed.csv"), index=False)
 
 
 def table8(res, out, aa_csv):
@@ -78,6 +93,8 @@ def main():
     os.makedirs(out, exist_ok=True)
     table2(a.results, out)
     table3(a.results, out)
+    if glob.glob(os.path.join(a.results, "table3/fullfix_seeds/g*/results.csv")):
+        table3_seeds(a.results, out)
     table8(a.results, out, a.aa_csv)
     print("wrote", out)
 
