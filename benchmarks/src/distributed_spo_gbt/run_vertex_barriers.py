@@ -54,6 +54,8 @@ ap.add_argument("--p_total", type=int, default=None, help="total SPO projections
 ap.add_argument("--image", default=None, help="training image; default <AR>/train-ydf:<commit8>-<build hash> like the notebooks")
 ap.add_argument("--run_id", default="", help="reuse a run id: finished cells are skipped, active jobs adopted")
 ap.add_argument("--extra_args", default="", help="extra train.py args appended to every cell, e.g. '--max_unique_values_for_discretized_numerical=1'")
+ap.add_argument("--fresh_cache", action="store_true",
+                help="build a fresh dataset cache per cell (default: one shared cache per image/dataset/arm/extra_args, built once)")
 ap.add_argument("--dry_run", action="store_true")
 args = ap.parse_args()
 
@@ -93,6 +95,14 @@ IMAGE = args.image or default_image()
 RUN_ID = args.run_id or datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 RUN_DIR = f"gs://{BUCKET}/runs/barriers_{RUN_ID}_{args.dataset}"
 tag_of = lambda arm, w: f"{arm}_w{w}"
+
+
+def cache_dir(arm):
+    """Shared cache per (image, data, arm, extra_args, machine): W only changes column placement at load time.
+    Image pins the code (no cross-version reuse); machine keeps concurrent launchers off each other's cache.
+    Needs an image whose train.py has --dataset_cache_path (older images: --fresh_cache)."""
+    key = hashlib.sha1("\n".join([IMAGE, ds["train"], ds["label"], ARMS[arm], args.extra_args, args.machine]).encode()).hexdigest()[:12]
+    return f"gs://{BUCKET}/work/cache_barriers/{args.dataset}/{arm}_{key}/dataset_cache"
 vcpus = lambda w: MGR_VCPUS + w * VCPUS
 CELLS = [(arm, w) for w in WORKERS for arm in ARM_LIST]
 
@@ -127,6 +137,8 @@ def make_job(arm, w):
          f"--num_trees={args.trees}", f"--meta={json.dumps(meta)}"]
     if arm == "spo":
         a += [f"--sparse_oblique_num_projections_exponent={spo_exponent(w):.6f}", f"--sparse_oblique_projection_density_factor={SPO_DENSITY}"]
+    if not args.fresh_cache:
+        a.append(f"--dataset_cache_path={cache_dir(arm)}")
     a += args.extra_args.split()
     pool = lambda n, m: {"machine_spec": {"machine_type": m}, "replica_count": n, "container_spec": {"image_uri": IMAGE, "args": a}}
     return aiplatform.CustomJob(display_name=f"bar-{args.dataset}-{tag}-{RUN_ID}", worker_pool_specs=[pool(1, MGR_MACHINE), pool(w, args.machine)])
@@ -184,6 +196,9 @@ def in_use():
 
 while pending or running:
     for c in list(pending):
+        # Shared cache: while it is not built, run at most one cell per cache (that cell builds it).
+        if not args.fresh_cache and not fs.exists(cache_dir(c[0])[5:] + "/done") and any(r[0] == c[0] for r in running):
+            continue
         # One submitter at a time across launchers: re-check the quota under the lock, let the new job list, then release.
         with open(SUBMIT_LOCK, "w") as lk:
             fcntl.flock(lk, fcntl.LOCK_EX)
