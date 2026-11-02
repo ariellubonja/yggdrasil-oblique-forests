@@ -1,7 +1,8 @@
 """Barrier-timing figure (YouTube-8M, W=16, Vertex n2-highmem-4) from the manager's barriers.csv.
-Usage (repo root): python benchmarks/src/distributed_spo_gbt/make_barrier_figs.py
+Usage (repo root): python benchmarks/src/distributed_spo_gbt/make_barrier_figs.py [--run_dir DIR with {aa,spo}_w16/]
 Writes .dat files + two pgfplots bodies under paper/distributed_spo_gbt_kdd27/figures/evaluation/grcp_n2/.
 """
+import argparse
 from pathlib import Path
 import pandas as pd
 
@@ -101,6 +102,10 @@ def swimlane_body(d):
 
 
 def main():
+    global RUN
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--run_dir", default=str(RUN))
+    RUN = Path(ap.parse_args().run_dir)
     (OUT / "yt8m_barriers").mkdir(parents=True, exist_ok=True)
     tot = pd.DataFrame({arm: budget(load(sub)) for arm, sub in ARMS}).T[[c for c, _, _ in SEGS]]
     body, pct = budget_body(tot)
