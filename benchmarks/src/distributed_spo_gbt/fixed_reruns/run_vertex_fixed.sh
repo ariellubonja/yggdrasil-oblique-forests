@@ -1,5 +1,5 @@
 #!/bin/bash
-# KDD27 Tables 2-3 with every fix, on Vertex AI (project ydf-distributed-spo-gbt, us-east1, n2-highmem-4, 1 manager + 4
+# KDD28 Tables 2-3 with every fix, on Vertex AI (project ydf-distributed-spo-gbt, us-east1, n2-highmem-4, 1 manager + 4
 # workers). Builds the two training images, then runs sequentially (the 96-vCPU N2 quota fits one sweep at a time):
 #   table2/fullfix              column replication r = 0..1, 5 seeds, P = F per worker (the paper's setting)
 #   table2/fullfix_splitbudget  same + --split_budget (cluster total P = F, = single-machine budget)

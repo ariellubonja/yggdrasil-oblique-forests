@@ -1,5 +1,5 @@
 #!/bin/bash
-# KDD27 Table 8 rerun, in-process (MULTI_THREAD workers) on one machine: accuracy only, runtime not comparable.
+# KDD28 Table 8 rerun, in-process (MULTI_THREAD workers) on one machine: accuracy only, runtime not comparable.
 # Arms = run_dgbt_suite.sh distributed cells (W up to 32) + the two single-machine arms of speedup_map suite_results.csv
 # (recorded argv, threads aside). Datasets outer, folds, arms inner. Resumable.
 # Usage: run_table8_local.sh <out_dir>   (out_dir holds folds/, bin/, logs/, results.csv; env DATASETS, FOLDS, ARMS,

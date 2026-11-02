@@ -1,5 +1,5 @@
 #!/bin/bash
-# KDD27 Table 8 distributed-SPO arms with every fix (branch dgbt-spo-full-fixes), in-process workers, on one Linux box.
+# KDD28 Table 8 distributed-SPO arms with every fix (branch dgbt-spo-full-fixes), in-process workers, on one Linux box.
 # Variants (each: 33 datasets x their folds x W in 1,4,8,16,32 -> 765 cells, or 612 for parity without W=1):
 #   fullfix          paper flags (0/1 columns typed BOOLEAN by the driver, r=0, local projection count)
 #   fullfix_numeric  + --force_numerical_features (0/1 columns NUMERICAL, as single-machine)

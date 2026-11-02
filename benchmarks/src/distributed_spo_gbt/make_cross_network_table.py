@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Body of the KDD27 cross-network projections table (in-worker vs cross-network, per CC18 dataset).
+"""Body of the KDD28 cross-network projections table (in-worker vs cross-network, per CC18 dataset).
 
 Reads the Vertex run results.csv, writes only the tabular body; caption/label live in main.tex.
 With a seed column (several seeds per dataset and arm), times, wait, GB and accuracy are seed means.
@@ -14,7 +14,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     HERE, "../../results/runtime/distributed_spo_gbt/naive_column_shipping/vertex_hm4_20261029/results.csv")
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(
-    HERE, "../../../paper/distributed_spo_gbt_kdd27/tables/table_cross_network_body.tex")
+    HERE, "../../../paper/distributed_spo_gbt_kdd28/tables/table_cross_network_body.tex")
 
 def load(src):
     """{dataset: {arm: row}}; with a seed column, each (dataset, arm) is the mean over its seeds."""

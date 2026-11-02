@@ -30,8 +30,10 @@ Claude Code is the hub and this repo is the source of truth.
 - **Papers** — Overleaf MCP ids (config `~/.config/overleaf-mcp/projects.json`); **always pass
   `projectName`**, there is no default:
   - `ydf-vectorized-adaptive` — SPO-RF paper, snapshot `paper/vectorized_adaptive_spaa27`.
-  - `ydf-distributed-spo-gbt` — distributed SPO-GBT paper, snapshot `paper/distributed_spo_gbt_kdd27`.
+  - `ydf-distributed-spo-gbt` — distributed SPO-GBT paper, snapshot `paper/distributed_spo_gbt_kdd28`.
   - `CV` is personal, leave it.
+  **"The paper" / "my paper" = the KDD28 distributed SPO-GBT paper unless the user names another
+  (2026-11-02).** Venue renamed KDD28 → KDD28 the same day.
   The MCP (Claude Desktop only) is text-only: figures go in as pgfplots `.tex`. Prefer `write_section`
   for prose edits. Without it, edit the repo snapshot and tell the user which files changed.
   `table_*.tex` come from `benchmarks/src/utils/make_paper_accuracy_tables.py` — regenerate, never
@@ -147,7 +149,7 @@ Claude Code is the hub and this repo is the source of truth.
 - **Generators emit only the body (2026-10-24):** `tables/<name>_body.tex` (`tabular` only) or a pgfplots
   `.dat`; environment, `\caption`, `\Description`, `\label` are hand-owned. Forward-only: SPAA27's legacy
   caption-emitting generators stay; before re-running one, `git pull` the MCP clone and copy the live
-  caption wording into the script. Never rebuild a caption from the repo snapshot or memory. KDD27 is fully
+  caption wording into the script. Never rebuild a caption from the repo snapshot or memory. KDD28 is fully
   migrated.
 - **Compile the Overleaf clone before every push (2026-10-22):** `git pull` the MCP clone, copy to the
   scratchpad, apply the change, `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`; push
@@ -156,8 +158,8 @@ Claude Code is the hub and this repo is the source of truth.
 - **Check page layout (2026-10-26):** after adding/moving a float or section, render the pages and map
   labels via `main.aux`: floats on or right after their section's page, no half-empty pages, no stranded
   headings. To pin a figure*/table* by its heading use `\twocolumn[{\floatblock ...}]` with a minipage +
-  `\captionsetup{type=...}` (KDD27 preamble defines `\floatblock`).
-- **Caption style (2026-10-29):** copy neighbouring floats. KDD27: one short sentence, then
+  `\captionsetup{type=...}` (KDD28 preamble defines `\floatblock`).
+- **Caption style (2026-10-29):** copy neighbouring floats. KDD28: one short sentence, then
   `\Description`, `\label`, and a setup footnote `\par\smallskip\raggedright\footnotesize <notes>`.
 - **No machine specs in captions (2026-09-18)** (CPU, threads, trees, instance type); the setup section has them.
 - **Don't commit paper figure/table edits (2026-09-25)** after pushing to Overleaf; the user picks between
@@ -166,3 +168,16 @@ Claude Code is the hub and this repo is the source of truth.
   figure pass at the end.
 
 @oblique_context/OBLIQUE_CONTEXT.md
+
+## No speculation: "why" claims need an empirical basis (user directive, 2026-11-01)
+
+Every claim explaining why something is so (accuracy tie, speedup, bug mechanism) cites measured evidence (a run,
+cell, counter, diff, or traced code path). Without it, label the claim "hypothesis, untested" and name the experiment
+that would test it. Back-of-envelope estimates are hypotheses until checked. Subagent briefs must demand the same labels.
+**Test hypotheses without asking (2026-11-01):** if a hypothesis can be tested with local runs or builds, run the test in the
+same turn and report the result instead of offering to test it.
+
+## No semicolons in prose (user directive, 2026-11-01)
+
+Never use ";" in text written for the user. Split the clauses into separate sentences ending in "." and reword them so
+each reads naturally. Code, commands and quoted file contents are exempt.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Paper-generator inputs from the fixed reruns (fixed_reruns_2026-11-01/), written to its paper_inputs/:
-  table2/  results.csv + summary_pooled.csv of table2/fullfix + the unchanged single-machine row
+  table2/  results.csv + summary_pooled.csv of table2/fullfix_splitbudget (cluster P = F, the single-machine
+           budget) + the unchanged single-machine row
            -> make_column_replication_{table,fig}.py
   table3_results.csv  one row per (dataset, arm) like naive_column_shipping/.../results.csv, from table3/fullfix
            (rows/features copied from the paper run) -> make_cross_network_{table,fig}.py
@@ -27,7 +28,7 @@ def table2(res, out):
     d = os.path.join(out, "table2")
     os.makedirs(d, exist_ok=True)
     for f in ["results.csv", "summary_pooled.csv"]:
-        shutil.copy(os.path.join(res, "table2/fullfix", f), d)
+        shutil.copy(os.path.join(res, "table2/fullfix_splitbudget", f), d)
     shutil.copy(os.path.join(res, "paper_refs/table2_single_machine_spo_gbt.csv"), os.path.join(d, "single_machine_spo_gbt.csv"))
 
 

@@ -13,7 +13,7 @@ from make_pf_grid_table import ARMS as _ARMS  # noqa: E402
 ARMS = _ARMS[::-1]  # SPO first, as in the paper's MULTI_THREAD bar figure
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "../../../paper/distributed_spo_gbt_kdd27/figures/evaluation/vertex_pf")
+OUT = os.path.join(HERE, "../../../paper/distributed_spo_gbt_kdd28/figures/evaluation/vertex_pf")
 TEX_DIR = "figures/evaluation/vertex_pf"  # path as seen from main.tex
 PANELS = [  # (tag, title, run_prefix, machine, W list, oom log glob, legend?)
     ("hm4", "n2-highmem-4", "pfhm4_20261025", "n2-highmem-4", "1,2,4,8,16",

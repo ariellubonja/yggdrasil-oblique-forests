@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paper vs fixed-rerun accuracy for KDD27 Tables 2, 3 and 8, and distributed-vs-single parity (paired by dataset).
+"""Paper vs fixed-rerun accuracy for KDD28 Tables 2, 3 and 8, and distributed-vs-single parity (paired by dataset).
 
   python compare_fixed_reruns.py [--results <dir>] [--out <dir>]
 <dir> defaults to benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01 (layout: its README.md).

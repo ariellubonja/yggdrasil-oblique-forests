@@ -1,6 +1,6 @@
 # Distributed SPO-GBT: how to recreate the results
 
-**Accuracy numbers made before 2026-11-01 (KDD27 Tables 2, 3, 8 as first published) carry a bug** (distributed SPO
+**Accuracy numbers made before 2026-11-01 (KDD28 Tables 2, 3, 8 as first published) carry a bug** (distributed SPO
 trained on cache-bin representatives; plus nondeterministic tie order). §G has the fixes, the reruns, and how to
 recreate them; it supersedes §E/§F for accuracy.
 
@@ -145,7 +145,7 @@ What the CSVs hold:
   old-vs-new worker comparison (moved here from `runtime/GBT/` on 2026-10-26); source of
   `make_in_node_tables.py`.
 
-## D. Paper artifacts and what regenerates them (`paper/distributed_spo_gbt_kdd27/`, checked 2026-10-26)
+## D. Paper artifacts and what regenerates them (`paper/distributed_spo_gbt_kdd28/`, checked 2026-10-26)
 
 Generators emit the tabular body only; `main.tex` owns the environments and captions.
 
@@ -161,7 +161,7 @@ whose hm16 ranges now include the `pfgrid` W = 1..4 cells (the Overleaf copy was
 hm4 column now reads the P = F n2-highmem-4 cells (`pfhm4*`) instead of the deleted sqrt(F) grids; pushed to Overleaf 2026-10-26.
 | `tables/table_dist_runtime_body.tex` | `make_paper_tables.py` (body header says in-process) | `results.csv` (trees == 50; `extra` tags `in_process_m7i`) + `anchors.csv` | C |
 | `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_{delta,mean}_body.tex` | `make_paper_tables.py` | `suite_results.csv` vs `speedup_map_by_dataset/suite_results.csv` | C |
-| `figures/evaluation/cc18_tree_feature_hist_body.tex` + `cc18_tree_feature_hist/*.dat` | `../cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out paper/distributed_spo_gbt_kdd27 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6` (byte-identical, 2026-10-28) | `results/misc/cc18_gbt_feature_study/nodes_all.tar.gz` + CC18 headers from `benchmarks/data/download_cc18_datasets.py` | CC18 study |
+| `figures/evaluation/cc18_tree_feature_hist_body.tex` + `cc18_tree_feature_hist/*.dat` | `../cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out paper/distributed_spo_gbt_kdd28 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6` (byte-identical, 2026-10-28) | `results/misc/cc18_gbt_feature_study/nodes_all.tar.gz` + CC18 headers from `benchmarks/data/download_cc18_datasets.py` | CC18 study |
 | `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `in_node_parallelism_2026-10-22/` | C |
 | `figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf` | none (made interactively in a chat session) | `results.csv` + `anchors.csv` | C |
 | `figures/method/*.pdf`, `listings/in_worker_oblique` | hand-made (SVG sources in `benchmarks/results/figures/`) | - | - |
@@ -203,7 +203,7 @@ Setup:
 - Checkpoints off.
 - Data: CC18 fold 0, numeric (policy-encoded), seeds 1-5, r = 0, 0.1, ..., 1.
 
-Paper: KDD27 Table 2 (`tab:column-replication`) and the column-replication figure. Generators and cells are on the
+Paper: KDD28 Table 2 (`tab:column-replication`) and the column-replication figure. Generators and cells are on the
 branch; they reproduce the bodies on `main` byte-for-byte.
 
 Known issue: the Python API's `random_seed` is dropped by the DGBT learner. The harness sets it through
@@ -217,7 +217,7 @@ every layer. Branch `cross-worker-col-comms` @ f4548d37 (was `naive-column-shipp
 - code;
 - `benchmarks/results/runtime/distributed_spo_gbt/naive_column_shipping/` (`README.md`, Vertex run
   `vertex_hm4_20261029`: `results.csv`, `launch.sh`, raw eval.json + barrier CSVs);
-- generators `make_cross_network_{table,fig}.py` for KDD27 Table 3 / Fig. 9.
+- generators `make_cross_network_{table,fig}.py` for KDD28 Table 3 / Fig. 9.
 
 That branch is not merged into `main` yet.
 

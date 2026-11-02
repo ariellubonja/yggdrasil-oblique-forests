@@ -1,4 +1,4 @@
-"""KDD27 column-replication figure data: mean delta + bootstrap CI (top), per-dataset delta boxes (bottom).
+"""KDD28 column-replication figure data: mean delta + bootstrap CI (top), per-dataset delta boxes (bottom).
 A "single" slot right of r=1 shows single-machine SPO-GBT (single_machine_spo_gbt.csv) vs distributed r=0.
 
 Writes .dat files and a pgfplots body; the figure environment and caption live in main.tex.
@@ -11,7 +11,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 CSV = ROOT / "benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex/results.csv"
-OUT = ROOT / "paper/distributed_spo_gbt_kdd27/figures/evaluation/column_replication"
+OUT = ROOT / "paper/distributed_spo_gbt_kdd28/figures/evaluation/column_replication"
 SINGLE = CSV.parent / "single_machine_spo_gbt.csv"
 CLIP = 5.0
 XS = 1.2  # x position of the single-machine slot

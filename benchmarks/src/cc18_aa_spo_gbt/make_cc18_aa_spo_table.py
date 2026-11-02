@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KDD27 appendix table body: mean test accuracy / ROC AUC / log-loss per arm of the CC18 AA-vs-SPO GBT study.
+"""KDD28 appendix table body: mean test accuracy / ROC AUC / log-loss per arm of the CC18 AA-vs-SPO GBT study.
 
   python3 make_cc18_aa_spo_table.py <results.csv> <out_body.tex> [--time]
 --time adds train_s (mean over datasets of the fold mean, seconds per model; same run as the metrics) and its ratio to AA.

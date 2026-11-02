@@ -1,4 +1,4 @@
-# KDD27 accuracy results rerun with the 2026-10-31/11-01 bug fixes
+# KDD28 accuracy results rerun with the 2026-10-31/11-01 bug fixes
 
 How to recreate everything here: `benchmarks/src/distributed_spo_gbt/REPLICABILITY.md` §G.
 Comparison (prints every table below): `python benchmarks/src/distributed_spo_gbt/fixed_reruns/compare_fixed_reruns.py`

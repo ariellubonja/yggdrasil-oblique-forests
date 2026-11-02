@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KDD27 cross-network projections figure: pgfplots body + .dat files (caption/label live in main.tex).
+"""KDD28 cross-network projections figure: pgfplots body + .dat files (caption/label live in main.tex).
 
 (a) cross-network speedup (in-worker time / cross-network time) vs rows x features, log-log;
 (b) cross-network tree-training time split into in-worker time, communication wait and other extra,
@@ -14,7 +14,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     HERE, "../../results/runtime/distributed_spo_gbt/naive_column_shipping/vertex_hm4_20261029/results.csv")
-PAPER = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "../../../paper/distributed_spo_gbt_kdd27")
+PAPER = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "../../../paper/distributed_spo_gbt_kdd28")
 REL = "figures/evaluation/cross_network"
 os.makedirs(os.path.join(PAPER, REL), exist_ok=True)
 

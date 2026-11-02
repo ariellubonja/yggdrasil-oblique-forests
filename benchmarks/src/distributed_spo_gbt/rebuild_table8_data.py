@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rebuild the 33 suite datasets + CV folds behind KDD27 Table 8 (tab:dist-accuracy) and check them against the
+"""Rebuild the 33 suite datasets + CV folds behind KDD28 Table 8 (tab:dist-accuracy) and check them against the
 recorded sha256s (speedup_map_by_dataset/MANIFEST/inputs.sha256). Follows spaa27_experiments/REPLICABILITY.md §4.
 
   <venv>/bin/python rebuild_table8_data.py <folds_dir>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit the KDD27 column-replication table BODY (tabular only; caption/label live in main.tex).
+"""Emit the KDD28 column-replication table BODY (tabular only; caption/label live in main.tex).
 Per replication level r: mean test accuracy over datasets (of per-dataset seed means), delta vs r=0
 in points, wins/ties/losses vs r=0, mean rank. Same definitions as column_replication/summarize_replication.py.
 A bold last row gives single-machine SPO-GBT (same hyperparameters, single_machine_spo_gbt.csv), not ranked."""
@@ -10,7 +10,7 @@ from statistics import mean
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 # argv: [src_dir (results.csv, summary_pooled.csv, single_machine_spo_gbt.csv)] [out_body.tex] [run note]
 SRC = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex"
-OUT = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "paper/distributed_spo_gbt_kdd27/tables/table_column_replication_body.tex"
+OUT = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "paper/distributed_spo_gbt_kdd28/tables/table_column_replication_body.tex"
 NOTE = sys.argv[3] if len(sys.argv) > 3 else "Vertex AI run full20261029b"
 EPS = 1e-9
 DASH = r"\multicolumn{1}{c}{---}"
