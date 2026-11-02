@@ -2,7 +2,8 @@
 """Vertex P=F grid -> pgfplots BODY: grouped log-scale bars of tree-training seconds per dataset, one panel per machine type.
 Same cells and selection as make_pf_grid_table.py (imports its grid()); bars = arm x W, hue = arm, lightness = W.
 Writes <out_dir>/fig_vertex_<tag>_pf_body.tex + <tag>.dat per panel; figure environment/caption live in main.tex.
-Usage: make_pf_grid_fig.py [--out_dir DIR]  (defaults reproduce the paper's hm4 + hm16 panels)"""
+Usage: make_pf_grid_fig.py [--out_dir DIR] [--hm4_prefix P --hm4_oom_log LOG --hm16_prefix P]
+  (defaults reproduce the 2026-10-25 hm4 + hm16 panels)"""
 import argparse, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -74,8 +75,12 @@ def panel(tag, title, g, out_dir, width, legend):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out_dir", default=OUT); ap.add_argument("--trees", type=int, default=10)
+    ap.add_argument("--hm4_prefix", default=PANELS[0][2]); ap.add_argument("--hm4_oom_log", default=PANELS[0][5])
+    ap.add_argument("--hm16_prefix", default=PANELS[1][2])
     a = ap.parse_args(); os.makedirs(a.out_dir, exist_ok=True)
+    over = {"hm4": (a.hm4_prefix, a.hm4_oom_log), "hm16": (a.hm16_prefix, None)}
     for tag, title, prefix, machine, w, oom_logs in PANELS:
+        prefix, oom_logs = over[tag]
         g = grid(prefix, machine, a.trees, w, oom_logs)
         panel(tag, title, g, a.out_dir, "0.52\\textwidth" if tag == "hm4" else "0.46\\textwidth", legend=(tag == "hm4"))
         print("wrote", tag, "panel to", a.out_dir, file=sys.stderr)
