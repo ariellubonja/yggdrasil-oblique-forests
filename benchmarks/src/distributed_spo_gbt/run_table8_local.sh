@@ -36,10 +36,12 @@ for ds in $DATASETS; do
         T=$(( NCPU / W )); [ $T -lt 1 ] && T=1
         AXIS=SPARSE_OBLIQUE; [ $A = AA ] && AXIS=AXIS_ALIGNED
         WD=$OUT/work/${ds}_f${k}_W${W}; rm -rf $WD
+        # Legacy per-worker local count (recorded Table 8 cells); DIST_EXTRA comes last and may override it.
         $OUT/bin/train_distributed_gbt --alsologtostderr --train_csv $TRAIN --test_csv $TEST --label label \
           --work_dir $WD --num_workers $W --num_threads $T --num_trees 300 --max_depth 6 --split_axis $AXIS \
           --sparse_oblique_projection_density_factor 1.5 --sparse_oblique_num_projections_exponent 1 \
           --sparse_oblique_max_num_projections 2147483647 --sparse_oblique_local_projection_count=true \
+          --sparse_oblique_split_budget=false \
           --max_unique_values_for_discretized_numerical=1 --worker_logs=false ${DIST_EXTRA:-} > $LOG 2>&1
         rc=$?; rm -rf $WD
         acc=$(grep -m1 -E "^Accuracy:" $LOG | awk '{print $2}')

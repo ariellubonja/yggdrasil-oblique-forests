@@ -26,6 +26,7 @@
 #include "yggdrasil_decision_forests/dataset/vertical_dataset.h"
 #include "yggdrasil_decision_forests/dataset/vertical_dataset_io.h"
 #include "yggdrasil_decision_forests/learner/abstract_learner.pb.h"
+#include "yggdrasil_decision_forests/learner/distributed_decision_tree/oblique.h"
 #include "yggdrasil_decision_forests/learner/distributed_gradient_boosted_trees/distributed_gradient_boosted_trees.h"
 #include "yggdrasil_decision_forests/learner/distributed_gradient_boosted_trees/distributed_gradient_boosted_trees.pb.h"
 #include "yggdrasil_decision_forests/metric/metric.h"
@@ -169,9 +170,25 @@ TEST_F(DatasetAdult, SparseOblique_5workers_FullReplication) {
   EXPECT_GT(metric::Accuracy(evaluation_), 0.82);
 }
 
-// The projection budget is the cluster total, split over the workers; with
-// full replication every worker samples single-machine projections.
-TEST_F(DatasetAdult, SparseOblique_5workers_SplitBudget) {
+// Default budget: P is the cluster total per node, split over the workers;
+// with full replication every worker samples single-machine projections.
+TEST_F(DatasetAdult, SparseOblique_5workers_DefaultSplitBudget) {
+  SetNumWorkers(5);
+  SetSparseOblique();
+  auto* in_worker =
+      train_config_
+          .MutableExtension(proto::distributed_gradient_boosted_trees_config)
+          ->mutable_in_worker_oblique();
+  EXPECT_TRUE(in_worker->split_projections_across_workers());
+  in_worker->set_column_replication(1.0f);
+  check_model = false;
+  TrainAndEvaluateModel();
+  EXPECT_GT(NumObliqueConditions(*model_), 0);
+  EXPECT_GT(metric::Accuracy(evaluation_), 0.82);
+}
+
+// Legacy per-worker count (W*P projections per node), kept for reruns.
+TEST_F(DatasetAdult, SparseOblique_5workers_LegacyPerWorkerBudget) {
   SetNumWorkers(5);
   SetSparseOblique();
   auto* in_worker =
@@ -179,11 +196,32 @@ TEST_F(DatasetAdult, SparseOblique_5workers_SplitBudget) {
           .MutableExtension(proto::distributed_gradient_boosted_trees_config)
           ->mutable_in_worker_oblique();
   in_worker->set_column_replication(1.0f);
-  in_worker->set_split_projections_across_workers(true);
+  in_worker->set_split_projections_across_workers(false);
   check_model = false;
   TrainAndEvaluateModel();
   EXPECT_GT(NumObliqueConditions(*model_), 0);
   EXPECT_GT(metric::Accuracy(evaluation_), 0.82);
+}
+
+TEST(ProjectionsForWorker, SharesSumToTotal) {
+  for (const int total : {0, 1, 2, 3, 5, 7, 10, 29, 100, 1000, 2147483}) {
+    EXPECT_EQ(distributed_decision_tree::ProjectionsForWorker(total, 1, 0),
+              total);
+    for (const int num_workers : {2, 3, 4, 5, 8, 16, 32, 64}) {
+      int sum = 0;
+      for (int w = 0; w < num_workers; w++) {
+        const int share =
+            distributed_decision_tree::ProjectionsForWorker(total, num_workers, w);
+        EXPECT_GE(share, total / num_workers);
+        EXPECT_LE(share, total / num_workers + 1);
+        sum += share;
+      }
+      EXPECT_EQ(sum, total) << "total=" << total << " W=" << num_workers;
+    }
+  }
+  // Fewer projections than workers: the first "total" workers get one each.
+  EXPECT_EQ(distributed_decision_tree::ProjectionsForWorker(3, 8, 2), 1);
+  EXPECT_EQ(distributed_decision_tree::ProjectionsForWorker(3, 8, 3), 0);
 }
 
 // Axis-aligned reference on the same split (upstream expectation).
@@ -265,6 +303,21 @@ TEST(ThreeValueColumn, SparseObliqueUsesRawValues) {
   ASSERT_OK_AND_ASSIGN(const auto evaluation,
                        model->EvaluateWithStatus(dataset, {}, &rnd));
   EXPECT_EQ(metric::Accuracy(evaluation), 1.0);
+}
+
+// A local projection count at r < 1 needs the legacy per-worker budget: with
+// the default split budget it would be divided by W twice.
+TEST(ThreeValueColumn, LocalCountNeedsLegacyBudget) {
+  const std::string path = WriteThreeValueDataset();
+  auto config = ThreeValueTrainConfig();
+  auto* in_worker =
+      config.MutableExtension(proto::distributed_gradient_boosted_trees_config)
+          ->mutable_in_worker_oblique();
+  in_worker->set_num_projections_from_local_features(true);
+  EXPECT_THAT(TrainThreeValue(config, path, ThreeValueDataSpec(path)).status(),
+              test::StatusIs(absl::StatusCode::kInvalidArgument));
+  in_worker->set_split_projections_across_workers(false);
+  EXPECT_OK(TrainThreeValue(config, path, ThreeValueDataSpec(path)).status());
 }
 
 TEST(ThreeValueColumn, SparseObliqueRejectsForcedDiscretization) {

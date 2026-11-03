@@ -100,10 +100,19 @@ struct ObliqueSplitArgs {
   // Base seed. Each node derives an independent random stream from it.
   uint64_t seed;
   // If num_workers > 1, GetNumProjections is the cluster total and this worker
-  // samples its share: floor(P/num_workers) + (worker_idx < P % num_workers).
+  // samples its share, ProjectionsForWorker(P, num_workers, worker_idx).
   int worker_idx = 0;
   int num_workers = 1;
 };
+
+// Share of "total" projections sampled by worker "worker_idx" of "num_workers":
+// floor(total/W) + (worker_idx < total % W). Shares sum to total; W <= 1 = total.
+inline int ProjectionsForWorker(const int total, const int num_workers,
+                                const int worker_idx) {
+  if (total <= 0) return 0;
+  if (num_workers <= 1) return total;
+  return total / num_workers + (worker_idx < total % num_workers ? 1 : 0);
+}
 
 // For each open node, samples projections from the node's local numerical
 // features, scores them like the axis-aligned distributed splitter and keeps

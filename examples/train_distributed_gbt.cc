@@ -96,11 +96,15 @@ ABSL_FLAG(int, sparse_oblique_max_num_projections, 1000,
           "P = F arms pass INT_MAX so wide datasets (Bioresponse, F = 1776) "
           "are not truncated.");
 ABSL_FLAG(bool, sparse_oblique_local_projection_count, false,
-          "If true, F in ceil(F^exponent) is the worker's own numerical "
-          "candidate count instead of the dataset's numerical feature count.");
-ABSL_FLAG(bool, sparse_oblique_split_budget, false,
-          "If true, ceil(F^exponent) is the cluster total per node, split "
-          "across the workers (split_projections_across_workers).");
+          "Legacy (Table 8 cells): if true, F in ceil(F^exponent) is the "
+          "worker's own numerical candidate count instead of the dataset's "
+          "numerical feature count. Needs --sparse_oblique_split_budget=false "
+          "unless --column_replication 1.");
+ABSL_FLAG(bool, sparse_oblique_split_budget, true,
+          "If true (default), ceil(F^exponent) is the cluster total per node, "
+          "split across the workers (split_projections_across_workers): the "
+          "single-machine SPO budget. false = legacy per-worker count (W*P per "
+          "node).");
 ABSL_FLAG(double, column_replication, 0.0,
           "In-worker oblique: fraction in [0,1] of the numerical columns a "
           "worker does not own that it also holds and samples projections "

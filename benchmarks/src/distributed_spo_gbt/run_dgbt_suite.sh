@@ -45,6 +45,7 @@ for ds in $DATASETS; do
       rm -rf "$WD"
       echo "### $STAMP START $TAG"
       T0=$(date +%s.%N)
+      # Legacy per-worker local count (recorded Table 9 cells): pin split budget off, else the guard rejects it.
       "$BIN" --alsologtostderr --train_csv "$TRAIN" --test_csv "$TEST" --label "$LABEL" \
         --work_dir "$WD" --num_workers "$W" --num_threads "$THREADS" \
         --num_trees "$TREES" --max_depth "$MAX_DEPTH" --split_axis "$AXIS" \
@@ -52,6 +53,7 @@ for ds in $DATASETS; do
         --sparse_oblique_num_projections_exponent 1 \
         --sparse_oblique_max_num_projections 2147483647 \
         --sparse_oblique_local_projection_count=true \
+        --sparse_oblique_split_budget=false \
         --max_unique_values_for_discretized_numerical=1 \
         --worker_logs=false > "$LOG" 2>&1
       RC=$?

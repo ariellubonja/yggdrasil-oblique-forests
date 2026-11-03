@@ -369,15 +369,17 @@ absl::Status SetDefaultHyperParameters(
       LOG(INFO) << "Sparse oblique splits: numerical discretization disabled";
       cache->set_max_unique_values_for_discretized_numerical(0);
     }
-    // The split budget divides one count across workers; a per-worker local
+    // The split budget (default) divides one count across workers; a local
     // count (r < 1) would be divided again, giving ~P/W projections in total.
     const auto& in_worker = spe_config->in_worker_oblique();
     if (in_worker.split_projections_across_workers() &&
         in_worker.num_projections_from_local_features() &&
         in_worker.column_replication() < 1.f) {
       return absl::InvalidArgumentError(
-          "split_projections_across_workers needs "
-          "num_projections_from_local_features=false (or column_replication=1)");
+          "split_projections_across_workers=true (default) needs "
+          "num_projections_from_local_features=false (or column_replication=1); "
+          "set split_projections_across_workers=false for the legacy "
+          "per-worker local count");
     }
   }
 

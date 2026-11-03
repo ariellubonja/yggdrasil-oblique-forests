@@ -200,6 +200,7 @@ cc_test(
         "//yggdrasil_decision_forests/dataset:vertical_dataset",
         "//yggdrasil_decision_forests/dataset:vertical_dataset_io",
         "//yggdrasil_decision_forests/learner:abstract_learner_cc_proto",
+        "//yggdrasil_decision_forests/learner/distributed_decision_tree:oblique",
         "//yggdrasil_decision_forests/learner/distributed_decision_tree/dataset_cache:dataset_cache_worker",
         "//yggdrasil_decision_forests/metric",
         "//yggdrasil_decision_forests/model:abstract_model",

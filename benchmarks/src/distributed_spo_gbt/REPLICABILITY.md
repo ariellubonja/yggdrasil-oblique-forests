@@ -314,3 +314,38 @@ thread count; rerun it with `fixed_reruns/run_single_machine_cc18.sh <train_obli
 <cc18_fold0 dir> <out>` (reproduced 170/170 cells on an M1 Pro). It is bit-reproducible only on such a Mac: the
 single-machine finder's job split depends on the thread count. (`paper_refs/table2_single_machine_run_local.sh` is
 the original, with paths from the author's machine.)
+
+## H. Projection budget default (2026-11-02)
+
+**Before:** `in_worker_oblique.split_projections_across_workers` defaulted to false, so every worker sampled
+P = ceil(F^e) projections per node (W·P per node). **Now** it defaults to true: P = GetNumProjections(global F) per node
+in total, worker w samples floor(P/W) + (w < P mod W) (`distributed_decision_tree::ProjectionsForWorker`). At r = 1
+this is the single-machine SPO-GBT budget. `examples/train_distributed_gbt --sparse_oblique_split_budget` and
+`vertex_build/train_cells.py` (`--no_split_budget` for legacy) follow the new default. The guard still rejects the split
+budget with `num_projections_from_local_features` at r < 1.
+
+Semantics of the recorded results and how to reproduce each:
+- **Table 2 published cells** (`table2/fullfix`): per-worker global count, P = F per worker = 4F per node at W = 4.
+  `train_cells.py --no_split_budget`, or `run_vertex_fixed.sh table2` (archived sources and image at a pre-change commit).
+- **Table 8 / Table 9 cells**: per-worker local count, P = F per node in total only at r = 0. Driver flags
+  `--sparse_oblique_local_projection_count=true --sparse_oblique_split_budget=false`; `run_table8_local.sh`,
+  `run_dgbt_suite.sh`, `fixed_reruns/run_seed_sweep.sh` and `queue3.sh` pin them.
+- **Parity runs** (`table2/fullfix_splitbudget`, Table 8 `parity`): split budget = the new default.
+- **Column-replication sweep / smoke** (`run_replication_sweep.py`, `smoke_colrep.sh`): pin `--sparse_oblique_split_budget=false`.
+- **§C in-process drivers** (`run_dgbt.sh`, hence `run_grid.sh`/`queue*.sh`, and `run_barrier_cell.sh`): pin
+  `--sparse_oblique_split_budget=false` (the recorded `results.csv` SPO rows and the first barrier measurement are per-worker P).
+- **§A Vertex grids**: cells before 2026-11-02 (incl. `runtime_reruns/run_vertex_grid_fixed.sh`, image `fullfix-10509539`) used a
+  per-W exponent, P_TOTAL // W per worker, recorded in each cell's `eval.json["learner_kwargs"]`. `run_vertex_barriers.py --budget`
+  selects the semantics: `split` (default) sends one exponent with ceil(F^e) = P_TOTAL and the library divides it; `per_worker`
+  keeps the per-W exponent for old images. The launcher reads the image tag's YDF commit (first 8-hex token that is a commit of
+  this repo) and exits when that commit's proto default disagrees with `--budget`, or when no commit is found. `eval.json["meta"]`
+  records `budget`, `p_total` and `projections_per_worker` (the largest share under `split`).
+- **Caveat (pre-existing, both semantics):** a worker with no numerical candidate for a node skips it and its share is not
+  redistributed, so a node gets fewer than P when some worker owns no numerical column (F < W or skewed ownership). Not reached
+  by the paper configurations (all features, F >= W).
+
+Evidence (`ariel_notes/results/2026-11-02_dist_matches_single/`, CC18 fold 0, 34 datasets, 10 trees, depth 6, P = F,
+seeds 1-5, Mac in-process workers): Δ vs single machine (dataset-paired, SE over datasets): W = 1 +0.08 ± 0.24 pts,
+log loss +0.0003 ± 0.0008; W = 4, r = 1 −0.06 ± 0.15 pts, −0.0001 ± 0.0011; legacy W = 4 +0.27 ± 0.19 pts,
+−0.0056 ± 0.0017 (27/34 datasets lower log loss). The default and legacy cells are bit-identical to the 2026-11-01
+split-budget prototype and old-default cells (170/170 each).

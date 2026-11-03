@@ -98,19 +98,23 @@ def accuracy_table(metric="test_auc"):
         for fam in fams:
             blk = [(lab, s.loc[ds]) for f, lab, s in stats if f == fam]
             best = max(r["mean"] for _, r in blk)
-            for lab, r in blk:
+            for i, (lab, r) in enumerate(blk):
                 means[lab].append(r["mean"])
                 mu, has_sd = f"{r['mean']:.4f}"[1:], r["count"] > 1
                 sd = r"$_{\pm" + f"{r['std']:.4f}"[1:] + "}$" if has_sd else r"\phantom{$_{\pm.0000}$}"
                 if abs(r["mean"] - best) < 5e-5:
-                    cells.append(r"{\boldmath\textbf{" + mu + sd + "}}" if has_sd else r"\textbf{" + mu + "}" + sd)
+                    c = r"{\boldmath\textbf{" + mu + sd + "}}" if has_sd else r"\textbf{" + mu + "}" + sd
                 else:
-                    cells.append(mu + sd)
+                    c = mu + sd
+                # distributed cells colored by AUC delta (x1e3) vs the family's single machine, as the old heatmap
+                cells.append(_delta_color((r["mean"] - blk[0][1]["mean"]) * 1e3) + c if i else c)
         lines.append(ds.replace("_", r"\_") + " & " + " & ".join(cells) + r" \\")
     # Mean row: bold the best per family, compared at the printed 4 decimals
     avg = {lab: round(sum(means[lab]) / len(means[lab]), 4) for _, lab, _ in stats}
     top = {fam: max(avg[lab] for f, lab, _ in stats if f == fam) for fam in fams}
-    mcells = [(r"\textbf{%s}" if avg[lab] == top[f] else "%s") % f"{avg[lab]:.4f}"[1:] + r"\phantom{$_{\pm.0000}$}"
+    ref = {f: avg[lab] for f, lab, _ in reversed(stats)}  # first arm per family = single machine
+    mcells = [("" if "single" in lab else _delta_color((avg[lab] - ref[f]) * 1e3))
+              + (r"\textbf{%s}" if avg[lab] == top[f] else "%s") % f"{avg[lab]:.4f}"[1:] + r"\phantom{$_{\pm.0000}$}"
               for f, lab, _ in stats]
     lines += [r"\midrule", "Mean & " + " & ".join(mcells) + r" \\",
               r"\bottomrule", r"\end{tabular}}"]
@@ -130,6 +134,11 @@ def _diverge(v, cap=15.0):
     t = max(-1.0, min(1.0, v / cap))
     mid, pole = (240, 239, 236), ((42, 120, 214) if t > 0 else (227, 73, 72))
     return ",".join(str(round(m + abs(t) * (q - m))) for m, q in zip(mid, pole))
+
+
+def _delta_color(v):
+    """Cell prefix: heatmap background, white text past |v| > 9 (as accuracy_delta_heatmap)."""
+    return rf"\cellcolor[RGB]{{{_diverge(v)}}}" + (r"\color{white}" if abs(v) > 9 else "")
 
 
 def accuracy_delta_heatmap(metric="test_auc"):

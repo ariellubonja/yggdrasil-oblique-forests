@@ -21,7 +21,8 @@ export DGBT_BARRIER_CSV=$OUT/$TAG.csv
   --test_csv "$TRUNK_DIR/test_100000x256/shard_00.csv" --label label \
   --work_dir "$WORK" --num_workers "$W" --num_threads "$THREADS" --num_trees "$TREES" --max_depth 6 \
   --split_axis "$AXIS" --sparse_oblique_projection_density_factor 1.5 \
-  --sparse_oblique_num_projections_exponent 0.5 --worker_logs=false > "$OUT/$TAG.log" 2>&1
+  --sparse_oblique_num_projections_exponent 0.5 --worker_logs=false \
+  --sparse_oblique_split_budget=false > "$OUT/$TAG.log" 2>&1  # legacy per-worker P: the first barrier measurement predates the split budget
 grep -E "Training \(incl|^Accuracy:" "$OUT/$TAG.log" | cut -c1-160
 PY=$REPO/.venv/bin/python; [ -x "$PY" ] || PY=python3  # pandas lives in the repo venv
 "$PY" "$REPO/benchmarks/src/distributed_spo_gbt/summarize_barriers.py" "$DGBT_BARRIER_CSV"

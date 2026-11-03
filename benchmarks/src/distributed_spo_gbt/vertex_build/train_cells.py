@@ -44,8 +44,11 @@ parser.add_argument("--checkpoints", action="store_true", help="keep YDF checkpo
 parser.add_argument("--no_checkpoints", action="store_true", help="no-op: checkpoints are off by default")
 parser.add_argument("--reuse_reader", action="store_true")
 parser.add_argument("--barrier_csv", action="store_true")
-parser.add_argument("--split_budget", action="store_true",
-                    help="in_worker_oblique.split_projections_across_workers: P is the cluster total per node")
+# Default (2026-11-02): P is the cluster total per node, = single-machine SPO at r = 1.
+parser.add_argument("--split_budget", dest="split_budget", action="store_true", default=True,
+                    help="in_worker_oblique.split_projections_across_workers=true (default; kept for old command lines)")
+parser.add_argument("--no_split_budget", dest="split_budget", action="store_false",
+                    help="legacy per-worker P (W*P per node): reruns of the recorded Table 2 cells")
 parser.add_argument("--variants", default="",
                     help="comma list of knob sets run per (dataset, level) for in-job A/B: "
                          "base | nockpt | reuse | all; cells land in r<RR>_<variant>/")

@@ -114,6 +114,9 @@ Claude Code is the hub and this repo is the source of truth.
   `ariel_notes/results/<date>_<topic>/` (gitignored) or tracked `benchmarks/results/...`; name the path
   in every run script and subagent brief. EC2 boxes auto-stop when idle (window per instance:
   `aws cloudwatch describe-alarms`), and a stop wipes `/tmp`.
+- **Agents may start EC2 instances on their own and must stop them when the job is done (2026-11-02):**
+  `aws ec2 stop-instances --instance-ids <id>` (stop, never terminate; "ariel" boxes only) after mirroring the
+  results off. Auto-stop is a backstop, not the plan.
 
 ## Distributed GBT
 
@@ -159,7 +162,7 @@ Claude Code is the hub and this repo is the source of truth.
   labels via `main.aux`: floats on or right after their section's page, no half-empty pages, no stranded
   headings. To pin a figure*/table* by its heading use `\twocolumn[{\floatblock ...}]` with a minipage +
   `\captionsetup{type=...}` (KDD28 preamble defines `\floatblock`).
-- **Caption style (2026-10-29):** copy neighbouring floats. KDD28: one short sentence, then
+- **Caption style (2026-10-29, 2026-11-03):** copy the user's captions; conciseness is key (short fragments, no restated setup). KDD28: one short sentence, then
   `\Description`, `\label`, and a setup footnote `\par\smallskip\raggedright\footnotesize <notes>`.
 - **No machine specs in captions (2026-09-18)** (CPU, threads, trees, instance type); the setup section has them.
 - **Don't commit paper figure/table edits (2026-09-25)** after pushing to Overleaf; the user picks between

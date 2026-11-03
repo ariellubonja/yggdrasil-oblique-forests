@@ -149,12 +149,9 @@ std::vector<Projection> SampleNodeProjections(const ObliqueSplitArgs& args,
   const int count_basis = args.num_features_for_projection_count > 0
                               ? args.num_features_for_projection_count
                               : static_cast<int>(features.size());
-  int num_projections =
-      decision_tree::GetNumProjections(args.dt_config, count_basis);
-  if (args.num_workers > 1) {
-    num_projections = num_projections / args.num_workers +
-                      (args.worker_idx < num_projections % args.num_workers);
-  }
+  const int num_projections = ProjectionsForWorker(
+      decision_tree::GetNumProjections(args.dt_config, count_basis),
+      args.num_workers, args.worker_idx);
   // Density over the LOCAL candidates keeps E[nnz] = density_factor.
   const float projection_density =
       std::clamp(oblique_config.projection_density_factor() /

@@ -45,7 +45,8 @@ set +e
   --work_dir "$WORK/$DATASET" --num_workers "$W" --num_threads "$THREADS" \
   --num_trees "$TREES" --max_depth "$MAX_DEPTH" --split_axis "$AXIS" \
   --sparse_oblique_projection_density_factor 1.5 \
-  --sparse_oblique_num_projections_exponent 0.5 --worker_logs=false "$@" >> "$LOG" 2>&1
+  --sparse_oblique_num_projections_exponent 0.5 --worker_logs=false \
+  --sparse_oblique_split_budget=false "$@" >> "$LOG" 2>&1  # legacy per-worker P (recorded results.csv rows); "$@" may override
 RC=$?
 set -e
 T1=$(date +%s.%N)

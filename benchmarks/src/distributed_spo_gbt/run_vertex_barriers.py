@@ -9,7 +9,7 @@ summarized with summarize_barriers.py. Re-running with --run_id reuses finished 
 
   python run_vertex_barriers.py --dataset epsilon --workers 1,2,4,8 --arms aa,spo [--dry_run]
 """
-import argparse, datetime, fcntl, hashlib, json, math, os, subprocess, sys, time
+import argparse, datetime, fcntl, hashlib, json, math, os, re, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT, REGION, BUCKET = "ydf-distributed-spo-gbt", "us-east1", "ariel_ydf_bucket"
@@ -56,6 +56,9 @@ ap.add_argument("--run_id", default="", help="reuse a run id: finished cells are
 ap.add_argument("--extra_args", default="", help="extra train.py args appended to every cell, e.g. '--max_unique_values_for_discretized_numerical=1'")
 ap.add_argument("--fresh_cache", action="store_true",
                 help="build a fresh dataset cache per cell (default: one shared cache per image/dataset/arm/extra_args, built once)")
+ap.add_argument("--budget", choices=("split", "per_worker"), default="split",
+                help="split (default; images from 2026-11-02 on): one exponent, ceil(F^e) = P_TOTAL per node, the library divides it over W. "
+                     "per_worker: pre-2026-11-02 images (every worker samples ceil(F^e)): per-W exponent, P_TOTAL // w per worker")
 ap.add_argument("--dry_run", action="store_true")
 args = ap.parse_args()
 
@@ -70,9 +73,36 @@ now = lambda: datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S")
 
 
 def spo_exponent(w):
-    """ceil(cols ** e) == P_TOTAL // w per worker (projection count uses the global feature count)."""
-    p = max(1, P_TOTAL // w)
+    """ceil(cols ** e) == P per worker: P = P_TOTAL under --budget split (the library divides it over W),
+    P_TOTAL // w under --budget per_worker (pre-2026-11-02 images, every worker samples ceil(F^e))."""
+    p = P_TOTAL if args.budget == "split" else max(1, P_TOTAL // w)
     return math.log(p - 0.5) / math.log(ds["cols"]) if p > 1 else 0.0
+
+
+def proj_per_worker(w):
+    """Largest per-worker share under split, the exact per-worker count under per_worker."""
+    return -(-P_TOTAL // w) if args.budget == "split" else max(1, P_TOTAL // w)
+
+
+def image_ydf_commit():
+    """First 8-hex token of the image tag naming a commit of this repo (tags: <commit8>-<hash>, <name>-<commit8>[-v])."""
+    for tok in re.findall(r"[0-9a-f]{8}", IMAGE.rsplit(":", 1)[-1]):
+        if subprocess.run(["git", "-C", HERE, "cat-file", "-e", f"{tok}^{{commit}}"], capture_output=True).returncode == 0:
+            return tok
+    return None
+
+
+def check_image_budget():
+    """Exit unless the image's YDF default agrees with --budget: the wrong pairing gives W*P or ~P/W projections per node."""
+    commit = image_ydf_commit()
+    if commit is None:
+        sys.exit(f"image {IMAGE}: no commit of this repo in the tag, cannot check its projection-budget default")
+    proto = "yggdrasil_decision_forests/learner/distributed_gradient_boosted_trees/distributed_gradient_boosted_trees.proto"
+    text = subprocess.run(["git", "-C", HERE, "show", f"{commit}:{proto}"], capture_output=True, text=True).stdout
+    splits = "split_projections_across_workers = 4 [default = true]" in text
+    if splits != (args.budget == "split"):
+        want = "split" if splits else "per_worker"
+        sys.exit(f"image {IMAGE}: YDF {commit} {'splits' if splits else 'does not split'} the budget over workers; pass --budget {want}")
 
 
 def default_image():
@@ -108,10 +138,12 @@ CELLS = [(arm, w) for w in WORKERS for arm in ARM_LIST]
 
 print(f"dataset {args.dataset} ({ds['rows']} x {ds['cols']}, label {ds['label']}) | workers {args.machine} ({VCPUS} vCPU), manager {MGR_MACHINE} | "
       f"{args.trees} trees | SPO total projections {P_TOTAL}, density {SPO_DENSITY}\nimage {IMAGE}\nRUN_ID {RUN_ID} -> {RUN_DIR}")
-print(f"{'cell':8} {'nodes':>5} {'vCPUs':>5} {'proj/worker':>11} {'exponent':>9}")
+print(f"{'cell':8} {'nodes':>5} {'vCPUs':>5} {'proj/wk':>8} {'exponent':>9}   (budget: {args.budget}; proj/wk = max share under split)")
 for arm, w in CELLS:
-    proj = f"{P_TOTAL // w:11d} {spo_exponent(w):9.6f}" if arm == "spo" else f"{'-':>11} {'-':>9}"
+    proj = f"{proj_per_worker(w):8d} {spo_exponent(w):9.6f}" if arm == "spo" else f"{'-':>8} {'-':>9}"
     print(f"{tag_of(arm, w):8} {1 + w:5d} {vcpus(w):5d} {proj}")
+if "spo" in ARM_LIST:
+    check_image_budget()
 if args.dry_run:
     sys.exit(0)
 
@@ -128,7 +160,8 @@ def make_job(arm, w):
     tag, out = tag_of(arm, w), f"{RUN_DIR}/{tag_of(arm, w)}"
     meta = {"dataset": args.dataset, "rows": ds["rows"], "cols": ds["cols"], "workers": w, "arm": arm, "machine_type": args.machine,
             "manager_machine_type": MGR_MACHINE, "tag": tag, "trees": args.trees, "image": IMAGE,
-            "projections_per_worker": P_TOTAL // w if arm == "spo" else None, "p_total": P_TOTAL if arm == "spo" else None,
+            "p_total": P_TOTAL if arm == "spo" else None, "budget": args.budget if arm == "spo" else None,
+            "projections_per_worker": proj_per_worker(w) if arm == "spo" else None,  # max share under split
             "extra_args": args.extra_args}
     # fresh cache per cell (never resume a stale one), under work/ so the bucket lifecycle rule deletes it after 2 days
     work_dir = f"gs://{BUCKET}/work/{RUN_ID}_{args.dataset}/{tag}_{datetime.datetime.now(datetime.timezone.utc).strftime('%H%M%S')}"

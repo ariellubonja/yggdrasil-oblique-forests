@@ -91,6 +91,7 @@ def main():
                "--sparse_oblique_num_projections_exponent", "1",
                "--sparse_oblique_max_num_projections", "2147483647",
                "--sparse_oblique_local_projection_count=false",
+               "--sparse_oblique_split_budget=false",  # legacy per-worker P: reproduces the recorded cells
                "--sparse_oblique_projection_density_factor", "1.5",
                "--sparse_oblique_weights", "BINARY",
                "--max_unique_values_for_discretized_numerical=1",

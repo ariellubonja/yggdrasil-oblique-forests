@@ -24,10 +24,12 @@ for ds in $DATASETS; do
       m=$(grep -o "test-accuracy:[^ ]* test-auc:[^ ]* test-logloss:[^ ]*" $LOG | tail -1 | sed 's/test-[a-z]*://g; s/ /,/g')
     else
       WD=$OUT/work/${ARM}_s${SEED}_${ds}_f$k; rm -rf $WD
+      # Legacy per-worker local count (recorded cells); the split-budget pin keeps newer binaries off the guard.
       $DIST --alsologtostderr --train_csv $TRAIN --test_csv $TEST --label label --work_dir $WD --num_workers 1 \
         --num_threads $T --num_trees 300 --max_depth 6 --split_axis SPARSE_OBLIQUE \
         --sparse_oblique_projection_density_factor 1.5 --sparse_oblique_num_projections_exponent 1 \
         --sparse_oblique_max_num_projections 2147483647 --sparse_oblique_local_projection_count=true \
+        --sparse_oblique_split_budget=false \
         --max_unique_values_for_discretized_numerical=1 --worker_logs=false --force_numerical_features=true \
         --seed $SEED > $LOG 2>&1
       rc=$?; rm -rf $WD
