@@ -2,9 +2,8 @@
 """fig:threshold-sensitivity -- SPO-RF train time relative to all-exact vs the dynamic switch threshold.
 
 y = T(threshold) / T(all nodes exact, Highway VQSort), so y < 1 is where Dynamic beats exact and
-each curve's minimum is the breakeven. Main figure = AVX2 64-bin vs AVX-512 256-bin on the two
-datasets both sweeps cover, at the thresholds both scanned; appendix = all datasets with the
-vectorized binners, and the scalar 64-bin binner. Sweeps: benchmarks/results/runtime/dynamic_histogram_breakeven/.
+each curve's minimum is the breakeven. One panel: every natural dataset under both
+vectorized binners, log x-axis. Sweeps: benchmarks/results/runtime/dynamic_histogram_breakeven/.
 Captions live in main.tex and must not carry machine specs (CLAUDE.md directive).
 All-exact references (same dataset files as the sweeps) come from REFS below.
 Emits pgfplots (Overleaf MCP is text-only) into paper/vectorized_adaptive_spaa27/figures/results/.
@@ -46,65 +45,35 @@ DATASETS = [  # (sweep key, legend, color hex, mark)
     ("youtube8m_video_train", "YouTube-8M 3.9M$\\times$1152", "7A5195", "star"),
 ]
 
-PANELS = {
-    # Main text: the two datasets swept under both vectorized binners, common thresholds only.
-    "isa": {
-        "out": "threshold_sensitivity_higgs_trunk.tex",
-        "series": [  # (glob, line style, legend)
-            ("dynamic_threshold_sweep_hwysort_avx512_random256_thr*.csv", "solid", "256 bins, AVX-512"),
-            ("dynamic_threshold_sweep_hwysort_vectorized_random_3runs_2datasets.csv", "dashed", "64 bins, AVX2"),
-        ],
-        "datasets": {"HIGGS_with_header", "trunk_1500000_x_4096"},
-        # Google palette (fig:decompose), one color per (binner, dataset) curve; legend per curve.
-        "colors": {("solid", "HIGGS_with_header"): "4285F4", ("solid", "trunk_1500000_x_4096"): "EA4335",
-                   ("dashed", "HIGGS_with_header"): "FBBC05", ("dashed", "trunk_1500000_x_4096"): "34A853"},
-        "common_thresholds": True,
-        "xmin": 80, "xmax": 6500, "xtick": "{100,1000,5000}", "band": False, "mark_min": True,
-        "legend_all": True,
-        "ref_label": "anchor=south east] at (axis cs:6500,1)",
-    },
-    # Every natural dataset, both vectorized binners, from the 2026-09-22/23 sweeps
-    # (commit cc1277fe; 26-point ladder 100..10000, 1 run), linear axis. Trunks hidden, not deleted.
-    "all": {
-        "out": "threshold_sensitivity_linear.tex",
-        "series": [
-            ("dynamic_threshold_sweep_natural_*_avx512_256.csv", "solid", "256 bins, AVX-512"),
-            ("dynamic_threshold_sweep_natural_*_avx2_64.csv", "dashed", "64 bins, AVX2"),
-        ],
-        "datasets": {"HIGGS_with_header", "SUSY_with_header", "epsilon_normalized_train", "youtube8m_video_train"},
-        # Google primaries, one per dataset; no point marks; AVX2 = short dashes.
-        "palette": {"HIGGS_with_header": "4285F4", "SUSY_with_header": "EA4335",
-                    "epsilon_normalized_train": "FBBC05", "youtube8m_video_train": "34A853"},
-        "marks": False, "dash": "dash pattern=on 2pt off 1.5pt",
-        "xmode": "normal", "xmin": 0, "xmax": 10300, "xtick": "{0,2000,4000,6000,8000,10000}",
-        "extra_axis": "scaled x ticks=false, ", "band": True, "mark_min": True, "min_mark": "x", "min_color": "black",
-        # y = speedup over all-exact (T_exact / T); the X marks each curve's best threshold.
-        "speedup": True,
-        "ref_label": None, "grid": False, "ylabel": "Speedup over Exact", "xlabel": "Dynamic Switch Threshold",
-        # Darker band = computed range of the AVX2 best thresholds (the X's; user choice 2026-09-25).
-        "band_dashed": True,
-        # Legend built after the plots, row-wise over 3 columns: dataset keys or "series:<style>".
-        "legend_order": ["HIGGS_with_header", "SUSY_with_header", "series:dashed",
-                         "epsilon_normalized_train", "youtube8m_video_train", "series:solid"],
-        "legend_names": {"HIGGS_with_header": "HIGGS", "SUSY_with_header": "SUSY",
-                         "epsilon_normalized_train": "Epsilon", "youtube8m_video_train": "YouTube-8M",
-                         "series:dashed": "AVX2", "series:solid": "AVX-512"},
-    },
-    "scalar": {
-        "out": "threshold_sensitivity_scalar.tex",
-        "series": [
-            ("dynamic_threshold_sweep_hwysort_scalar_thr*.csv", "solid", "64 bins, scalar"),
-        ],
-        "xmin": 800, "xmax": 28000, "xtick": "{1000,10000}", "band": False, "mark_min": False,
-        "ref_label": "anchor=north west] at (axis cs:800,1)",
-    },
+# Every natural dataset, both vectorized binners, from the 2026-09-22/23 sweeps
+# (commit cc1277fe; 26-point ladder 100..10000, 1 run), base for the log-axis panel. Trunks hidden, not deleted.
+_ALL = {
+    "series": [
+        ("dynamic_threshold_sweep_natural_*_avx512_256.csv", "solid", "256 bins, AVX-512"),
+        ("dynamic_threshold_sweep_natural_*_avx2_64.csv", "dashed", "64 bins, AVX2"),
+    ],
+    "datasets": {"HIGGS_with_header", "SUSY_with_header", "epsilon_normalized_train", "youtube8m_video_train"},
+    # Google primaries, one per dataset; no point marks; AVX2 = short dashes.
+    "palette": {"HIGGS_with_header": "4285F4", "SUSY_with_header": "EA4335",
+                "epsilon_normalized_train": "FBBC05", "youtube8m_video_train": "34A853"},
+    "marks": False, "dash": "dash pattern=on 2pt off 1.5pt",
+    "xmode": "normal", "xmin": 0, "xmax": 10300, "xtick": "{0,2000,4000,6000,8000,10000}",
+    "extra_axis": "scaled x ticks=false, ", "band": True, "mark_min": True, "min_mark": "x", "min_color": "black",
+    # y = speedup over all-exact (T_exact / T); the X marks each curve's best threshold.
+    "speedup": True,
+    "ref_label": None, "grid": False, "ylabel": "Speedup over Exact", "xlabel": "Dynamic Switch Threshold",
+    # Darker band = computed range of the AVX2 best thresholds (the X's; user choice 2026-09-25).
+    "band_dashed": True,
+    # Legend built after the plots, row-wise over 3 columns: dataset keys or "series:<style>".
+    "legend_order": ["HIGGS_with_header", "SUSY_with_header", "series:dashed",
+                     "epsilon_normalized_train", "youtube8m_video_train", "series:solid"],
+    "legend_names": {"HIGGS_with_header": "HIGGS", "SUSY_with_header": "SUSY",
+                     "epsilon_normalized_train": "Epsilon", "youtube8m_video_train": "YouTube-8M",
+                     "series:dashed": "AVX2", "series:solid": "AVX-512"},
 }
-# Zoom of "all" on the breakeven region: thresholds 0..3000, y floored at 1.05 (reference line off-range).
-PANELS["all_zoom"] = dict(PANELS["all"], out="threshold_sensitivity_zoom.tex", xmin=0, xmax=3000,
-                          xtick="{0,500,1000,1500,2000,2500,3000}", ymin=1.05)
 # Same data, full 100..10000 ladder on a log x-axis.
-PANELS["all_log"] = dict(PANELS["all"], out="threshold_sensitivity_log.tex", xmode="log", xmin=100, xmax=10000,
-                         xtick="{100,200,500,1000,2000,5000,10000}", extra_axis="", ymin=1.05)
+PANELS = {"all_log": dict(_ALL, out="threshold_sensitivity_log.tex", xmode="log", xmin=100, xmax=10000,
+                         xtick="{100,200,500,1000,2000,5000,10000}", extra_axis="", ymin=1.05)}
 
 
 def load_sweep(pattern: str) -> dict[str, dict[int, float]]:

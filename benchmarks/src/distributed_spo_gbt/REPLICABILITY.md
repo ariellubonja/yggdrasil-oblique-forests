@@ -153,18 +153,16 @@ Generators emit the tabular body only; `main.tex` owns the environments and capt
 |---|---|---|---|
 | `tables/table_vertex_hm4_hm16_pf_body.tex` | `make_pf_grid_table.py --run_prefix pfhm4_20261025 --machine n2-highmem-4 --w 1,2,4,8,16 --oom_logs 'barriers/vertex/p_F/pfhm4_20261025_youtube8m/launcher.log' --right_run_prefix pfgrid20261025 --right_machine n2-highmem-16 --right_w 1,2,4` | `barriers/vertex/p_F/pfhm4_20261025*`, `pfgrid20261025*` | A |
 | `figures/evaluation/vertex_pf/fig_vertex_{hm4,hm16}_pf_body.tex` + `{hm4,hm16}.dat` | `make_pf_grid_fig.py` (writes in place; same cells/selection as the grid table, imports its `grid()`) | same as the grid table | A |
-| `figures/evaluation/grcp_n2/fig_yt8m_barriers_{budget,swimlane}_body.tex` + `yt8m_barriers/*.dat` | `make_barrier_figs.py` (writes in place) | `barriers/vertex/p_F/pfhm4bar20261025_youtube8m/{aa,spo}_w16/barriers.csv` | A |
+| `figures/evaluation/grcp_n2/fig_yt8m_barriers_{budget,swimlane}_body.tex` + `yt8m_barriers/budget.dat` (`swimlane_spo_tree1.dat` is a side record, the swimlane body inlines it) | `make_barrier_figs.py` (writes in place) | `barriers/vertex/p_F/pfhm4bar20261025_youtube8m/{aa,spo}_w16/barriers.csv` | A |
 | `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` | `make_pf_ablation_tables.py` (writes in place) | ablation: `p_F/pfw1*`; setup cost: every n2-highmem-4 and n2-highmem-16 cell in `p_F` | A |
 
 Regenerated locally on 2026-10-26 from the fetched cells: every body reproduced byte-for-byte except `table_setup_cost_body.tex`,
 whose hm16 ranges now include the `pfgrid` W = 1..4 cells (the Overleaf copy was made from the `pfw1` W = 1 cells alone) and whose
 hm4 column now reads the P = F n2-highmem-4 cells (`pfhm4*`) instead of the deleted sqrt(F) grids; pushed to Overleaf 2026-10-26.
-| `tables/table_dist_runtime_body.tex` | `make_paper_tables.py` (body header says in-process) | `results.csv` (trees == 50; `extra` tags `in_process_m7i`) + `anchors.csv` | C |
-| `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_{delta,mean}_body.tex` | `make_paper_tables.py` | `suite_results.csv` vs `speedup_map_by_dataset/suite_results.csv` | C |
+| `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body.tex` | `make_paper_tables.py` | `suite_results.csv` vs `speedup_map_by_dataset/suite_results.csv` | C |
 | `figures/evaluation/cc18_tree_feature_hist_body.tex` + `cc18_tree_feature_hist/*.dat` | `../cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out paper/distributed_spo_gbt_kdd28 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6` (byte-identical, 2026-10-28) | `results/misc/cc18_gbt_feature_study/nodes_all.tar.gz` + CC18 headers from `benchmarks/data/download_cc18_datasets.py` | CC18 study |
 | `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `in_node_parallelism_2026-10-22/` | C |
-| `figures/evaluation/multi_thread_m7i_metal_24x/dist_runtime_bars_chat.pdf` | none (made interactively in a chat session) | `results.csv` + `anchors.csv` | C |
-| `figures/method/*.pdf`, `listings/in_worker_oblique` | hand-made (SVG sources in `benchmarks/results/figures/`) | - | - |
+| `figures/method/*.pdf` (`in_node_spo_sampling.pdf` only in a commented-out block), `listings/in_worker_oblique` | hand-made (SVG sources in `benchmarks/results/figures/`) | - | - |
 | `tables/table_column_replication_body.tex`, `figures/evaluation/fig_column_replication_body.tex` + `column_replication/*.dat` | `make_column_replication_{table,fig}.py` (**branch `column-replication`**) | `benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex/` (that branch) | E |
 | `tables/table_cross_network_body.tex`, `figures/evaluation/fig_cross_network_body.tex` + `cross_network/*.dat` | `make_cross_network_{table,fig}.py` (**branch `cross-worker-col-comms`**) | `naive_column_shipping/vertex_hm4_20261029/results.csv` (that branch) | F |
 

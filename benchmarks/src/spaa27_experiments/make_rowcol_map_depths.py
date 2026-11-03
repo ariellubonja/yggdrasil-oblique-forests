@@ -10,14 +10,12 @@ Sources (committed under benchmarks/results/runtime/):
 Speedup = median(train_s exact_hwy) / median(train_s dyn_vec). Circles: Trunk
 synthetic datasets; squares: natural datasets. Writes fig_rowcol_map_depths.{pdf,png}
 (background = inverse-distance interpolation of the speedup over the 3 nearest points
-in log-log space, a prediction for unmeasured shapes) + rowcol_map_depths.csv under speedup_map_by_dataset/analysis and copies the PDF to
-paper/vectorized_adaptive_spaa27/figures/results/spo_vs_gbt_rowcol_map_depths.pdf.
+in log-log space, a prediction for unmeasured shapes) + rowcol_map_depths.csv under speedup_map_by_dataset/analysis.
 """
 from __future__ import annotations
 
 import argparse
 import glob
-import shutil
 from pathlib import Path
 
 import matplotlib
@@ -227,7 +225,6 @@ def main() -> None:
     fig = args.out_dir / "figures" / f"{args.name}.pdf"
     plot(tab, fig)
     if not args.no_paper_copy:
-        shutil.copy(fig, PAPER_FIG / "spo_vs_gbt_rowcol_map_depths.pdf")
         if str(args.pgf):
             write_pgf(tab, args.pgf)
     print(tab.to_string(index=False))

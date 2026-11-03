@@ -99,19 +99,14 @@ features per tree 10.5 / 9.9 / 9.3; distinct roots over the 10 folds 5 / 6 / 6; 
 - `per_depth_tree_slices.csv`, `per_model_tree_slices.csv`, `tree_slices_pooled.csv` – the single-iteration slices (trees 100/200/300).
 - `nodes_all.tar.gz` – raw dumps, one `nodes.csv` per model (117 MB extracted):
   `tree,depth,node_id,parent_id,attribute,attribute_name,cond_type,threshold,num_examples,split_score`.
-- Paper figures (DGBT paper, `paper/distributed_spo_gbt_kdd28/figures/evaluation/`): `benchmarks/src/cc18_gbt_feature_study/make_fig_tree1_pareto.py` =
-  `fig:cc18-tree1-pareto`, split share by feature RANK in trees 1/100/200/300 for 6 datasets sampled uniformly (seed 0, shown in
-  increasing F: diabetes, breast-w, tic-tac-toe, dresses-sales, pc4, Bioresponse; `--select extremes` gives the 3 most /
-  3 least Pareto-like by tree-1 normalised entropy instead); `benchmarks/src/cc18_gbt_feature_study/make_fig_tree_feature_hist.py` = `fig:cc18-tree-feature-hist`, the
-  same counts on a fixed x-axis (features in header order, unused at 0, shared y range per dataset). Both pool the
-  10 folds; both write body-only `.tex` + `.dat`, captions live in `main.tex`.
+- Paper figure (DGBT paper, `paper/distributed_spo_gbt_kdd28/figures/evaluation/`): `benchmarks/src/cc18_gbt_feature_study/make_fig_tree_feature_hist.py` =
+  `fig:cc18-tree-feature-hist`, split share per feature (header order, unused at 0, shared y range per dataset), pooled over
+  the 10 folds; writes body-only `.tex` + `.dat`, caption lives in `main.tex`. The first-tree Pareto figure and the
+  per-depth / per-iteration tables it replaced were dropped from the paper (2026-10-26/28) and their generators deleted.
 - `benchmarks/src/cc18_gbt_feature_study/dump_forest_nodes.cc` (+ `cc_binary` in `examples/BUILD`, uncommitted on the box),
   `benchmarks/src/cc18_gbt_feature_study/run_cc18_gbt.py` (driver, 8 jobs × 6 threads, 1232 job-seconds total, Bioresponse 44 s/fold),
   `benchmarks/src/cc18_gbt_feature_study/aggregate_cc18_gbt.py`.
 - Exact paper body of `fig:cc18-tree-feature-hist` (byte-identical, checked 2026-10-28): `python3 benchmarks/src/cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out <repo>/paper/distributed_spo_gbt_kdd28 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6`
-- `benchmarks/src/cc18_gbt_feature_study/make_fig_tree1_pareto.py --out <paper dir>` – first-tree feature Pareto figure (3 most / 3 least
-  concentrated datasets by normalised entropy, pooled over the 10 folds): writes `figures/evaluation/cc18_tree1_pareto/*.dat`
-  + `cc18_tree1_pareto_body.tex`; the `figure*`/caption/label live in `main.tex`. Replaced the per-depth table in the KDD28 paper on 2026-10-26.
 
 ## Reproduce
 

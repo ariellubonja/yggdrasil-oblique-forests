@@ -2,9 +2,9 @@
 """Per-feature split histogram of the k-th tree (--trees, 1-based; first = 1) of each CC18 AA-GBT model, pooled
 over the 10 folds, on a FIXED x-axis: the dataset's features in CSV header order (x = 1..F, label excluded,
 unused features at 0). Datasets = the k (default 3) most / least Pareto-like by the first tree's normalised
-entropy (same rule as make_fig_tree1_pareto.py), kept fixed for the later trees; y range shared per dataset.
+entropy, kept fixed for the later trees; y range shared per dataset.
 Writes under --out: figures/evaluation/cc18_tree_feature_hist/<slot>_t<tree>.dat and --body (default cc18_tree_feature_hist_body.tex,
-a second figure* in main.tex, appended below fig:cc18-tree1-pareto). Caption/label stay in main.tex."""
+a figure* in main.tex). Caption/label stay in main.tex."""
 import argparse, collections, csv, io, math, random, re, tarfile
 from pathlib import Path
 
