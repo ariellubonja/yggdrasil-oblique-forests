@@ -119,15 +119,15 @@ ABSL_FLAG(std::string, aa_sorting_strategy, "in_node",
           "so keep 'in_node' for AA + Random/Histogram.");
 
 // Oblique split parameters (only used when feature_split_type = "Oblique")
-ABSL_FLAG(int, max_num_projections, 1000,
-          "Maximum number of projections for oblique splits.");
-ABSL_FLAG(float, projection_density_factor, 1.5f,
-          "Projection density factor.");
-ABSL_FLAG(float, num_projections_exponent, -1.f,
-          "Exponent e of the per-node projection budget ceil(F^e) (also the "
-          "axis-aligned candidate count when --num_candidate_attributes=0). "
-          "-1 = harness default: 0.5 for Bagging (P = sqrt(F)), 1 for "
-          "Boosting (P = F).");
+ABSL_FLAG(int, max_num_projections, 6000,
+          "Maximum number of projections (YDF default). Ignored for Oblique, "
+          "which uses the YDF proto defaults.");
+ABSL_FLAG(float, projection_density_factor, 2.f,
+          "Projection density factor (YDF default). Ignored for Oblique.");
+ABSL_FLAG(float, num_projections_exponent, 2.f,
+          "Exponent e of ceil(F^e), the axis-aligned candidate count when "
+          "--num_candidate_attributes=0 (default 2 = YDF SPO default). Ignored "
+          "for Oblique. -1 = 0.5 for Bagging, 1 for Boosting.");
 ABSL_FLAG(bool, oblique_also_axis_aligned, false,
           "Oblique only: also scan every candidate numerical attribute for an "
           "axis-aligned split next to the projections "
@@ -1325,8 +1325,8 @@ int main(int argc, char** argv) {
                                : (ensemble_method == "Boosting" ? 5 : 1));
   }
 
-  // Projection budget: RF samples sqrt(F) projections per node, GBT samples F
-  // (user directive 2026-10-24). An explicit flag value overrides both.
+  // AA candidate budget. Default 2 (YDF SPO default, 2026-11-03).
+  // -1 = 0.5 for RF, 1 for GBT.
   const float exponent_flag = absl::GetFlag(FLAGS_num_projections_exponent);
   const float num_projections_exponent =
       exponent_flag >= 0 ? exponent_flag
@@ -1349,11 +1349,12 @@ int main(int argc, char** argv) {
   if (feature_split_type == "Oblique") {
     LOG(INFO) << "Configuring oblique splits";
     auto* sos = dt_config->mutable_sparse_oblique_split();
-    sos->set_max_num_projections(
-        absl::GetFlag(FLAGS_max_num_projections));
-    sos->set_projection_density_factor(
-        absl::GetFlag(FLAGS_projection_density_factor));
-    sos->set_num_projections_exponent(num_projections_exponent);
+    // Now switched to YDF default params
+    // sos->set_max_num_projections(
+    //     absl::GetFlag(FLAGS_max_num_projections));
+    // sos->set_projection_density_factor(
+    //     absl::GetFlag(FLAGS_projection_density_factor));
+    // sos->set_num_projections_exponent(num_projections_exponent);
     const int dyn_thr = ResolveDynamicSplitThreshold();
     LOG(INFO) << "dynamic_split_threshold = " << dyn_thr
               << (absl::GetFlag(FLAGS_dynamic_split_threshold) == -2

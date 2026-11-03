@@ -68,9 +68,15 @@ Claude Code is the hub and this repo is the source of truth.
 - **SPO always uses BINARY projection weights (2026-10-12).** RF/GBT get it from
   `SetDefaultHyperParameters`; the distributed learner does not, so pass `--sparse_oblique_weights
   BINARY` explicitly; never `CONTINUOUS`.
+- **Harness SPO uses YDF proto defaults (2026-11-03):** `train_oblique_forest.cc` no longer sets SPO
+  exponent / max / density, so those flags are ignored for Oblique. Flag defaults are the YDF values (exponent 2,
+  max 6000, density 2), so AA with `--num_candidate_attributes 0` gets min(F², 6000). The rule below is superseded.
 - **Harness projection budget (2026-10-24):** `--num_projections_exponent` default `-1` = 0.5 for
   Bagging (P = ceil(sqrt F)), 1 for Boosting (P = F). `--max_num_projections` stays 1000 unless a run
   lifts it (Table 9 `_fullproj` arms pass INT_MAX). AA GBT arms pass `--num_candidate_attributes -1`.
+- **Local SPO "only parallel above 10 projections" (2026-11-03):** YDF's `min(T, ceil(P/10))` oblique jobs
+  stays as is (fix on `abl-innode-fix` dropped). The answer is: make sure SPO runs on the proto defaults
+  (exponent 2, max 6000, min 1, density factor 2). P = F² > 10 for F ≥ 4, so the gate never bites.
 - **Unspecified parameters → library/driver defaults (2026-10-12).** Don't invent values; any
   non-default is named with its reason in the run report and held constant across arms.
   **Exception — distributed SPO projection budget:** the proto default exponent 2 (P = F² per worker) is
