@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Emit the KDD28 column-replication table BODY (tabular only; caption/label live in main.tex).
-Per replication level r: mean test accuracy over datasets (of per-dataset seed means), delta vs r=0
-in points, wins/ties/losses vs r=0, mean rank. Same definitions as column_replication/summarize_replication.py.
-A bold last row gives single-machine SPO-GBT (same hyperparameters, single_machine_spo_gbt.csv), not ranked."""
+Per replication level r: mean test accuracy over datasets (of per-dataset seed means), delta and
+wins/ties/losses vs single-machine SPO-GBT (same hyperparameters, single_machine_spo_gbt.csv), mean rank
+among the r levels. A bold last row gives single-machine SPO-GBT itself (the baseline, not ranked)."""
 import csv, os, pathlib, sys
 from collections import defaultdict
 from statistics import mean
@@ -40,19 +40,23 @@ def pooled(path):
     return out
 
 
-def single_row(path, dist_path):
-    """(acc_mean, gain_pts, wins, ties, losses) of single-machine SPO-GBT vs distributed r=0."""
-    acc, base = defaultdict(list), defaultdict(list)
+def vs_single(path, dist_path):
+    """(single acc_mean, {r: (gain_pts, wins, ties, losses)}) of distributed level r vs single-machine SPO-GBT."""
+    acc, dist = defaultdict(list), defaultdict(list)
     for r in csv.DictReader(open(path)):
         if r["rc"] == "0" and r["test_acc"]:
             acc[r["dataset"]].append(float(r["test_acc"]))
     for r in csv.DictReader(open(dist_path)):
-        if r["rc"] == "0" and r["test_acc"] and float(r["replication"]) == 0.0:
-            base[r["dataset"]].append(float(r["test_acc"]))
-    assert set(acc) == set(base), set(acc) ^ set(base)
-    gains = [mean(acc[d]) - mean(base[d]) for d in sorted(acc)]
-    wins, losses = sum(g > EPS for g in gains), sum(g < -EPS for g in gains)
-    return mean(mean(v) for v in acc.values()), 100 * mean(gains), wins, len(gains) - wins - losses, losses
+        if r["rc"] == "0" and r["test_acc"]:
+            dist[(r["dataset"], float(r["replication"]))].append(float(r["test_acc"]))
+    out = {}
+    for l in sorted({l for _, l in dist}):
+        ds = sorted(d for d, x in dist if x == l)
+        assert set(acc) == set(ds), (l, set(acc) ^ set(ds))
+        gains = [mean(dist[(d, l)]) - mean(acc[d]) for d in ds]
+        wins, losses = sum(g > EPS for g in gains), sum(g < -EPS for g in gains)
+        out[l] = (100 * mean(gains), wins, len(gains) - wins - losses, losses)
+    return mean(mean(v) for v in acc.values()), out
 
 
 def main():
@@ -68,16 +72,14 @@ def main():
              "", r"\begin{tabular}{crrcr}", r"\toprule",
              r"$r$ & \multicolumn{1}{c}{Mean acc.} & \multicolumn{1}{c}{$\Delta$ (pts)} & W/T/L & \multicolumn{1}{c}{Mean rank} \\",
              r"\midrule"]
-    for l, (n, a, g, w, t, lo, rk) in sorted(p.items()):
+    sa, vs = vs_single(SRC / "single_machine_spo_gbt.csv", SRC / "results.csv")
+    for l, (n, a, _, _, _, _, rk) in sorted(p.items()):
+        g, w, t, lo = vs[l]
+        gs = "0.00" if abs(g) < 0.005 else f"{g:+.2f}"  # no "-0.00"
         acc = f"{a:.4f}".lstrip("0")
-        if l == 0.0:
-            lines.append(f"{l:.1f} & {acc} & {DASH} & {DASH} & {rk:.2f} \\\\")
-        else:
-            lines.append(f"{l:.1f} & {acc} & ${g:+.2f}$ & {w}/{t}/{lo} & {rk:.2f} \\\\")
-    a, g, w, t, lo = single_row(SRC / "single_machine_spo_gbt.csv", SRC / "results.csv")
-    acc = f"{a:.4f}".lstrip("0")
+        lines.append(f"{l:.1f} & {acc} & ${gs}$ & {w}/{t}/{lo} & {rk:.2f} \\\\")
     lines += [r"\midrule",
-              rf"\textbf{{single}} & \textbf{{{acc}}} & $\mathbf{{{g:+.2f}}}$ & \textbf{{{w}/{t}/{lo}}} & {DASH} \\"]
+              rf"\textbf{{single}} & \textbf{{{f'{sa:.4f}'.lstrip('0')}}} & {DASH} & {DASH} & {DASH} \\"]
     lines += [r"\bottomrule", r"\end{tabular}", ""]
     OUT.write_text("\n".join(lines))
     print(f"wrote {OUT} ({n} datasets, {len(p)} levels)", file=sys.stderr)
