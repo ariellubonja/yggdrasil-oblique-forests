@@ -20,6 +20,8 @@ arm_args() {
   case $1 in
     aa_ydf)      ARGS=(--ydf_defaults "--feature_split_type=Axis Aligned") ;;
     spo_harness) ARGS=(--feature_split_type=Oblique) ;;
+    # Harness SPO (P=F, max 1000, density 1.5, no ES) at YDF's 300 trees + EXACT. Needs a pre-9dc54c93 binary.
+    spo_harness_exact300) ARGS=(--feature_split_type=Oblique --num_trees 300 "--numerical_split_type=Exact") ;;
     spo_ydf)     ARGS=(--ydf_defaults --feature_split_type=Oblique) ;;
     aa_spo_ydf)  ARGS=(--ydf_defaults --feature_split_type=Oblique --oblique_also_axis_aligned) ;;
     *) echo "unknown arm $1" >&2; exit 2 ;;

@@ -171,30 +171,31 @@ def accuracy_delta_heatmap(metric="test_auc"):
 
 
 def accuracy_mean_figure(metric="test_auc"):
-    """The table's Mean row as one line per family over single machine, W=1... (tikzpicture only)."""
+    """The table's Mean row as one line per family over W, single machine as dotted references (tikzpicture only)."""
     stats, done, _ = accuracy_stats(metric)
-    xs = ["Single"] + [lab.split("W{=}")[1].rstrip("$") for f, lab, _ in stats if f == AXES[0][0] and "W{=}" in lab]
-    xl = ["single", *(f"$W{{=}}{w}$" for w in xs[1:])]
+    xs = [lab.split("W{=}")[1].rstrip("$") for f, lab, _ in stats if f == AXES[0][0] and "W{=}" in lab]
+    xl = [f"$W{{=}}{w}$" for w in xs]
     lines = [HDR, r"\begin{tikzpicture}",
              r"\begin{axis}[width=0.5\textwidth, height=4.6cm, symbolic x coords={" + ",".join(xs) + "}, xtick=data,",
              "  xticklabels={" + ",".join(xl) + r"}, ylabel={Mean test ROC AUC},",
              r"  yticklabel style={/pgf/number format/fixed, /pgf/number format/precision=3, /pgf/number format/fixed zerofill},",
              r"  tick label style={font=\footnotesize}, label style={font=\footnotesize}, tick style={draw=none},",
-             r"  legend style={font=\scriptsize, at={(0.98,0.98)}, anchor=north east, draw=none}, legend cell align=left]"]
-    all_m = []
+             r"  legend style={font=\scriptsize, at={(0.5,1.03)}, anchor=south, draw=none,"
+             r" /tikz/every even column/.append style={column sep=6pt}}, legend columns=2, legend cell align=left]"]
+    all_m, refs = [], []
     for (f, _, _, colors), mark in zip(FIG_ARMS, ("*", "diamond*")):
         m = [sum(st.loc[ds, "mean"] for ds in done) / len(done) for g, _, st in stats if g == f"{f}-GBT"]
         all_m += m
+        refs.append((f, colors[1], m[0]))  # m[0] = single machine, drawn flat across all W
         style = "" if mark == "*" else ", dashed"
         lines += [rf"\addplot[color={_rgb(colors[1])}, mark={mark}, thick{style}] coordinates {{"
-                  + " ".join(f"({x},{v:.4f})" for x, v in zip(xs, m)) + "};", rf"\addlegendentry{{{f}-GBT}}"]
-        if mark == "*":  # local (single-machine) SPO-GBT as a flat reference across all W
-            spo_single = m[0]
-    lo, hi = min(all_m), max(all_m)  # headroom so the legend clears the reference line
-    lines[2] = lines[2].replace("height=4.6cm,", f"height=4.6cm, ymin={lo - 0.1 * (hi - lo):.4f}, ymax={hi + 0.8 * (hi - lo):.4f},")
-    lines += [rf"\addplot[color={_rgb(FIG_ARMS[0][3][1])}, densely dotted, no marks] coordinates {{"
-              f"({xs[0]},{spo_single:.4f}) ({xs[-1]},{spo_single:.4f})}};",
-              r"\addlegendentry{single-machine SPO-GBT}", r"\end{axis}", r"\end{tikzpicture}"]
+                  + " ".join(f"({x},{v:.4f})" for x, v in zip(xs, m[1:])) + "};", rf"\addlegendentry{{{f}-GBT}}"]
+    lo, hi = min(all_m), max(all_m)  # legend sits above the axis
+    lines[2] = lines[2].replace("height=4.6cm,", f"height=4.6cm, ymin={lo - 0.1 * (hi - lo):.4f}, ymax={hi + 0.1 * (hi - lo):.4f},")
+    for f, c, v in refs:
+        lines += [rf"\addplot[color={_rgb(c)}, thick, densely dotted, no marks] coordinates {{({xs[0]},{v:.4f}) ({xs[-1]},{v:.4f})}};",
+                  rf"\addlegendentry{{single-machine {f}-GBT}}"]
+    lines += [r"\end{axis}", r"\end{tikzpicture}"]
     return "\n".join(lines) + "\n"
 
 

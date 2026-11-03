@@ -496,19 +496,30 @@ Columns are round-robined.
 \input{tables/table_dist_accuracy_body}
 \par\smallskip\raggedright\footnotesize Distributed ran locally on \texttt{MULTI\_THREAD} on m7i. 300 trees. 5 CV folds except Chronological holdouts.
 \end{minipage}
+\par\vskip1em
+}]
 
-\vskip1em
-\noindent\begin{minipage}[t]{0.38\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
+\begin{figure}[H]
 \centering
-% body sizes its axis to 0.5\textwidth; widen it to fill this column
-\setlength{\textwidth}{1.9\linewidth}%
+% body sizes its axis to 0.5\textwidth; match it to the column
+\setlength{\textwidth}{2\linewidth}%
 \input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body}
-\caption{Mean test ROC AUC over the datasets of Table~\ref{tab:dist-accuracy}. \Claude{drop "single" from the x-axis, leave it as a dotted line. add AA single accuracy}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy}.}
 \Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}
 \label{fig:dist-accuracy-mean}
-\end{minipage}
-}]
+\end{figure}
+
+\subsection{Accuracy of Richard's AA+SPO on CC18}
+\label{sec:cc18-aa-spo}
+
+\begin{table}[H]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Test accuracy of single-machine AA and SPO-GBT in CC18. }
+\label{tab:cc18-aa-spo}
+\input{tables/table_cc18_aa_spo_body}
+\par\smallskip\raggedright\footnotesize \textbf{YDF defaults}: 300 trees, 10\% validation with early stopping, exact splits, $P{=}\min(F^2, 6000)$ projections, density 2. \textbf{Harness defaults}: \TODO{30 trees - rerunning w/ 300}, no early stopping, $P{=}\min(F, 1000)$, density 1.5, 64-bin dynamic histogram. \TODO{seed 1}. \Claude{Show distributions, not mean}
+\texttt{m7i.24x. 10 CV folds} \TODO{why doesnt harness accuracy match table?}
+\end{table}
 
 \twocolumn[{\floatblock
 \subsubsection{Accuracy study of $r \in [0,1]$}
@@ -574,11 +585,10 @@ Naive baseline for communication cost. \textbf{Should match local SPO-GBT accura
 \subsection{Enabling Parallelism for Distributed SPO}
 \label{sec:in-node-parallelism}
 
-\Claude{Local SPO only parallelizes in-node when >10 projections. If you see this, ensure $P=F$. - I thought we went back to defaults. check this}
-
 
 Added VQSort 25-Oct-2026. 22-Oct-26: Added In-node parallelism in SPO-GBT. single machine gives 2x.
 
+FYI Local SPO only parallelizes in-node when >10 projections. Ensure you're using YDF defaults for num projections, etc. so this doesn't apply.
 
 \noindent\begin{minipage}[t]{0.45\textwidth}\vspace{0pt}
 \captionsetup{type=table}
@@ -612,22 +622,6 @@ Training a distributed model includes \emph{setup}: the time from job start unti
 \caption{Setup time in seconds (min--max over all runs).}
 \label{tab:setup-cost}
 \input{tables/table_setup_cost_body}
-\end{table}
-
-
-\section{Full Accuracy Results}
-\label{sec:full-accuracy}
-
-
-\subsection{Single-machine AA vs.\ SPO GBT on CC18}
-\label{sec:cc18-aa-spo}
-
-\begin{table}[H]
-\centering\footnotesize\setlength{\tabcolsep}{4pt}
-\caption{Mean test accuracy, ROC AUC and log-loss of single-machine AA and SPO GBT over 34 CC18 datasets and 10 CV folds.}
-\label{tab:cc18-aa-spo}
-\input{tables/table_cc18_aa_spo_body}
-\par\smallskip\raggedright\footnotesize \textbf{YDF defaults}: 300 trees, 10\% validation with early stopping \TODO{check early stopping}, exact splits, $P{=}\min(F^2, 6000)$ projections, density 2. \textbf{Harness defaults}: 30 trees, no early stopping, $P{=}\min(F, 1000)$, density 1.5, 64-bin dynamic histogram. \textbf{AA+SPO}: SPO plus every axis-aligned split. Binary weights, depth 6, seed 1. Bold = best. \TODO{check how many seeds were used. Show distributions, not mean}
 \end{table}
 
 
