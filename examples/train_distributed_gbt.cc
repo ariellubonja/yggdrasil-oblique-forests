@@ -180,6 +180,11 @@ int main(int argc, char** argv) {
         absl::GetFlag(FLAGS_max_unique_values_for_discretized_numerical));
   }
   const std::string split_axis = absl::GetFlag(FLAGS_split_axis);
+  // The learner rejects this pair only after building the dataset cache.
+  QCHECK(!(absl::GetFlag(FLAGS_sparse_oblique_ship_columns) &&
+           absl::GetFlag(FLAGS_column_replication) > 0))
+      << "--sparse_oblique_ship_columns and --column_replication > 0 are "
+         "exclusive: pass one of them";
   if (split_axis == "SPARSE_OBLIQUE") {
     auto* oblique = dt->mutable_sparse_oblique_split();
     oblique->set_num_projections_exponent(
