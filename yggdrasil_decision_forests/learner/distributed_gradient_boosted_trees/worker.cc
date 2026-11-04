@@ -875,6 +875,8 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
         spe_config.in_worker_oblique().num_projections_from_local_features()
             ? (ship_foreign_columns_ ? num_owned_numerical_features_ : 0)
             : num_global_numerical_features_;
+    const bool split_budget =
+        spe_config.in_worker_oblique().split_projections_across_workers();
     using distributed_decision_tree::ObliqueSplitArgs;
     using Projections =
         std::vector<std::vector<decision_tree::internal::Projection>>;
@@ -895,7 +897,9 @@ absl::Status DistributedGradientBoostedTreesWorker::FindSplits(
           num_features_for_projection_count,
           MixProjectionSeed(request.projection_seed(), WorkerIdx(),
                             weak_model_idx),
-          presampled};
+          presampled,
+          split_budget ? WorkerIdx() : 0,
+          split_budget ? welcome_.num_train_workers() : 1};
     };
 
     // Column shipping: sample every node's projections first (same streams

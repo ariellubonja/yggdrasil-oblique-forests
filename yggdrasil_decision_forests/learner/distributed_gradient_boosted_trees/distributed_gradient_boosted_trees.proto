@@ -86,11 +86,9 @@ message DistributedGradientBoostedTreesTrainingConfig {
   optional bool reuse_dataset_cache_in_workers = 13 [default = false];
 
   message InWorkerOblique {
-    // Number of projections a worker tests per open node:
-    //   false: GetNumProjections(number of numerical features in the dataset),
-    //          i.e. ceil(F^exponent) = sqrt(F) with exponent 0.5.
-    //   true:  GetNumProjections(number of numerical candidates the worker
-    //          holds for that node).
+    // Feature count fed to GetNumProjections: false (default) = the global F,
+    // true = the worker's local candidate count of the node (legacy, Table 8
+    // cells). The projection density always uses the local count.
     optional bool num_projections_from_local_features = 1 [default = false];
 
     // Naive cross-worker projections (communication-cost baseline). Every
@@ -106,17 +104,15 @@ message DistributedGradientBoostedTreesTrainingConfig {
     // attributes it lacks.
     optional bool ship_foreign_columns = 2 [default = false];
 
-    // Static column replication, in [0, 1]. Besides its owned columns, every
-    // worker loads and samples projections from a uniform random fraction
-    // "column_replication" (rounded to nearest) of the NUMERICAL columns owned
-    // by the other workers, drawn once from (random_seed, worker index).
-    // 0: disjoint columns, F/W per worker (default). 1: every worker holds all
-    // F numerical columns. The projection count per worker is unchanged
-    // (num_projections_from_local_features=false keeps it at ceil(F^exponent)
-    // of the global F). Ownership, i.e. who answers axis-aligned splits, does
-    // not change; an oblique split is evaluated by the lowest-index worker
-    // holding all its attributes.
+    // Fraction in [0, 1] of the other workers' NUMERICAL columns each worker also
+    // loads and samples from, drawn once from (seed, worker); 1 = all F columns.
+    // Ownership is unchanged; the lowest worker holding a split's columns evaluates it.
     optional float column_replication = 3 [default = 0];
+
+    // true (default): P = GetNumProjections(F) per node in total, worker w samples
+    // floor(P/W) + (w < P mod W); with column_replication=1 = single-machine SPO.
+    // false: legacy per-worker count, every worker samples P (W*P per node).
+    optional bool split_projections_across_workers = 4 [default = true];
   }
 
   message Internal {

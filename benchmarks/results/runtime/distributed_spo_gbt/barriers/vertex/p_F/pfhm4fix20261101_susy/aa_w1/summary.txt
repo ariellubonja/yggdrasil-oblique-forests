@@ -1,0 +1,27 @@
+== per stage, summed over the run (s unless named) ==
+                        n  mean_ms  barrier_s  tail_s  manager_serial_s  fanout_s  worker_max_s  idle_s  comm_residual_s  MB_out  MB_in
+stage_r                                                                                                                                
+StartNewIter           10   38.220      0.382   0.000             0.000     0.000         0.371       0            0.011   0.000  0.001
+FindSplits             50 4329.323    216.466   0.001             0.000     0.001       216.409       0            0.056   0.008  0.045
+EvaluateSplits         50   33.294      1.665   0.000             0.000     0.001         1.611       0            0.052   0.044  0.001
+ShareSplits/r1         50    2.596      0.130   0.000             0.001     0.001         0.084       0            0.044   0.003  0.001
+ShareSplits/r2         50   15.911      0.796   0.000             0.000     0.003         0.746       0            0.047   0.000  0.001
+EndIter                10   49.249      0.492   0.000             0.001     0.000         0.481       0            0.010   0.000  0.000
+GetLabelStatistics      1   20.664      0.021   0.000             0.000     0.000         0.000       0            0.000   0.000  0.000
+SetInitialPredictions   1   35.127      0.035   0.000             0.000     0.000         0.000       0            0.000   0.000  0.000
+StartTraining           1 1343.783      1.344   0.000             0.000     0.000         0.000       0            0.000   0.000  0.000
+
+identity: sum(barrier+tail) 221.33 s + gaps between stages 0.04 s (max gap 31.9 ms) = 221.38 s; first-begin->last-end 221.38 s
+idle: 0.00 worker-s of 219.70 worker-s capacity = 0.0 % of worker time waiting at barriers
+share of wall time inside stages (%): tail 0.0, manager_serial 0.0, fanout 0.0, worker_max 99.9, comm_residual 0.1
+
+== FindSplits by layer (mean per call, ms; skew = (max-median)/max) ==
+       barrier_s  manager_serial_s  fanout_s  worker_max_s  worker_med_s  worker_min_s  idle_s  comm_residual_s  tail_s  skew_%
+layer                                                                                                                          
+0       2537.780             0.010     0.020      2536.660      2536.660      2536.660   0.000            1.090   0.010   0.000
+1       4513.300             0.010     0.020      4512.190      4512.190      4512.190   0.000            1.080   0.010   0.000
+2       4667.100             0.010     0.020      4665.980      4665.980      4665.980   0.000            1.090   0.010   0.000
+3       4871.440             0.010     0.020      4870.310      4870.310      4870.310   0.000            1.100   0.020   0.000
+4       5057.010             0.010     0.030      5055.770      5055.770      5055.770   0.000            1.200   0.020   0.000
+
+slowest worker in FindSplits (count): {0: 50}

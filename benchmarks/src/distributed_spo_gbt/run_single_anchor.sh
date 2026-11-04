@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # Same-boot single-machine SPO-GBT anchor (the paper's spo_gbt_exact_hwy arm, with test
 # evaluation) for one natural dataset: run_single_anchor.sh DATASET [TREES] [Oblique|AxisAligned]
 # Threads: harness default (-1 = all cores). Oblique weights: harness default (binary, density 1.5).
@@ -8,7 +9,7 @@ DATASET=$1; TREES=${2:-300}; SPLIT=${3:-Oblique}
 case $SPLIT in Oblique) ARM=spo_gbt_exact_hwy; FST=Oblique;; AxisAligned) ARM=aa_gbt_exact; FST='Axis Aligned';; *) echo bad split; exit 2;; esac
 REPO=/home/ubuntu/yggdrasil-oblique-forests
 BIN=${BIN:-/home/ubuntu/spo_vs_gbt/bin/default}
-OUT=$REPO/benchmarks/results/runtime/distributed_spo_gbt
+OUT=${OUT:-$REPO/benchmarks/results/runtime/distributed_spo_gbt}
 RESULTS=${RESULTS:-$OUT/anchors.csv}
 D=$REPO/benchmarks/data
 case $DATASET in

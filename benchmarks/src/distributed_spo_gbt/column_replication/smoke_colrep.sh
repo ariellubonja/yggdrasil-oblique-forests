@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # Smoke / bit-identity checks of the column-replication build against the baseline binary.
 #   smoke_colrep.sh BASELINE_BIN COLREP_BIN DATA_DIR OUT_DIR
 # DATA_DIR = prep_cc18_fold0.py output. Prints PASS/FAIL per check; models are saved under OUT_DIR.
@@ -13,7 +14,8 @@ COMMON=(--alsologtostderr --label label --split_axis SPARSE_OBLIQUE
 fails=0
 run() {  # run NAME BIN DATASET W T extra...  (new-binary-only flags are added when BIN is the new one and a seed is given)
   local name=$1 bin=$2 ds=$3 w=$4 t=$5; shift 5
-  local extra=(); [ "$bin" = "$NEW" ] && [ $# -gt 0 ] && extra=(--force_numerical_features)
+  # Legacy per-worker P on the new binary: the baseline binary predates the split budget.
+  local extra=(); [ "$bin" = "$NEW" ] && [ $# -gt 0 ] && extra=(--force_numerical_features --sparse_oblique_split_budget=false)
   local d=$OUT/$name; rm -rf "$d"; mkdir -p "$d"
   local t0=$(date +%s.%N)
   "$bin" "${COMMON[@]}" --train_csv "$DATA/$ds/train.csv" --test_csv "$DATA/$ds/test.csv" \

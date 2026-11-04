@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # After the 50-tree distributed grid: the non-distributed references at 50 trees (paper binary,
 # harness defaults: all cores, binary weights, density 1.5, Exact finder) — SPO and axis-aligned.
 set -uo pipefail

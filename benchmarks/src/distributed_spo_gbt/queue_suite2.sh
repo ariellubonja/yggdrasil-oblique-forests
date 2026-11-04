@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # Resume the Table-9 suite (run_dgbt_suite.sh skips finished cells) under the training lock.
 set -uo pipefail
 REPO=/home/ubuntu/yggdrasil-oblique-forests

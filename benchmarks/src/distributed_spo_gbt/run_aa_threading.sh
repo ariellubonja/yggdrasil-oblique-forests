@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # AA-vs-SPO cause study (2026-10-26): HIGGS on n2-highmem-16, 10 trees, P=F; three launchers share the
 # 96-vCPU quota via the submit lock. Hypotheses + cell table: ariel_notes/results/2026-10-26_aa_threading/HYPOTHESES.md
 set -uo pipefail

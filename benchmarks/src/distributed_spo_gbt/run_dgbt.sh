@@ -12,14 +12,18 @@
 # mistake (results.csv rows with extra=="" and trees==300). The dataset cache lives in WORK/DATASET and is
 # reused across cells (first cell of a dataset pays its creation).
 # Appends one row to RESULTS (CSV) and keeps the full log under logs/.
+# Values: params/kdd28_params.json profile inproc_grid (TREES stays argv 4, the caller's choice).
 set -euo pipefail
 DATASET=$1; W=$2; AXIS=$3; TREES=$4; shift 4
+PARAMS=$(cd "$(dirname "$0")" && pwd)/params/params.py
+. "$(dirname "$PARAMS")/drift.sh"  # run_cell: pre-flight + drift stop (ALLOW_DRIFT=1 warns)
+eval "$(python3 "$PARAMS" export inproc_grid Q_)"
 REPO=/home/ubuntu/yggdrasil-oblique-forests
-BIN=$REPO/bazel-bin/examples/train_distributed_gbt
-OUT=$REPO/benchmarks/results/runtime/distributed_spo_gbt
+BIN=${BIN:-$REPO/bazel-bin/examples/train_distributed_gbt}
+OUT=${OUT:-$REPO/benchmarks/results/runtime/distributed_spo_gbt}
 WORK=${WORK:-/home/ubuntu/dgbt_work}
 RESULTS=${RESULTS:-$OUT/results.csv}
-MAX_DEPTH=${MAX_DEPTH:-6}
+MAX_DEPTH=${MAX_DEPTH:-$Q_MAX_DEPTH}
 THREADS=${THREADS:-$((48 / W))}
 D=$REPO/benchmarks/data
 # SUSY/HIGGS train CSVs spell the label 0.000000000000000000e+00 / 1.000000000000000000e+00 while the
@@ -36,16 +40,21 @@ esac
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 TAG="${DATASET}_W${W}_${AXIS}_T${TREES}_d${MAX_DEPTH}"
 LOG=$OUT/logs/${TAG}_${STAMP}.log
+python3 "$PARAMS" require-stamped "$RESULTS" || exit 2
 mkdir -p "$OUT/logs" "$WORK/$DATASET"
-GITSHA=$(git -C "$REPO" rev-parse --short HEAD)
+GITSHA=${GITSHA:-$(git -C "$REPO" rev-parse --short HEAD)}
 echo "=== $STAMP $TAG threads/worker=$THREADS extra=[$*] git=$GITSHA" | tee "$LOG"
 T0=$(date +%s.%N)
 set +e
-"$BIN" --alsologtostderr --train_csv "$TRAIN" --test_csv "$TEST" --label "$LABEL" \
+PROF=inproc_grid.spo; [ "$AXIS" = AXIS_ALIGNED ] && PROF=inproc_grid.aa
+# SPO flags on SPO cells only: AXIS_ALIGNED fails on them (train_distributed_gbt.cc, never ignore a flag).
+S1=(); S2=()  # S2 = legacy per-worker P (recorded results.csv rows); "$@" may override
+[ "$AXIS" = AXIS_ALIGNED ] || { S1=(--sparse_oblique_projection_density_factor $Q_SPO_DENSITY --sparse_oblique_num_projections_exponent $Q_SPO_EXPONENT)
+  S2=(--sparse_oblique_max_num_projections $Q_SPO_MAX_PROJECTIONS --sparse_oblique_split_budget=$Q_SPLIT_BUDGET); }
+LOG_APPEND=1 DRIFT_EXPECT="trees=$TREES max_depth=$MAX_DEPTH" run_cell $PROF "$LOG" "$BIN" --alsologtostderr --train_csv "$TRAIN" --test_csv "$TEST" --label "$LABEL" \
   --work_dir "$WORK/$DATASET" --num_workers "$W" --num_threads "$THREADS" \
   --num_trees "$TREES" --max_depth "$MAX_DEPTH" --split_axis "$AXIS" \
-  --sparse_oblique_projection_density_factor 1.5 \
-  --sparse_oblique_num_projections_exponent 0.5 --worker_logs=false "$@" >> "$LOG" 2>&1
+  ${S1[@]+"${S1[@]}"} --worker_logs=false ${S2[@]+"${S2[@]}"} "$@"
 RC=$?
 set -e
 T1=$(date +%s.%N)
@@ -72,7 +81,7 @@ PY
 )
 LOGLOSS=$(grep -m1 -E "^LogLoss:" "$LOG" | sed -E 's/LogLoss: *:? *//' | awk '{print $1}' || true)
 COND=$(grep -o "Conditions: .*" "$LOG" | tail -1 || true)
-[ -f "$RESULTS" ] || echo "dataset,workers,threads_per_worker,split_axis,trees,max_depth,rc,train_took,tree_training_s,cache_created,wall_s,test_acc,test_auc,test_logloss,conditions,extra,git,log" > "$RESULTS"
-echo "$DATASET,$W,$THREADS,$AXIS,$TREES,$MAX_DEPTH,$RC,$TRAIN_S,$TREES_S,$CACHE_S,$WALL,$ACC,$AUC,$LOGLOSS,\"$COND\",\"$*\",$GITSHA,$(basename "$LOG")" >> "$RESULTS"
+[ -f "$RESULTS" ] || echo "dataset,workers,threads_per_worker,split_axis,trees,max_depth,rc,train_took,tree_training_s,cache_created,wall_s,test_acc,test_auc,test_logloss,conditions,extra,git,log,$(python3 "$PARAMS" stamp-header dataset,workers,threads_per_worker,split_axis,trees,max_depth,rc,train_took,tree_training_s,cache_created,wall_s,test_acc,test_auc,test_logloss,conditions,extra,git,log)" > "$RESULTS"
+echo "$DATASET,$W,$THREADS,$AXIS,$TREES,$MAX_DEPTH,$RC,$TRAIN_S,$TREES_S,$CACHE_S,$WALL,$ACC,$AUC,$LOGLOSS,\"$COND\",\"$*\",$GITSHA,$(basename "$LOG"),$(python3 "$PARAMS" stamp "$PROF$DRIFT" "$LOG")" >> "$RESULTS"
 echo "=== rc=$RC train_took=$TRAIN_S trees=${TREES_S}s cache=$CACHE_S wall=${WALL}s acc=$ACC auc=$AUC $COND" | tee -a "$LOG"
 exit $RC

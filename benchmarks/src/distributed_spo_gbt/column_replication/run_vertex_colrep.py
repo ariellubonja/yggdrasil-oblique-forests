@@ -12,27 +12,36 @@ import datetime
 import json
 import os
 import subprocess
+import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
+
+P = kdd28.load_profile("table2")  # defaults below = the recorded Table 2 setting
 PROJECT, REGION, BUCKET = "ydf-distributed-spo-gbt", "us-east1", "ariel_ydf_bucket"
 FIELDS = ["dataset", "seed", "replication", "workers", "threads", "trees", "max_depth", "rc",
           "test_acc", "test_auc", "test_logloss", "num_conditions", "num_oblique", "num_multi_col",
           "held_cols", "train_s", "wall_s", "cache_build_s", "workers_ready_s",
           "checkpoints_s", "tree_training_s", "ship_bytes_in", "ship_bytes_out", "ship_cols_in",
           "ship_s_max", "ship_s_sum", "cross_worker_splits", "local_projection_count", "git", "log"]
+STAMP_COLS = kdd28.stamp_columns(FIELDS)
+FIELDS += STAMP_COLS
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--image", required=True)
 ap.add_argument("--run_id", default="")
-ap.add_argument("--seeds", default="1,2,3,4,5")
-ap.add_argument("--levels", default="0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1")
+ap.add_argument("--seeds", default=",".join(map(str, P["seeds"])))
+ap.add_argument("--levels", default=",".join(map(str, P["column_replication"])))
 ap.add_argument("--datasets", default="", help="comma filter passed to train_cells.py")
 ap.add_argument("--data", default=f"gs://{BUCKET}/cc18_fold0")
-ap.add_argument("--machine", default="n2-highmem-4")
-ap.add_argument("--workers", type=int, default=4)
-ap.add_argument("--num_trees", type=int, default=10)
-ap.add_argument("--max_depth", type=int, default=6)
+ap.add_argument("--machine", default=P["machine"])
+ap.add_argument("--workers", type=int, default=P["workers"][0])
+ap.add_argument("--num_trees", type=int, default=P["trees"])
+ap.add_argument("--max_depth", type=int, default=P["max_depth"])
+ap.add_argument("--profile", default="table2.dist_split",
+                help="profile name stamped into results.csv; name the override (e.g. table2.dist_per_worker) when --extra_args changes the setting")
 ap.add_argument("--git", default="34d64d3d")
 ap.add_argument("--quota", type=int, default=96, help="N2 custom-training vCPUs in the region")
 ap.add_argument("--out_root", default=os.path.join(
@@ -43,7 +52,7 @@ ap.add_argument("--env", action="append", default=[],
                 help="KEY=VALUE set in every container (manager and workers); repeatable")
 ap.add_argument("--extra_args", default="",
                 help="extra train_cells.py flags, e.g. '--cache_root gs://b/work/cache --no_checkpoints'")
-ap.add_argument("--dry_run", action="store_true")
+ap.add_argument("--dry_run", action="store_true", help="print every job's container argv and exit")
 args = ap.parse_args()
 
 SEEDS = [int(s) for s in args.seeds.split(",")]
@@ -55,7 +64,26 @@ now = lambda: datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S") 
 
 print(f"RUN_ID {RUN_ID} -> {RUN_DIR} | {len(SEEDS)} jobs x (1+{args.workers}) x {args.machine} "
       f"= {JOB_VCPUS} vCPUs/job, quota {args.quota} | trees {args.num_trees} depth {args.max_depth}")
+
+
+def job_args(seed):
+    """Container argv of one seed's job (train_cells.py flags)."""
+    meta = {"machine": args.machine, "run_id": RUN_ID, "git": args.git, "threads": VCPUS}
+    a = [f"--data={args.data}", f"--out={RUN_DIR}/s{seed}", f"--seed={seed}",
+         f"--levels={args.levels}", f"--num_trees={args.num_trees}",
+         f"--max_depth={args.max_depth}", f"--meta={json.dumps(meta)}"]
+    if args.datasets:
+        a.append(f"--datasets={args.datasets}")
+    # Recorded P = F budget, explicit since train_cells.py defaults to YDF (2026-11-03). --extra_args may override.
+    a += [f"--sparse_oblique_num_projections_exponent={P['spo_exponent']}",
+          f"--sparse_oblique_max_num_projections={P['spo_max_projections']}",
+          f"--sparse_oblique_projection_density_factor={P['spo_density']}"]
+    return a + args.extra_args.split()
+
+
 if args.dry_run:
+    for s in SEEDS:
+        print("argv", f"s{s}", json.dumps(job_args(s)))
     raise SystemExit(0)
 
 from google.cloud import aiplatform  # noqa: E402
@@ -67,13 +95,7 @@ ACTIVE = ("JOB_STATE_QUEUED", "JOB_STATE_PENDING", "JOB_STATE_RUNNING")
 
 
 def make_job(seed):
-    meta = {"machine": args.machine, "run_id": RUN_ID, "git": args.git, "threads": VCPUS}
-    a = [f"--data={args.data}", f"--out={RUN_DIR}/s{seed}", f"--seed={seed}",
-         f"--levels={args.levels}", f"--num_trees={args.num_trees}",
-         f"--max_depth={args.max_depth}", f"--meta={json.dumps(meta)}"]
-    if args.datasets:
-        a.append(f"--datasets={args.datasets}")
-    a += args.extra_args.split()
+    a = job_args(seed)
     env = [{"name": k, "value": v} for k, v in (e.split("=", 1) for e in args.env)]
     pool = lambda n: {"machine_spec": {"machine_type": args.machine}, "replica_count": n,  # noqa: E731
                       "container_spec": {"image_uri": args.image, "env": env,
@@ -160,7 +182,10 @@ for p in sorted(fs.glob(f"{RUN_DIR[5:]}/s*/*/*/eval.json")):
     e = json.loads(fs.cat(p))
     rows.append({k: e.get(k, "") for k in FIELDS} | {
         "rc": 0, "threads": e.get("threads", VCPUS), "git": args.git,
-        "log": "/".join(p.split("/")[-4:-1])})
+        "log": "/".join(p.split("/")[-4:-1])}
+        | {col: e.get("stamp", {}).get(c, "") for col, c in zip(STAMP_COLS, kdd28.STAMP)}
+        # train_cells.py stamps "<profile>!drift" when it ran under ALLOW_DRIFT=1: keep the mark, generators refuse it
+        | {STAMP_COLS[0]: args.profile + (kdd28.DRIFT if str(e.get("stamp", {}).get("profile", "")).endswith(kdd28.DRIFT) else "")})
 with open(os.path.join(args.out_root, "results.csv"), "w", newline="") as f:
     w = csv.DictWriter(f, FIELDS)
     w.writeheader()

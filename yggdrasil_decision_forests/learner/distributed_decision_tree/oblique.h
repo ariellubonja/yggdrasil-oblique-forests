@@ -110,9 +110,9 @@ class DenseNumericalColumns {
   absl::flat_hash_map<int, std::unique_ptr<std::vector<float>>> external_;
 };
 
-// Reads one numerical column of the cache in example order. Discretized
-// columns are mapped back through their bin boundaries (lossy); missing values
-// take the cache's replacement value.
+// Reads one numerical column of the cache in example order; missing values take
+// the cache's replacement value. Fails on a discretized non-constant column:
+// its bin indices do not give back the raw values that inference projects.
 absl::StatusOr<std::vector<float>> MaterializeNumericalColumn(
     const dataset_cache::DatasetCacheReader& dataset, int feature);
 
@@ -141,6 +141,10 @@ struct ObliqueSplitArgs {
   // columns a layer needs before scoring (column shipping).
   const std::vector<std::vector<decision_tree::internal::Projection>>*
       presampled_projections = nullptr;
+  // If num_workers > 1, GetNumProjections is the cluster total and this worker
+  // samples its share, ProjectionsForWorker(P, num_workers, worker_idx).
+  int worker_idx = 0;
+  int num_workers = 1;
 };
 
 // Samples the projections of one open node, in order, from the node's own
@@ -148,6 +152,15 @@ struct ObliqueSplitArgs {
 // vector for a node without numerical candidates.
 std::vector<decision_tree::internal::Projection> SampleNodeProjections(
     const ObliqueSplitArgs& args, int node_idx);
+
+// Share of "total" projections sampled by worker "worker_idx" of "num_workers":
+// floor(total/W) + (worker_idx < total % W). Shares sum to total; W <= 1 = total.
+inline int ProjectionsForWorker(const int total, const int num_workers,
+                                const int worker_idx) {
+  if (total <= 0) return 0;
+  if (num_workers <= 1) return total;
+  return total / num_workers + (worker_idx < total % num_workers ? 1 : 0);
+}
 
 // For each open node, samples projections from the node's local numerical
 // features, scores them like the axis-aligned distributed splitter and keeps

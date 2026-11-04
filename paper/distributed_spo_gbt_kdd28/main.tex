@@ -1,0 +1,651 @@
+\documentclass[sigconf,screen]{acmart}
+
+% KDD 2028 (dates and venue TBA)
+\copyrightyear{2028}
+\acmYear{2028}
+\acmConference[KDD '28]{Proceedings of the 34th ACM SIGKDD Conference on Knowledge Discovery and Data Mining}{TBA, 2028}{TBA}
+\acmBooktitle{Proceedings of the 34th ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD '28), TBA, 2028, TBA}
+\usepackage{hyperref}
+\usepackage{mathtools}
+\usepackage{enumitem}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
+\usetikzlibrary{patterns}
+
+
+% \usepackage[letterpaper,margin=0.8in]{geometry}
+
+\newlist{todolist}{itemize}{2}
+\setlist[todolist]{label=$\square$}
+\newcommand{\done}{\rlap{$\square$}{\raisebox{2pt}{\large\hspace{1pt}\checkmark}}\hspace{-2.5pt}}
+
+
+\usepackage{listings}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{colortbl}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.96,0.96,0.94}
+
+\lstdefinestyle{cppstyle}{
+  language=C++,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue},
+  commentstyle=\color{codegreen},
+  stringstyle=\color{codepurple},
+  backgroundcolor=\color{backcolour},
+  frame=single,
+  columns=fullflexible,
+  breaklines=true,
+  showstringspaces=false,
+  xleftmargin=1em,
+  aboveskip=0.5em, belowskip=0.5em,
+}
+\lstset{style=cppstyle}
+
+\newcommand{\TODO}[1]{\textbf{\textcolor{red}{#1}}}
+\newcommand{\Claude}[1]{\textbf{\textcolor{YellowOrange}{#1}}}
+
+% Inconsolata has no italic: substitute upright silently (no font warnings).
+{\fontencoding{T1}\fontfamily{zi4}\selectfont}{\fontencoding{TS1}\fontfamily{zi4}\selectfont}
+\DeclareFontShape{T1}{zi4}{m}{it}{<->ssub*zi4/m/n}{}
+\DeclareFontShape{TS1}{zi4}{m}{it}{<->ssub*zi4/m/n}{}
+
+\title{Distributed Training of Gradient-Boosted Trees with Sparse Oblique Splits}
+\author{Ariel Lubonja}
+\email{ariel@cs.jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Jungsang Yoon}
+\email{jyoon72@jh.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Haoyin Xu}
+\email{hx@jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Richard Stotz}
+\email{richardstotz@google.com}
+\affiliation{
+  \institution{Google}
+  \city{Zurich}
+  \country{Switzerland}
+}
+
+\author{Jeffrey Hetherly}
+\email{hetherly@google.com}
+\affiliation{
+  \institution{Google}
+  \city{San Francisco}
+  \state{California}
+  \country{USA}
+}
+
+\author{Mathieu Guillame-Bert}
+\email{gbm@google.com}
+\affiliation{
+  \institution{Google}
+  \city{Zurich}
+  \country{Switzerland}
+}
+
+\author{Vladimir Braverman}
+\email{vova@cs.jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Joshua T. Vogelstein}
+\email{jovo@jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\author{Randal Burns}
+\email{randal@cs.jhu.edu}
+\affiliation{
+  \institution{Johns Hopkins University}
+  \city{Baltimore}
+  \state{Maryland}
+  \country{USA}
+}
+
+\renewcommand{\shortauthors}{Lubonja et al.}
+
+\makeatletter
+% Full-width \twocolumn[] blocks act as floats: lift acmart's \vspace warning like figure* does.
+\newcommand{\floatblock}{\let\@vspace\@vspace@orig\let\@vspacer\@vspacer@orig}
+\makeatother
+
+\begin{document}
+
+\ccsdesc[500]{Computing methodologies~Classification and regression trees}
+\ccsdesc[300]{Computing methodologies~Distributed algorithms}
+\keywords{gradient boosted trees, sparse oblique splits, distributed training}
+
+\maketitle
+
+\section{Work log - Weekly TODOs}
+
+\textit{Ariel TODOs by Nov-10}
+
+\textbf{\textit{Accuracy cost of parititioning columns: }}
+
+\TODO{ensure we're measuring on datasets where SPO > AA accuracy}
+
+\textcolor{cyan}{\done~2. Fix single vs. Distributed full replication accuracy + cross-column comms.} Sec.~\ref{sec:round-robin-replication}, Sec.~\ref{sec:cross-network-projections}
+
+Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs accuracy. \textbf{4 plots}: $0\% \to 100\%$ replication, under column assignment method. \textbf{100\% replication is equivalent to local SPO}
+    \begin{todolist}
+        \item[\textcolor{gray}{\done}] \textcolor{gray}{Round-robin}. Sec.~\ref{sec:round-robin-replication}
+        \item Random
+        \item if AA acc = SPO acc, any partition strategy should get similar accuracy. Start with datasets where SPO is better (perhaps trunk)
+        \item Important columns in model trained on 1\% of the dataset
+        \item Correlation-based: all pairs uplift graph. Together or apart?
+        \item Jovo methods: Feature information, mini-patches
+        \item[\textcolor{gray}{\done}] \textcolor{gray}{Do selected columns remain constant along trees?} See Fig.~\ref{fig:cc18-tree-feature-hist}
+    \end{todolist}
+
+\textbf{\textit{Procedural}}
+
+\begin{todolist}
+    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{\href{https://github.com/google/yggdrasil-decision-forests/commit/2fe3a7fae5a3e8646401cd98f5c0a2a9d5d81653}{Richard's new} AA + SPO scan.} Sec.~\ref{sec:cc18-aa-spo}
+    \begin{todolist}
+        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{implement and vastly increase projections (to YDF defaults).}
+        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{AA, SPO (train\_oblique\_forest.cc default params) vs. SPO (YDF default params). Table~\ref{tab:cc18-aa-spo}}
+        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Richard's AA+SPO. \textbf{Include?} Didn't see much accuracy diff. Table~\ref{tab:cc18-aa-spo}}
+    \end{todolist}
+    \item \Claude{why is SPO faster than AA despite Presort time excluded?} Opus-high then Fable-max to verify.
+    \item[\textcolor{gray}{\done}] \textcolor{gray}{Plot Barrier results} See Fig.~\ref{fig:yt8m-barriers}
+    \begin{todolist}
+        \item[\textcolor{gray}{\done}] \textcolor{gray}{Naive SPO with cross-node communication}. See Sec. \ref{sec:cross-network-projections}
+    \end{todolist}
+    \stepcounter{enumi}\item[\textcolor{gray}{\done}] \textcolor{gray}{(in-worker oblique) Replace std::sort with Highway VQSort}
+    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Multiple runs for Training and accuracy (seed)} 5 seeds: Table~\ref{tab:column-replication}, Table~\ref{tab:cross-network}
+    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Related Work review. Fable: are there any previous work red flags that strongly challenge the novelty of this work? something a reviewer would point to and say "how is this different from that?" run a review with fable-max, then run a 2nd fable-max agent to verify the first, and iterate until both are happy} Sec.~\ref{sec:related-work}
+\end{todolist}
+
+
+\section{Introduction}
+
+% The timely story writes itself — tabular foundation models (TabPFN etc.) don’t scale to large data, GBDTs still win there, and you’re pushing the frontier of the thing that wins at scale. Lead with that in papers and talks, not “trees are still relevant.”
+
+% Being excellent at the unfashionable-but-used thing is a good position, but only if you stay literate in the fashionable thing — which is what the 20% buys you. 20% on tabular llm - to GBT dynamic
+
+Distributed Tree training offers two main advantages: training on very large data ($>$100m examples+) that does not fit in a single machine's memory, and distributed hyperparameter tuning. 
+
+To our knowledge, no distributed tree learner searches sparse oblique splits when no worker holds every feature, which is what this paper does. This severely limits Sparse Oblique methods to datasets that are limited to a single machine. AutoML frequently selects SPO-GBT as the best method.
+
+YDF has support for distributed training GBTs~\cite{ydf,guillamebert2018exact}: the distribution is among the features, i.e. different workers handle different features. This allows us to train on very large (deep \& wide) datasets, because each worker just needs (roughly) enough memory to hold the label column and the feature column. 
+
+
+Distributed training has 0 support for Sparse oblique splits; mainly because it's nontrivial to implement: Workers would need to store the pseudo-features, or store enough features to construct the pseudo-features efficiently, without moving features around too much. 
+Column-partitioned learners~\cite{abuzaid2016yggdrasil,guillamebert2018exact,ydf} assign each feature to one worker, which also builds the split's bitmap. An oblique split reads features held by several workers, so no single owner exists. YDF has all the primitives and the GBT implementation ready.
+
+
+\subsection{Current YDF Distributed GBT}
+
+\textbf{Different workers handle different features}. This is very scalable, as each worker needs $\sim O(2N)$ memory.
+
+YDF Distributed training requires:
+
+\begin{itemize}
+    \item Manager - a single machine that comms to the workers.
+    \item Workers, communicating via IP. \texttt{Multi\_THREAD} or \texttt{GRPC}
+    \item a Shared Directory - a computation cache \& checkpointing in case of worker(s) failure
+    \item a Sharded dataset (path): csv, tfrecord, Apache Beam. Sharded by column. Usually 10 shards / worker.
+\end{itemize}
+
+ [Source: \href{https://ydf.readthedocs.io/en/latest/tutorial/distributed_training/#setup}{YDF Docs}]
+
+ \begin{figure*}[t]
+    \centering
+    \includegraphics[width=.72\linewidth]{figures/method/distributed_gbt_training_loop_barrier.pdf}
+    \caption{Distributed GBT Training Loop and manager barrier.}
+    \Description{Manager-worker training loop with a barrier at each depth.}
+    \label{fig:ydf-dist-gbt-training-loop}
+\end{figure*}
+
+\subsubsection{Load-balanced Data Sharding}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{figures/method/distributed_gbt_column_partitioning.pdf}
+    \caption{Data Sharding illustration. Dataset is split by column, presorted, then round-robined in a load-balancing way.}
+    \Description{Columns presorted and round-robined to workers.}
+    \label{fig:ydf-dist-gbt-load-balancing}
+\end{figure}
+
+Feature columns are weighed by their expected compute expense : numerical features weigh $5.0$, Discretized weigh $1.0$ (\texttt{LoadBalancer::Initialize}). Numerical columns are Pre-Sorted (\texttt{dataset\_cache.cc::}\newline\texttt{SortNumericalColumns}).
+
+\begin{enumerate}
+    \item Shard dataset in shared directory, by column. 
+        \begin{itemize}
+            \item 1 column to 1 worker. No replication.
+            \item \textbf{Main issue}: how to shard these once in SPO when they're sampled per node?
+        \end{itemize}
+    \item Presort Columns. \textbf{Not possible in SPO}
+    \item Load-balanced column round-robin to workers, by compute intensity: 5 for Numeric, 1 for Discretized. \textbf{Issue 3. No fixed columns in SPO}
+    \item Train
+\end{enumerate}
+
+\subsubsection{Training}
+
+\paragraph{for depth in tree:}
+
+\begin{enumerate}
+    \item Workers scan their column subset, computing local \texttt{BestSplit} for nodes at a depth $d$ (in \texttt{FindBestSplitsWithThreadPool}). Local maxes are sent to Manager.
+    \item Manager computes global Max in \texttt{MergeBestSplits}. Update manager's tree structure \texttt{ApplySplitToTree}.
+    \item Manager broadcasts global winning split -\newline \texttt{EmitEvaluateSplits}
+    \item Worker who owns Winning Column creates \textbf{bitmap} of examples to split into left-right. There is 1 winner per node at this depth
+        \begin{lstlisting}
+for (auto value : values) {
+  const auto node_idx = example_to_node[example_idx];
+  if (active_node_idx >= 0)
+    active_node.writer.Write(value >= active_node.threshold);  // the bitmap
+  example_idx++;
+}
+        \end{lstlisting}
+    \item Winning workers broadcasts bitmap peer-to-peer
+    \item Monitor workload for skew. Work-steal.
+\end{enumerate}
+
+
+\subsubsection{Approximate Splits}
+
+AA-GBT offers approximate splits to further improve training speed. Very often, this can speed up training by 2x-5x without negative impact on quality. In our experiments, these are not used. Instead, the data is Presorted and Exact splits are run.
+
+\section{Related Work}
+\label{sec:related-work}
+
+Oblique decision trees split on linear combinations of features rather than on a single feature. Breiman's original random forest paper proposed Forest-RC, which draws random linear combinations of a few inputs at each node~\cite{breiman}. OC1 searches for hyperplanes by hill climbing with random perturbations~\cite{murthy1994system}, canonical correlation forests derive the projection at each node from CCA~\cite{rainforth2015canonical}, and TAO learns sparse oblique trees by alternating optimization over the node hyperplanes~\cite{carreira2018alternating}, with bivariate trees as the two-feature special case~\cite{kairgeldin_bivariate_2024}. Sparse projection oblique random forests (SPO-RF)~\cite{tomita2020sparse} sample sparse random projections at each node and are implemented in treeple~\cite{treeple} and in YDF~\cite{ydf}, whose sparse oblique splits we optimize. SPO-RF is also the base learner of MIGHT, which trains forests to purity to obtain calibrated posteriors for biomedical screening~\cite{might1,might2}. Common to all of these methods is the fact that the feature being split exists only once the node's projection has been drawn and therefore cannot be presorted/pre-quantized before training.
+
+Axis-aligned learners find splits either exactly or with histograms. Exact splitting sorts the candidate feature's values within the node or scans a pre-sorted index of the whole column: ranger~\cite{wright2017ranger}, XGBoost's exact method~\cite{chen2016xgboost} and YDF~\cite{ydf} pre-sort, and scikit-learn's forests sort in the node~\cite{pedregosa2011scikit}. Histogram splitting, the default in LightGBM~\cite{ke2017lightgbm}, CatBoost~\cite{prokhorenkova2018catboost}, XGBoost's histogram method~\cite{chen2016xgboost}, TF Boosted Trees~\cite{ponomareva2017tf} and Spark MLlib~\cite{meng2016mllib}, quantizes every feature once before training into a fixed number of bins, so that filling a node's histogram is a scatter-add over stored bin indices with no search in the loop. XGBoost's local proposal variant~\cite{chen2016xgboost} and YDF's histogram splits~\cite{ydf} instead recompute bin boundaries per node, from the node's quantiles, its value range, or at random. Further savings come from sharing work across nodes: histogram subtraction derives one child's histogram from the parent's~\cite{ke2017lightgbm}, CatBoost's oblivious trees split every node of a level on the same feature and bin grid~\cite{prokhorenkova2018catboost}, and GPU trainers assemble partial histograms per thread block~\cite{wenthundergbm19,xu2025scalagbm}. 
+
+\textit{The partitioning landscape}
+
+\begin{itemize}
+    \item PLANET (Panda et al., VLDB 2009). Row-partitioned MapReduce tree ensembles with a central controller; the lineage of every data-parallel learner. Binned splits because exact ones would need a distributed sort per attribute.
+    \item Fu, Jiang, Shao, Cui, “An Experimental Evaluation of Large Scale GBDT Systems” / Vero (VLDB 2019). Defines the row/column × row-store/column-store quadrants and derives the cost formulas. Shows vertical partitioning wins at high dimension and deep trees; places LightGBM feature-parallel as replicated.
+    \item LightGBM (Ke et al., NIPS 2017) + its distributed guide. Data, feature and voting parallel modes; feature parallel keeps the full dataset on every worker, which is exactly why it dodges your problem.
+    \item PV-Tree (Meng et al., NIPS 2016). Two-phase voting to cut data-parallel histogram traffic. Quantifies attribute-parallel placement cost as proportional to \#samples (your bitmap term).
+    \item DimBoost (Jiang, Cui, Zhang, Fu, SIGMOD 2018). High-dimensional GBDT on parameter servers, row-partitioned. Closed access; cite via Vero.
+    \item Also, unread this session: Ye et al., “Stochastic gradient boosted distributed decision trees” (CIKM 2009; horizontal vs vertical GBDT, Yggdrasil cites it as the vertical precedent); Vasiloudis et al., “Block-distributed GBT” (SIGIR 2019; 2-D row×column blocks, the hybrid quadrant you lack); Svore \& Burges (2011; full copy per worker, search split by feature).
+\end{itemize}
+% Added 2026-10-26 from the related-work check (ariel_notes/related_work/2026-10-26_distributed_spo/).
+% Entries without a locator there (1-5, 7-10, 12-15) are from memory, not read in that pass: verify before final.
+
+\textit{Classic parallel decision-tree induction}
+
+\begin{itemize}
+    \item \textit{Parallel Formulations of Decision-Tree Classification Algorithms} (Srivastava, Han, Kumar, Singh; Data Mining and Knowledge Discovery 1999). The canonical taxonomy of parallel tree construction: synchronous (data-parallel), partitioned (task-parallel per subtree) and hybrid. Our column-partitioned protocol is the synchronous, attribute-distributed case in this vocabulary.
+    \item \textit{SPRINT: A Scalable Parallel Classifier for Data Mining} (Shafer, Agrawal, Mehta; VLDB 1996) and \textit{SLIQ: A Fast Scalable Classifier for Data Mining} (Mehta, Agrawal, Rissanen; EDBT 1996). Presorted attribute lists split across processors; splitting a node requires exchanging record ids proportional to $N$. The origin of the per-level placement cost our bitmap broadcast pays, and of the obstacle for splits that read several attributes.
+    \item \textit{ScalParC: A New Scalable and Efficient Parallel Classification Algorithm for Mining Large Datasets} (Joshi, Karypis, Kumar; IPPS 1998). Removes SPRINT's $O(N)$ per-processor memory with a distributed hash table; shows that placement bookkeeping, not split finding, bounds attribute-distributed designs.
+    \item \textit{Communication and Memory Efficient Parallel Decision Tree Construction} (Jin, Agrawal; SDM 2003). Data-parallel construction that prunes candidate splits statistically to cut communication; an early communication-versus-exactness trade-off of the kind our cross-worker options face.
+    \item \textit{A Streaming Parallel Decision Tree Algorithm} (Ben-Haim, Tom-Tov; JMLR 2010). Data-parallel training with mergeable histograms, the basis of the histogram-allreduce family. There a projection is local to every worker, so oblique splits cost no extra communication but lose exact thresholds.
+\end{itemize}
+
+\textit{Distributed GBDT designs}
+
+\begin{itemize}
+    \item \textit{Stochastic Gradient Boosted Distributed Decision Trees} (Ye, Chow, Chen, Zheng; CIKM 2009). The first GBDT study of horizontal (MapReduce) against vertical (MPI) partitioning, finding the vertical version faster; the earliest precedent for feature-partitioned boosting.
+    \item \textit{Large-Scale Learning to Rank Using Boosted Decision Trees} (Svore, Burges; in Scaling Up Machine Learning, 2011). Every node holds the full dataset and the split search is divided by feature. Feature-parallel search without feature-partitioned data: it avoids cross-worker features by replicating the data, which our memory motivation rules out.
+    \item \textit{Parallel Boosted Regression Trees for Web Search Ranking} (Tyree, Weinberger, Agrawal, Paykin; WWW 2011). Shared-memory GBRT parallelized over features with histograms; the single-machine analogue of feature-parallel split search.
+    \item \textit{TencentBoost: A Gradient Boosting Tree System with Parameter Server} (Jiang, Jiang, Cui, Zhang; ICDE 2017). Row-partitioned GBDT on a parameter server and the predecessor of DimBoost; the horizontal alternative at the scale we target.
+    \item \textit{Block-Distributed Gradient Boosted Trees} (Vasiloudis, Cho, Bostr\"om; SIGIR 2019). Partitions rows and features in two-dimensional blocks over a parameter server: the hybrid quadrant between row and column partitioning, and the design a cross-worker projection scheme would move toward.
+    \item \textit{A Parallel Random Forest Algorithm for Big Data in a Spark Cloud Computing Environment} (Chen, Li, Tang, Bilal, Yu, Weng, Li; IEEE TPDS 2017). Vertical, one-feature-per-partition random forest on Spark with importance-ranked feature selection per tree; a precedent for importance-driven column assignment.
+\end{itemize}
+
+\textit{Optional}
+
+\begin{itemize}
+    \item \textit{CLOUDS: A Decision Tree Classifier for Large Datasets} (Alsabti, Ranka, Singh; KDD 1998). Early histogram-based approximate splitting for data that does not fit in memory.
+    \item \textit{Parallel Classification for Data Mining on Shared-Memory Multiprocessors} (Zaki, Ho, Agrawal; ICDE 1999). Attribute-parallel tree construction on SMPs; feature-level parallelism without partitioning the data.
+    \item \textit{MLlib: Machine Learning in Apache Spark} (Meng et al.; JMLR 2016). The reference for Spark's row-partitioned, PLANET-style trees, whose per-node feature subsets are drawn on the driver and broadcast.
+    \item \textit{FedTree: A Federated Learning System for Trees} (Li, Wen, He; MLSys 2023). One GBDT system with both horizontal and vertical federated partitioning; both keep single-feature splits.
+\end{itemize}
+
+\section{Method: Column Distribution Strategies on Distributed SPO-GBT}
+
+Partitioning function should be done when loading data - where VerticalDataset is created. 
+
+\textbf{There is a range of replication: from 0\% replication to 100\% replication}. 0\% replication is worst case: disjoint columns. 100\% replication is equivalent to local SPO-GBT but expensive.
+
+\subsection{All Columns on Every Worker}
+
+In GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike RF and SPO-RF, which sample $\sqrt{\mathbf{F}} \sim \mathbf{F}$. \newline\mbox{}
+
+\textbf{\textit{Benefit}}: Full feature range available for sampling
+
+\textbf{\textit{Cost:}} Requires many-to-many communication at each depth, as no single node holds all features.
+
+
+\subsection{V0: \texorpdfstring{$\frac{F}{W}$}{F/W} Worker-local projections}
+
+% Also applicable to bivariate and other random subset-based tree kernels
+
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=.6\linewidth]{figures/method/in_node_spo_sampling.pdf}
+%     \caption{V1 works identically to Distributed GBT, but features are sampled only within a worker.}
+%     \label{fig:simple-in-worker-column-sampling}
+% \end{figure}
+
+% \begin{figure}[t]
+% \begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+% if (oblique) {
+%   const int num_features_for_projection_count =
+%       spe_config.in_worker_oblique().num_projections_from_local_features()
+%           ? 0
+%           : num_global_numerical_features_;
+%   for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
+%        weak_model_idx++) {
+%     auto& weak_model = weak_models_[weak_model_idx];
+%     const distributed_decision_tree::ObliqueSplitArgs args{
+%         oblique_features_per_weak_models[weak_model_idx],
+%         weak_model.example_to_node,
+%         welcome_.dataspec(),
+%         welcome_.train_config_linking(),
+%         dt_config,
+%         *weak_model.label_accessor,
+%         weak_model.label_stats_per_node,
+%         *oblique_columns_,
+%         model::proto::Task::REGRESSION,
+%         weak_model.label_accessor_type,
+%         num_features_for_projection_count,
+%         MixProjectionSeed(request.projection_seed(), WorkerIdx(),
+%                           weak_model_idx)};
+%     RETURN_IF_ERROR(distributed_decision_tree::FindBestObliqueSplits(
+%         args, thread_pool_.get(), &splits_per_weak_models[weak_model_idx]));
+%   }
+% }
+% \end{lstlisting}
+% \caption{Worker-side call into the in-worker oblique split search (\texttt{worker.cc}, \texttt{FindSplits}).}
+% \label{lst:worker_oblique_call}
+% \end{figure}
+
+Load balancing disabled for Dist. SPO-GBT
+
+
+Each worker holds and samples from a small subset of columns.
+
+\textbf{\textit{How many features should each worker hold?}}
+
+Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at each worker.
+
+
+
+\begin{description}
+    \item[\textit{Benefit}:]
+    \begin{itemize}
+        \item No communication
+    \end{itemize}
+\end{description}
+
+\begin{description}
+    \item[\textit{Cost}:]
+    \begin{itemize}
+        \item Smaller search space than sampling $F \sim \mathbf{F}$.
+        \item Each worker still needs to hold $F$ features instead of 1.
+    \end{itemize}
+\end{description}
+
+
+\subsection{Random Column Assignment}
+
+\subsection{\texorpdfstring{$C_2$}{C2} Combinations}
+
+\subsection{Smart Column Assignments}
+
+Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axis-aligned GBT split on.
+
+\begin{figure*}[t]
+\centering
+\input{figures/evaluation/cc18_tree_feature_hist_body}
+\caption{Features split on by the first tree of a AA-GBT. Top: most Pareto-like. Bottom: least-pareto like. See animation \href{https://drive.google.com/file/d/1BLq98ab_YEgCxTeb6eLGhEEZw2BVsqCO/view?usp=drive_link}{here}.}
+\Description{Bar charts of per-feature split share against feature index for the same six datasets and trees 1, 100, 200 and 300.}
+\label{fig:cc18-tree-feature-hist}
+\par\smallskip\raggedright\footnotesize pooled over the 10 cross-validation models of a dataset
+\end{figure*}
+
+\twocolumn[{\floatblock
+\section{Evaluation}
+
+\textbf{Skew in tree (e.g. big nodes) doesn't create skew in workers. Skew in columns does.} If a dataset has no explicit test set, the last 10\% of the dataset is used as test.
+
+
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=figure}
+\centering
+\input{figures/evaluation/vertex_pf/fig_vertex_hm4_pf_body}\hfill\input{figures/evaluation/vertex_pf/fig_vertex_hm16_pf_body}
+\par\smallskip\ref*{vertexpflegend}
+\caption{Table~\ref{tab:vertex-hm4-pf-runtime} as bars: distributed tree-training time of SPO-GBT and AA-GBT vs. workers $W$, log scale.}
+\Description{Two panels of grouped bars on a log time axis, one group per dataset, bars ordered by worker count with SPO in blue and AA in orange; missing bars are marked OOM.}
+\label{fig:vertex-hm4-hm16-pf-runtime}
+\end{minipage}
+\vskip1em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Distributed tree-training time (s) on Vertex AI}
+\label{tab:vertex-hm4-pf-runtime}
+\input{tables/table_vertex_hm4_hm16_pf_body}
+\par\smallskip\raggedright\footnotesize  $P{=}F$ projections. In-node parallel + VQSort. $\lfloor F/W\rfloor$ per worker, so SUSY and HIGGS get 16 at $W{=}16$). 10 trees. Setup excluded, checkpoints off.
+\end{minipage}
+\vskip1em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=figure}
+\centering
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\input{figures/evaluation/grcp_n2/fig_yt8m_barriers_swimlane_body}
+\par\footnotesize (a) Timeline of one SPO-GBT tree
+\end{minipage}
+\hfill
+\begin{minipage}[b]{0.48\textwidth}
+\centering
+\input{figures/evaluation/grcp_n2/fig_yt8m_barriers_budget_body}
+\par\footnotesize (b) Time budget per arm, summed over the run.
+\end{minipage}
+\caption{Barrier timing of distributed AA-GBT and SPO-GBT on YouTube-8M with $W{=}16$ workers on Vertex AI \texttt{n2-highmem-4}. (b) Stacked bars sum the slowest worker's time per stage.}
+% TODO(ariel): caption covers (b) only; (a) is the swimlane
+\Description{Two panels. Left: timeline of one SPO-GBT tree in four lanes (manager, slowest, median, fastest worker), above a zoom on tree level 0. Right: one horizontal 100\% stacked bar per arm, split into six time components, with the total seconds at its end.}
+\label{fig:yt8m-barriers}
+\par\smallskip\raggedright\footnotesize 10 trees, $P{=}F$, Disjoint columns (in-worker projections)
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
+\subsection{Simple Column Replication}
+
+Columns are round-robined.
+
+\subsubsection{Zero Replication $r=0$}
+
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of single-machine vs. $W$-distributed GBT. Single-machine SPO-GBT samples $F$ projections per node, distributed SPO-GBT workers sample $F/W$ projections from their $F/W$ columns.}
+\label{tab:dist-accuracy}
+\input{tables/table_dist_accuracy_body}
+\par\smallskip\raggedright\footnotesize Distributed ran locally on \texttt{MULTI\_THREAD} on m7i. 300 trees. 5 CV folds except Chronological holdouts.
+\end{minipage}
+\par\vskip1em
+}]
+
+\begin{figure}[H]
+\centering
+% body sizes its axis to 0.5\textwidth; match it to the column
+\setlength{\textwidth}{2\linewidth}%
+\input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy}.}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}
+\label{fig:dist-accuracy-mean}
+\end{figure}
+
+\subsection{Accuracy of Richard's AA+SPO on CC18}
+\label{sec:cc18-aa-spo}
+
+\begin{table}[H]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Test accuracy of single-machine AA and SPO-GBT in CC18. }
+\label{tab:cc18-aa-spo}
+\input{tables/table_cc18_aa_spo_body}
+\par\smallskip\raggedright\footnotesize \textbf{YDF defaults}: 300 trees, 10\% validation with early stopping, exact splits, $P{=}\min(F^2, 6000)$ projections, density 2. \textbf{Harness defaults}: \TODO{30 trees - rerunning w/ 300}, no early stopping, $P{=}\min(F, 1000)$, density 1.5, 64-bin dynamic histogram. \TODO{seed 1}. \Claude{Show distributions, not mean}
+\texttt{m7i.24x. 10 CV folds} \TODO{why doesnt harness accuracy match table?}
+\end{table}
+
+\twocolumn[{\floatblock
+\subsubsection{Accuracy study of $r \in [0,1]$}
+
+\label{sec:round-robin-replication}
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=table}
+\centering\footnotesize
+\caption{Test accuracy of distributed SPO-GBT \TODO{($W=4$) is this why acc doesn't change?} vs.\ column replication $r$.}
+\label{tab:column-replication}
+\input{tables/table_column_replication_body}
+\par\smallskip\raggedright\footnotesize Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns. Mean over CC18 w/ 5 seeds. \TODO{Why does $r$ have no effect on acc?}.
+\par\footnotesize \textbf{single} = single-machine SPO-GBT, same hyperparameters
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\input{figures/evaluation/fig_column_replication_body}
+\caption{Table~\ref{tab:column-replication} as charts: mean (top) and per-dataset (bottom) $\Delta$ test accuracy vs.\ \texttt{single}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
+\label{fig:column-replication}
+\par\smallskip\raggedright\footnotesize \TODO{Drop datasets where SPO does not outperform AA.} Top: 95\% bootstrap interval over the 34 datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy. All 374 points lie within this range. \Claude{Scale dots by dataset size}. \TODO{r=0 removes only cross-worker column combinations. Single-column projections (56 \% of draws at density 1.5 \Claude{I thought density was 2 as per YDF defaults}) are untouched, and multi-column splits are worth only +0.2 pts over AA (Table \ref{tab:cc18-aa-spo}).} \TODO{Plot distribution of accuracy by seed}
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock%
+\subsection{Projections with Cross-Worker Communication}
+\label{sec:cross-network-projections}
+
+Naive baseline for communication cost. \textbf{Should match local SPO-GBT accuracy.}
+
+
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=figure}
+\centering
+\input{figures/evaluation/fig_cross_network_body}
+\caption{Table~\ref{tab:cross-network} as charts: (a) speedup vs.\ dataset size, (b) time breakdown, (c) test accuracy, means over 5 seeds.}
+\Description{Three panels in a row. Left: log-log scatter of speedup against rows times features, decreasing from about 0.94 to 0.36. Middle: horizontal stacked bars for eight datasets. Right: scatter of accuracies along the diagonal.}
+\label{fig:cross-network}
+\par\smallskip\raggedright\footnotesize (a) one point per dataset, log-log, dashed = parity. (b) cross-network time of the 8 datasets with the lowest speedup. (c) dashed = equal accuracy.
+\end{minipage}
+\vskip1em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Tree-training time, communication and test accuracy of in-worker vs.\ cross-network projections per CC18 dataset.}
+\label{tab:cross-network}
+\input{tables/table_cross_network_body}
+\par\smallskip\raggedright\footnotesize In-worker: each worker samples projections from its own $F/W$ columns. Cross-network: each worker samples from all $F$ columns and fetches the ones it lacks from their owners at every tree level. Speedup = in-worker time / cross-network time. GB: columns communicated between workers. Wait: time blocked on communication, slowest worker per round. Last row: sums, geomean speedup, mean accuracy. $W{=}4$, 300 trees, depth 6, $P{=}F$, mean of 5 seeds.
+\end{minipage}
+}]
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{main}
+
+\appendix
+% Full-width page top: A.1 and A.2 share one page.
+\twocolumn[{\floatblock%
+
+\section{Appendix}
+
+\subsection{Enabling Parallelism for Distributed SPO}
+\label{sec:in-node-parallelism}
+
+
+Added VQSort 25-Oct-2026. 22-Oct-26: Added In-node parallelism in SPO-GBT. single machine gives 2x.
+
+FYI Local SPO only parallelizes in-node when >10 projections. Ensure you're using YDF defaults for num projections, etc. so this doesn't apply.
+
+\noindent\begin{minipage}[t]{0.45\textwidth}\vspace{0pt}
+\captionsetup{type=table}
+\centering\scriptsize\setlength{\tabcolsep}{2pt}
+\caption{Benefit of VQSort and distributed in-node parallelism: tree-training time in seconds ($P{=}F$).}
+\label{tab:in-node-dist-vqsort-ablation}
+\input{tables/table_in_node_ablation_body}
+\par\smallskip\raggedright\footnotesize Vertex AI \texttt{n2-highmem-16}, 10 trees. Ablates Highway VQSort and in-worker parallelism; models are byte-identical.
+\end{minipage}\hfill
+\begin{minipage}[t]{0.53\textwidth}\vspace{0pt}
+\captionsetup{type=table}
+\centering\scriptsize\setlength{\tabcolsep}{2pt}
+% (10 trees, depth 6, exact splits)
+\caption{Fixing limited SPO in-node parallelism: training time in seconds of SPO-GBT with $T$ threads.}
+% Used $P=\lceil\sqrt{F}\rceil$.
+\label{tab:in-node-dist-vqsort-vertex}
+\input{tables/table_in_node_threads_body}
+\par\smallskip\raggedright\footnotesize Single \texttt{m7i.24x}, $P=\sqrt{F}$. Sequential: $P$ projections in $\min(T,\lceil P/10\rceil)$ threads, i.e.\ single-threaded when $P\le 10$. Parallel: $\min(T,P)$. Existing method was due to PR 403 overhead, which is now gone.
+\end{minipage}
+\par\vskip1em
+}]
+
+
+\subsection{Setup cost}
+
+Training a distributed model includes \emph{setup}: the time from job start until the manager logs \texttt{Start tree training} (noted based on whether included). Setup covers reading the CSV from Cloud Storage, building the distributed dataset cache in the shared directory (one file per column, numerical columns presorted) and waiting until every worker has loaded its column partition. (Table~\ref{tab:setup-cost}).
+
+
+\begin{table}[H]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\caption{Setup time in seconds (min--max over all runs).}
+\label{tab:setup-cost}
+\input{tables/table_setup_cost_body}
+\end{table}
+
+
+\subsection{Full Implementation Code}
+
+\subsubsection{Call Stack}
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\columnwidth}
+\begin{lstlisting}
+distributed_gradient_boosted_trees.cc
+  ::TrainWithStatusImpl()
+  RunIteration()    // one tree, layer by layer
+    EmitFindSplits() / EmitEvaluateSplits()
+    MultiThreadManager()  // MULTI_THREAD, not GRPC
+      worker.cc::RunRequest() & RunRequestImp()
+        worker.cc::FindSplits()
+          training.cc::FindBestSplitsWithThreadPool()
+          oblique.cc::FindBestObliqueSplits()
+        worker.cc::EvaluateSplits()
+          oblique.cc::EvaluateObliqueSplits()
+\end{lstlisting}
+\end{minipage}
+
+\input{listings/in_worker_oblique}
+
+
+\end{document}

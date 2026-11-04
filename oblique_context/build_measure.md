@@ -2,7 +2,7 @@
 
 > Shard of `OBLIQUE_CONTEXT.md`. Read for `.bazelrc` configs, env knobs, the
 > `train_oblique_forest` harness, dataset shapes, or the measurement tooling.
-> The experiment *workflow* is in `AGENTS.md`. Snapshot 2026-07-04,
+> Snapshot 2026-07-04,
 > `main` @ `c80ffbf7`; grep for symbols if a line ref misses.
 
 ---

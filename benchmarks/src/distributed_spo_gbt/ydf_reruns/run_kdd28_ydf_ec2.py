@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+# KDD28 accuracy reruns, profile kdd28_ydf, on EC2 ariel-dist-accuracy-1 (ex ariel-ydf-1, i-0f90f7764082bf21a,
+# m7i.metal-24xl), distributed = in-process MULTI_THREAD workers (accuracy only, never timing). 2026-11-03.
+# Same-seed rerun on this box is bit-identical (tested 2026-11-03: 7 pairs, single and W=4/16, same tree nodes).
+"""One resumable queue for tab:dist-accuracy (distacc), tab:column-replication (colrep, colrep_single; its r = 0
+cells are the in-worker arm of tab:cross-network) and tab:cc18-aa-spo arms (a), (d), (e) (cc18).
+Cells run concurrently under a CPU-slot budget, datasets outer and arms inner, heaviest datasets first.
+Flags mirror run_table8_local.sh, run_replication_sweep.py, run_single_machine_cc18.sh, run_cc18_aa_spo_gbt.sh."""
+import argparse
+import csv
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import threading
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "params"))
+import params as kdd28  # noqa: E402
+
+PR = "kdd28_ydf"
+SPLIT_AA = "--feature_split_type=Axis Aligned"
+ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps appended)
+    "distacc": "dataset,fold,arm,workers,split_axis,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git",
+    "colrep": "dataset,seed,replication,workers,threads,trees,max_depth,rc,test_acc,test_auc,test_logloss,"
+              "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log",
+    "colrep_single": "dataset,seed,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git",
+    "cc18": "dataset,fold,arm,threads,rc,test_acc,test_auc,test_logloss,num_trees,train_s,wall_s,git,bin_sha",
+}
+KEYS = {"distacc": ("dataset", "fold", "arm"), "colrep": ("dataset", "seed", "replication"),
+        "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm")}
+
+
+def seconds(d):
+    """absl duration text ("551.19ms", "1m2.5s") -> seconds."""
+    unit = {"h": 3600.0, "m": 60.0, "s": 1.0, "ms": 1e-3, "us": 1e-6, "µs": 1e-6, "ns": 1e-9}
+    parts = re.findall(r"([0-9.]+)(h|ms|us|µs|ns|m|s)", d or "")
+    return round(sum(float(v) * unit[u] for v, u in parts), 3) if parts else ""
+
+
+def parse_log(path, dist):
+    txt = open(path, errors="replace").read()
+    g = lambda pat: (re.findall(pat, txt, re.M) or [""])[-1]  # noqa: E731
+    out = {}
+    if dist:
+        out["test_acc"], out["test_auc"] = g(r"^Accuracy: ([0-9.]+)"), g(r"^\s*auc: ([0-9.]+)")
+        out["test_logloss"] = g(r"^LogLoss: *:? *([0-9.]+)")
+        out["train_s"] = seconds(g(r"Training \(incl\. cache creation\) took ([0-9.a-zµ]+)"))
+        c = re.search(r"Conditions: (\d+) total, (\d+) oblique, (\d+) with >1 column", txt)
+        out["num_conditions"], out["num_oblique"], out["num_multi_col"] = c.groups() if c else ("", "", "")
+        out["held_cols"] = ";".join(f"{o}+{r}" for o, r in re.findall(r"worker \d+: (\d+) owned \+ (\d+) replicated", txt))
+    else:
+        m = re.findall(r"test-accuracy:(\S+) test-auc:(\S+) test-logloss:(\S+)", txt)
+        out["test_acc"], out["test_auc"], out["test_logloss"] = m[-1] if m else ("", "", "")
+        out["train_s"] = g(r"Training block took: ([0-9.e+-]+)")
+        out["num_trees"] = g(r"Final model num-trees:(\d+)")
+    return out
+
+
+class Cell:
+    def __init__(self, table, key, profile, argv, threads, weight, cost, extra, dist, work=None):
+        self.table, self.key, self.profile, self.argv = table, key, profile, argv
+        self.threads, self.weight, self.cost, self.extra, self.dist, self.work = threads, weight, cost, extra, dist, work
+        self.tag = "__".join(str(k) for k in key)
+
+
+def build_cells(a):
+    B = a.bin_dir
+    single_bin, dist_bin = os.path.join(B, "train_oblique_forest"), os.path.join(B, "train_distributed_gbt")
+    tables, cells = a.tables.split(","), []
+
+    def single(table, key, prof, train, test, label, seed, split, model, ts, extra, cost):
+        argv = [single_bin, "--input_mode", "csv", "--train_csv", train, "--test_csv", test, "--label_col", label,
+                "--ensemble_method", "Boosting", "--ydf_defaults", *split, "--validation_set_ratio", "0",
+                "--early_stopping", "NONE", "--num_threads", str(ts), "--seed", str(seed), "--model_out_dir", model]
+        cells.append(Cell(table, key, prof, argv, ts, ts, cost, extra, False))
+
+    def dist(table, key, prof, train, test, w, seed, aa, r, model, work, extra, cost):
+        p = kdd28.load_profile(prof)
+        spo = [] if aa else ["--sparse_oblique_num_projections_exponent", kdd28._fmt(p["spo_exponent"]),
+                             "--sparse_oblique_max_num_projections", kdd28._fmt(p["spo_max_projections"]),
+                             "--sparse_oblique_projection_density_factor", kdd28._fmt(p["spo_density"]),
+                             f"--sparse_oblique_local_projection_count={kdd28._fmt(p['local_projection_count'])}",
+                             f"--sparse_oblique_split_budget={kdd28._fmt(p['split_budget'])}",
+                             "--sparse_oblique_weights", "BINARY"] + ([] if r is None else ["--column_replication", str(r)])
+        argv = [dist_bin, "--alsologtostderr", "--train_csv", train, "--test_csv", test, "--label", "label",
+                *(["--force_numerical_features"] if p["force_numerical"] else []), "--work_dir", work,
+                "--num_workers", str(w), "--num_threads", str(a.worker_threads), "--num_trees", str(p["trees"]),
+                "--max_depth", str(p["max_depth"]), "--split_axis", "AXIS_ALIGNED" if aa else "SPARSE_OBLIQUE", *spo,
+                f"--max_unique_values_for_discretized_numerical={p['max_unique_discretized']}", "--seed", str(seed),
+                "--worker_logs=false", "--model_out_dir", model]
+        t = w * a.worker_threads
+        cells.append(Cell(table, key, prof, argv, t, min(t, a.max_weight), cost, extra, True, work))
+
+    def shape(train):  # (features, rows ~ bytes / 8 B per value); (0, 0) when unreadable
+        try:
+            with open(train) as f:
+                nf = len(f.readline().split(",")) - 1
+            return nf, os.path.getsize(train) // max(1, 8 * (nf + 1))
+        except OSError:
+            return 0, 0
+
+    def cost(train, aa):
+        nf, n = shape(train)
+        return n * (nf if aa else min(nf * nf, 6000))
+
+    if "distacc" in tables:
+        ds = sorted(os.listdir(a.tab_folds))
+        ds.sort(key=lambda d: -cost(os.path.join(a.tab_folds, d, "fold0_train.csv"), False))
+        dp = kdd28.load_profile(f"{PR}.distacc_spo")
+        for d in ds:
+            nf = len(json.load(open(os.path.join(a.tab_folds, d, "folds.json")))["indices"])
+            for k in range(nf):
+                tr, te = (os.path.join(a.tab_folds, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
+                o = os.path.join(a.out, "distacc")
+                for arm in ["single:SPO", "single:AA"] + [f"{w}:{x}" for x in ("SPO", "AA") for w in dp["workers"]]:
+                    W, A = arm.split(":")
+                    key, tag = (d, k, arm), f"{d}__f{k}__{W}_{A}"
+                    model, c = os.path.join(o, "models", tag), cost(tr, A == "AA")
+                    if W == "single":
+                        prof = f"{PR}.distacc_single_{A.lower()}"
+                        split = ["--feature_split_type=Oblique"] if A == "SPO" else [SPLIT_AA]
+                        single("distacc", key, prof, tr, te, "label", 1, split, model, a.single_threads,
+                               {"workers": W, "split_axis": A}, c)
+                    else:
+                        dist("distacc", key, f"{PR}.distacc_{A.lower()}", tr, te, int(W), 1, A == "AA", None, model,
+                             os.path.join(o, "work", tag), {"workers": W, "split_axis": "AXIS_ALIGNED" if A == "AA"
+                                                            else "SPARSE_OBLIQUE"}, c)
+    if "colrep" in tables:
+        cp = kdd28.load_profile(f"{PR}.colrep_spo")
+        sp = kdd28.load_profile(f"{PR}.colrep_single_spo")
+        ds = sorted(d for d in os.listdir(a.cc18_fold0) if os.path.isdir(os.path.join(a.cc18_fold0, d)))
+        ds.sort(key=lambda d: -cost(os.path.join(a.cc18_fold0, d, "train.csv"), False))
+        for d in ds:
+            tr, te = os.path.join(a.cc18_fold0, d, "train.csv"), os.path.join(a.cc18_fold0, d, "test.csv")
+            for s in cp["seeds"]:
+                for r in cp["column_replication"]:
+                    o, tag = os.path.join(a.out, "colrep"), f"{d}__s{s}__r{r:.2f}"
+                    dist("colrep", (d, s, float(r)), f"{PR}.colrep_spo", tr, te, cp["workers"][0], s, False, r,
+                         os.path.join(o, "models", tag), os.path.join(o, "work", tag),
+                         {"workers": cp["workers"][0], "trees": cp["trees"], "max_depth": cp["max_depth"],
+                          "log": tag + ".log"}, cost(tr, False))
+            for s in sp["seeds"]:
+                o = os.path.join(a.out, "colrep_single")
+                single("colrep_single", (d, s), f"{PR}.colrep_single_spo", tr, te, "label", s,
+                       ["--feature_split_type=Oblique"], os.path.join(o, "models", f"{d}__s{s}"), a.single_threads,
+                       {}, cost(tr, False))
+    if "cc18" in tables:
+        ds = sorted(d for d in os.listdir(a.cc18_10fold) if os.path.isdir(os.path.join(a.cc18_10fold, d)))
+        ds.sort(key=lambda d: -cost(os.path.join(a.cc18_10fold, d, "fold0_train.csv"), False))
+        arms = {"cc18_aa": [SPLIT_AA], "cc18_spo": ["--feature_split_type=Oblique"],
+                "cc18_aa_spo": ["--feature_split_type=Oblique", "--oblique_also_axis_aligned"]}
+        for d in ds:
+            lbl = json.load(open(os.path.join(a.cc18_10fold, d, "meta.json")))["label_col"]
+            for k in kdd28.load_profile(f"{PR}.cc18_aa")["folds"]:
+                tr, te = (os.path.join(a.cc18_10fold, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
+                for arm, split in arms.items():
+                    single("cc18", (d, k, arm), f"{PR}.{arm}", tr, te, lbl, 1, split,
+                           os.path.join(a.out, "cc18", "models", f"{d}__f{k}__{arm}"), a.single_threads, {},
+                           cost(tr, arm == "cc18_aa"))
+    return cells
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--bin_dir", required=True, help="dir with train_oblique_forest and train_distributed_gbt")
+    ap.add_argument("--tab_folds", required=True, help="TabArena/TabReD folds (<ds>/fold<k>_{train,test}.csv)")
+    ap.add_argument("--cc18_fold0", required=True, help="prep_cc18_fold0.py output (task_*/train.csv)")
+    ap.add_argument("--cc18_10fold", required=True, help="run_cc18_aa_spo_gbt.sh data/ (<ds>/fold<k>_*.csv, meta.json)")
+    ap.add_argument("--tables", default="distacc,colrep,cc18")
+    ap.add_argument("--cpus", type=int, default=os.cpu_count())
+    ap.add_argument("--single_threads", type=int, default=4, help="train_oblique_forest --num_threads (model depends on it)")
+    ap.add_argument("--worker_threads", type=int, default=2, help="threads per in-process worker (model depends on it)")
+    ap.add_argument("--max_weight", type=int, default=16, help="CPU slots one cell may claim at most")
+    ap.add_argument("--git", default="")
+    ap.add_argument("--only", default="", help="comma list of dataset substrings")
+    a = ap.parse_args()
+    cells = build_cells(a)
+    if a.only:
+        cells = [c for c in cells if any(o in c.key[0] for o in a.only.split(","))]
+    bin_sha = ""
+    try:
+        bin_sha = subprocess.run(["sha256sum", os.path.join(a.bin_dir, "train_oblique_forest")], capture_output=True,
+                                 text=True).stdout[:12]
+    except OSError:
+        pass
+    lock, done, csvs = threading.Lock(), {}, {}
+    for t in {c.table for c in cells}:
+        os.makedirs(os.path.join(a.out, t, "logs"), exist_ok=True)
+        path = csvs[t] = os.path.join(a.out, t, "results.csv")
+        if subprocess.run([sys.executable, kdd28.__file__, "require-stamped", path]).returncode:
+            sys.exit(2)
+        cols = ROWS[t].split(",")
+        if os.path.exists(path):
+            for r in csv.DictReader(open(path)):
+                if r["rc"] == "0":
+                    done[(t,) + tuple(r[k] for k in KEYS[t])] = 1
+        else:
+            with open(path, "w", newline="") as f:
+                csv.writer(f).writerow(cols + kdd28.stamp_columns(cols))
+    todo = [c for c in cells if (c.table,) + tuple(str(k) for k in c.key) not in done]
+    print(f"{len(cells)} cells, {len(cells) - len(todo)} done, {len(todo)} to run on {a.cpus} CPU slots", flush=True)
+    pre = set()
+    for c in todo:  # pre-flight per profile: first cell's argv + --print_params_only, exit 2 on drift
+        if c.profile not in pre:
+            pre.add(c.profile)
+            kdd28.preflight(c.argv, c.profile, os.path.join(a.out, c.table, "logs", f"preflight_{c.profile}.log"))
+    left = {t: sum(1 for c in todo if c.table == t) for t in csvs}
+    fails = {t: 0 for t in csvs}
+    cv, state = threading.Condition(), {"free": a.cpus, "stop": False, "running": 0}
+
+    def run(c):
+        log = os.path.join(a.out, c.table, "logs", c.tag + ".log")
+        if c.work:
+            shutil.rmtree(c.work, ignore_errors=True)
+        t0, rc = time.time(), -1
+        try:
+            with open(log, "w") as lf:
+                lf.write("# " + " ".join(c.argv) + "\n")
+                lf.flush()
+                rc = subprocess.run(c.argv, stdout=lf, stderr=subprocess.STDOUT).returncode
+            wall = round(time.time() - t0, 2)
+            m = parse_log(log, c.dist)
+            if c.work:
+                shutil.rmtree(c.work, ignore_errors=True)
+            drift = kdd28.check_cell(c.profile, log)  # exit 2 on drift (ALLOW_DRIFT=1 -> "!drift")
+            v = dict(zip(KEYS[c.table], c.key)) | c.extra | m | {"rc": rc, "wall_s": wall, "git": a.git,
+                                                                  "bin_sha": bin_sha, "threads": c.threads}
+            row = [v.get(k, "") for k in ROWS[c.table].split(",")] + kdd28.stamp_values(c.profile + drift, log)
+            with lock:
+                with open(csvs[c.table], "a", newline="") as f:
+                    csv.writer(f).writerow(row)
+                left[c.table] -= 1
+                fails[c.table] += rc != 0
+                print(f"{time.strftime('%H:%M:%S')} {c.table} {c.tag} rc={rc} auc={m.get('test_auc')} {wall}s", flush=True)
+                if left[c.table] == 0:
+                    with open(os.path.join(a.out, c.table, "DONE"), "w") as f:
+                        f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} failed={fails[c.table]}\n")
+        except SystemExit:
+            state["stop"] = True
+        finally:
+            with cv:
+                state["free"] += c.weight
+                state["running"] -= 1
+                cv.notify_all()
+
+    group = {}  # one dataset's cells stay together, heaviest dataset (any table) first
+    for c in todo:
+        group[(c.table, c.key[0])] = max(group.get((c.table, c.key[0]), 0), c.cost)
+    pending = sorted(todo, key=lambda c: -group[(c.table, c.key[0])])  # strict FIFO: wide cells never starve
+    for c in pending:
+        c.weight = min(c.weight, a.cpus)
+    with cv:
+        while pending and not state["stop"]:
+            if pending[0].weight > state["free"]:
+                cv.wait()
+                continue
+            fit = pending.pop(0)
+            state["free"] -= fit.weight
+            state["running"] += 1
+            threading.Thread(target=run, args=(fit,), daemon=True).start()
+        while state["running"]:
+            cv.wait()
+    if state["stop"]:
+        print("STOP: a cell drifted from its profile (see DRIFT lines)", file=sys.stderr)
+        sys.exit(2)
+    for t in csvs:  # tables with nothing left to run still get their marker
+        if not os.path.exists(os.path.join(a.out, t, "DONE")) and left[t] == 0:
+            with open(os.path.join(a.out, t, "DONE"), "w") as f:
+                f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} failed={fails[t]}\n")
+    if set(a.tables.split(",")) <= set(csvs) and not a.only:
+        with open(os.path.join(a.out, "ALL_DONE"), "w") as f:
+            f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ\n", time.gmtime()) + json.dumps(fails) + "\n")
+    print("### DONE", json.dumps(fails), flush=True)
+
+
+if __name__ == "__main__":
+    main()

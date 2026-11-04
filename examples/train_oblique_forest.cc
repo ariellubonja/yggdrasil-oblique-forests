@@ -31,9 +31,15 @@
 #include "absl/status/statusor.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/flags/reflection.h"
+#include "absl/flags/commandlineflag.h"
+#include "absl/flags/internal/parse.h"
+#include "absl/log/check.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 
@@ -45,7 +51,9 @@
 #include "yggdrasil_decision_forests/dataset/vertical_dataset_io.h"
 #include "yggdrasil_decision_forests/learner/learner_library.h"
 #include "yggdrasil_decision_forests/learner/random_forest/random_forest.pb.h"
+#include "yggdrasil_decision_forests/learner/gradient_boosted_trees/gradient_boosted_trees.h"
 #include "yggdrasil_decision_forests/learner/gradient_boosted_trees/gradient_boosted_trees.pb.h"
+#include "yggdrasil_decision_forests/learner/decision_tree/training.h"
 #include "yggdrasil_decision_forests/metric/metric.h"
 #include "yggdrasil_decision_forests/metric/metric.pb.h"
 #include "yggdrasil_decision_forests/metric/report.h"
@@ -119,15 +127,28 @@ ABSL_FLAG(std::string, aa_sorting_strategy, "in_node",
           "so keep 'in_node' for AA + Random/Histogram.");
 
 // Oblique split parameters (only used when feature_split_type = "Oblique")
-ABSL_FLAG(int, max_num_projections, 1000,
-          "Maximum number of projections for oblique splits.");
-ABSL_FLAG(float, projection_density_factor, 1.5f,
-          "Projection density factor.");
-ABSL_FLAG(float, num_projections_exponent, -1.f,
-          "Exponent e of the per-node projection budget ceil(F^e) (also the "
-          "axis-aligned candidate count when --num_candidate_attributes=0). "
-          "-1 = harness default: 0.5 for Bagging (P = sqrt(F)), 1 for "
-          "Boosting (P = F).");
+ABSL_FLAG(int, max_num_projections, 6000,
+          "Cap on the per-node projection count (default 6000 = YDF SPO "
+          "default). Oblique, or Axis Aligned with --num_candidate_attributes=0 "
+          "(caps the candidate count); an error otherwise.");
+ABSL_FLAG(float, projection_density_factor, 2.f,
+          "Expected non-zero weights per projection (default 2 = YDF SPO "
+          "default). Oblique only; an error otherwise.");
+ABSL_FLAG(float, num_projections_exponent, 2.f,
+          "Exponent e of the per-node projection budget ceil(F^e) (default 2 = "
+          "YDF SPO default), also the axis-aligned candidate count when "
+          "--num_candidate_attributes=0; an error otherwise. -1 = 0.5 for "
+          "Bagging, 1 for Boosting.");
+ABSL_FLAG(bool, oblique_also_axis_aligned, false,
+          "Oblique only: also scan every candidate numerical attribute for an "
+          "axis-aligned split next to the projections "
+          "(sparse_oblique_split.include_axis_aligned_splits); the best of both wins.");
+ABSL_FLAG(bool, ydf_defaults, false,
+          "Drop every harness hyperparameter choice: the ensemble config is "
+          "reset to the YDF learner/proto defaults (e.g. GBT: 300 trees, "
+          "10% validation + early stopping, EXACT, SPO exponent 2, max 6000 "
+          "projections, density 2). Kept: --ensemble_method, "
+          "--feature_split_type, --oblique_also_axis_aligned, seed, threads.");
 ABSL_FLAG(int, dynamic_split_threshold, -2,
           "When using dynamic histogram splits, switch to exact splitting if "
           "the number of examples at a node is below this threshold. "
@@ -171,7 +192,19 @@ ABSL_FLAG(bool, compute_oob_performances, false,
 ABSL_FLAG(int64_t, rows, 4096, "Number of examples (for synthetic mode).");
 ABSL_FLAG(int, cols, 4096, "Number of numerical features (for synthetic mode).");
 ABSL_FLAG(int, label_mod, 2,
-          "Number of classes (labels are 1..label_mod, for synthetic mode).");
+          "Not implemented: synthetic labels are always binary. Passing it is "
+          "an error.");
+ABSL_FLAG(float, validation_set_ratio, -1.f,
+          "Boosting only, applied after --ydf_defaults: GBT validation_set_ratio "
+          "in [0, 1). The default -1 means \"leave\" the mode's value (harness "
+          "0, --ydf_defaults 0.1) and must not be passed.");
+ABSL_FLAG(std::string, early_stopping, "",
+          "Boosting only, applied after --ydf_defaults: NONE, MIN_LOSS_FINAL, "
+          "VALIDATION_LOSS_INCREASE or a proto enum name. \"\" = leave the "
+          "mode's value (harness NONE, --ydf_defaults VALIDATION_LOSS_INCREASE).");
+ABSL_FLAG(bool, print_params_only, false,
+          "Log the effective-params line, then exit 0 before any dataset load "
+          "or training (run-script pre-flight).");
 ABSL_FLAG(uint32_t, seed, 1,
           "PRNG seed (for deterministic synthetic mode and model training).");
 ABSL_FLAG(std::string, dataset_layout, "column",
@@ -1071,9 +1104,96 @@ absl::StatusOr<std::unique_ptr<dataset::VerticalDataset>> Load(
 
 /* #endregion */
 
+// --early_stopping value -> proto enum (MIN_LOSS_FINAL = the ydf.GradientBoostedTreesLearner alias).
+static bool ParseEarlyStopping(
+    std::string name, model::gradient_boosted_trees::proto::
+                          GradientBoostedTreesTrainingConfig::EarlyStopping* out) {
+  using Gbt = model::gradient_boosted_trees::proto::GradientBoostedTreesTrainingConfig;
+  if (name == "MIN_LOSS_FINAL") name = "MIN_VALIDATION_LOSS_ON_FULL_MODEL";
+  return Gbt::EarlyStopping_Parse(name, out);
+}
+
+// Never silently ignore a flag (2026-11-03): an explicit flag that has no
+// effect under the chosen configuration fails the run.
+static void CheckNoIgnoredFlags() {
+  const bool oblique = absl::GetFlag(FLAGS_feature_split_type) == "Oblique";
+  const bool boosting = absl::GetFlag(FLAGS_ensemble_method) == "Boosting";
+  const bool ydf = absl::GetFlag(FLAGS_ydf_defaults);
+  const bool aa_budget =
+      !oblique && absl::GetFlag(FLAGS_num_candidate_attributes) == 0;
+  const std::string nst = absl::GetFlag(FLAGS_numerical_split_type);
+  const std::string mode = absl::GetFlag(FLAGS_input_mode);
+  std::vector<std::string> errors;
+  auto need = [&](const absl::CommandLineFlag& flag, bool used,
+                  absl::string_view when) {
+    // CommandLineFlag::IsSpecifiedOnCommandLine is private in this absl.
+    if (absl::flags_internal::WasPresentOnCommandLine(flag.Name()) && !used) {
+      errors.push_back(absl::StrCat("--", flag.Name(), " ", when));
+    }
+  };
+#define NEED(x, used, when) need(absl::GetFlagReflectionHandle(FLAGS_##x), used, when)
+  constexpr absl::string_view kYdf = "is reset by --ydf_defaults";
+  NEED(max_num_projections, !ydf && (oblique || aa_budget),
+       ydf ? kYdf : "needs --feature_split_type Oblique (or Axis Aligned with "
+                    "--num_candidate_attributes 0)");
+  NEED(num_projections_exponent, !ydf && (oblique || aa_budget),
+       ydf ? kYdf : "needs --feature_split_type Oblique (or Axis Aligned with "
+                    "--num_candidate_attributes 0)");
+  NEED(projection_density_factor, !ydf && oblique,
+       ydf ? kYdf : "needs --feature_split_type Oblique");
+  NEED(oblique_also_axis_aligned, oblique, "needs --feature_split_type Oblique");
+  NEED(aa_sorting_strategy, !ydf && !oblique,
+       ydf ? kYdf : "needs --feature_split_type 'Axis Aligned'");
+  NEED(num_candidate_attributes, !ydf && !oblique,
+       ydf ? kYdf : "needs --feature_split_type 'Axis Aligned'");
+  NEED(dynamic_split_threshold, !ydf && absl::StartsWith(nst, "Dynamic"),
+       ydf ? kYdf : "needs a Dynamic --numerical_split_type");
+  NEED(histogram_num_bins, !ydf && nst != "Exact",
+       ydf ? kYdf : "has no effect with --numerical_split_type Exact");
+  NEED(shrinkage, !ydf && boosting, ydf ? kYdf : "needs --ensemble_method Boosting");
+  NEED(bootstrap_training_dataset, !ydf && !boosting,
+       ydf ? kYdf : "needs --ensemble_method Bagging");
+  // =false is allowed anywhere: GBT computes no OOB either (table8 argv).
+  NEED(compute_oob_performances,
+       !absl::GetFlag(FLAGS_compute_oob_performances) || (!ydf && !boosting),
+       ydf ? kYdf : "needs --ensemble_method Bagging");
+  // RF has no validation split or early stopping.
+  NEED(validation_set_ratio,
+       boosting && absl::GetFlag(FLAGS_validation_set_ratio) >= 0,
+       boosting ? "is -1 (leave)" : "needs --ensemble_method Boosting");
+  NEED(early_stopping, boosting && !absl::GetFlag(FLAGS_early_stopping).empty(),
+       boosting ? "is empty (leave)" : "needs --ensemble_method Boosting");
+  NEED(num_trees, !ydf, kYdf);
+  NEED(tree_depth, !ydf, kYdf);
+  NEED(min_examples, !ydf, kYdf);
+  NEED(numerical_split_type, !ydf, kYdf);
+  NEED(growing_strategy, !ydf, kYdf);
+  NEED(rows, mode == "trunk", "needs --input_mode trunk");
+  NEED(cols, mode == "trunk", "needs --input_mode trunk");
+  NEED(label_mod, false, "is not implemented (synthetic labels are binary)");
+  NEED(train_csv, mode == "csv", "needs --input_mode csv");
+  NEED(test_csv, mode == "csv", "needs --input_mode csv");
+  NEED(csv_single_pass_load, mode == "csv", "needs --input_mode csv");
+  NEED(ds_path, mode == "tfrecord", "needs --input_mode tfrecord");
+#undef NEED
+  const float vsr = absl::GetFlag(FLAGS_validation_set_ratio);
+  QCHECK(vsr == -1.f || (vsr >= 0.f && vsr < 1.f))
+      << "--validation_set_ratio must be -1 or in [0, 1), got " << vsr;
+  model::gradient_boosted_trees::proto::GradientBoostedTreesTrainingConfig::
+      EarlyStopping es;
+  QCHECK(absl::GetFlag(FLAGS_early_stopping).empty() ||
+         ParseEarlyStopping(absl::GetFlag(FLAGS_early_stopping), &es))
+      << "--early_stopping: unknown value '" << absl::GetFlag(FLAGS_early_stopping)
+      << "' (NONE, MIN_LOSS_FINAL, VALIDATION_LOSS_INCREASE or a proto enum name)";
+  QCHECK(errors.empty()) << "Flags given on the command line have no effect "
+                            "in this configuration: "
+                         << absl::StrJoin(errors, "; ");
+}
+
 int main(int argc, char** argv) {
   const auto t_main_start = std::chrono::high_resolution_clock::now();
   absl::ParseCommandLine(argc, argv);
+  CheckNoIgnoredFlags();
   if (std::getenv("RM_MAX_ROWS") == nullptr) {
     setenv("RM_MAX_ROWS", "5000", /*overwrite=*/0);
   }
@@ -1102,7 +1222,10 @@ int main(int argc, char** argv) {
   std::string label_col;
 
   // 1) Prepare data source based on mode
-  if (mode == "csv") {
+  const bool print_params_only = absl::GetFlag(FLAGS_print_params_only);
+  if (print_params_only) {
+    LOG(INFO) << "--print_params_only: no dataset load";
+  } else if (mode == "csv") {
     csv_path = absl::GetFlag(FLAGS_train_csv);
     label_col = absl::GetFlag(FLAGS_label_col);
 
@@ -1315,8 +1438,8 @@ int main(int argc, char** argv) {
                                : (ensemble_method == "Boosting" ? 5 : 1));
   }
 
-  // Projection budget: RF samples sqrt(F) projections per node, GBT samples F
-  // (user directive 2026-10-24). An explicit flag value overrides both.
+  // Projection budget (also the AA candidate count). Default 2 = YDF SPO
+  // default (2026-11-03). -1 = 0.5 for RF, 1 for GBT.
   const float exponent_flag = absl::GetFlag(FLAGS_num_projections_exponent);
   const float num_projections_exponent =
       exponent_flag >= 0 ? exponent_flag
@@ -1339,6 +1462,7 @@ int main(int argc, char** argv) {
   if (feature_split_type == "Oblique") {
     LOG(INFO) << "Configuring oblique splits";
     auto* sos = dt_config->mutable_sparse_oblique_split();
+    // Flag defaults are the YDF proto defaults (2026-11-03).
     sos->set_max_num_projections(
         absl::GetFlag(FLAGS_max_num_projections));
     sos->set_projection_density_factor(
@@ -1349,6 +1473,7 @@ int main(int argc, char** argv) {
               << (absl::GetFlag(FLAGS_dynamic_split_threshold) == -2
                       ? " (build default)" : " (from flag)");
     sos->set_dynamic_split_threshold(dyn_thr);
+    sos->set_include_axis_aligned_splits(absl::GetFlag(FLAGS_oblique_also_axis_aligned));
   } else if (feature_split_type == "Axis Aligned") {
     LOG(INFO) << "Using axis-aligned splits";
 
@@ -1455,6 +1580,84 @@ int main(int argc, char** argv) {
 
 
 
+
+  if (absl::GetFlag(FLAGS_ydf_defaults)) {
+    // Learner SetDefaultHyperParameters + proto defaults fill everything in.
+    if (ensemble_method == "Boosting") {
+      auto& gbt = *train_config.MutableExtension(
+          model::gradient_boosted_trees::proto::gradient_boosted_trees_config);
+      gbt.Clear();
+      dt_config = gbt.mutable_decision_tree();
+    } else {
+      auto& rf = *train_config.MutableExtension(
+          model::random_forest::proto::random_forest_config);
+      rf.Clear();
+      dt_config = rf.mutable_decision_tree();
+    }
+    if (feature_split_type == "Oblique") {
+      dt_config->mutable_sparse_oblique_split()->set_include_axis_aligned_splits(
+          absl::GetFlag(FLAGS_oblique_also_axis_aligned));
+    }
+    LOG(INFO) << "--ydf_defaults: hyperparameters reset to YDF defaults";
+  }
+  // After the --ydf_defaults clear, so they hold in both modes (Boosting only, see CheckNoIgnoredFlags).
+  if (ensemble_method == "Boosting") {
+    auto& gbt = *train_config.MutableExtension(
+        model::gradient_boosted_trees::proto::gradient_boosted_trees_config);
+    if (absl::GetFlag(FLAGS_validation_set_ratio) >= 0) {
+      gbt.set_validation_set_ratio(absl::GetFlag(FLAGS_validation_set_ratio));
+      LOG(INFO) << "--validation_set_ratio=" << gbt.validation_set_ratio();
+    }
+    if (!absl::GetFlag(FLAGS_early_stopping).empty()) {
+      model::gradient_boosted_trees::proto::GradientBoostedTreesTrainingConfig::
+          EarlyStopping es;
+      QCHECK(ParseEarlyStopping(absl::GetFlag(FLAGS_early_stopping), &es));
+      gbt.set_early_stopping(es);
+      LOG(INFO) << "--early_stopping="
+                << model::gradient_boosted_trees::proto::
+                       GradientBoostedTreesTrainingConfig::EarlyStopping_Name(es);
+    }
+  }
+  LOG(INFO) << "Final training config: " << train_config.ShortDebugString();
+  {
+    // CSV stamp: the config as trained (proto + learner defaults), not the flags.
+    model::decision_tree::proto::DecisionTreeTrainingConfig dt;
+    int64_t trees = 0;
+    std::string vsr = "-", es = "-";  // RF: no validation split, no early stopping
+    if (ensemble_method == "Boosting") {
+      auto gbt = train_config.GetExtension(
+          model::gradient_boosted_trees::proto::gradient_boosted_trees_config);
+      CHECK_OK(model::gradient_boosted_trees::internal::SetDefaultHyperParameters(&gbt));
+      dt = gbt.decision_tree();
+      trees = gbt.num_trees();
+      vsr = absl::StrCat(gbt.validation_set_ratio());
+      es = model::gradient_boosted_trees::proto::
+          GradientBoostedTreesTrainingConfig::EarlyStopping_Name(gbt.early_stopping());
+    } else {
+      auto rf = train_config.GetExtension(
+          model::random_forest::proto::random_forest_config);
+      model::decision_tree::SetDefaultHyperParameters(rf.mutable_decision_tree());
+      dt = rf.decision_tree();
+      trees = rf.num_trees();
+    }
+    const bool spo = dt.has_sparse_oblique_split();
+    const auto& so = dt.sparse_oblique_split();
+    auto spo_val = [spo](auto v) { return spo ? absl::StrCat(v) : std::string("-"); };
+    LOG(INFO) << "effective-params: num_trees=" << trees
+              << " max_depth=" << dt.max_depth()
+              << " min_examples=" << dt.min_examples()
+              << " num_candidate_attributes=" << dt.num_candidate_attributes()
+              << " split="
+              << model::decision_tree::proto::NumericalSplit::Type_Name(
+                     dt.numerical_split().type())
+              << " spo_exponent=" << spo_val(so.num_projections_exponent())
+              << " spo_max=" << spo_val(so.max_num_projections())
+              << " spo_density=" << spo_val(so.projection_density_factor())
+              << " spo_min=" << spo_val(so.min_num_projections())
+              << " validation_set_ratio=" << vsr << " early_stopping=" << es
+              << " seed=" << train_config.random_seed();
+  }
+  if (print_params_only) return 0;
 
   // -----------Done Configuring Model. Start Training-----------
 

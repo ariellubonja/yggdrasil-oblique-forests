@@ -2,11 +2,14 @@
 """Per-feature split histogram of the k-th tree (--trees, 1-based; first = 1) of each CC18 AA-GBT model, pooled
 over the 10 folds, on a FIXED x-axis: the dataset's features in CSV header order (x = 1..F, label excluded,
 unused features at 0). Datasets = the k (default 3) most / least Pareto-like by the first tree's normalised
-entropy (same rule as make_fig_tree1_pareto.py), kept fixed for the later trees; y range shared per dataset.
+entropy, kept fixed for the later trees; y range shared per dataset.
 Writes under --out: figures/evaluation/cc18_tree_feature_hist/<slot>_t<tree>.dat and --body (default cc18_tree_feature_hist_body.tex,
-a second figure* in main.tex, appended below fig:cc18-tree1-pareto). Caption/label stay in main.tex."""
-import argparse, collections, csv, io, math, random, re, tarfile
+a figure* in main.tex). Caption/label stay in main.tex."""
+import argparse, collections, csv, io, math, random, re, sys, tarfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "distributed_spo_gbt" / "params"))
+import params as kdd28  # noqa: E402  (kdd28_params.json)
 
 here = Path(__file__).resolve().parents[2] / "results" / "misc" / "cc18_gbt_feature_study"
 ap = argparse.ArgumentParser()
@@ -25,13 +28,17 @@ ap.add_argument("--datasets", default="", help="comma list of short names; overr
 ap.add_argument("--no_counts", action="store_true", help="panel title = dataset name only, no (used/F)")
 ap.add_argument("--hsep", default="1.0cm", help="horizontal sep between panels")
 ap.add_argument("--bar_max_f", type=int, default=60, help="ybar up to this many features, ycomb above")
+kdd28.add_profile_arg(ap, __file__)
 args = ap.parse_args()
 trees = [int(t) for t in args.trees.split(",")]
 
 F = {r["dataset"]: int(float(r["F"])) for r in csv.DictReader(open(args.per_dataset))}
 counts = {t: collections.defaultdict(collections.Counter) for t in trees}
+stamps = []  # run_cc18_gbt.py's per-model stamp.csv, when the tarball has them
 with tarfile.open(args.tar) as tf:
     for m in tf.getmembers():
+        if re.search(r"runs/.+__fold\d+/stamp\.csv$", m.name):
+            stamps += list(csv.DictReader(io.TextIOWrapper(tf.extractfile(m), encoding="utf-8")))
         mm = re.search(r"runs/(.+)__fold\d+/nodes\.csv$", m.name)
         if not mm:
             continue
@@ -41,6 +48,7 @@ with tarfile.open(args.tar) as tf:
             if t in counts:
                 counts[t][ds][int(r["attribute"])] += 1
 
+kdd28.check_rows(stamps, args.profile, [""], Path(args.tar).name + " stamp.csv", columns=list(stamps[0]) if stamps else [])
 # header order = dataspec column order; the label is the last column in every CC18 CSV (asserted below)
 headers = {ds: open(Path(args.data) / ds / "repeat0_fold0_sample0_train.csv").readline().rstrip("\n").split(",")
            for ds in F}
@@ -109,7 +117,7 @@ for out in map(Path, args.out):
                          f"\\nextgroupplot[title={{{title}}}, xmin=0.5, xmax={f + 0.5}, xtick={xtick}, ymax={1.08 * ymax[ds]:.3f}]",
                          f"\\addplot[{style}] table[x=x, y=share_pct] {{figures/evaluation/cc18_tree_feature_hist/{kind}{i}_t{t}.dat}};"]
         body += [r"\end{groupplot}", r"\end{tikzpicture}"]
-    (out / "figures" / "evaluation" / args.body).write_text("\n".join(body) + "\n")
+    (out / "figures" / "evaluation" / args.body).write_text(kdd28.add_setup("\n".join(body) + "\n", kdd28.setup_line(args.profile)))
     print(out / "figures" / "evaluation" / args.body)
 for t, kind, i, ds, title in panels:
     print(f"tree {t} {kind}{i}: {title}  Hn(tree1)={hn_of[ds]:.3f}")

@@ -3,6 +3,7 @@
 # W<=4 only: 96-vCPU N2 quota (W=4 cell = 80 vCPUs). Builds the train image first if the tag is missing.
 set -euo pipefail
 cd "$(dirname "$0")"
+eval "$(python3 params/params.py export vertex_grid_pf Q_)"  # trees; P_TOTAL = F (dataset column count below)
 export PATH=$HOME/google-cloud-sdk/bin:$PATH
 RUN_ID=${RUN_ID:-pfgrid20261025}
 IMAGE=us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo/train-ydf:47fe64fa-bdad5080
@@ -13,6 +14,6 @@ if ! gcloud artifacts docker tags list "${IMAGE%:*}" --format="value(tag)" 2>/de
 fi
 for d in "susy 18" "higgs 28" "epsilon 2000" "youtube8m 1152"; do set -- $d
   "$HOME/vertex_venv/bin/python" -u run_vertex_barriers.py --dataset "$1" --workers "${WORKERS:-1,2,4}" --arms aa,spo \
-    --trees 10 --p_total "$2" --image "$IMAGE" --run_id "$RUN_ID"
+    --trees $Q_TREES --p_total "$2" --image "$IMAGE" --run_id "$RUN_ID"
 done
 echo "$(date -u +%FT%TZ) grid finished"

@@ -292,6 +292,14 @@ message DecisionTreeTrainingConfig {
     // histogramming to exact (sorting-based) splitting, which is faster for
     // small data. Set to -1 to disable the dynamic switch.
     optional int32 dynamic_split_threshold = 12 [default = 250];
+
+    // If true, numerical features are also tested with the classical
+    // axis-aligned splitter. Enabling this option increases the training time,
+    // and can improve quality.
+    //
+    // This option is not supported by Isolation Forests.
+    // Field 12 is upstream's number; the fork already uses 12 (dynamic_split_threshold).
+    optional bool include_axis_aligned_splits = 13 [default = false];
   }
 
   message MHLDObliqueSplit {

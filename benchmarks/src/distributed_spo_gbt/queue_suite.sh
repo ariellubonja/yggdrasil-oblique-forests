@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # Runs after the 50-tree grid and its single-machine references (queue_single50.sh):
 # rebuild the driver (new --sparse_oblique_max_num_projections flag), W=16 smoke on a
 # 4-feature dataset, then the Table-9 suite. Holds the training lock throughout.

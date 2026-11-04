@@ -107,6 +107,14 @@ absl::Status DistributedGradientBoostedTreesLearner::SetHyperParametersImpl(
   gradient_boosted_trees::GradientBoostedTreesLearner gbt_learner(
       training_config_);
   RETURN_IF_ERROR(gbt_learner.SetHyperParametersImpl(generic_hyper_params));
+  const auto& gbt_ext =
+      gradient_boosted_trees::proto::gradient_boosted_trees_config;
+  model::proto::TrainingConfig updated = gbt_learner.training_config();
+  updated.ClearExtension(gbt_ext);
+  if (training_config_.HasExtension(gbt_ext)) {
+    *updated.MutableExtension(gbt_ext) = training_config_.GetExtension(gbt_ext);
+  }
+  training_config_ = std::move(updated);
   auto* dgbt_config = training_config_.MutableExtension(
       distributed_gradient_boosted_trees::proto::
           distributed_gradient_boosted_trees_config);
@@ -348,6 +356,30 @@ absl::Status SetDefaultHyperParameters(
       LOG(INFO) << "Sparse oblique splits: dynamic load balancing disabled";
       balancer->set_dynamic_balancing_frequency_iteration(-1);
       balancer->set_dynamic_balancing_frequency_seconds(-1);
+    }
+    // Projections need raw values; the cache counts distinct-1, so 0 bins
+    // constant columns only.
+    auto* cache = spe_config->mutable_create_cache();
+    if (cache->force_numerical_discretization()) {
+      return absl::InvalidArgumentError(
+          "Sparse oblique splits do not support "
+          "force_numerical_discretization=true");
+    }
+    if (cache->max_unique_values_for_discretized_numerical() != 0) {
+      LOG(INFO) << "Sparse oblique splits: numerical discretization disabled";
+      cache->set_max_unique_values_for_discretized_numerical(0);
+    }
+    // The split budget (default) divides one count across workers; a local
+    // count (r < 1) would be divided again, giving ~P/W projections in total.
+    const auto& in_worker = spe_config->in_worker_oblique();
+    if (in_worker.split_projections_across_workers() &&
+        in_worker.num_projections_from_local_features() &&
+        in_worker.column_replication() < 1.f) {
+      return absl::InvalidArgumentError(
+          "split_projections_across_workers=true (default) needs "
+          "num_projections_from_local_features=false (or column_replication=1); "
+          "set split_projections_across_workers=false for the legacy "
+          "per-worker local count");
     }
   }
 

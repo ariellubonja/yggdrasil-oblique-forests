@@ -7,7 +7,7 @@ already exists in --out is skipped, so resubmitting the job resumes it.
 
 Speed knobs (all off = the 2026-10-28 behaviour; see ariel_notes/results/2026-10-29_vertex_speed):
   --cache_root     share one dataset cache per dataset across jobs/seeds (lock + done marker)
-  --no_checkpoints skip the iteration-0 and final checkpoints (create_checkpoints=false)
+  checkpoints are always off (create_checkpoints=false, CLAUDE.md 2026-10-29); --checkpoints re-enables (A/B)
   --reuse_reader   workers keep the loaded columns between trainings
   --barrier_csv    record the manager's per-round barrier CSV next to eval.json
 """
@@ -39,25 +39,59 @@ parser.add_argument("--local_projection_count", action="store_true",
                     help="num_projections_from_local_features=true: P per worker from its own "
                          "column count (total P = F with exponent 1)")
 parser.add_argument("--datasets", default="", help="comma filter; empty = all under --data")
-parser.add_argument("--num_trees", type=int, default=10)
+parser.add_argument("--num_trees", type=int, default=300, help="default = YDF GBT default (profile kdd28_ydf); table2 passes 10")
 parser.add_argument("--max_depth", type=int, default=6)
 parser.add_argument("--label", default="label")
 parser.add_argument("--meta", default="{}")
 parser.add_argument("--cache_root", default="",
                     help="gs:// dir of shared dataset caches; empty = per-run cache under /work/")
-parser.add_argument("--no_checkpoints", action="store_true")
+parser.add_argument("--checkpoints", action="store_true", help="keep YDF checkpoints (A/B only)")
+parser.add_argument("--no_checkpoints", action="store_true", help="no-op: checkpoints are off by default")
 parser.add_argument("--reuse_reader", action="store_true")
 parser.add_argument("--barrier_csv", action="store_true")
+# Default (2026-11-02): P is the cluster total per node, = single-machine SPO at r = 1.
+parser.add_argument("--split_budget", dest="split_budget", action="store_true", default=True,
+                    help="in_worker_oblique.split_projections_across_workers=true (default; kept for old command lines)")
+parser.add_argument("--no_split_budget", dest="split_budget", action="store_false",
+                    help="legacy per-worker P (W*P per node): reruns of the recorded Table 2 cells")
+# SPO budget (2026-11-03): unset = YDF proto defaults (exponent 2, max 6000, density 2), = profile kdd28_ydf.
+# The recorded P = F cells (profile table2) pass 1 / 2147483647 / 1.5 (run_vertex_colrep.py does).
+parser.add_argument("--sparse_oblique_num_projections_exponent", type=float, default=None)
+parser.add_argument("--sparse_oblique_max_num_projections", type=int, default=None)
+parser.add_argument("--sparse_oblique_projection_density_factor", type=float, default=None)
 parser.add_argument("--variants", default="",
                     help="comma list of knob sets run per (dataset, level) for in-job A/B: "
                          "base | nockpt | reuse | all; cells land in r<RR>_<variant>/")
 parser.add_argument("--repeat", type=int, default=1,
                     help="run every cell this many times (timing); repeats land in r<RR>_rep<k>/")
 parser.add_argument("--force", action="store_true", help="rerun cells whose eval.json exists")
+parser.add_argument("--profile", default="", help="kdd28_params.json profile the cells must match (a PROFILES key); "
+                    "empty = --meta's \"profile\", else inferred from the SPO budget and --split_budget")
 args = parser.parse_args()
 args.data, args.out = args.data.rstrip("/"), args.out.rstrip("/")
 
 CACHE_KEY_VERSION = "v1"  # bump when the cache format or its config changes
+# SPO flags given on the command line, else omitted (proto default). check_argv_equivalence.sh asserts the
+# defaults equal profile kdd28_ydf.dist_spo (the image has no params/).
+SPO_BUDGET = ("sparse_oblique_num_projections_exponent", "sparse_oblique_max_num_projections",
+              "sparse_oblique_projection_density_factor")
+YDF_SPO = dict(zip(SPO_BUDGET, (2.0, 6000, 2.0)))  # ydf:learner/decision_tree/decision_tree.proto:187/201/222
+SPO_KWARGS = dict(sparse_oblique_weights="BINARY", max_unique_values_for_discretized_numerical=1,
+                  **{k: getattr(args, k) for k in SPO_BUDGET if getattr(args, k) is not None})
+SPO_EFFECTIVE = {k: SPO_KWARGS.get(k, YDF_SPO[k]) for k in SPO_BUDGET}
+LOCAL_PROJECTION_COUNT = args.local_projection_count  # num_projections_from_local_features of every cell
+# Copy of the profiles (no params/ in the image): checked before training, asserted equal by the argv check.
+PROFILES = {
+    "kdd28_ydf.dist_spo": dict(trees=300, max_depth=6, spo_exponent=2, spo_max_projections=6000, spo_density=2,
+                               split_budget=True, local_projection_count=False, max_unique_discretized=1,
+                               seeds=[1, 2, 3, 4, 5]),
+    "table2.dist_split": dict(trees=10, max_depth=6, spo_exponent=1, spo_max_projections=2147483647, spo_density=1.5,
+                              split_budget=True, local_projection_count=False, max_unique_discretized=1,
+                              seeds=[1, 2, 3, 4, 5]),
+    "table2.dist_per_worker": dict(trees=10, max_depth=6, spo_exponent=1, spo_max_projections=2147483647,
+                                   spo_density=1.5, split_budget=False, local_projection_count=False,
+                                   max_unique_discretized=1, seeds=[1, 2, 3, 4, 5]),
+}
 LOCK_STALE_S = 45 * 60
 
 # C++ log lines that bound the phases (manager clock, first match wins).
@@ -222,14 +256,14 @@ class CacheLock:
       self.held = False
 
 
-VARIANTS = {"base": set(), "nockpt": {"no_checkpoints"}, "reuse": {"reuse_reader"},
-            "all": {"no_checkpoints", "reuse_reader"}}
+VARIANTS = {"base": {"checkpoints"}, "nockpt": set(), "reuse": {"checkpoints", "reuse_reader"},
+            "all": {"reuse_reader"}}
 
 
 def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
   feats, spec, loc = dataset_ctx(fs, dataset)
   knobs = VARIANTS[variant] if variant else set()
-  no_checkpoints = args.no_checkpoints or "no_checkpoints" in knobs
+  no_checkpoints = not (args.checkpoints or "checkpoints" in knobs)
   reuse_reader = args.reuse_reader or "reuse_reader" in knobs
 
   tc = abstract_learner_pb2.TrainingConfig()
@@ -241,7 +275,8 @@ def run_cell(fs, cluster, dataset, level, out_cell, variant=""):
     ext.in_worker_oblique.ship_foreign_columns = True
   else:
     ext.in_worker_oblique.column_replication = level
-  ext.in_worker_oblique.num_projections_from_local_features = args.local_projection_count
+  ext.in_worker_oblique.num_projections_from_local_features = LOCAL_PROJECTION_COUNT
+  ext.in_worker_oblique.split_projections_across_workers = args.split_budget
   if no_checkpoints:
     ext.create_checkpoints = False
   if reuse_reader:
@@ -290,11 +325,7 @@ def _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc
       features=feats,
       data_spec=spec,
       split_axis="SPARSE_OBLIQUE",
-      sparse_oblique_weights="BINARY",
-      sparse_oblique_num_projections_exponent=1.0,
-      sparse_oblique_projection_density_factor=1.5,
-      sparse_oblique_max_num_projections=2147483647,
-      max_unique_values_for_discretized_numerical=1,
+      **SPO_KWARGS,
       num_trees=args.num_trees,
       max_depth=args.max_depth,
       random_seed=args.seed,
@@ -333,6 +364,7 @@ def _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc
                 "cache_lock_wait_s": lock_wait_s},
       **phase_summary(tee),
       **json.loads(args.meta),
+      "stamp": stamp(learner, ext, tc.random_seed),
   }
   fs.pipe(f"{out_cell}/eval.json"[5:], json.dumps(summary, indent=2).encode())
   fs.pipe(f"{out_cell}/manager.log"[5:], tee.text().encode())
@@ -341,6 +373,65 @@ def _train_cell(fs, cluster, dataset, level, out_cell, variant, feats, spec, loc
   print(f"CELL_DONE {dataset} {level_tag(level)} {variant} acc={ev.accuracy:.4f} {train_s}s "
         f"cache={summary['cache_build_s']} ready={summary['workers_ready_s']} "
         f"ckpt={summary['checkpoints_s']} trees={summary.get('tree_training_s')}", flush=True)
+
+
+def stamp(learner, ext, seed):
+  """Effective parameters for the CSV stamp columns: learner hyperparameters, then the extra config."""
+  try:
+    hp = dict(learner.hyperparameters)
+  except Exception:  # noqa: BLE001  older ydf: fall back to the kwargs passed here
+    hp = {}
+  kw = {**SPO_KWARGS, **SPO_EFFECTIVE, "num_trees": args.num_trees, "max_depth": args.max_depth}
+  # ydf keeps an omitted kwarg as a key with value None: fall through to the kwargs, then the proto defaults.
+  g = lambda k: _s(next((v for v in (hp.get(k), kw.get(k), YDF_SPO.get(k)) if v is not None), None))  # noqa: E731
+  return {"trees": g("num_trees"), "max_depth": g("max_depth"), "min_examples": g("min_examples"),
+          "split_type": "EXACT",  # DGBT has only the exact splitter (max_unique 1: no binned column)
+          "spo_exponent": g("sparse_oblique_num_projections_exponent"),
+          "spo_max_projections": g("sparse_oblique_max_num_projections"),
+          "spo_density": g("sparse_oblique_projection_density_factor"),
+          "split_budget": _s(ext.in_worker_oblique.split_projections_across_workers),
+          "local_projection_count": _s(ext.in_worker_oblique.num_projections_from_local_features), "seed": _s(seed),
+          "profile": PROFILE_STAMP}
+
+
+PROFILE_STAMP = ""
+
+
+def check_profile():
+  """Learner kwargs about to be used vs the profile. Raises SystemExit(2) on drift; ALLOW_DRIFT=1 warns + !drift."""
+  global PROFILE_STAMP
+  name = (args.profile or json.loads(args.meta).get("profile") or
+          ("kdd28_ydf.dist_spo" if SPO_EFFECTIVE == YDF_SPO
+           else "table2.dist_split" if args.split_budget else "table2.dist_per_worker"))
+  if name not in PROFILES:
+    print(f"STOP unknown profile {name!r} (known: {', '.join(PROFILES)})", flush=True)
+    sys.exit(2)
+  got = {"trees": args.num_trees, "max_depth": args.max_depth,
+         "spo_exponent": SPO_EFFECTIVE["sparse_oblique_num_projections_exponent"],
+         "spo_max_projections": SPO_EFFECTIVE["sparse_oblique_max_num_projections"],
+         "spo_density": SPO_EFFECTIVE["sparse_oblique_projection_density_factor"], "split_budget": args.split_budget,
+         "local_projection_count": LOCAL_PROJECTION_COUNT,
+         "max_unique_discretized": SPO_KWARGS["max_unique_values_for_discretized_numerical"], "seeds": args.seed}
+  bad = [f"{k}={got[k]} (profile {name}: {v})" for k, v in PROFILES[name].items()
+         if not (got[k] in v if isinstance(v, list) else got[k] == v)]
+  if SPO_KWARGS["sparse_oblique_weights"] != "BINARY":
+    bad.append(f"sparse_oblique_weights={SPO_KWARGS['sparse_oblique_weights']} (CLAUDE.md: BINARY)")
+  PROFILE_STAMP = name
+  if not bad:
+    print(f"OK kwargs match profile {name}", flush=True)
+    return
+  for b in bad:
+    print(f"DRIFT kwargs: {b}", flush=True)
+  if os.environ.get("ALLOW_DRIFT") == "1":
+    print(f"WARN drift from profile {name}, continuing (ALLOW_DRIFT=1), cells stamped {name}!drift", flush=True)
+    PROFILE_STAMP = name + "!drift"
+    return
+  print(f"STOP drift from profile {name} (ALLOW_DRIFT=1 to continue)", flush=True)
+  sys.exit(2)
+
+
+def _s(v):
+  return "" if v is None else ("true" if v is True else "false" if v is False else str(v))
 
 
 def main():
@@ -356,6 +447,7 @@ def main():
       time.sleep(2)
 
   ydf.verbose(2)
+  check_profile()  # before any training; SystemExit is not caught by the per-cell retry below
   fs = gcsfs.GCSFileSystem()
   only = [d for d in args.datasets.split(",") if d]
   datasets = sorted(p.rstrip("/").rsplit("/", 1)[-1] for p in fs.ls(args.data[5:])
