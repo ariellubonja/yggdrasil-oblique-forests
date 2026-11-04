@@ -29,6 +29,7 @@ _CHECKED = []
 EXTRA_SPECS = {"aaspo": ("single:AA+SPO", "distacc_single_aa_spo", "AA+SPO-GBT"),
                "exact300": ("single:SPO-harness-exact300", "distacc_single_spo_harness_exact300", "SPO-GBT harness")}
 EXTRA = []
+EXTRA_FIRST = False  # --extra_first: extra single-machine columns right after Dataset (default: after AA-GBT)
 ONE_BOLD = False  # --one_bold (implied by --purple): one bold per row = highest unrounded mean over all columns
 PURPLE_ON = False  # --purple: dist SPO cell == dist AA cell at the same W on every fold -> both purple, dataset gets *
 PURPLE = r"\cellcolor[RGB]{215,195,240}"
@@ -80,15 +81,16 @@ def accuracy_stats(metric="test_auc"):
     d = d.drop_duplicates(["dataset", "fold", "workers", "split_axis"], keep="last")
     nfolds = p[p.method == "aa_gbt_exact"].groupby("dataset").fold.nunique()
     workers = sorted(d.workers.unique())
-    arms = []  # (family, label, per-dataset fold values)
+    axis_arms, extra_arms = [], []  # (family, label, per-dataset fold values)
     for fam, axis, _ in AXES:
         parm = "spo_gbt_exact_hwy_fullproj" if axis == "SPARSE_OBLIQUE" else "aa_gbt_exact"
-        arms.append((fam, f"{fam} single machine", p[p.method == parm].groupby("dataset")[metric]))
+        axis_arms.append((fam, f"{fam} single machine", p[p.method == parm].groupby("dataset")[metric]))
         for w in workers:
-            arms.append((fam, f"{fam} dist.\\ $W{{=}}{w}$", d[(d.split_axis == axis) & (d.workers == w)].groupby("dataset")[metric]))
-    for path, row_arm, _, fam in EXTRA:  # after the AA block; bold = best of all single-machine columns
+            axis_arms.append((fam, f"{fam} dist.\\ $W{{=}}{w}$", d[(d.split_axis == axis) & (d.workers == w)].groupby("dataset")[metric]))
+    for path, row_arm, _, fam in EXTRA:  # bold = best of all single-machine columns
         y = pd.read_csv(path); y = y[(y.rc == 0) & (y.arm == row_arm)]
-        arms.append((fam, f"{fam} single machine", y.groupby("dataset")[metric]))
+        extra_arms.append((fam, f"{fam} single machine", y.groupby("dataset")[metric]))
+    arms = extra_arms + axis_arms if EXTRA_FIRST else axis_arms + extra_arms
     stats = [(fam, lab, g.agg(["mean", "std", "count"])) for fam, lab, g in arms]
     # Only datasets whose every distributed cell has all folds (suite still running).
     done = [ds for ds in sorted(d.dataset.unique())
@@ -99,7 +101,8 @@ def accuracy_stats(metric="test_auc"):
 
 def accuracy_table(metric="test_auc"):
     stats, done, nfolds = accuracy_stats(metric)
-    fams = [f for f, _, _ in AXES] + [e[3] for e in EXTRA]
+    axis_fams, extra_fams = [f for f, _, _ in AXES], [e[3] for e in EXTRA]
+    fams = extra_fams + axis_fams if EXTRA_FIRST else axis_fams + extra_fams
     singles = [lab for _, lab, _ in stats if "single" in lab]
     lines = [HDR, r"\resizebox{\linewidth}{!}{%",  # 13 columns at W up to 32
              r"\begin{tabular}{l" + "|".join("r" * sum(f == fam for f, _, _ in stats) for fam in fams) + "}",
@@ -112,7 +115,7 @@ def accuracy_table(metric="test_auc"):
         for fam in fams:
             blk = [(lab, s.loc[ds]) for f, lab, s in stats if f == fam]
             best = max(r["mean"] for _, r in blk)
-            if fam in fams[len(AXES):]:
+            if fam in extra_fams:
                 best = max(s.loc[ds, "mean"] for _, lab, s in stats if lab in singles)
             for i, (lab, r) in enumerate(blk):
                 means[lab].append(r["mean"])
@@ -125,7 +128,7 @@ def accuracy_table(metric="test_auc"):
                     c = mu + sd
                 # distributed cells colored by AUC delta (x1e3) vs the family's single machine, as the old heatmap
                 w = int(lab.split("W{=}")[1].rstrip("$")) if "W{=}" in lab else None
-                if w is not None and fam in fams[:len(AXES)] and (ds, w) in purple:
+                if w is not None and fam in axis_fams and (ds, w) in purple:
                     cells.append(PURPLE + c)
                 else:
                     cells.append(_delta_color((r["mean"] - blk[0][1]["mean"]) * 1e3) + c if i else c)
@@ -135,7 +138,7 @@ def accuracy_table(metric="test_auc"):
     raw = {lab: sum(means[lab]) / len(means[lab]) for _, lab, _ in stats}
     avg = {lab: round(raw[lab], 4) for _, lab, _ in stats}
     top = {fam: max(avg[lab] for f, lab, _ in stats if f == fam) for fam in fams}
-    for fam in fams[len(AXES):]:
+    for fam in extra_fams:
         top[fam] = max(avg[lab] for lab in singles)
     ref = {f: avg[lab] for f, lab, _ in reversed(stats)}  # first arm per family = single machine
     mcells = [("" if "single" in lab else _delta_color((avg[lab] - ref[f]) * 1e3))
@@ -208,6 +211,7 @@ if __name__ == "__main__":
     ap.add_argument("--no_figure", action="store_true", help="write the table body only")
     ap.add_argument("--purple", action="store_true", help="purple dist SPO/AA cells equal on every fold, * on the dataset")
     ap.add_argument("--one_bold", action="store_true", help="bold only the best column per row (implied by --purple)")
+    ap.add_argument("--extra_first", action="store_true", help="put the --extra columns right after Dataset (default: after AA-GBT)")
     ap.add_argument("--extra", default="", help="name=results.csv,... extra single-machine columns after AA-GBT, in order; "
                     "names: " + ", ".join(EXTRA_SPECS))
     kdd28.add_profile_arg(ap, __file__)
@@ -218,6 +222,7 @@ if __name__ == "__main__":
         sys.exit("--arms needs 4 comma-separated arm names")
     ARMS_SHOWN = list(ARM_NAME.values())
     PURPLE_ON = args.purple
+    EXTRA_FIRST = args.extra_first
     ONE_BOLD = args.one_bold or args.purple
     EXTRA = [(p, *EXTRA_SPECS[n]) for n, p in (kv.split("=", 1) for kv in args.extra.split(",") if kv)]
     if not args.accuracy_csv:
