@@ -57,6 +57,7 @@
 #include "yggdrasil_decision_forests/metric/metric.h"
 #include "yggdrasil_decision_forests/metric/metric.pb.h"
 #include "yggdrasil_decision_forests/metric/report.h"
+#include "yggdrasil_decision_forests/model/decision_tree/decision_forest_interface.h"
 #include "yggdrasil_decision_forests/model/model_library.h"
 // #include "yggdrasil_decision_forests/utils/status_macros.h"
 #include "yggdrasil_decision_forests/utils/filesystem.h"
@@ -1655,7 +1656,9 @@ int main(int argc, char** argv) {
               << " spo_density=" << spo_val(so.projection_density_factor())
               << " spo_min=" << spo_val(so.min_num_projections())
               << " validation_set_ratio=" << vsr << " early_stopping=" << es
-              << " seed=" << train_config.random_seed();
+              << " seed=" << train_config.random_seed()
+              << " oblique_also_axis_aligned="
+              << (spo ? (so.include_axis_aligned_splits() ? "true" : "false") : "-");
   }
   if (print_params_only) return 0;
 
@@ -1745,6 +1748,10 @@ int main(int argc, char** argv) {
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> dur = end - start;
   LOG(INFO) << "train_oblique_forest wall-time - Training + Post-Processing: " << dur.count() << "s";
+  // Always logged (GBT's "Final model num-trees" needs a validation set).
+  if (const auto* df = dynamic_cast<const model::DecisionForestInterface*>(model_ptr.get())) {
+    LOG(INFO) << "model-num-trees:" << df->num_trees();
+  }
 
   // 4) Save model if requested
   const std::string out_dir = absl::GetFlag(FLAGS_model_out_dir);

@@ -31,35 +31,46 @@ import evalsuite  # noqa: E402
 DB_PATH = os.path.join(HERE, "kdd28_params.json")
 STAMP = ["profile", "trees", "max_depth", "min_examples", "split_type", "spo_exponent", "spo_max_projections",
          "spo_density", "split_budget", "local_projection_count", "seed", "validation_set_ratio", "early_stopping",
-         "num_candidate_attributes"]
+         "num_candidate_attributes", "oblique_also_axis_aligned"]
+# Header of CSVs started before 2026-11-04 (no oblique_also_axis_aligned): only the EC2 driver resumes them
+STAMP_V1 = STAMP[:-1]
 # stamp column -> key of the "effective-params:" line printed by train_oblique_forest / train_distributed_gbt
 LOG_KEY = {"trees": "num_trees", "max_depth": "max_depth", "min_examples": "min_examples", "split_type": "split",
            "spo_exponent": "spo_exponent", "spo_max_projections": "spo_max", "spo_density": "spo_density",
            "split_budget": "split_budget", "local_projection_count": "local_projection_count", "seed": "seed",
            "validation_set_ratio": "validation_set_ratio", "early_stopping": "early_stopping",
-           "num_candidate_attributes": "num_candidate_attributes"}
-# Recorded, checked only when the profile defines them (train_distributed_gbt has no early stopping)
-RECORD_ONLY = {"validation_set_ratio", "early_stopping", "num_candidate_attributes"}
+           "num_candidate_attributes": "num_candidate_attributes", "oblique_also_axis_aligned": "oblique_also_axis_aligned"}
+# Recorded, checked only when the profile defines them (train_distributed_gbt has no early stopping, and
+# prints no oblique_also_axis_aligned: only single-machine profiles define include_axis_aligned)
+RECORD_ONLY = {"validation_set_ratio", "early_stopping", "num_candidate_attributes", "oblique_also_axis_aligned"}
 # Checked against the effective-params line when the profile defines them, never CSV stamp columns
 # (profile field -> log key). column_shipping: cross-network arm, branch cross-worker-col-comms (2026-11-04).
 CHECK_ONLY = {"column_shipping": "column_shipping"}
 # stamp column -> profile field (seed is checked against the profile's seed list)
-FIELD = {c: c for c in STAMP[1:]} | {"seed": "seeds"}
+FIELD = {c: c for c in STAMP[1:]} | {"seed": "seeds", "oblique_also_axis_aligned": "include_axis_aligned"}
 SPLIT_FLAG = {"EXACT": "Exact", "DYNAMIC_RANDOM_HISTOGRAM": "Dynamic Random Histogram", "HISTOGRAM_RANDOM": "Random",
               "HISTOGRAM_EQUAL_WIDTH": "Equal Width", "DYNAMIC_EQUAL_WIDTH_HISTOGRAM": "Dynamic Equal Width Histogram"}
 INT_MAX = 2147483647
 
 
-def stamp_columns(existing=()):
+def stamp_columns(existing=(), stamp=None):
     """Stamp column names to append to a CSV whose header is `existing`: clashes get an eff_ prefix."""
-    return [f"eff_{c}" if c in existing else c for c in STAMP]
+    return [f"eff_{c}" if c in existing else c for c in (stamp or STAMP)]
 
 
-def stamped_header(head):
-    """True when a CSV header ends with the stamp columns, optionally followed by the eval-suite columns."""
+def stamp_width(head):
+    """Number of stamp columns a CSV header ends with (before any eval-suite columns): len(STAMP), len(STAMP_V1), 0."""
     if head[-len(evalsuite.COLUMNS):] == evalsuite.COLUMNS:
         head = head[:-len(evalsuite.COLUMNS)]
-    return head[-len(STAMP):] == stamp_columns(head[:-len(STAMP)])
+    for st in (STAMP, STAMP_V1):
+        if head[-len(st):] == stamp_columns(head[:-len(st)], st):
+            return len(st)
+    return 0
+
+
+def stamped_header(head, allow_v1=False):
+    """True when a CSV header ends with the stamp columns, optionally followed by the eval-suite columns."""
+    return stamp_width(head) in ((len(STAMP), len(STAMP_V1)) if allow_v1 else (len(STAMP),))
 
 
 def load_db():
@@ -558,6 +569,16 @@ def selftest():
     cases.append(("legacy + new eval.json rows", (rc, "1 of 2 rows have no effective_params" in err), (0, True)))
     rc, _ = code(check_evals, [dict(new, workers=4)], "vertex_grid_pf", "e")
     cases.append(("eval.json exponent drift still caught", rc, 2))
+    aaspo = {"oblique_also_axis_aligned": "false", "spo_exponent": "2", "spo_max": "6000", "spo_density": "2"}
+    cases.append(("AA+SPO profile vs SPO log drifts", any("oblique_also_axis_aligned" in m for m in
+                  effective_mismatches("kdd28_ydf.cc18_aa_spo", aaspo)), True))
+    cases.append(("SPO profile vs SPO log no flag drift", any("oblique_also_axis_aligned" in m for m in
+                  effective_mismatches("kdd28_ydf.cc18_spo", aaspo)), False))
+    rc, err = code(check_rows, [{"profile": "kdd28_ydf.cc18_aa_spo", "trees": "300"}], "kdd28_ydf", ["cc18_aa_spo"], "o")
+    cases.append(("old CSV without the column warns, no exit", (rc, "oblique_also_axis_aligned" in err), (0, True)))
+    rc, _ = code(check_rows, [{"profile": "kdd28_ydf.cc18_aa_spo", "oblique_also_axis_aligned": "false"}],
+                 "kdd28_ydf", ["cc18_aa_spo"], "o")
+    cases.append(("CSV AA+SPO row stamped false exits 2", rc, 2))
     cases += _eval_selftest(code)
     bad = [(n, got, want) for n, got, want in cases if got != want]
     for n, got, want in cases:
@@ -601,6 +622,9 @@ def _eval_selftest(code):
              ("eval: header with eval columns is stamped", stamped_header(["a"] + STAMP + evalsuite.COLUMNS), True),
              ("eval: header without eval columns is stamped", stamped_header(["a"] + STAMP), True),
              ("eval: header without stamps refused", stamped_header(["a", "b"] + evalsuite.COLUMNS), False),
+             ("v1 header refused by default", stamped_header(["a"] + STAMP_V1 + evalsuite.COLUMNS), False),
+             ("v1 header accepted with allow_v1", stamped_header(["a"] + STAMP_V1 + evalsuite.COLUMNS, True), True),
+             ("v1 header width", stamp_width(["a"] + STAMP_V1), len(STAMP_V1)),
              ("eval: sha cache = hashlib", evalsuite.ShaCache().get_many([evalsuite.DB_PATH])[evalsuite.DB_PATH],
               evalsuite._sha_file(evalsuite.DB_PATH))]
     saved = dict(_EVAL)
@@ -630,9 +654,13 @@ def main(argv):
         if os.path.exists(argv[2]):
             with open(argv[2]) as f:
                 head = f.readline().strip().split(",")
-            if not stamped_header(head):
+            v1 = "--allow-v1" in argv[3:]
+            if not stamped_header(head, v1):
                 sys.exit(print(f"ERROR {argv[2]}: recorded CSV without the stamp columns ({','.join(STAMP)}); "
                                "write new runs to a new results path", file=sys.stderr) or 2)
+            if stamp_width(head) == len(STAMP_V1):
+                print(f"WARN {argv[2]}: header predates the oblique_also_axis_aligned stamp, new rows omit it",
+                      file=sys.stderr)
     elif cmd == "check-effective":
         kv = [a.split("=", 1) for a in argv[4:]]
         bad = [k for k, _ in kv if k not in ("F", "W") and k not in FIELD]

@@ -82,6 +82,7 @@ cc_binary(
         "//yggdrasil_decision_forests/metric:metric_cc_proto",
         "//yggdrasil_decision_forests/metric:report",
         "//yggdrasil_decision_forests/model:model_library",
+        "//yggdrasil_decision_forests/model/decision_tree:decision_forest_interface",
         "//yggdrasil_decision_forests/model/random_forest",
         "//yggdrasil_decision_forests/utils:distribution",
         "//yggdrasil_decision_forests/utils:logging",
