@@ -17,7 +17,8 @@ Comparison (prints every table below): `python benchmarks/src/distributed_spo_gb
 | `table8/parity/` | 8 (parity) | 10509539, numeric typing, r = 1, split budget | m7i |
 | `table8/sort_speed_ab_m7i.csv` | — | old vs deterministic sort, 3 reps (runtime only) | m7i |
 
-Paper Table 8 cells: `benchmarks/results/runtime/{speedup_map_by_dataset,distributed_spo_gbt}/suite_results.csv`.
+Paper Table 8 cells: single-machine from `benchmarks/results/runtime/speedup_map_by_dataset/suite_results.csv`. The distributed
+`distributed_spo_gbt/suite_results.csv` was removed on 2026-11-04 as pre-fix (git history: 185b8b53).
 All cells rc = 0.
 
 ## Results (mean over datasets)

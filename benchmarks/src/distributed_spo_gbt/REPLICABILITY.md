@@ -15,7 +15,7 @@ not the harness. **Only family A yields numbers the paper may report as "distrib
 |---|---|---|---|
 | A. Vertex AI grids on natural datasets (GRPC, one VM per manager and per worker) | GCP project `ydf-distributed-spo-gbt`, `us-east1` | `run_vertex_barriers.py` + `vertex_build/` | `barriers/vertex/p_F/<RUN_ID>_<dataset>/<arm>_w<W>/` (P = F) |
 | B. Vertex AI weak/strong scaling on trunk data (2026-10-15) | same project, `n2-highmem-2` | the two notebooks + `vertex_build/` | `vertex_scaling/<RUN_ID>_<cols>c/`; removed from `main.tex` on 2026-10-26 |
-| C. Single box, workers as threads in one process | AWS `m7i.metal-24xl` | `examples/train_distributed_gbt` via `run_dgbt*.sh`, `queue*.sh` | `results.csv`, `anchors.csv`, `suite_results.csv`, `in_node_parallelism_2026-10-22/`; smoke tests since 2026-10-25 |
+| C. Single box, workers as threads in one process | AWS `m7i.metal-24xl` | `examples/train_distributed_gbt` via `run_dgbt*.sh`, `queue*.sh` | `results.csv`, `anchors.csv`, `in_node_parallelism_2026-10-22/`; smoke tests since 2026-10-25 |
 | E. Column replication on CC18 (Vertex, n2-highmem-4) | same project | `column_replication/run_vertex_colrep.py` + `vertex_build/train_cells.py` | **branch `column-replication`** (b64346ca), see §E |
 | F. Naive column shipping / cross-network (Vertex, n2-highmem-4) | same project | see the branch | **branch `cross-worker-col-comms`** (f4548d37), see §F |
 | G. Fixed reruns of Tables 2, 3, 8 + distributed-vs-single parity (2026-11-01) | Vertex (2, 3) and the m7i (8) | `fixed_reruns/` | **branch `kdd27-fixed-reruns`**, `benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01/`, see §G |
@@ -128,11 +128,10 @@ have not been replaced by Vertex runs yet. Paths inside the scripts are the box'
 | `run_dgbt.sh DATASET W AXIS TREES [extra flags]` | One cell on a natural dataset: parses "Training (incl. cache creation) took", "Dataset cache created in" and the "Start tree training" -> "took" timestamps, appends a row to `results.csv`, keeps the log under `logs/`. |
 | `run_grid.sh` | Dataset-outer queue of `run_dgbt.sh` cells (`DATASETS`, `CELLS="W:AXIS ..."`, `TREES`), holds the training lock. |
 | `run_single_anchor.sh DATASET [TREES] [Oblique|AxisAligned]` | Same-boot single-machine reference (the paper's `spo_gbt_exact_hwy` / AA arm) -> `anchors.csv`. |
-| `run_dgbt_suite.sh` | Table-9 accuracy suite on the paper's CV folds, 1/4/8/16 workers, P = F total via `--sparse_oblique_num_projections_exponent 1 --sparse_oblique_local_projection_count=true`, cap lifted, density 1.5, binary; `--max_unique_values_for_discretized_numerical=1`. Skips finished cells -> `suite_results.csv` (logs under `logs/suite/`, 107 MB). |
+| `run_dgbt_suite.sh` | Table-9 accuracy suite on the paper's CV folds, 1/4/8/16 workers, P = F total via `--sparse_oblique_num_projections_exponent 1 --sparse_oblique_local_projection_count=true`, cap lifted, density 1.5, binary; `--max_unique_values_for_discretized_numerical=1`. Skips finished cells -> `suite_results.csv` (logs under `logs/suite/`). Its 2026-10-12 output was removed on 2026-11-04 as pre-fix (no discretization fix 7c0eebd3, VQSort tie fix dc1a8494 or fma fix 5e42cd20), recoverable from git history at commit 185b8b53. |
 | `queue2.sh`, `queue3.sh`, `queue_single50.sh`, `queue_suite.sh`, `queue_suite2.sh` | The 2026-10-11/12 run order on the box; each waits on the previous queue's `*.out` marker file (written on the box, not tracked). |
 | `run_barrier_cell.sh AXIS [TREES] [W] [THREADS]` | One in-process cell with the barrier recorder on; needs `TRUNK_DIR` from `gen_trunk.py` (>= 256 columns). Source of the first measurement in `barriers/README.md`. |
 | `summarize.py` | `results.csv` (+ `anchors.csv`) -> markdown table: per-tree time and "x slower" vs the single-machine anchor. |
-| `compare_suite.py` | `suite_results.csv` vs the paper's single-machine GBT arms: test AUC mean +- std over folds, best per row in bold, `--latex`. |
 | `summarize_barriers.py <csv> [tree_training_s]` | Per-stage sums, per-layer FindSplits, identity check, idle share; used for family A cells too. |
 
 What the CSVs hold:
@@ -140,7 +139,8 @@ What the CSVs hold:
   `trees == 300` that ran **continuous** weights by mistake (CLAUDE.md, 2026-10-12). Since 2026-10-26 the
   `extra` column tags every row `in_process_m7i` and those 7 also `continuous_weights`; the generators
   filter `trees == 50`, so they are never used. `anchors.csv`: same-boot single-machine references, 50 trees.
-- `suite_results.csv`: the Table-9 suite (33 datasets x 5 folds x W in {1,4,8,16} x 2 arms, 300 trees).
+- `suite_results.csv`, `logs/suite/`, `suite_table9_compare.md` (the 2026-10-12 Table-9 suite, 33 datasets x 5 folds x
+  W in {1,4,8,16} x 2 arms, 300 trees): removed on 2026-11-04 as pre-fix (no discretization fix 7c0eebd3, VQSort tie fix dc1a8494 or fma fix 5e42cd20), recoverable from git history at commit 185b8b53. `compare_suite.py` and `compare_table8_local.py` went with them.
 - `in_node_parallelism_2026-10-22/`: the single-machine thread sweep and the in-process "distributed"
   old-vs-new worker comparison (moved here from `runtime/GBT/` on 2026-10-26); source of
   `make_in_node_tables.py`.
@@ -165,7 +165,7 @@ and add a `% setup:` line. Regenerated into a scratch dir with the commands abov
 ablation table differ from the paper copies only by that line. `table_setup_cost_body.tex` does not: all 8 lower bounds
 (n2-highmem-4 and n2-highmem-16, all four datasets) differ from the paper copy because newer cells exist (the `pf*fix20261101`
 cells, e.g. SUSY hm4 63--262 vs the paper's 134--262). The upper bounds match. The HEAD generator gives the same numbers.
-| `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body.tex` | `make_paper_tables.py` | `suite_results.csv` vs `speedup_map_by_dataset/suite_results.csv` | C | `table8` |
+| `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body.tex` | `make_paper_tables.py --profile table8 --accuracy_csv benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01/paper_inputs/table8_results.csv` | `fixed_reruns_2026-11-01/paper_inputs/table8_results.csv` | C | `table8` |
 | `figures/evaluation/cc18_tree_feature_hist_body.tex` + `cc18_tree_feature_hist/*.dat` | `../cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out paper/distributed_spo_gbt_kdd28 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6` (byte-identical, 2026-10-28) | `results/misc/cc18_gbt_feature_study/nodes_all.tar.gz` + CC18 headers from `benchmarks/data/download_cc18_datasets.py` | CC18 study | `cc18_feature_study` |
 | `tables/table_cc18_aa_spo_body.tex` | `../cc18_aa_spo_gbt/make_cc18_aa_spo_table.py <results.csv> <out> --time` | `ariel_notes/results/2026-11-03_cc18_harness_exact300/results.csv` | CC18 study | `cc18_aa_spo` |
 | `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `in_node_parallelism_2026-10-22/` | C | `in_node_threads` |

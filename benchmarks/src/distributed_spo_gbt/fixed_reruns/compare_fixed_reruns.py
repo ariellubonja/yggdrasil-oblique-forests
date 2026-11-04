@@ -3,7 +3,8 @@
 
   python compare_fixed_reruns.py [--results <dir>] [--out <dir>]
 <dir> defaults to benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01 (layout: its README.md).
-Paper Table 8 cells come from benchmarks/results/runtime/{speedup_map_by_dataset,distributed_spo_gbt}/suite_results.csv.
+Single-machine Table 8 cells come from benchmarks/results/runtime/speedup_map_by_dataset/suite_results.csv. The pre-fix
+distributed suite_results.csv was removed on 2026-11-04 (git history: 185b8b53), so the distributed "paper" column is empty.
 A rerun folder that is missing is skipped, so this also checks a partial replication.
 """
 import argparse
@@ -16,9 +17,6 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "../../../.."))
-sys.path.insert(0, os.path.dirname(HERE))
-import compare_table8_local  # noqa: E402
-
 T8_ARMS = ["1:SPO", "4:SPO", "8:SPO", "16:SPO", "32:SPO"]
 
 
@@ -87,8 +85,16 @@ def table3(res, out):
     t.to_csv(f"{out}/table3_paper_vs_fixed.csv")
 
 
+def recorded_single():
+    """Single-machine SPO/AA cells of the SPAA speedup-map suite, arm = single:SPO / single:AA."""
+    single = {"spo_gbt_exact_hwy_fullproj": "single:SPO", "aa_gbt_exact": "single:AA"}
+    p = pd.read_csv(os.path.join(REPO, "benchmarks/results/runtime/speedup_map_by_dataset/suite_results.csv"))
+    p = p[(p.status == "OK") & p.method.isin(single)]
+    return p.assign(arm=p.method.map(single))[["dataset", "fold", "arm", "test_auc", "test_acc"]]
+
+
 def table8(res, out):
-    rec = compare_table8_local.recorded()
+    rec = recorded_single()
     k = ["dataset", "fold", "arm"]
     m = rec.rename(columns={"test_auc": "paper"})[k + ["paper"]]
     names = ["binfix", "binfix_numeric", "fullfix", "fullfix_numeric", "fullfix_rep", "parity"]

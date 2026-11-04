@@ -171,6 +171,9 @@ Claude Code is the hub and this repo is the source of truth.
   `cross-worker-col-comms`).
 - **Paper sources always land in the local repo (2026-10-26):** raw cells, generator and `_body.tex`, even
   when made over ssh; copy them back in the same session. An Overleaf body is not a copy.
+- **No table or section numbers in names (user directive, 2026-11-04):** result dirs, files, profile names and docs
+  refer to floats by their LaTeX label (e.g. `dist-accuracy`), never by number (`table8`), because numbers change
+  with every paper edit.
 
 ## Paper rules
 
