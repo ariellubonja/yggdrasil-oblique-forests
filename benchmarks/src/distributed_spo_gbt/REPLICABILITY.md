@@ -392,9 +392,8 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   (single, W = 4), credit-g (single, W = 4) and heloc (single, W = 4, W = 16), 300 trees. All 7 pairs have byte-identical
   `nodes-*` and identical test metrics. Only `header.pb` (creation metadata) and `data_spec.pb` (label dictionary
   serialized in another order) differ. No worker-reply-order effect was seen in the distributed pairs.
-- Not rerun: the cross-network arm of tab:cross-network. Column shipping lives only on `cross-worker-col-comms` /
-  `fix-disc-colcomms`, which predate the split budget and the effective-params line. Its in-worker arm equals the
-  column-replication r = 0 cells.
+- Not rerun on 2026-11-03: the cross-network arm of tab:cross-network (column shipping then lived only on
+  `cross-worker-col-comms` / `fix-disc-colcomms`). Its in-worker arm equals the column-replication r = 0 cells.
 - AA+SPO and arm (c) columns of tab:dist-accuracy (2026-11-04): profile arms `kdd28_ydf.distacc_single_aa_spo` and
   `kdd28_ydf.distacc_single_spo_harness_exact300` (the flags of `cc18_aa_spo.spo_harness_exact300`, P = min(F, 1000)),
   `run_kdd28_ydf_ec2.py --tables distacc_aaspo,distacc_exact300` (153 dataset-folds each, single machine, 4 threads,
@@ -409,10 +408,10 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   `ariel_notes/results/2026-11-04_colrep_distacc/wait_and_mirror.sh`. r = 0 and `single` reuse the distacc W = 4 SPO and
   single SPO rows. Check: r = 0 rerun on 3 dataset-folds (blood-transfusion f1, diabetes f2, Fitness_Club f0), on m7i and
   again on c8i, gave `nodes-*` and header byte-identical to the distacc W = 4 models and equal AUC.
-- Cross-network arm (added 2026-11-04, not yet run): branch `cross-worker-col-comms` @ d97fe698 (main merged in, split
-  budget applies to ship mode), profile arm `kdd28_ydf.cross_network_ship`, `run_kdd28_ydf_ec2.py --tables cross_network`
+- Cross-network arm (added 2026-11-04, not yet run): `main` since merge 719fb006 of `cross-worker-col-comms` @ d97fe698
+  (split budget applies to ship mode), profile arm `kdd28_ydf.cross_network_ship`, `run_kdd28_ydf_ec2.py --tables cross_network`
   (34 CC18 fold 0 x seeds 1-5, W = 4). Results box `~/results/2026-11-04_cross_network_ydf/`, mirrored by
-  `ariel_notes/results/2026-11-04_cross_network_ydf/mirror.sh`. The arm definition lives on that branch's kdd28_params.json.
+  `ariel_notes/results/2026-11-04_cross_network_ydf/mirror.sh`. The arm definition is in main's kdd28_params.json.
 
 ## K. Eval suites: which data and metric code an accuracy table used (user decision, 2026-11-04)
 
