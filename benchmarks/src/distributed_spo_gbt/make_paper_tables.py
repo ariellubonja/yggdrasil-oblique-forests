@@ -29,6 +29,7 @@ _CHECKED = []
 EXTRA_SPECS = {"aaspo": ("single:AA+SPO", "distacc_single_aa_spo", "AA+SPO-GBT"),
                "exact300": ("single:SPO-harness-exact300", "distacc_single_spo_harness_exact300", "SPO-GBT harness")}
 EXTRA = []
+ONE_BOLD = False  # --one_bold (implied by --purple): one bold per row = highest unrounded mean over all columns
 PURPLE_ON = False  # --purple: dist SPO cell == dist AA cell at the same W on every fold -> both purple, dataset gets *
 PURPLE = r"\cellcolor[RGB]{215,195,240}"
 
@@ -106,6 +107,7 @@ def accuracy_table(metric="test_auc"):
     means = {lab: [] for _, lab, _ in stats}
     purple = accuracy_stats.purple
     for ds in done:
+        gbest = max(s.loc[ds, "mean"] for _, _, s in stats)
         cells = []
         for fam in fams:
             blk = [(lab, s.loc[ds]) for f, lab, s in stats if f == fam]
@@ -114,9 +116,10 @@ def accuracy_table(metric="test_auc"):
                 best = max(s.loc[ds, "mean"] for _, lab, s in stats if lab in singles)
             for i, (lab, r) in enumerate(blk):
                 means[lab].append(r["mean"])
+                is_best = r["mean"] == gbest if ONE_BOLD else abs(r["mean"] - best) < 5e-5
                 mu, has_sd = f"{r['mean']:.4f}"[1:], r["count"] > 1
                 sd = r"$_{\pm" + f"{r['std']:.4f}"[1:] + "}$" if has_sd else r"\phantom{$_{\pm.0000}$}"
-                if abs(r["mean"] - best) < 5e-5:
+                if is_best:
                     c = r"{\boldmath\textbf{" + mu + sd + "}}" if has_sd else r"\textbf{" + mu + "}" + sd
                 else:
                     c = mu + sd
@@ -129,13 +132,14 @@ def accuracy_table(metric="test_auc"):
         mark = "$^{*}$" if any(x == ds for x, _ in purple) else ""
         lines.append(ds.replace("_", r"\_") + mark + " & " + " & ".join(cells) + r" \\")
     # Mean row: bold the best per family, compared at the printed 4 decimals
-    avg = {lab: round(sum(means[lab]) / len(means[lab]), 4) for _, lab, _ in stats}
+    raw = {lab: sum(means[lab]) / len(means[lab]) for _, lab, _ in stats}
+    avg = {lab: round(raw[lab], 4) for _, lab, _ in stats}
     top = {fam: max(avg[lab] for f, lab, _ in stats if f == fam) for fam in fams}
     for fam in fams[len(AXES):]:
         top[fam] = max(avg[lab] for lab in singles)
     ref = {f: avg[lab] for f, lab, _ in reversed(stats)}  # first arm per family = single machine
     mcells = [("" if "single" in lab else _delta_color((avg[lab] - ref[f]) * 1e3))
-              + (r"\textbf{%s}" if avg[lab] == top[f] else "%s") % f"{avg[lab]:.4f}"[1:] + r"\phantom{$_{\pm.0000}$}"
+              + (r"\textbf{%s}" if (raw[lab] == max(raw.values()) if ONE_BOLD else avg[lab] == top[f]) else "%s") % f"{avg[lab]:.4f}"[1:] + r"\phantom{$_{\pm.0000}$}"
               for f, lab, _ in stats]
     lines += [r"\midrule", "Mean & " + " & ".join(mcells) + r" \\",
               r"\bottomrule", r"\end{tabular}}"]
@@ -200,6 +204,7 @@ if __name__ == "__main__":
     ap.add_argument("--suffix", default="", help="output name suffix: table_dist_accuracy<suffix>_body.tex")
     ap.add_argument("--no_figure", action="store_true", help="write the table body only")
     ap.add_argument("--purple", action="store_true", help="purple dist SPO/AA cells equal on every fold, * on the dataset")
+    ap.add_argument("--one_bold", action="store_true", help="bold only the best column per row (implied by --purple)")
     ap.add_argument("--extra", default="", help="name=results.csv,... extra single-machine columns after AA-GBT, in order; "
                     "names: " + ", ".join(EXTRA_SPECS))
     kdd28.add_profile_arg(ap, __file__)
@@ -210,6 +215,7 @@ if __name__ == "__main__":
         sys.exit("--arms needs 4 comma-separated arm names")
     ARMS_SHOWN = list(ARM_NAME.values())
     PURPLE_ON = args.purple
+    ONE_BOLD = args.one_bold or args.purple
     EXTRA = [(p, *EXTRA_SPECS[n]) for n, p in (kv.split("=", 1) for kv in args.extra.split(",") if kv)]
     if not args.accuracy_csv:
         ap.error("--accuracy_csv is required (dist-accuracy appendix: --profile table8 --accuracy_csv "
