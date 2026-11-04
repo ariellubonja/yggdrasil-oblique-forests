@@ -13,9 +13,10 @@ import params as kdd28  # noqa: E402  (params/kdd28_params.json)
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 # argv: [src_dir (results.csv, summary_pooled.csv, single_machine_spo_gbt.csv)] [out_body.tex] [run note]
 _ap = argparse.ArgumentParser()
-_ap.add_argument("src", nargs="?", default=str(ROOT / "benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex"))
+_ap.add_argument("src", nargs="?", default=str(ROOT / "benchmarks/results/kdd28/appendix-earlier-settings/tab-column-replication/table2_single10"))
 _ap.add_argument("out_pos", nargs="?", default=None, metavar="out")
-_ap.add_argument("note", nargs="?", default="Vertex AI run full20261029b")
+_ap.add_argument("note", nargs="?", default="Vertex AI run colrep-fullparity_fullparity20261101 with --split_budget, "
+                 "dgbt-spo-full-fixes 10509539; single row 10 seeds (1-5 run 2c0990f0, 6-10 parity audit S1)")
 _ap.add_argument("--out", default=None, help="output body path (same as the 2nd positional)")
 _ap.add_argument("--single_csv", default=None, help="single-machine rows (default: <src>/single_machine_spo_gbt.csv)")
 _ap.add_argument("--dist_arm", default="dist_split", help="profile arm of the distributed rows (kdd28_ydf: colrep_spo)")

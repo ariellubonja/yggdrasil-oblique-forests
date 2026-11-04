@@ -29,6 +29,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import evalsuite  # noqa: E402
 DB_PATH = os.path.join(HERE, "kdd28_params.json")
+REPO = os.path.abspath(os.path.join(HERE, "../../../.."))
+# Paper-mirroring results tree (benchmarks/results/kdd28/README.md): one dir per float, raw Vertex cells in cells/
+RESULTS = os.path.join(REPO, "benchmarks/results/kdd28")
+
+
+def results_path(*parts):
+    return os.path.join(RESULTS, *parts)
+
+
+def float_inputs(path):
+    """Repo-relative paths listed in a float's inputs.txt (blank lines and # comments skipped), as absolute paths."""
+    with open(path) as f:
+        rel = [ln.split("#", 1)[0].strip() for ln in f]
+    return [os.path.join(REPO, r) for r in rel if r]
 STAMP = ["profile", "trees", "max_depth", "min_examples", "split_type", "spo_exponent", "spo_max_projections",
          "spo_density", "split_budget", "local_projection_count", "seed", "validation_set_ratio", "early_stopping",
          "num_candidate_attributes", "oblique_also_axis_aligned"]
@@ -580,10 +594,51 @@ def selftest():
                  "kdd28_ydf", ["cc18_aa_spo"], "o")
     cases.append(("CSV AA+SPO row stamped false exits 2", rc, 2))
     cases += _eval_selftest(code)
+    cases += _layout_selftest()
     bad = [(n, got, want) for n, got, want in cases if got != want]
     for n, got, want in cases:
         print(f"{'FAIL' if (n, got, want) in bad else 'PASS'} selftest {n}: {got}" + (f" (want {want})" if got != want else ""))
     sys.exit(1 if bad else 0)
+
+
+def _layout_selftest():
+    """check_layout.py on a synthetic tree: a good tree passes, each broken copy gives its error."""
+    import shutil
+    import tempfile
+    import check_layout as cl
+    fields = "".join(f"- **{f}:** x\n" for f in cl.FIELDS if f != "Labels")
+    tex = "\\label{sec:a}\\label{tab:t}\\input{tables/t_body}\\label{sec:b}\\includegraphics{d}\\label{fig:d}\n"
+    t = tempfile.mkdtemp()
+    try:
+        def build():
+            shutil.rmtree(os.path.join(t, "k"), ignore_errors=True)
+            os.makedirs(os.path.join(t, "k/accuracy/tab-t"))
+            os.makedirs(os.path.join(t, "k/outdated/old"))
+            open(os.path.join(t, "main.tex"), "w").write(tex)
+            open(os.path.join(t, "k/accuracy/tab-t/README.md"), "w").write("- **Labels:** `tab:t`\n" + fields)
+            open(os.path.join(t, "k/accuracy/tab-t/inputs.txt"), "w").write("main.tex\n")
+            open(os.path.join(t, "k/outdated/README.md"), "w").write("| `old/` | why |\n")
+
+        def errs(mutate=None):
+            build()
+            if mutate:
+                mutate()
+            return cl.check(os.path.join(t, "main.tex"), os.path.join(t, "k"), None, t)[0]
+
+        def has(mutate, text):
+            return any(text in e for e in errs(mutate))
+        w = lambda rel, txt: open(os.path.join(t, rel), "w").write(txt)  # noqa: E731
+        return [("layout: good tree passes", errs(), []),
+                ("layout: data float without dir", has(lambda: shutil.rmtree(os.path.join(t, "k/accuracy/tab-t")),
+                                                       "data float tab:t: no results dir"), True),
+                ("layout: dir label not in main.tex", has(lambda: w("main.tex", "\\label{fig:d}\n"), "not in"), True),
+                ("layout: README field missing", has(lambda: w("k/accuracy/tab-t/README.md", "- **Labels:** `tab:t`\n"),
+                                                     "field **Status:** missing"), True),
+                ("layout: inputs.txt entry absent", has(lambda: w("k/accuracy/tab-t/inputs.txt", "nope.csv\n"),
+                                                        "nope.csv does not exist"), True),
+                ("layout: outdated entry unnamed", has(lambda: w("k/outdated/README.md", "\n"), "outdated/old/"), True)]
+    finally:
+        shutil.rmtree(t)
 
 
 def _eval_selftest(code):

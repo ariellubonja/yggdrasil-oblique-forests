@@ -4,7 +4,7 @@
 Each cell = 1 manager + W workers of --machine, training image from vertex_build/ (time-barriers
 branch: the manager writes barriers.csv next to eval.json). Cells are scheduled inside the region's
 N2 custom-training vCPU quota, finished cells are downloaded to
-benchmarks/results/runtime/distributed_spo_gbt/barriers/vertex/<RUN_ID>_<dataset>/<arm>_w<W>/ and
+benchmarks/results/kdd28/cells/vertex_p_F/<RUN_ID>_<dataset>/<arm>_w<W>/ and
 summarized with summarize_barriers.py. Re-running with --run_id reuses finished cells.
 
   python run_vertex_barriers.py --dataset epsilon --workers 1,2,4,8 --arms aa,spo [--dry_run]
@@ -44,7 +44,7 @@ DATASETS = {  # label + numeric column count drive the projection exponent
                     test=f"csv:gs://{BUCKET}/big/AIRLINE/test/shard_*.csv", label="class", cols=43, rows=37_892_905),
 }
 QUOTA_IDS = {"n2": "CustomModelTrainingN2CPUsPerProjectPerRegion", "c2": "CustomModelTrainingC2CPUsPerProjectPerRegion"}
-RESULTS = os.path.join(HERE, "../../results/runtime/distributed_spo_gbt/barriers/vertex/p_F")  # every run is P = F (CLAUDE.md 2026-10-25); sqrt(F) grids deleted, see commit 54e79671
+RESULTS = os.path.join(HERE, "../../results/kdd28/cells/vertex_p_F")  # P = F Vertex cell store (benchmarks/results/kdd28/README.md)
 SUBMIT_LOCK = "/tmp/run_vertex_barriers.submit.lock"  # shared by every launcher on this host
 
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

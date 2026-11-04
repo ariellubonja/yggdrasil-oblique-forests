@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Vertex barrier grid -> LaTeX tabular BODY: tree-training seconds per dataset x arm x W, plus test accuracy.
-Selects cells by run-dir prefix, machine type and tree count (default: the P=F, 10-tree n2-highmem-16 grid).
+Selects cells by run-dir prefix, machine type and tree count (defaults: the paper's tab:vertex-hm4-pf-runtime body,
+hm4 grid left + hm16 grid right; --right_run_prefix "" gives one grid).
 --right_run_prefix appends a second grid to the right under bold machine-type headers (one Dataset/Arm column).
 Caption/label live in main.tex. Usage: make_pf_grid_table.py [--run_prefix P] [--machine M] [--trees N] [--w 1,2,4]
   [--oom_logs GLOB] [--right_run_prefix P --right_machine M --right_w 1,2,4 --right_oom_logs GLOB] [--out BODY.tex] [--md]"""
@@ -9,7 +10,7 @@ import argparse, glob, json, os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "params"))
 import params as kdd28  # noqa: E402  (params/kdd28_params.json)
-RESULTS = os.path.join(HERE, "../../results/runtime/distributed_spo_gbt/barriers/vertex/p_F")  # P = F runs (pf* prefixes)
+RESULTS = kdd28.results_path("cells/vertex_p_F")  # P = F Vertex cells (pf* prefixes), stored once for all floats
 DATASETS = [("epsilon", "Epsilon"), ("higgs", "HIGGS"), ("susy", "SUSY"), ("youtube8m", "YouTube-8M")]
 ARMS = [("aa", "AA"), ("spo", "SPO in-node")]
 
@@ -55,12 +56,13 @@ def grid(prefix, machine, trees, w, oom_logs):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--run_prefix", default="pfgrid20261025"); ap.add_argument("--machine", default="n2-highmem-16")
-    ap.add_argument("--trees", type=int, default=10); ap.add_argument("--w", default="1,2,4")
+    ap.add_argument("--run_prefix", default="pfhm4fix20261101"); ap.add_argument("--machine", default="n2-highmem-4")
+    ap.add_argument("--trees", type=int, default=10); ap.add_argument("--w", default="1,2,4,8,16")
     ap.add_argument("--out", default=None); ap.add_argument("--md", action="store_true")
-    ap.add_argument("--oom_logs", default=None, help="launcher log glob; memory-failed cells print OOM")
-    ap.add_argument("--right_run_prefix", default=None, help="second grid, appended to the right")
-    ap.add_argument("--right_machine", default=None); ap.add_argument("--right_w", default=None)
+    ap.add_argument("--oom_logs", default=os.path.join(RESULTS, "pfhm4fix20261101_youtube8m/launcher.log"),
+                    help="launcher log glob; memory-failed cells print OOM")
+    ap.add_argument("--right_run_prefix", default="pfgridfix20261101", help="second grid, appended to the right")
+    ap.add_argument("--right_machine", default="n2-highmem-16"); ap.add_argument("--right_w", default="1,2,4")
     ap.add_argument("--right_oom_logs", default=None)
     kdd28.add_profile_arg(ap, __file__)
     a = ap.parse_args()

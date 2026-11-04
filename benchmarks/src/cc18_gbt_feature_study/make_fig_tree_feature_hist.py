@@ -11,11 +11,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "distributed_spo_gbt" / "params"))
 import params as kdd28  # noqa: E402  (kdd28_params.json)
 
-here = Path(__file__).resolve().parents[2] / "results" / "misc" / "cc18_gbt_feature_study"
+here = Path(__file__).resolve().parents[2] / "results/kdd28/appendix/fig-cc18-tree-feature-hist/cc18_gbt_feature_study"
 ap = argparse.ArgumentParser()
 ap.add_argument("--tar", default=here / "nodes_all.tar.gz")
 ap.add_argument("--per_dataset", default=here / "per_dataset.csv")
-ap.add_argument("--data", default=here.parents[2] / "data" / "cc18_binary_csv", help="CC18 CSV dir (headers)")
+ap.add_argument("--data", default=here.parents[4] / "data" / "cc18_binary_csv", help="CC18 CSV dir (headers)")
 ap.add_argument("--out", required=True, nargs="+", help="paper dir(s): <out>/figures/evaluation/... is written")
 ap.add_argument("--body", default="cc18_tree_feature_hist_body.tex")
 ap.add_argument("--k", type=int, default=3, help="datasets per row (most / least)")

@@ -10,7 +10,7 @@ from matplotlib.animation import FFMpegWriter
 from matplotlib.collections import LineCollection
 import numpy as np
 
-here = Path(__file__).resolve().parents[2] / "results" / "misc" / "cc18_gbt_feature_study"
+here = Path(__file__).resolve().parents[2] / "results/kdd28/appendix/fig-cc18-tree-feature-hist/cc18_gbt_feature_study"
 ap = argparse.ArgumentParser()
 ap.add_argument("--tar", default=here / "nodes_all.tar.gz")
 ap.add_argument("--per_dataset", default=here / "per_dataset.csv")

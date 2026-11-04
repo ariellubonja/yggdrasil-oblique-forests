@@ -13,8 +13,9 @@ import numpy as np
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[4]
-RES = REPO / "benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01"
-ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else RES / "table8/seed_sweep"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from layout import at  # noqa: E402
+ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(at(None, "table8/seed_sweep"))
 SUITE = REPO / "benchmarks/results/runtime/speedup_map_by_dataset/suite_results.csv"
 
 
@@ -28,7 +29,7 @@ def load():
   p = pd.read_csv(SUITE)
   p = p[(p.status == "OK") & (p.method == "spo_gbt_exact_hwy_fullproj")]
   paper = p.assign(arm="single", seed=1)[["dataset", "fold", "arm", "seed", "test_acc", "test_auc", "test_logloss"]]
-  num = pd.read_csv(RES / "table8/fullfix_numeric/results.csv")
+  num = pd.read_csv(at(None, "table8/fullfix_numeric/results.csv"))
   num = num[num.arm == "1:SPO"].assign(arm="w1", seed=123456)[
       ["dataset", "fold", "arm", "seed", "test_acc", "test_auc", "test_logloss"]]
   return pd.concat([paper, num, sw])

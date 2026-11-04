@@ -18,7 +18,7 @@ import params as kdd28  # noqa: E402  (params/kdd28_params.json)
 
 _ap = argparse.ArgumentParser()
 _ap.add_argument("src", nargs="?", default=os.path.join(
-    HERE, "../../results/runtime/distributed_spo_gbt/naive_column_shipping/vertex_hm4_20261029/results.csv"))
+    HERE, "../../results/kdd28/runtime/tab-cross-network/table3_results_5seed.csv"))
 _ap.add_argument("paper_pos", nargs="?", metavar="paper_dir", default=os.path.join(HERE, "../../../paper/distributed_spo_gbt_kdd28"))
 _ap.add_argument("--out", default=None, help="paper dir to write under (same as the 2nd positional)")
 kdd28.add_profile_arg(_ap, __file__)

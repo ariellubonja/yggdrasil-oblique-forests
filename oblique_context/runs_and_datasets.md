@@ -88,7 +88,7 @@ each arm as speedup = exact_hwy / arm.
 `learner/distributed_gradient_boosted_trees/`): stage, layer, barrier length, manager serial time,
 fan-out, worker max/median/min runtime, idle worker-seconds, comm residual, bytes. Off by default.
 Summarize with `benchmarks/src/distributed_spo_gbt/summarize_barriers.py`; taxonomy in
-`benchmarks/results/runtime/distributed_spo_gbt/barriers/README.md`.
+`benchmarks/results/kdd28/analysis/barrier_smoke_inprocess_20261022/README.md`.
 
 ## History behind standing rules
 

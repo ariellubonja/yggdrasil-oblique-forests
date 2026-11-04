@@ -2,7 +2,7 @@
 """Paper vs fixed-rerun accuracy for KDD28 Tables 2, 3 and 8, and distributed-vs-single parity (paired by dataset).
 
   python compare_fixed_reruns.py [--results <dir>] [--out <dir>]
-<dir> defaults to benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01 (layout: its README.md).
+--results defaults to the kdd28 tree (fixed_reruns/layout.py maps the old fixed_reruns_2026-11-01 layout).
 Single-machine Table 8 cells come from benchmarks/results/runtime/speedup_map_by_dataset/suite_results.csv. The pre-fix
 distributed suite_results.csv was removed on 2026-11-04 (git history: 185b8b53), so the distributed "paper" column is empty.
 A rerun folder that is missing is skipped, so this also checks a partial replication.
@@ -14,6 +14,7 @@ import sys
 
 import numpy as np
 import pandas as pd
+from layout import at
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "../../../.."))
@@ -30,11 +31,11 @@ def paired(delta):
 
 
 def table2(res, out):
-    p = os.path.join(res, "paper_refs")
+    p = at(res, "paper_refs")
     rows = pd.read_csv(f"{p}/table2_summary_pooled.csv")[["replication", "acc_mean"]].rename(columns={"acc_mean": "paper"})
     runs = {}
     for name in ["binfix", "fullfix", "fullfix_splitbudget"]:
-        f = f"{res}/table2/{name}/results.csv"
+        f = at(res, f"table2/{name}/results.csv")
         if os.path.exists(f):
             d = pd.read_csv(f)
             d["dataset"] = strip_task(d.dataset)
@@ -72,10 +73,10 @@ def table3(res, out):
         d["dataset"] = strip_task(d.dataset)
         d["arm"] = d.replication.astype(str).map(lambda r: "cross_network" if r == "ship" else "in_worker")
         return d
-    paper = pd.read_csv(f"{res}/paper_refs/table3_results.csv")
+    paper = pd.read_csv(at(res, "paper_refs/table3_results.csv"))
     cols = {"paper": paper.groupby("arm").test_acc.mean(), "time_paper_s": paper.groupby("arm").tree_training_s.mean()}
     for name in ["binfix", "fullfix"]:
-        d = load(f"{res}/table3/{name}/g*/results.csv")
+        d = load(at(res, f"table3/{name}/g*/results.csv"))
         if d is not None:
             cols[name] = d.groupby("arm").test_acc.mean()
             cols[f"time_{name}_s"] = d.groupby("arm").tree_training_s.mean()
@@ -99,7 +100,7 @@ def table8(res, out):
     m = rec.rename(columns={"test_auc": "paper"})[k + ["paper"]]
     names = ["binfix", "binfix_numeric", "fullfix", "fullfix_numeric", "fullfix_rep", "parity"]
     for name in names:
-        f = f"{res}/table8/{name}/results.csv"
+        f = at(res, f"table8/{name}/results.csv")
         if os.path.exists(f):
             d = pd.read_csv(f)
             d = d[d.rc == 0].drop_duplicates(k, keep="last")
@@ -129,11 +130,10 @@ def table8(res, out):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--results", default=os.path.join(
-        REPO, "benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01"))
+    ap.add_argument("--results", default=None, help="an old-layout fixed_reruns dir (default: the kdd28 tree, layout.py)")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
-    out = args.out or os.path.join(args.results, "comparisons")
+    out = args.out or at(args.results, "comparisons")
     os.makedirs(out, exist_ok=True)
     table2(args.results, out)
     table3(args.results, out)

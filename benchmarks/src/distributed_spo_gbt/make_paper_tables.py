@@ -222,7 +222,7 @@ if __name__ == "__main__":
     EXTRA = [(p, *EXTRA_SPECS[n]) for n, p in (kv.split("=", 1) for kv in args.extra.split(",") if kv)]
     if not args.accuracy_csv:
         ap.error("--accuracy_csv is required (dist-accuracy appendix: --profile table8 --accuracy_csv "
-                 "benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01/paper_inputs/table8_results.csv)")
+                 "benchmarks/results/kdd28/appendix-earlier-settings/tab-dist-accuracy/table8_results.csv)")
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
     if args.accuracy_csv:
         ACC_CSV = args.accuracy_csv

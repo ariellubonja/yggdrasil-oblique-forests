@@ -226,5 +226,7 @@ for fn in ("train_cells.py", "train.py"):
         bad = bad or diff
 sys.exit(1 if bad else 0)
 PY
+# Results tree vs the floats of main.tex (benchmarks/results/kdd28/README.md); KDD28_MAIN_TEX picks the main.tex
+python3 "$HERE/check_layout.py" || fail=1
 [ $fail = 0 ] && echo "ALL PASS" || echo "SOME CASES FAILED"
 exit $fail

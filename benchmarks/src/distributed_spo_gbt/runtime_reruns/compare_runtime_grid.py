@@ -11,13 +11,15 @@ import os
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PF = os.path.join(HERE, "../../../results/runtime/distributed_spo_gbt/barriers/vertex/p_F")
+K = os.path.join(HERE, "../../../results/kdd28")
+OLD, NEW = os.path.join(K, "outdated/vertex_p_F_prefix_20261025"), os.path.join(K, "cells/vertex_p_F")
 GRIDS = [("n2-highmem-4", "pfhm4_20261025", "pfhm4fix20261101"), ("n2-highmem-16", "pfgrid20261025", "pfgridfix20261101")]
 
 
 def load(prefix, machine):
     out = {}
-    for p in glob.glob(os.path.join(PF, f"{prefix}_*", "*", "eval.json")):
+    pf = NEW if "fix" in prefix else OLD
+    for p in glob.glob(os.path.join(pf, f"{prefix}_*", "*", "eval.json")):
         e = json.load(open(p))
         if e.get("machine_type") == machine and e.get("trees") == 10 and "tree_training_s" in e:
             out[(e["dataset"], e["arm"], e["workers"])] = e
