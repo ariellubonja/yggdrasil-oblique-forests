@@ -74,7 +74,7 @@ def parse_log(path, dist):
         m = re.findall(r"test-accuracy:(\S+) test-auc:(\S+) test-logloss:(\S+)", txt)
         out["test_acc"], out["test_auc"], out["test_logloss"] = m[-1] if m else ("", "", "")
         out["train_s"] = g(r"Training block took: ([0-9.e+-]+)")
-        out["num_trees"] = g(r"Final model num-trees:(\d+)")
+        out["num_trees"] = g(r"model-num-trees:(\d+)") or g(r"Final model num-trees:(\d+)")  # first: harness >= 2026-11-04
     return out
 
 
@@ -186,7 +186,7 @@ def build_cells(a):
                 tag = f"{d}__f{k}__r{r:.2f}"
                 dist("colrep_distacc", (d, k, float(r)), f"{PR}.colrep_distacc_spo", tr, te, cp["workers"][0], 1, False, r,
                      os.path.join(o, "models", tag), os.path.join(o, "work", tag),
-                     {"workers": cp["workers"][0], "log": f"{d}__{k}__{float(r)}.log"}, cost(tr, False))
+                     {"workers": cp["workers"][0]}, cost(tr, False))
     if "colrep" in tables:
         cp = kdd28.load_profile(f"{PR}.colrep_spo")
         sp = kdd28.load_profile(f"{PR}.colrep_single_spo")
@@ -199,8 +199,7 @@ def build_cells(a):
                     o, tag = os.path.join(a.out, "colrep"), f"{d}__s{s}__r{r:.2f}"
                     dist("colrep", (d, s, float(r)), f"{PR}.colrep_spo", tr, te, cp["workers"][0], s, False, r,
                          os.path.join(o, "models", tag), os.path.join(o, "work", tag),
-                         {"workers": cp["workers"][0], "trees": cp["trees"], "max_depth": cp["max_depth"],
-                          "log": tag + ".log"}, cost(tr, False))
+                         {"workers": cp["workers"][0], "trees": cp["trees"], "max_depth": cp["max_depth"]}, cost(tr, False))
             for s in sp["seeds"]:
                 o = os.path.join(a.out, "colrep_single")
                 single("colrep_single", (d, s), f"{PR}.colrep_single_spo", tr, te, "label", s,
@@ -217,8 +216,7 @@ def build_cells(a):
                 o, tag = os.path.join(a.out, "cross_network"), f"{d}__s{s}__ship"
                 dist("cross_network", (d, s), f"{PR}.cross_network_ship", tr, te, xp["workers"][0], s, False, None,
                      os.path.join(o, "models", tag), os.path.join(o, "work", tag),
-                     {"workers": xp["workers"][0], "trees": xp["trees"], "max_depth": xp["max_depth"],
-                      "log": tag + ".log"}, cost(tr, False), ship=True)
+                     {"workers": xp["workers"][0], "trees": xp["trees"], "max_depth": xp["max_depth"]}, cost(tr, False), ship=True)
     if "cc18" in tables:
         ds = sorted(d for d in os.listdir(a.cc18_10fold) if os.path.isdir(os.path.join(a.cc18_10fold, d)))
         ds.sort(key=lambda d: -cost(os.path.join(a.cc18_10fold, d, "fold0_train.csv"), False))
@@ -268,20 +266,23 @@ def main():
                                  text=True).stdout[:12]
     except OSError:
         pass
-    lock, done, csvs, eval_cols = threading.Lock(), {}, {}, {}
+    lock, done, csvs, eval_cols, stamp_w = threading.Lock(), {}, {}, {}, {}
     for t in {c.table for c in cells}:
         os.makedirs(os.path.join(a.out, t, "logs"), exist_ok=True)
         path = csvs[t] = os.path.join(a.out, t, "results.csv")
-        if subprocess.run([sys.executable, kdd28.__file__, "require-stamped", path]).returncode:
+        if subprocess.run([sys.executable, kdd28.__file__, "require-stamped", path, "--allow-v1"]).returncode:
             sys.exit(2)
         cols = ROWS[t].split(",")
         if os.path.exists(path):
+            with open(path) as f:  # CSVs started before oblique_also_axis_aligned keep their (shorter) stamp
+                stamp_w[t] = kdd28.stamp_width(f.readline().strip().split(","))
             for r in csv.DictReader(open(path)):
                 if r["rc"] == "0":
                     done[(t,) + tuple(r[k] for k in KEYS[t])] = 1
         else:
             with open(path, "w", newline="") as f:
                 csv.writer(f).writerow(cols + kdd28.stamp_columns(cols) + evalsuite.COLUMNS)
+            stamp_w[t] = len(kdd28.STAMP)
         with open(path) as f:  # CSVs started before 2026-11-04 keep their header, rows stay eval-unstamped
             eval_cols[t] = f.readline().strip().split(",")[-len(evalsuite.COLUMNS):] == evalsuite.COLUMNS
         if not eval_cols[t]:
@@ -316,8 +317,8 @@ def main():
             drift = kdd28.check_cell(c.profile, log)  # exit 2 on drift (ALLOW_DRIFT=1 -> "!drift")
             v = dict(zip(KEYS[c.table], c.key)) | c.extra | m | {"rc": rc, "wall_s": wall, "git": a.git,
                                                                   "bin_sha": bin_sha, "threads": c.threads,
-                                                                  "machine": a.machine}
-            row = [v.get(k, "") for k in ROWS[c.table].split(",")] + kdd28.stamp_values(c.profile + drift, log)
+                                                                  "machine": a.machine, "log": c.tag + ".log"}
+            row = [v.get(k, "") for k in ROWS[c.table].split(",")] + kdd28.stamp_values(c.profile + drift, log)[:stamp_w[c.table]]
             if eval_cols[c.table]:
                 row += evalsuite.stamp(ev[(c.table,) + tuple(str(k) for k in c.key)], m)
             with lock:
