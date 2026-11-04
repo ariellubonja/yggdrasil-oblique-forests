@@ -212,6 +212,7 @@ int main(int argc, char** argv) {
           &absl::GetFlagReflectionHandle(FLAGS_sparse_oblique_max_num_projections),
           &absl::GetFlagReflectionHandle(FLAGS_sparse_oblique_local_projection_count),
           &absl::GetFlagReflectionHandle(FLAGS_sparse_oblique_split_budget),
+          &absl::GetFlagReflectionHandle(FLAGS_sparse_oblique_ship_columns),
           &absl::GetFlagReflectionHandle(FLAGS_column_replication)}) {
       if (absl::flags_internal::WasPresentOnCommandLine(f->Name())) {
         unused.push_back(absl::StrCat("--", f->Name()));
@@ -246,7 +247,8 @@ int main(int argc, char** argv) {
               << " split_budget=" << spo_bool(iw.split_projections_across_workers())
               << " local_projection_count="
               << spo_bool(iw.num_projections_from_local_features())
-              << " column_replication=" << spo_val(iw.column_replication());
+              << " column_replication=" << spo_val(iw.column_replication())
+              << " column_shipping=" << spo_bool(iw.ship_foreign_columns());
   }
   if (absl::GetFlag(FLAGS_print_params_only)) return 0;
 

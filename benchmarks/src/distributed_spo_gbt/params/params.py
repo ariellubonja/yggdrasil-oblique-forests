@@ -35,6 +35,9 @@ LOG_KEY = {"trees": "num_trees", "max_depth": "max_depth", "min_examples": "min_
            "num_candidate_attributes": "num_candidate_attributes"}
 # Recorded, checked only when the profile defines them (train_distributed_gbt has no early stopping)
 RECORD_ONLY = {"validation_set_ratio", "early_stopping", "num_candidate_attributes"}
+# Checked against the effective-params line when the profile defines them, never CSV stamp columns
+# (profile field -> log key). column_shipping: cross-network arm, branch cross-worker-col-comms (2026-11-04).
+CHECK_ONLY = {"column_shipping": "column_shipping"}
 # stamp column -> profile field (seed is checked against the profile's seed list)
 FIELD = {c: c for c in STAMP[1:]} | {"seed": "seeds"}
 SPLIT_FLAG = {"EXACT": "Exact", "DYNAMIC_RANDOM_HISTOGRAM": "Dynamic Random Histogram", "HISTOGRAM_RANDOM": "Random",
@@ -312,6 +315,9 @@ def effective_mismatches(profile, eff, ctx=None, expect=None):
         got = _norm(eff.get(LOG_KEY[c]))
         if _match(exp[FIELD[c]], got, ctx or {}) is False:
             out.append(f"{c}={got or '<empty>'} (profile: {_fmt(exp[FIELD[c]]) or 'null'})")
+    for field, key in CHECK_ONLY.items():
+        if field in exp and _match(exp[field], _norm(eff.get(key)), ctx or {}) is False:
+            out.append(f"{field}={_norm(eff.get(key)) or '<empty>'} (profile: {_fmt(exp[field]) or 'null'})")
     return out
 
 

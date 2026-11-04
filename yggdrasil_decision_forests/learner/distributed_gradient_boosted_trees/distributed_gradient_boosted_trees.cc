@@ -546,6 +546,11 @@ TrainWithCache(
         "in_worker_oblique: ship_foreign_columns and column_replication > 0 "
         "are separate baselines and cannot be combined.");
   }
+  if (spe_config.in_worker_oblique().ship_foreign_columns() &&
+      !spe_config.gbt().decision_tree().has_sparse_oblique_split()) {
+    return absl::InvalidArgumentError(
+        "in_worker_oblique.ship_foreign_columns requires sparse oblique splits.");
+  }
   if (spe_config.gbt().decision_tree().has_sparse_oblique_split() &&
       spe_config.in_worker_oblique().column_replication() > 0) {
     RETURN_IF_ERROR(SetColumnReplicas(
