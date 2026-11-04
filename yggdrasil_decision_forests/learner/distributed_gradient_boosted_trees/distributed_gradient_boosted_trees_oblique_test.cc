@@ -89,6 +89,14 @@ class DatasetAdult : public utils::TrainAndTestTester {
     oblique->mutable_continuous();
   }
 
+  // Naive cross-worker projections: columns shipped between workers.
+  void SetShipForeignColumns() {
+    train_config_
+        .MutableExtension(proto::distributed_gradient_boosted_trees_config)
+        ->mutable_in_worker_oblique()
+        ->set_ship_foreign_columns(true);
+  }
+
  private:
   void SetUp() override {
     train_config_ = PARSE_TEST_PROTO(R"pb(
@@ -164,6 +172,55 @@ TEST_F(DatasetAdult, SparseOblique_5workers_FullReplication) {
       .MutableExtension(proto::distributed_gradient_boosted_trees_config)
       ->mutable_in_worker_oblique()
       ->set_column_replication(1.0f);
+  check_model = false;
+  TrainAndEvaluateModel();
+  EXPECT_GT(NumObliqueConditions(*model_), 0);
+  EXPECT_GT(metric::Accuracy(evaluation_), 0.82);
+}
+
+// Legacy per-worker budget. Projections over all 6 features, foreign columns
+// shipped. 3 random combinations per worker score below the disjoint mode's
+// near axis-aligned projections (0.8355 vs >0.84), hence the 0.83 bound.
+TEST_F(DatasetAdult, SparseOblique_5workers_ShipColumns) {
+  SetNumWorkers(5);
+  SetSparseOblique();
+  SetShipForeignColumns();
+  train_config_.MutableExtension(proto::distributed_gradient_boosted_trees_config)
+      ->mutable_in_worker_oblique()
+      ->set_split_projections_across_workers(false);
+  check_model = false;
+  TrainAndEvaluateModel();
+  EXPECT_GT(NumObliqueConditions(*model_), 0);
+  EXPECT_GT(metric::Accuracy(evaluation_), 0.83);
+}
+
+// One worker owns every column: shipping has nothing to fetch and the
+// training must behave like the plain sparse oblique mode.
+TEST_F(DatasetAdult, SparseOblique_1worker_ShipColumns) {
+  SetNumWorkers(1);
+  SetSparseOblique();
+  SetShipForeignColumns();
+  train_config_.MutableExtension(proto::distributed_gradient_boosted_trees_config)
+      ->mutable_in_worker_oblique()
+      ->set_split_projections_across_workers(false);
+  check_model = false;
+  TrainAndEvaluateModel();
+  EXPECT_GT(NumObliqueConditions(*model_), 0);
+  EXPECT_GT(metric::Accuracy(evaluation_), 0.83);
+}
+
+// Shipping with the split budget: each node's P = GetNumProjections(F) is the
+// cluster total, worker w samples ProjectionsForWorker(P, 5, w) of them.
+TEST_F(DatasetAdult, SparseOblique_5workers_ShipColumns_SplitBudget) {
+  SetNumWorkers(5);
+  SetSparseOblique();
+  SetShipForeignColumns();
+  auto* in_worker =
+      train_config_
+          .MutableExtension(proto::distributed_gradient_boosted_trees_config)
+          ->mutable_in_worker_oblique();
+  EXPECT_TRUE(in_worker->split_projections_across_workers());
+  in_worker->set_num_projections_from_local_features(false);
   check_model = false;
   TrainAndEvaluateModel();
   EXPECT_GT(NumObliqueConditions(*model_), 0);

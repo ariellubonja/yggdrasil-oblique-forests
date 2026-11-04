@@ -133,6 +133,14 @@ message WorkerRequest {
     // Worker type: Evaluator
     CreateEvaluationCheckpoint create_evaluation_checkpoint = 17;
 
+    // Request dense copies of numerical columns owned by another worker. This
+    // message is only used in between workers
+    // (in_worker_oblique.ship_foreign_columns). Not in "MaybeSimulateFailure":
+    // a failed shipping round fails the training instead of restarting it.
+    //
+    // Worker type: Trainer
+    GetColumns get_columns = 18;
+
     // Note: The id of new messages should be registered in
     // "MaybeSimulateFailure"for unit testing.
   }
@@ -210,6 +218,11 @@ message WorkerRequest {
         splits = 1;
   }
 
+  message GetColumns {
+    // Numerical features owned by the target worker.
+    repeated int32 features = 1 [packed = true];
+  }
+
   message EndIter {
     optional int32 iter_idx = 1;
 
@@ -268,6 +281,27 @@ message WorkerResult {
     CreateCheckpoint create_checkpoint = 10;
     StartTraining start_training = 11;
     CreateEvaluationCheckpoint create_evaluation_checkpoint = 17;
+    GetColumns get_columns = 18;
+  }
+
+  // Worker-to-worker column shipping done while answering this request
+  // (FindSplits / EvaluateSplits with in_worker_oblique.ship_foreign_columns).
+  optional ColumnShipping column_shipping = 19;
+  message ColumnShipping {
+    // Column bytes received from other workers.
+    optional int64 bytes_in = 1;
+    // Column bytes served to other workers since the last report.
+    optional int64 bytes_out = 2;
+    optional int32 num_columns_in = 3;
+    // GetColumns requests sent / served.
+    optional int32 num_requests_out = 4;
+    optional int32 num_requests_served = 5;
+    // Wall time between sending the first GetColumns request and parsing the
+    // last answer (the worker is blocked for all of it).
+    optional double ship_seconds = 6;
+    // Oblique splits evaluated by this worker that use a column it does not
+    // own (EvaluateSplits only): the cross-worker projections that won.
+    optional int32 num_cross_worker_splits = 7;
   }
 
   // If true, indicates that the worker is missing information to complete the
@@ -317,6 +351,15 @@ message WorkerResult {
     message SplitEvaluationPerWeakModel {
       repeated bytes evaluation_per_open_node = 1;
     }
+  }
+
+  message GetColumns {
+    optional int32 source_worker = 1;
+    // Same order as the request.
+    repeated int32 features = 2 [packed = true];
+    // One entry per feature: num_examples fp32 values in example order, raw
+    // host byte order (all the workers run the same binary).
+    repeated bytes values = 3;
   }
 
   message EndIter {

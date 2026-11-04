@@ -5,7 +5,8 @@
 # 2026-11-04: box moved to c8i.metal-96xl (SMT + turbo on) for distacc_aaspo, distacc_exact300, colrep_distacc.
 """One resumable queue for tab:dist-accuracy (distacc), tab:column-replication (colrep, colrep_single; its r = 0
 cells are the in-worker arm of tab:cross-network), its AA+SPO and arm-(c) columns (distacc_aaspo,
-distacc_exact300), tab:column-replication on the distacc folds (colrep_distacc) and tab:cc18-aa-spo arms (a), (d), (e) (cc18).
+distacc_exact300), tab:column-replication on the distacc folds (colrep_distacc), tab:cc18-aa-spo arms (a), (d), (e) (cc18)
+and the cross-network (column shipping) arm of tab:cross-network (cross_network).
 Cells run concurrently under a CPU-slot budget, datasets outer and arms inner, heaviest datasets first.
 Flags mirror run_table8_local.sh, run_replication_sweep.py, run_single_machine_cc18.sh, run_cc18_aa_spo_gbt.sh."""
 import argparse
@@ -36,10 +37,14 @@ ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps 
     "colrep_distacc": "dataset,fold,replication,workers,threads,rc,test_acc,test_auc,test_logloss,"
                       "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
     "cc18": "dataset,fold,arm,threads,rc,test_acc,test_auc,test_logloss,num_trees,train_s,wall_s,git,bin_sha",
+    "cross_network": "dataset,seed,workers,threads,trees,max_depth,rc,test_acc,test_auc,test_logloss,num_conditions,"
+                     "num_oblique,num_multi_col,held_cols,ship_bytes_in,ship_bytes_out,ship_cols_in,ship_s_max,"
+                     "ship_s_sum,cross_worker_splits,train_s,wall_s,git,log",
 }
 KEYS = {"distacc": ("dataset", "fold", "arm"), "distacc_aaspo": ("dataset", "fold", "arm"),
         "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "replication"), "colrep": ("dataset", "seed", "replication"),
-        "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm")}
+        "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm"),
+        "cross_network": ("dataset", "seed")}
 
 
 def seconds(d):
@@ -60,6 +65,11 @@ def parse_log(path, dist):
         c = re.search(r"Conditions: (\d+) total, (\d+) oblique, (\d+) with >1 column", txt)
         out["num_conditions"], out["num_oblique"], out["num_multi_col"] = c.groups() if c else ("", "", "")
         out["held_cols"] = ";".join(f"{o}+{r}" for o, r in re.findall(r"worker \d+: (\d+) owned \+ (\d+) replicated", txt))
+        ship = re.findall(r"column-shipping:\{bytes-in:(\d+) bytes-out:(\d+) cols-in:(\d+) ship-s-max:(\S+) "
+                          r"ship-s-sum:(\S+) cross-worker-splits:(\d+)\}", txt)
+        if ship:  # cumulative counters: the last line is the run total
+            out |= dict(zip(["ship_bytes_in", "ship_bytes_out", "ship_cols_in", "ship_s_max", "ship_s_sum",
+                             "cross_worker_splits"], ship[-1]))
     else:
         m = re.findall(r"test-accuracy:(\S+) test-auc:(\S+) test-logloss:(\S+)", txt)
         out["test_acc"], out["test_auc"], out["test_logloss"] = m[-1] if m else ("", "", "")
@@ -86,14 +96,15 @@ def build_cells(a):
                 "--early_stopping", "NONE", "--num_threads", str(ts), "--seed", str(seed), "--model_out_dir", model]
         cells.append(Cell(table, key, prof, argv, ts, ts, cost, extra, False))
 
-    def dist(table, key, prof, train, test, w, seed, aa, r, model, work, extra, cost):
+    def dist(table, key, prof, train, test, w, seed, aa, r, model, work, extra, cost, ship=False):
         p = kdd28.load_profile(prof)
         spo = [] if aa else ["--sparse_oblique_num_projections_exponent", kdd28._fmt(p["spo_exponent"]),
                              "--sparse_oblique_max_num_projections", kdd28._fmt(p["spo_max_projections"]),
                              "--sparse_oblique_projection_density_factor", kdd28._fmt(p["spo_density"]),
                              f"--sparse_oblique_local_projection_count={kdd28._fmt(p['local_projection_count'])}",
                              f"--sparse_oblique_split_budget={kdd28._fmt(p['split_budget'])}",
-                             "--sparse_oblique_weights", "BINARY"] + ([] if r is None else ["--column_replication", str(r)])
+                             "--sparse_oblique_weights", "BINARY"] + ([] if r is None else ["--column_replication", str(r)]) \
+            + (["--sparse_oblique_ship_columns"] if ship else [])
         argv = [dist_bin, "--alsologtostderr", "--train_csv", train, "--test_csv", test, "--label", "label",
                 *(["--force_numerical_features"] if p["force_numerical"] else []), "--work_dir", work,
                 "--num_workers", str(w), "--num_threads", str(a.worker_threads), "--num_trees", str(p["trees"]),
@@ -195,6 +206,19 @@ def build_cells(a):
                 single("colrep_single", (d, s), f"{PR}.colrep_single_spo", tr, te, "label", s,
                        ["--feature_split_type=Oblique"], os.path.join(o, "models", f"{d}__s{s}"), a.single_threads,
                        {}, cost(tr, False))
+    if "cross_network" in tables:
+        xp = kdd28.load_profile(f"{PR}.cross_network_ship")
+        assert xp["column_shipping"] is True and xp["column_replication"] == 0
+        ds = sorted(d for d in os.listdir(a.cc18_fold0) if os.path.isdir(os.path.join(a.cc18_fold0, d)))
+        ds.sort(key=lambda d: -cost(os.path.join(a.cc18_fold0, d, "train.csv"), False))
+        for d in ds:
+            tr, te = os.path.join(a.cc18_fold0, d, "train.csv"), os.path.join(a.cc18_fold0, d, "test.csv")
+            for s in xp["seeds"]:
+                o, tag = os.path.join(a.out, "cross_network"), f"{d}__s{s}__ship"
+                dist("cross_network", (d, s), f"{PR}.cross_network_ship", tr, te, xp["workers"][0], s, False, None,
+                     os.path.join(o, "models", tag), os.path.join(o, "work", tag),
+                     {"workers": xp["workers"][0], "trees": xp["trees"], "max_depth": xp["max_depth"],
+                      "log": tag + ".log"}, cost(tr, False), ship=True)
     if "cc18" in tables:
         ds = sorted(d for d in os.listdir(a.cc18_10fold) if os.path.isdir(os.path.join(a.cc18_10fold, d)))
         ds.sort(key=lambda d: -cost(os.path.join(a.cc18_10fold, d, "fold0_train.csv"), False))
@@ -215,9 +239,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", required=True)
     ap.add_argument("--bin_dir", required=True, help="dir with train_oblique_forest and train_distributed_gbt")
-    ap.add_argument("--tab_folds", required=True, help="TabArena/TabReD folds (<ds>/fold<k>_{train,test}.csv)")
-    ap.add_argument("--cc18_fold0", required=True, help="prep_cc18_fold0.py output (task_*/train.csv)")
-    ap.add_argument("--cc18_10fold", required=True, help="run_cc18_aa_spo_gbt.sh data/ (<ds>/fold<k>_*.csv, meta.json)")
+    ap.add_argument("--tab_folds", default="", help="TabArena/TabReD folds (<ds>/fold<k>_{train,test}.csv)")
+    ap.add_argument("--cc18_fold0", default="", help="prep_cc18_fold0.py output (task_*/train.csv)")
+    ap.add_argument("--cc18_10fold", default="", help="run_cc18_aa_spo_gbt.sh data/ (<ds>/fold<k>_*.csv, meta.json)")
     ap.add_argument("--tables", default="distacc,colrep,cc18")
     ap.add_argument("--cpus", type=int, default=os.cpu_count())
     ap.add_argument("--single_threads", type=int, default=4, help="train_oblique_forest --num_threads (model depends on it)")
@@ -228,6 +252,13 @@ def main():
     ap.add_argument("--colrep_r0", default="", help="colrep_distacc: dataset:fold,... that also run r = 0 (identity check)")
     ap.add_argument("--only", default="", help="comma list of dataset substrings")
     a = ap.parse_args()
+    need = {"distacc": "tab_folds", "distacc_aaspo": "tab_folds", "distacc_exact300": "tab_folds",
+            "colrep_distacc": "tab_folds", "colrep": "cc18_fold0", "cross_network": "cc18_fold0", "cc18": "cc18_10fold"}
+    for t in a.tables.split(","):
+        if t not in need:
+            ap.error(f"unknown table {t!r} (known: {', '.join(need)})")
+        if not getattr(a, need[t]):
+            ap.error(f"--tables {t} needs --{need[t]}")
     cells = build_cells(a)
     if a.only:
         cells = [c for c in cells if any(o in c.key[0] for o in a.only.split(","))]

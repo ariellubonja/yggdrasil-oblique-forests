@@ -169,6 +169,10 @@ class Monitoring {
   void SendBegin();
   void DispatchDone(int num_requests, size_t bytes_out);
   void WorkerReply(int worker_idx, double runtime_seconds, size_t bytes_in);
+  // Worker-to-worker column shipping reported in a reply
+  // (WorkerResult.column_shipping); summed per round and over the training.
+  void WorkerShipping(int64_t bytes_in, int64_t bytes_out, int num_columns_in,
+                      double ship_seconds, int num_cross_worker_splits);
   absl::string_view StageName(Stages stage);
 
  private:
@@ -229,6 +233,19 @@ class Monitoring {
   std::vector<std::pair<int, double>> reply_runtimes_;
   std::unique_ptr<std::ofstream> barrier_csv_;
   bool barrier_csv_probed_ = false;
+
+  // Column shipping, current round / whole training.
+  struct ShippingStats {
+    int64_t bytes_in = 0;
+    int64_t bytes_out = 0;
+    int num_columns_in = 0;
+    double ship_seconds_sum = 0;  // Summed over the workers.
+    double ship_seconds_max = 0;  // Slowest worker of the round.
+    int num_cross_worker_splits = 0;
+  };
+  ShippingStats round_shipping_;
+  ShippingStats total_shipping_;
+  double total_ship_seconds_max_ = 0;  // Sum over rounds of the round max.
 };
 
 // Aggregates partial evaluations (evaluation of the weak models trained in a
@@ -419,7 +436,8 @@ absl::Status EmitShareSplits(
     const std::vector<distributed_decision_tree::SplitPerOpenNode>&
         splits_per_weak_models,
     distribute::AbstractManager* distribute, internal::Monitoring* monitoring,
-    distributed_decision_tree::LoadBalancer* load_balancer);
+    distributed_decision_tree::LoadBalancer* load_balancer,
+    bool ship_foreign_columns = false);
 
 absl::Status EmitEndIter(int iter_idx, bool is_last_iteration,
                          const WeakModels& weak_models,
@@ -479,14 +497,16 @@ typedef absl::flat_hash_map<int, ActiveFeature> ActiveFeaturesMap;
 absl::StatusOr<ActiveFeaturesMap> ActiveFeatures(
     const std::vector<distributed_decision_tree::SplitPerOpenNode>&
         splits_per_weak_models,
-    const distributed_decision_tree::LoadBalancer& load_balancer);
+    const distributed_decision_tree::LoadBalancer& load_balancer,
+    bool ship_foreign_columns = false);
 
-// Lowest worker holding every attribute of an oblique condition. Debug env var
-// DGBT_OBLIQUE_EVALUATOR_LAST=1 picks the highest one instead (the model must
-// not change; used by smoke_colrep.sh).
+// Lowest worker holding every attribute of an oblique condition; with column
+// shipping and no such worker, the owner of attribute 0 (it ships the rest).
+// Debug env var DGBT_OBLIQUE_EVALUATOR_LAST=1 picks the highest holder instead.
 absl::StatusOr<int> ObliqueSplitEvaluator(
     const decision_tree::proto::Condition::Oblique& oblique,
-    const distributed_decision_tree::LoadBalancer& load_balancer);
+    const distributed_decision_tree::LoadBalancer& load_balancer,
+    bool ship_foreign_columns = false);
 
 // Column replication for in-worker oblique splits: each worker additionally
 // holds a uniform random "replication" fraction (rounded to nearest) of the

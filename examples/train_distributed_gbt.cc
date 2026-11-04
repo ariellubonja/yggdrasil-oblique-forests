@@ -42,6 +42,7 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -130,6 +131,15 @@ ABSL_FLAG(bool, force_numerical_features, false,
           "Dataspec guide: every non-label column is NUMERICAL and 0/1 columns "
           "are not detected as BOOLEAN (the dataset policy's fully numeric "
           "input). Fails on string columns.");
+ABSL_FLAG(bool, sparse_oblique_ship_columns, false,
+          "Naive cross-worker projections: every worker samples from all the "
+          "numerical columns and fetches the ones it does not own from their "
+          "owners at every layer (in_worker_oblique.ship_foreign_columns). "
+          "Communication-cost baseline of the disjoint-column mode.");
+ABSL_FLAG(std::string, grpc_worker_addresses, "",
+          "Comma-separated host:port of running grpc_worker_main processes. If "
+          "set, they replace the in-process MULTI_THREAD workers and "
+          "--num_workers is ignored (manager stays in this process).");
 ABSL_FLAG(std::string, model_out_dir, "",
           "If set, the trained model is saved there (for bit-identity checks "
           "between builds / thread counts).");
@@ -189,6 +199,8 @@ int main(int argc, char** argv) {
         absl::GetFlag(FLAGS_column_replication));
     dgbt->mutable_in_worker_oblique()->set_split_projections_across_workers(
         absl::GetFlag(FLAGS_sparse_oblique_split_budget));
+    dgbt->mutable_in_worker_oblique()->set_ship_foreign_columns(
+        absl::GetFlag(FLAGS_sparse_oblique_ship_columns));
   } else {
     QCHECK_EQ(split_axis, "AXIS_ALIGNED") << "Unknown --split_axis";
     // Never silently ignore a flag (2026-11-03): SPO flags fail under AXIS_ALIGNED.
@@ -200,6 +212,7 @@ int main(int argc, char** argv) {
           &absl::GetFlagReflectionHandle(FLAGS_sparse_oblique_max_num_projections),
           &absl::GetFlagReflectionHandle(FLAGS_sparse_oblique_local_projection_count),
           &absl::GetFlagReflectionHandle(FLAGS_sparse_oblique_split_budget),
+          &absl::GetFlagReflectionHandle(FLAGS_sparse_oblique_ship_columns),
           &absl::GetFlagReflectionHandle(FLAGS_column_replication)}) {
       if (absl::flags_internal::WasPresentOnCommandLine(f->Name())) {
         unused.push_back(absl::StrCat("--", f->Name()));
@@ -234,7 +247,8 @@ int main(int argc, char** argv) {
               << " split_budget=" << spo_bool(iw.split_projections_across_workers())
               << " local_projection_count="
               << spo_bool(iw.num_projections_from_local_features())
-              << " column_replication=" << spo_val(iw.column_replication());
+              << " column_replication=" << spo_val(iw.column_replication())
+              << " column_shipping=" << spo_bool(iw.ship_foreign_columns());
   }
   if (absl::GetFlag(FLAGS_print_params_only)) return 0;
 
@@ -309,14 +323,35 @@ int main(int argc, char** argv) {
                                 ec);
     QCHECK(!ec) << "Deleting previous checkpoint: " << ec.message();
   }
-  QCHECK(google::protobuf::TextFormat::ParseFromString(
-      absl::Substitute(R"pb(
-                         implementation_key: "MULTI_THREAD"
-                         [yggdrasil_decision_forests.distribute.proto
-                              .multi_thread] { num_workers: $0 }
-                       )pb",
-                       absl::GetFlag(FLAGS_num_workers)),
-      deployment.mutable_distribute()));
+  const std::string grpc_addresses = absl::GetFlag(FLAGS_grpc_worker_addresses);
+  if (grpc_addresses.empty()) {
+    QCHECK(google::protobuf::TextFormat::ParseFromString(
+        absl::Substitute(R"pb(
+                           implementation_key: "MULTI_THREAD"
+                           [yggdrasil_decision_forests.distribute.proto
+                                .multi_thread] { num_workers: $0 }
+                         )pb",
+                         absl::GetFlag(FLAGS_num_workers)),
+        deployment.mutable_distribute()));
+  } else {
+    // Workers are separate processes (one grpc_worker_main each); the
+    // manager runs here. Worker-to-worker traffic then really crosses a
+    // socket, which is what the column-shipping measurements need.
+    std::string addresses_pbtxt;
+    for (const auto address : absl::StrSplit(grpc_addresses, ',')) {
+      absl::SubstituteAndAppend(&addresses_pbtxt, "addresses: \"$0\" ",
+                                address);
+    }
+    QCHECK(google::protobuf::TextFormat::ParseFromString(
+        absl::Substitute(R"pb(
+                           implementation_key: "GRPC"
+                           [yggdrasil_decision_forests.distribute.proto.grpc] {
+                             grpc_addresses { $0 }
+                           }
+                         )pb",
+                         addresses_pbtxt),
+        deployment.mutable_distribute()));
+  }
 
   // 4. Train. The learner reads the dataset *by path*: each worker reads the
   // shards it owns and builds its slice of the dataset cache.

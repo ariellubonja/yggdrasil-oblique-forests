@@ -91,8 +91,19 @@ message DistributedGradientBoostedTreesTrainingConfig {
     // cells). The projection density always uses the local count.
     optional bool num_projections_from_local_features = 1 [default = false];
 
-    // Field 2 is reserved for the naive column-shipping baseline (branch
-    // naive-column-shipping).
+    // Naive cross-worker projections (communication-cost baseline). Every
+    // worker samples its projections from ALL the numerical features of the
+    // dataset; the columns it does not own are fetched from their owners
+    // (worker-to-worker GetColumns) at every layer and dropped afterwards, so
+    // nothing is cached across layers or trees. The projection count per
+    // worker still follows num_projections_from_local_features (basis = the
+    // worker's owned numerical features; equal to the disjoint-column basis
+    // when every feature is a candidate, i.e. no num_candidate_attributes
+    // sampling), so the total projection budget equals the disjoint-column
+    // mode. The owner of a split's first attribute evaluates it and ships the
+    // attributes it lacks. split_projections_across_workers applies as in the
+    // disjoint mode: the node total is split over the workers.
+    optional bool ship_foreign_columns = 2 [default = false];
 
     // Fraction in [0, 1] of the other workers' NUMERICAL columns each worker also
     // loads and samples from, drawn once from (seed, worker); 1 = all F columns.

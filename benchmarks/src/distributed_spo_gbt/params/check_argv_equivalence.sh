@@ -96,7 +96,7 @@ DS=benchmarks/src/distributed_spo_gbt
 CASES=${CASES:-"table8_local table8_fixed dgbt_suite dgbt_spo dgbt_aa barrier_spo barrier_aa pf_grid pf_followups vertex_grid_fixed
   single_cc18 seed_single seed_w1 vertex_fixed colrep_default colrep_table3 replication_sweep barriers_per_worker barriers_split
   barriers_split_budget  cc18_aa_spo cc18_exact300 cc18_gbt train_cells train_cells_nosplit train_cells_table2 train_spo train_aa kdd28_ydf_ec2
-  kdd28_ydf_distacc_aaspo kdd28_ydf_distacc_exact300 kdd28_ydf_colrep_distacc"}
+  kdd28_ydf_distacc_aaspo kdd28_ydf_distacc_exact300 kdd28_ydf_colrep_distacc kdd28_ydf_cross_network"}
 run_case() { # case -> runs it inside $T with argv captured in $ARGV_LOG
   local O=$W/out/$1; rm -rf "$O"; mkdir -p "$O"
   case $1 in
@@ -135,6 +135,8 @@ run_case() { # case -> runs it inside $T with argv captured in $ARGV_LOG
                      --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --tables distacc_exact300 ;;
     kdd28_ydf_colrep_distacc) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
                      --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --tables colrep_distacc --colrep_r0 dsA:0 ;;
+    kdd28_ydf_cross_network) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --cc18_fold0 "$D/cc18" \
+                     --tables cross_network --cpus 4 ;;
     cc18_gbt) python3 benchmarks/src/cc18_gbt_feature_study/run_cc18_gbt.py --jobs 1; rm -rf "$W/home/featstudy" ;;
     train_cells) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s2 --seed 2 --levels 0,1) ;;
     train_cells_nosplit) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s1 --seed 1 \
