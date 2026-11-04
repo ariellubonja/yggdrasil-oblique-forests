@@ -115,8 +115,11 @@ def check_rows(rows, suite, label, max_lines=40, out=None):
         warn(f"{label}: mixes eval suites: " + ", ".join(f"{k} ({n} rows)" for k, n in seen.most_common()), out)
     probs, not_in, folds_seen = collections.defaultdict(collections.Counter), collections.Counter(), collections.defaultdict(set)
     bad_folds = collections.defaultdict(collections.Counter)
+    # Legacy CC18 CSVs use bare names ("Bioresponse"), the suite uses "task_<id>_Bioresponse".
+    bare = {d.split("_", 2)[2]: d for d in spec["datasets"] if d.startswith("task_") and d.count("_") >= 2}
     for r in rows:
         ds = _v(r, "dataset")
+        ds = ds if ds in spec["datasets"] else bare.get(ds, ds)
         if ds not in spec["datasets"]:
             not_in[ds or "<empty>"] += 1
             continue
