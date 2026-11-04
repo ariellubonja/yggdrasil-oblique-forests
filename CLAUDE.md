@@ -142,6 +142,9 @@ Claude Code is the hub and this repo is the source of truth.
 
 ## Distributed GBT
 
+- **KDD28 accuracy tables run in-process on EC2 (user decision, 2026-11-03):** distributed accuracy arms of
+  tab:dist-accuracy, tab:column-replication, tab:cross-network use MULTI_THREAD workers on `ariel-dist-accuracy-1`
+  (i-0f90f7764082bf21a). Timing stays Vertex only. Same-seed reruns there are bit-identical (tested 2026-11-03).
 - **Real distributed numbers come only from Vertex AI CustomJobs (2026-10-25).** The in-process driver
   `examples/train_distributed_gbt` and `run_dgbt*.sh` / `run_barrier_cell.sh` are smoke tests only;
   never report them as distributed.

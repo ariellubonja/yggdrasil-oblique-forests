@@ -368,3 +368,30 @@ values. The recorded P = F profiles stay reproducible because their launchers pa
 (`--sparse_oblique_max_num_projections 1000`). Images built before this change reject the new `train_cells.py` flags.
 Cost probe (`ariel_notes/results/2026-11-03_spo_budget_cost_probe/`, qsar-biodeg CC18 fold 0, F = 41, W = 4 in-process,
 300 trees, seed 1, Mac, smoke only): tree training 0.99 s (P = F) vs 7.41 s (YDF), median of 3, test accuracy 0.8679 both.
+
+## J. KDD28 accuracy reruns under `kdd28_ydf` on EC2 (user decision, 2026-11-03)
+
+Box: EC2 `ariel-dist-accuracy-1` (renamed from `ariel-ydf-1`), i-0f90f7764082bf21a, m7i.metal-24xl, Xeon 8488C, 48 cores
+online (SMT off), 377 GB. Distributed arms run in-process (MULTI_THREAD workers, `examples/train_distributed_gbt`) on this
+box. This exception to §C covers these accuracy tables only. Timing stays Vertex only.
+
+- Code: worktree `~/wt/kdd28-ydf-rerun` at e3279f20 plus the uncommitted profile arms and driver (`code.diff` in the
+  results folder). Binaries `bazel build -c opt` (icx), copied to `bin/`.
+- Driver: `ydf_reruns/run_kdd28_ydf_ec2.py`, one resumable queue for tab:dist-accuracy (33 TabArena/TabReD, 5 folds or
+  1 holdout, single + W = 1/4/8/16/32, SPO and AA), tab:column-replication (34 CC18 fold 0, W = 4, r = 0..1, seeds 1-5,
+  single row seeds 1-10), tab:cc18-aa-spo arms (a), (d), (e) (10 folds, seed 1). Arms (b) and (c) stay as recorded.
+  Profile arms `kdd28_ydf.{distacc_*,colrep_*,cc18_*}`. Seed 1 everywhere except the seed lists. Threads: single 4,
+  2 per worker. Argv golden: `params/golden/kdd28_ydf_ec2.argv`.
+- Inputs: TabArena/TabReD folds `~/spo_vs_gbt/folds` (339 files match `MANIFEST/inputs.sha256`). CC18 fold 0 and the 10
+  folds rebuilt on the box from `benchmarks/data/cc18_binary_csv`, then checked against the Mac copies
+  (`2026-10-28_column_replication/data_cc18_fold0`, `2026-10-29_cc18_aa_spo_gbt/data`): all CSVs byte-identical after one
+  climate-model train.csv (one value printed differently in the last digit) was replaced by the Mac copy.
+- Results: box `~/results/2026-11-03_ydf_defaults_rerun/{distacc,colrep,colrep_single,cc18}/results.csv` (stamped rows,
+  `models/`, `logs/`, `DONE` per table, `ALL_DONE`), mirrored by `ariel_notes/results/2026-11-03_ydf_defaults_rerun/mirror.sh`.
+- Determinism (tested 2026-11-03, `determinism/` there): same seed, same threads, two concurrent runs per cell for qsar-biodeg
+  (single, W = 4), credit-g (single, W = 4) and heloc (single, W = 4, W = 16), 300 trees. All 7 pairs have byte-identical
+  `nodes-*` and identical test metrics. Only `header.pb` (creation metadata) and `data_spec.pb` (label dictionary
+  serialized in another order) differ. No worker-reply-order effect was seen in the distributed pairs.
+- Not rerun: the cross-network arm of tab:cross-network. Column shipping lives only on `cross-worker-col-comms` /
+  `fix-disc-colcomms`, which predate the split budget and the effective-params line. Its in-worker arm equals the
+  column-replication r = 0 cells.
