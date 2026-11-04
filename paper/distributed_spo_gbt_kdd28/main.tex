@@ -345,47 +345,6 @@ In GBT, each worker (tree) node scans all $\mathbf{F}$ columns, unlike RF and SP
 
 \subsection{V0: \texorpdfstring{$\frac{F}{W}$}{F/W} Worker-local projections}
 
-% Also applicable to bivariate and other random subset-based tree kernels
-
-% \begin{figure}
-%     \centering
-%     \includegraphics[width=.6\linewidth]{figures/method/in_node_spo_sampling.pdf}
-%     \caption{V1 works identically to Distributed GBT, but features are sampled only within a worker.}
-%     \label{fig:simple-in-worker-column-sampling}
-% \end{figure}
-
-% \begin{figure}[t]
-% \begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
-% if (oblique) {
-%   const int num_features_for_projection_count =
-%       spe_config.in_worker_oblique().num_projections_from_local_features()
-%           ? 0
-%           : num_global_numerical_features_;
-%   for (int weak_model_idx = 0; weak_model_idx < weak_models_.size();
-%        weak_model_idx++) {
-%     auto& weak_model = weak_models_[weak_model_idx];
-%     const distributed_decision_tree::ObliqueSplitArgs args{
-%         oblique_features_per_weak_models[weak_model_idx],
-%         weak_model.example_to_node,
-%         welcome_.dataspec(),
-%         welcome_.train_config_linking(),
-%         dt_config,
-%         *weak_model.label_accessor,
-%         weak_model.label_stats_per_node,
-%         *oblique_columns_,
-%         model::proto::Task::REGRESSION,
-%         weak_model.label_accessor_type,
-%         num_features_for_projection_count,
-%         MixProjectionSeed(request.projection_seed(), WorkerIdx(),
-%                           weak_model_idx)};
-%     RETURN_IF_ERROR(distributed_decision_tree::FindBestObliqueSplits(
-%         args, thread_pool_.get(), &splits_per_weak_models[weak_model_idx]));
-%   }
-% }
-% \end{lstlisting}
-% \caption{Worker-side call into the in-worker oblique split search (\texttt{worker.cc}, \texttt{FindSplits}).}
-% \label{lst:worker_oblique_call}
-% \end{figure}
 
 Load balancing disabled for Dist. SPO-GBT
 
@@ -413,28 +372,51 @@ Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at
     \end{itemize}
 \end{description}
 
+\twocolumn[{\floatblock
+\section{Accuracy}
+\label{sec:accuracy}
 
-\subsection{Random Column Assignment}
+Both learners use YDF defaults with early stopping off, since the distributed learner has none, so every arm trains all 300 trees on the full training set.
 
-\subsection{\texorpdfstring{$C_2$}{C2} Combinations}
-
-\subsection{Smart Column Assignments}
-
-Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axis-aligned GBT split on.
-
-\begin{figure*}[t]
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
 \centering
-\input{figures/evaluation/cc18_tree_feature_hist_body}
-\caption{Features split on by the first tree of a AA-GBT. Top: most Pareto-like. Bottom: least-pareto like. See animation \href{https://drive.google.com/file/d/1BLq98ab_YEgCxTeb6eLGhEEZw2BVsqCO/view?usp=drive_link}{here}.}
-\Description{Bar charts of per-feature split share against feature index for the same six datasets and trees 1, 100, 200 and 300.}
-\label{fig:cc18-tree-feature-hist}
-\par\smallskip\raggedright\footnotesize pooled over the 10 cross-validation models of a dataset
-\end{figure*}
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of single-machine vs. $W$-distributed GBT. Single-machine SPO-GBT samples $\min(F^2,6000)$ projections per node, distributed SPO-GBT splits them across the $W$ workers, each sampling from its $F/W$ columns.}
+\label{tab:dist-accuracy-ydf}
+\IfFileExists{tables/table_dist_accuracy_ydf_body.tex}{\input{tables/table_dist_accuracy_ydf_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
+\par\smallskip\raggedright\footnotesize YDF defaults, early stopping off, 300 trees, depth 6, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Chronological holdouts.
+Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textcolor{RoyalPurple}{SPO matches AA bcs. shard ends up with 1 column per worker}
+\end{minipage}
+\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+% body sizes its axis to 0.5\textwidth; match it to the column
+\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_ydf_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_ydf_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-ydf}. \textcolor{RoyalPurple}{*Some datasets have few columns, so as $W$ increases, accuracy actually approaches} \textcolor{red}{AA-GBT}}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}
+\label{fig:dist-accuracy-mean-ydf}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_ydf_body.tex}{\input{figures/evaluation/fig_column_replication_ydf_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Table~\ref{tab:column-replication-ydf} as charts: mean (top) and per-dataset (bottom) $\Delta$ test accuracy vs.\ \texttt{single}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
+\label{fig:column-replication-ydf}
+\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy.
+\end{minipage}
+}]
 
 \twocolumn[{\floatblock
-\section{Evaluation}
+\section{Runtime}
 
-\textbf{Skew in tree (e.g. big nodes) doesn't create skew in workers. Skew in columns does.} If a dataset has no explicit test set, the last 10\% of the dataset is used as test.
+Skew in tree nodes doesn't create skew in workers. Skew in columns does. 
+
 
 
 \noindent\begin{minipage}{\textwidth}
@@ -478,74 +460,6 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 \end{minipage}
 }]
 
-\twocolumn[{\floatblock
-\subsection{Simple Column Replication}
-
-Columns are round-robined.
-
-\subsubsection{Zero Replication $r=0$}
-
-\mbox{}\par\vskip0.5em
-\noindent\begin{minipage}{\textwidth}
-\captionsetup{type=table}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{2pt}
-\caption{Test AUC of single-machine vs. $W$-distributed GBT. Single-machine SPO-GBT samples $F$ projections per node, distributed SPO-GBT workers sample $F/W$ projections from their $F/W$ columns.}
-\label{tab:dist-accuracy}
-\input{tables/table_dist_accuracy_body}
-\par\smallskip\raggedright\footnotesize Distributed ran locally on \texttt{MULTI\_THREAD} on m7i. 300 trees. 5 CV folds except Chronological holdouts.
-\end{minipage}
-\par\vskip1em
-}]
-
-\begin{figure}[H]
-\centering
-% body sizes its axis to 0.5\textwidth; match it to the column
-\setlength{\textwidth}{2\linewidth}%
-\input{figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy}.}
-\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}
-\label{fig:dist-accuracy-mean}
-\end{figure}
-
-\subsection{Accuracy of Richard's AA+SPO on CC18}
-\label{sec:cc18-aa-spo}
-
-\begin{table}[H]
-\centering\footnotesize\setlength{\tabcolsep}{4pt}
-\caption{Test accuracy of single-machine AA and SPO-GBT in CC18. }
-\label{tab:cc18-aa-spo}
-\input{tables/table_cc18_aa_spo_body}
-\par\smallskip\raggedright\footnotesize \textbf{YDF defaults}: 300 trees, 10\% validation with early stopping, exact splits, $P{=}\min(F^2, 6000)$ projections, density 2. \textbf{Harness defaults}: \TODO{30 trees - rerunning w/ 300}, no early stopping, $P{=}\min(F, 1000)$, density 1.5, 64-bin dynamic histogram. \TODO{seed 1}. \Claude{Show distributions, not mean}
-\texttt{m7i.24x. 10 CV folds} \TODO{why doesnt harness accuracy match table?}
-\end{table}
-
-\twocolumn[{\floatblock
-\subsubsection{Accuracy study of $r \in [0,1]$}
-
-\label{sec:round-robin-replication}
-\mbox{}\par\vskip0.5em
-\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=table}
-\centering\footnotesize
-\caption{Test accuracy of distributed SPO-GBT \TODO{($W=4$) is this why acc doesn't change?} vs.\ column replication $r$.}
-\label{tab:column-replication}
-\input{tables/table_column_replication_body}
-\par\smallskip\raggedright\footnotesize Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns. Mean over CC18 w/ 5 seeds. \TODO{Why does $r$ have no effect on acc?}.
-\par\footnotesize \textbf{single} = single-machine SPO-GBT, same hyperparameters
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-\input{figures/evaluation/fig_column_replication_body}
-\caption{Table~\ref{tab:column-replication} as charts: mean (top) and per-dataset (bottom) $\Delta$ test accuracy vs.\ \texttt{single}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
-\label{fig:column-replication}
-\par\smallskip\raggedright\footnotesize \TODO{Drop datasets where SPO does not outperform AA.} Top: 95\% bootstrap interval over the 34 datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy. All 374 points lie within this range. \Claude{Scale dots by dataset size}. \TODO{r=0 removes only cross-worker column combinations. Single-column projections (56 \% of draws at density 1.5 \Claude{I thought density was 2 as per YDF defaults}) are untouched, and multi-column splits are worth only +0.2 pts over AA (Table \ref{tab:cc18-aa-spo}).} \TODO{Plot distribution of accuracy by seed}
-\end{minipage}
-}]
-
 \twocolumn[{\floatblock%
 \subsection{Projections with Cross-Worker Communication}
 \label{sec:cross-network-projections}
@@ -573,14 +487,23 @@ Naive baseline for communication cost. \textbf{Should match local SPO-GBT accura
 \end{minipage}
 }]
 
+\clearpage
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{main}
 
 \appendix
-% Full-width page top: A.1 and A.2 share one page.
-\twocolumn[{\floatblock%
-
+\twocolumn[{\floatblock
 \section{Appendix}
+
+\begin{table}[H]
+\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\caption{Test accuracy of distributed SPO-GBT vs.\ column replication $r$.}
+\label{tab:column-replication-ydf}
+\IfFileExists{tables/table_column_replication_ydf_body.tex}{\input{tables/table_column_replication_ydf_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
+\par\smallskip\raggedright\footnotesize Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns. Mean over CC18 w/ 5 seeds. YDF defaults, early stopping off, 300 trees, depth 6, $P{=}\min(F^2,6000)$ split across workers. $W{=}4$.
+\par\footnotesize \textbf{single} = single-machine SPO-GBT, same hyperparameters
+\end{table}
+
 
 \subsection{Enabling Parallelism for Distributed SPO}
 \label{sec:in-node-parallelism}
@@ -606,7 +529,7 @@ FYI Local SPO only parallelizes in-node when >10 projections. Ensure you're usin
 % Used $P=\lceil\sqrt{F}\rceil$.
 \label{tab:in-node-dist-vqsort-vertex}
 \input{tables/table_in_node_threads_body}
-\par\smallskip\raggedright\footnotesize Single \texttt{m7i.24x}, $P=\sqrt{F}$. Sequential: $P$ projections in $\min(T,\lceil P/10\rceil)$ threads, i.e.\ single-threaded when $P\le 10$. Parallel: $\min(T,P)$. Existing method was due to PR 403 overhead, which is now gone.
+\par\smallskip\raggedright\footnotesize Single \texttt{m7i.24x}, $P=\sqrt{F}$. Sequential: $P$ projections in $\min(T,\lceil P/10\rceil)$ threads, i.e.\ single-threaded when $P\le 10$. Parallel: $\min(T,P)$. Existing method was due to PR 403 overhead, which is now gone. 10 trees, depth 6.
 \end{minipage}
 \par\vskip1em
 }]
@@ -647,5 +570,22 @@ distributed_gradient_boosted_trees.cc
 
 \input{listings/in_worker_oblique}
 
+
+\twocolumn[{\floatblock
+\subsection{Are there Popular Columns across Trees?}
+
+Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axis-aligned GBT split on.
+
+\vskip1em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=figure}
+\centering
+\input{figures/evaluation/cc18_tree_feature_hist_body}
+\caption{Features split on by the first tree of a AA-GBT. Top: most Pareto-like. Bottom: least-pareto like. See animation \href{https://drive.google.com/file/d/1BLq98ab_YEgCxTeb6eLGhEEZw2BVsqCO/view?usp=drive_link}{here}.}
+\Description{Bar charts of per-feature split share against feature index for the same six datasets and trees 1, 100, 200 and 300.}
+\label{fig:cc18-tree-feature-hist}
+\par\smallskip\raggedright\footnotesize pooled over the 10 cross-validation models of a dataset. 300 trees, depth 6.
+\end{minipage}
+}]
 
 \end{document}
