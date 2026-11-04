@@ -26,6 +26,24 @@ PROFILE = kdd28.generator_profile(__file__)  # --profile
 ARMS_SHOWN = ["single_spo", "single_aa", "dist_spo", "dist_aa"]
 ARM_NAME = {a: a for a in ARMS_SHOWN}  # role -> profile arm (--arms)
 _CHECKED = []
+# Extra single-machine columns after AA-GBT, each its own block: (csv, row arm, profile arm, family label)
+EXTRA_SPECS = {"aaspo": ("single:AA+SPO", "distacc_single_aa_spo", "AA+SPO-GBT"),
+               "exact300": ("single:SPO-harness-exact300", "distacc_single_spo_harness_exact300", "SPO-GBT harness")}
+EXTRA = []
+PURPLE_ON = False  # --purple: dist SPO cell == dist AA cell at the same W on every fold -> both purple, dataset gets *
+PURPLE = r"\cellcolor[RGB]{215,195,240}"
+
+
+def purple_pairs(d, metric):
+    """{(dataset, W)} where distributed SPO and AA give the same raw metric on every fold."""
+    out = set()
+    for (ds, w), g in d.groupby(["dataset", "workers"]):
+        s = g[g.split_axis == "SPARSE_OBLIQUE"].set_index("fold")[metric]
+        a = g[g.split_axis == "AXIS_ALIGNED"].set_index("fold")[metric]
+        if len(s) and s.index.is_unique and a.index.is_unique and sorted(s.index) == sorted(a.index) \
+                and (s.sort_index() == a.sort_index()).all():
+            out.add((ds, int(w)))
+    return out
 
 
 def _rerun_arm(r):
@@ -42,6 +60,9 @@ def check_inputs(p, d):
     if ACC_CSV:
         x = pd.read_csv(ACC_CSV)
         kdd28.check_frame(x[x.rc == 0], PROFILE, ARMS_SHOWN, pathlib.Path(ACC_CSV).name, arm_of=_rerun_arm)
+        for path, row_arm, parm, _ in EXTRA:
+            y = pd.read_csv(path); y = y[(y.rc == 0) & (y.arm == row_arm)]
+            kdd28.check_frame(y, PROFILE, [parm], pathlib.Path(path).name, arm_of=lambda r, parm=parm: parm)
     else:
         kdd28.check_frame(p, PROFILE, ["single_spo", "single_aa"], "speedup_map suite_results.csv",
                           arm_of=lambda r: "single_spo" if r["method"] != "aa_gbt_exact" else "single_aa")
@@ -75,25 +96,33 @@ def accuracy_stats(metric="test_auc"):
         arms.append((fam, f"{fam} single machine", p[p.method == parm].groupby("dataset")[metric]))
         for w in workers:
             arms.append((fam, f"{fam} dist.\\ $W{{=}}{w}$", d[(d.split_axis == axis) & (d.workers == w)].groupby("dataset")[metric]))
+    for path, row_arm, _, fam in EXTRA:  # after the AA block; bold = best of all single-machine columns
+        y = pd.read_csv(path); y = y[(y.rc == 0) & (y.arm == row_arm)]
+        arms.append((fam, f"{fam} single machine", y.groupby("dataset")[metric]))
     stats = [(fam, lab, g.agg(["mean", "std", "count"])) for fam, lab, g in arms]
     # Only datasets whose every distributed cell has all folds (suite still running).
     done = [ds for ds in sorted(d.dataset.unique())
             if all(ds in s.index and s.loc[ds, "count"] == nfolds.get(ds, -1) for _, _, s in stats)]
+    accuracy_stats.purple = purple_pairs(d, metric) if PURPLE_ON else set()
     return stats, done, nfolds
 
 
 def accuracy_table(metric="test_auc"):
     stats, done, nfolds = accuracy_stats(metric)
-    fams = [f for f, _, _ in AXES]
+    fams = [f for f, _, _ in AXES] + [e[3] for e in EXTRA]
+    singles = [lab for _, lab, _ in stats if "single" in lab]
     lines = [HDR, r"\resizebox{\linewidth}{!}{%",  # 13 columns at W up to 32
              r"\begin{tabular}{l" + "|".join("r" * sum(f == fam for f, _, _ in stats) for fam in fams) + "}",
              r"\toprule", "Dataset & " + " & ".join(col(lab) for _, lab, _ in stats) + r" \\", r"\midrule"]
     means = {lab: [] for _, lab, _ in stats}
+    purple = accuracy_stats.purple
     for ds in done:
         cells = []
         for fam in fams:
             blk = [(lab, s.loc[ds]) for f, lab, s in stats if f == fam]
             best = max(r["mean"] for _, r in blk)
+            if fam in fams[len(AXES):]:
+                best = max(s.loc[ds, "mean"] for _, lab, s in stats if lab in singles)
             for i, (lab, r) in enumerate(blk):
                 means[lab].append(r["mean"])
                 mu, has_sd = f"{r['mean']:.4f}"[1:], r["count"] > 1
@@ -103,18 +132,25 @@ def accuracy_table(metric="test_auc"):
                 else:
                     c = mu + sd
                 # distributed cells colored by AUC delta (x1e3) vs the family's single machine, as the old heatmap
-                cells.append(_delta_color((r["mean"] - blk[0][1]["mean"]) * 1e3) + c if i else c)
-        lines.append(ds.replace("_", r"\_") + " & " + " & ".join(cells) + r" \\")
+                w = int(lab.split("W{=}")[1].rstrip("$")) if "W{=}" in lab else None
+                if w is not None and fam in fams[:len(AXES)] and (ds, w) in purple:
+                    cells.append(PURPLE + c)
+                else:
+                    cells.append(_delta_color((r["mean"] - blk[0][1]["mean"]) * 1e3) + c if i else c)
+        mark = "$^{*}$" if any(x == ds for x, _ in purple) else ""
+        lines.append(ds.replace("_", r"\_") + mark + " & " + " & ".join(cells) + r" \\")
     # Mean row: bold the best per family, compared at the printed 4 decimals
     avg = {lab: round(sum(means[lab]) / len(means[lab]), 4) for _, lab, _ in stats}
     top = {fam: max(avg[lab] for f, lab, _ in stats if f == fam) for fam in fams}
+    for fam in fams[len(AXES):]:
+        top[fam] = max(avg[lab] for lab in singles)
     ref = {f: avg[lab] for f, lab, _ in reversed(stats)}  # first arm per family = single machine
     mcells = [("" if "single" in lab else _delta_color((avg[lab] - ref[f]) * 1e3))
               + (r"\textbf{%s}" if avg[lab] == top[f] else "%s") % f"{avg[lab]:.4f}"[1:] + r"\phantom{$_{\pm.0000}$}"
               for f, lab, _ in stats]
     lines += [r"\midrule", "Mean & " + " & ".join(mcells) + r" \\",
               r"\bottomrule", r"\end{tabular}}"]
-    return kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(PROFILE, ARMS_SHOWN))
+    return kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(PROFILE, ARMS_SHOWN + [e[2] for e in EXTRA]))
 
 
 FIG_ARMS = (("SPO", "SPARSE_OBLIQUE", "spo_gbt_exact_hwy", ("0C447C", "378ADD", "B5D4F4")),
@@ -174,6 +210,9 @@ if __name__ == "__main__":
                     help="profile arms of the single SPO, single AA, dist SPO, dist AA rows (kdd28_ydf: distacc_single_spo,...)")
     ap.add_argument("--suffix", default="", help="output name suffix: table_dist_accuracy<suffix>_body.tex")
     ap.add_argument("--no_figure", action="store_true", help="write the table body only")
+    ap.add_argument("--purple", action="store_true", help="purple dist SPO/AA cells equal on every fold, * on the dataset")
+    ap.add_argument("--extra", default="", help="name=results.csv,... extra single-machine columns after AA-GBT, in order; "
+                    "names: " + ", ".join(EXTRA_SPECS))
     kdd28.add_profile_arg(ap, __file__)
     args = ap.parse_args()
     PROFILE = args.profile
@@ -181,12 +220,15 @@ if __name__ == "__main__":
     if len(ARM_NAME) != 4 or len(args.arms.split(",")) != 4:
         sys.exit("--arms needs 4 comma-separated arm names")
     ARMS_SHOWN = list(ARM_NAME.values())
+    PURPLE_ON = args.purple
+    EXTRA = [(p, *EXTRA_SPECS[n]) for n, p in (kv.split("=", 1) for kv in args.extra.split(",") if kv)]
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
     if args.accuracy_csv:
         ACC_CSV = args.accuracy_csv
         HDR = ("% auto-generated by benchmarks/src/distributed_spo_gbt/make_paper_tables.py -- regenerate, do not hand-edit\n"
                "% source: " + args.accuracy_note + ", "
-               + args.accuracy_csv.split("benchmarks/")[-1] + "\n")
+               + args.accuracy_csv.split("benchmarks/")[-1]
+               + "".join(" + " + e[0].split("benchmarks/")[-1] for e in EXTRA) + "\n")
     (out / f"table_dist_accuracy{args.suffix}_body.tex").write_text(accuracy_table())
     if not args.no_figure:
         fig = out.parent / "figures/evaluation/multi_thread_m7i_metal_24x"; fig.mkdir(parents=True, exist_ok=True)

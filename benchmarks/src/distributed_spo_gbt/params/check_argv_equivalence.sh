@@ -79,7 +79,7 @@ make_tree() { # old|new
   if [ "$1" = old ]; then git -C "$REPO" archive "$BASE" $SRC_DIRS | tar -x -C "$T"
   else for d in $SRC_DIRS; do mkdir -p "$T/$(dirname $d)"; cp -R "$REPO/$d" "$T/$d"; done; fi
   rm -rf "$T/benchmarks/src/distributed_spo_gbt/params/pystub"; cp -R "$HERE/pystub" "$T/pystub"
-  git init -q "$T" && echo "$REPO/.git/objects" > "$T/.git/objects/info/alternates"
+  git init -q "$T" && echo "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)/objects" > "$T/.git/objects/info/alternates"
   git -C "$T" -c user.name=x -c user.email=x commit -q --allow-empty -m sandbox
   mkdir -p "$T/bazel-bin/examples" && cp "$STUB/train_distributed_gbt" "$T/bazel-bin/examples/"
   local v=$T/benchmarks/results/runtime/distributed_spo_gbt/barriers/vertex  # run_pf_followups waits for 24 cells
@@ -95,7 +95,8 @@ IMG=us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo/train-ydf
 DS=benchmarks/src/distributed_spo_gbt
 CASES=${CASES:-"table8_local table8_fixed dgbt_suite dgbt_spo dgbt_aa barrier_spo barrier_aa pf_grid pf_followups vertex_grid_fixed
   single_cc18 seed_single seed_w1 vertex_fixed colrep_default colrep_table3 replication_sweep barriers_per_worker barriers_split
-  barriers_split_budget  cc18_aa_spo cc18_exact300 cc18_gbt train_cells train_cells_nosplit train_cells_table2 train_spo train_aa kdd28_ydf_ec2"}
+  barriers_split_budget  cc18_aa_spo cc18_exact300 cc18_gbt train_cells train_cells_nosplit train_cells_table2 train_spo train_aa kdd28_ydf_ec2
+  kdd28_ydf_distacc_aaspo kdd28_ydf_distacc_exact300 kdd28_ydf_colrep_distacc"}
 run_case() { # case -> runs it inside $T with argv captured in $ARGV_LOG
   local O=$W/out/$1; rm -rf "$O"; mkdir -p "$O"
   case $1 in
@@ -128,6 +129,12 @@ run_case() { # case -> runs it inside $T with argv captured in $ARGV_LOG
     cc18_exact300) ARMS=spo_harness_exact300 bash benchmarks/src/cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh "$D/cc18aa" "$STUB/train_oblique_forest"; rm -rf "$D/cc18aa/logs" "$D/cc18aa/models" "$D/cc18aa/results.csv" ;;
     kdd28_ydf_ec2) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" --cc18_fold0 "$D/cc18" \
                      --cc18_10fold "$D/cc18aa/data" --cpus 4 ;;
+    kdd28_ydf_distacc_aaspo) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
+                     --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --tables distacc_aaspo ;;
+    kdd28_ydf_distacc_exact300) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
+                     --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --tables distacc_exact300 ;;
+    kdd28_ydf_colrep_distacc) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
+                     --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --tables colrep_distacc --colrep_r0 dsA:0 ;;
     cc18_gbt) python3 benchmarks/src/cc18_gbt_feature_study/run_cc18_gbt.py --jobs 1; rm -rf "$W/home/featstudy" ;;
     train_cells) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s2 --seed 2 --levels 0,1) ;;
     train_cells_nosplit) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s1 --seed 1 \

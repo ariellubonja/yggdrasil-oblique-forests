@@ -8,12 +8,15 @@
   python3 params.py require-stamped <csv>                  # exit 2 if <csv> exists without the stamp columns
   python3 params.py show [profile]                         # profile table (values, floats)
   python3 params.py selftest                               # exit 1 unless the matcher / checks behave (stdlib only)
+  python3 params.py check-eval <csv> [--suite <name>]       # WARN eval-suite: lines where rows differ from an eval suite
   python3 params.py check-effective <profile> <log> [F=.. W=..] [<stamp col>=<value> ...]
                                                            # exit 2 + field=got (profile: expected) on drift; col=value
                                                            # = the script's own knob (e.g. trees=$TREES) replaces the profile
 Run scripts source drift.sh (shell) or call preflight()/check_cell() (Python): exit 2 at the first drifted cell,
 ALLOW_DRIFT=1 warns and stamps the row's profile as <profile>!drift, which check_rows refuses.
 Profiles are named <profile> or <profile>.<arm>; an arm overrides its parent's fields. Python 3 stdlib only.
+Eval suites (datasets, folds, file hashes, metric code; eval_suites.json, evalsuite.py) only warn: generators declare
+one with --eval_suite (add_profile_arg), check_rows then checks it and setup_line names it.
 """
 import json
 import math
@@ -23,6 +26,8 @@ import shlex
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import evalsuite  # noqa: E402
 DB_PATH = os.path.join(HERE, "kdd28_params.json")
 STAMP = ["profile", "trees", "max_depth", "min_examples", "split_type", "spo_exponent", "spo_max_projections",
          "spo_density", "split_budget", "local_projection_count", "seed", "validation_set_ratio", "early_stopping",
@@ -45,6 +50,13 @@ INT_MAX = 2147483647
 def stamp_columns(existing=()):
     """Stamp column names to append to a CSV whose header is `existing`: clashes get an eff_ prefix."""
     return [f"eff_{c}" if c in existing else c for c in STAMP]
+
+
+def stamped_header(head):
+    """True when a CSV header ends with the stamp columns, optionally followed by the eval-suite columns."""
+    if head[-len(evalsuite.COLUMNS):] == evalsuite.COLUMNS:
+        head = head[:-len(evalsuite.COLUMNS)]
+    return head[-len(STAMP):] == stamp_columns(head[:-len(STAMP)])
 
 
 def load_db():
@@ -189,6 +201,7 @@ def check_rows(rows, profile, allowed, label, arm_of=None, ctx_of=None, columns=
               f"(needs arms {', '.join(a or '<base>' for a in allowed)})", file=sys.stderr)
         sys.exit(2)
     cols = list(columns if columns is not None else (rows[0].keys() if rows else []))
+    _eval_rows(rows, label, exp)
     src = {c: (f"eff_{c}" if f"eff_{c}" in cols else c) for c in STAMP}  # eff_<c> = the stamp where <c> was taken
     present = [c for c in STAMP if src[c] in cols]
     absent = [c for c in STAMP if src[c] not in cols]
@@ -247,6 +260,49 @@ def check_rows(rows, profile, allowed, label, arm_of=None, ctx_of=None, columns=
         sys.exit(2)
     if present:
         print(f"OK {label}: {len(rows)} rows match profile {profile} on {', '.join(present)}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------- eval suite of a generator (warnings only)
+
+_EVAL = {"suite": None, "who": "", "seen": {}}
+
+
+def _declare_eval(name, script):
+    """argparse type of --eval_suite: records the generator's suite and notes once when it is not the reference."""
+    if not name or name == "none":
+        return None
+    try:
+        evalsuite.load_suite(name)
+    except KeyError as e:
+        import argparse
+        raise argparse.ArgumentTypeError(e.args[0])
+    if _EVAL["suite"] != name:  # parse_intermixed_args converts the default twice
+        _EVAL.update(suite=name, who=os.path.basename(script))
+        evalsuite.reference_note(name, _EVAL["who"])
+    return name
+
+
+def _eval_rows(rows, label, exp=None):
+    """Eval-suite warnings for rows a generator checks (only when it declared a suite), for profile arms with a
+    validation split or early stopping the suite has not, and when the inputs of this run mix eval_suite values."""
+    if not _EVAL["suite"]:
+        return
+    spec = evalsuite.load_suite(_EVAL["suite"])
+    for n, p in (exp or {}).items():
+        vr, es = p.get("validation_set_ratio"), p.get("early_stopping")
+        if spec.get("validation") == "none" and vr not in (None, 0):
+            evalsuite.warn(f"{label}: profile {n} has validation_set_ratio={_fmt(vr)} (suite: none)")
+        if spec.get("early_stopping") == "none" and es is not None and str(es).upper() != "NONE":
+            evalsuite.warn(f"{label}: profile {n} has early_stopping={es} (suite: none)")
+    evalsuite.check_rows(rows, spec, label, max_lines=10)
+    seen = _EVAL["seen"]
+    before = len(seen)
+    for r in rows:
+        k = evalsuite._v(r, "eval_suite") or "unstamped"
+        seen[k] = seen.get(k, 0) + 1
+    if len(seen) > 1 and len(seen) > before and before:
+        evalsuite.warn(f"{_EVAL['who']}: table mixes eval suites across inputs: "
+                       + ", ".join(f"{k} ({n} rows)" for k, n in seen.items()))
 
 
 def check_frame(df, profile, allowed, label, arm_of=None, ctx_of=None):
@@ -432,6 +488,8 @@ def setup_line(profile, arms=()):
         diff = [ap[k] or ("single machine" if k == "W" else "") for k in ap if ap[k] != bp[k]]
         diff = [d for d in diff if d]
         line += f" | {a}: {', '.join(diff) if diff else 'same'}"
+    if _EVAL["suite"]:
+        line += f" | eval suite {_EVAL['suite']}"
     return line
 
 
@@ -447,6 +505,9 @@ def add_setup(text, line):
 def add_profile_arg(ap, script):
     ap.add_argument("--profile", default=generator_profile(script),
                     help="kdd28_params.json profile the input CSVs must match (default: %(default)s)")
+    ap.add_argument("--eval_suite", default=evalsuite.load_db()["_generators"].get(os.path.basename(script), ""),
+                    type=lambda s: _declare_eval(s, script),
+                    help="eval_suites.json suite the table declares, warns on rows that differ (default: %(default)s)")
 
 
 # ---------------------------------------------------------------- CLI
@@ -491,10 +552,60 @@ def selftest():
     cases.append(("legacy + new eval.json rows", (rc, "1 of 2 rows have no effective_params" in err), (0, True)))
     rc, _ = code(check_evals, [dict(new, workers=4)], "vertex_grid_pf", "e")
     cases.append(("eval.json exponent drift still caught", rc, 2))
+    cases += _eval_selftest(code)
     bad = [(n, got, want) for n, got, want in cases if got != want]
     for n, got, want in cases:
         print(f"{'FAIL' if (n, got, want) in bad else 'PASS'} selftest {n}: {got}" + (f" (want {want})" if got != want else ""))
     sys.exit(1 if bad else 0)
+
+
+def _eval_selftest(code):
+    """Eval-suite cases: every mismatch kind warns (never exits), a matching table stays silent."""
+    import hashlib
+    sha = {f"{d}/fold{k}_{s}.csv": hashlib.sha256(f"{d}{k}{s}".encode()).hexdigest()
+           for d, ks in (("A", (0, 1)), ("B", (0,))) for k in ks for s in ("train", "test")}
+    spec = {"name": "t_suite", "datasets": {"A": [0, 1], "B": [0]}, "sha": sha, "seeds": [1], "metric_impl": "ydf_eval_v1",
+            "files": {"train": "{dataset}/fold{fold}_train.csv", "test": "{dataset}/fold{fold}_test.csv"},
+            "validation": "none", "early_stopping": "none"}
+    good = [{"dataset": d, "fold": str(k), "seed": "1", "validation_set_ratio": "0", "early_stopping": "NONE",
+             "eval_suite": "t_suite", "metric_impl": "ydf_eval_v1",
+             "data_sha": evalsuite.data_sha(sha[f"{d}/fold{k}_train.csv"], sha[f"{d}/fold{k}_test.csv"])}
+            for d, k in (("A", 0), ("A", 1), ("B", 0))]
+
+    def warns(rows):
+        rc, err = code(evalsuite.check_rows, rows, spec, "t")
+        return rc, [ln for ln in err.splitlines() if ln.startswith(evalsuite.PREFIX)]
+
+    def has(rows, text):
+        rc, w = warns(rows)
+        return rc == 0 and any(text in ln for ln in w)
+    other = dict(good[1], data_sha=evalsuite.data_sha("0" * 64, sha["A/fold1_test.csv"]))
+    cases = [("eval: matching table is silent", warns(good), (0, [])),
+             ("eval: changed dataset warns", has(good[:2] + [dict(good[2], dataset="C")], "not in suite t_suite"), True),
+             ("eval: changed fold hash warns", has([good[0], other, good[2]], "fold 1 data_sha="), True),
+             ("eval: other metric_impl warns", has(good[:2] + [dict(good[2], metric_impl="sklearn_auc_v1")],
+                                                   "metric_impl=sklearn_auc_v1"), True),
+             ("eval: mixed-suite table warns", has(good[:2] + [dict(good[2], eval_suite="kdd28_cc18_fold0")],
+                                                   "mixes eval suites"), True),
+             ("eval: early stopping warns", has(good[:2] + [dict(good[2], early_stopping="LOSS_INCREASE")],
+                                                "early_stopping=LOSS_INCREASE"), True),
+             ("eval: missing fold warns", has(good[:2], "suite datasets missing: B"), True),
+             ("eval: unstamped rows warn, no exit", has([{k: v for k, v in r.items() if k not in evalsuite.COLUMNS}
+                                                         for r in good], "unstamped eval"), True),
+             ("eval: header with eval columns is stamped", stamped_header(["a"] + STAMP + evalsuite.COLUMNS), True),
+             ("eval: header without eval columns is stamped", stamped_header(["a"] + STAMP), True),
+             ("eval: header without stamps refused", stamped_header(["a", "b"] + evalsuite.COLUMNS), False),
+             ("eval: sha cache = hashlib", evalsuite.ShaCache().get_many([evalsuite.DB_PATH])[evalsuite.DB_PATH],
+              evalsuite._sha_file(evalsuite.DB_PATH))]
+    saved = dict(_EVAL)
+    _EVAL.update(suite=spec, who="gen.py", seen={})
+    rc1, _ = code(_eval_rows, good, "in1")
+    rc2, err = code(_eval_rows, [{k: v for k, v in r.items() if k not in evalsuite.COLUMNS} for r in good], "in2")
+    _EVAL.clear()
+    _EVAL.update(saved)
+    cases.append(("eval: generator mixing inputs warns", (rc1, rc2, "table mixes eval suites across inputs" in err),
+                  (0, 0, True)))
+    return cases
 
 
 def main(argv):
@@ -513,7 +624,7 @@ def main(argv):
         if os.path.exists(argv[2]):
             with open(argv[2]) as f:
                 head = f.readline().strip().split(",")
-            if head[-len(STAMP):] != stamp_columns(head[:-len(STAMP)]):
+            if not stamped_header(head):
                 sys.exit(print(f"ERROR {argv[2]}: recorded CSV without the stamp columns ({','.join(STAMP)}); "
                                "write new runs to a new results path", file=sys.stderr) or 2)
     elif cmd == "check-effective":
@@ -527,6 +638,14 @@ def main(argv):
         for m in mism:
             print(m)
         sys.exit(2 if mism else 0)
+    elif cmd == "check-eval":
+        if len(argv) < 3:
+            sys.exit("usage: params.py check-eval <csv> [--suite <name>]")
+        db = evalsuite.load_db()
+        suite = argv[argv.index("--suite") + 1] if "--suite" in argv else db["reference"]
+        label = os.path.basename(os.path.dirname(os.path.abspath(argv[2]))) + "/" + os.path.basename(argv[2])
+        evalsuite.reference_note(suite, label, db=db)
+        evalsuite.check_csv(argv[2], suite, label)
     elif cmd == "selftest":
         selftest()
     elif cmd == "show":

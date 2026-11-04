@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # KDD28 accuracy reruns, profile kdd28_ydf, on EC2 ariel-dist-accuracy-1 (ex ariel-ydf-1, i-0f90f7764082bf21a,
 # m7i.metal-24xl), distributed = in-process MULTI_THREAD workers (accuracy only, never timing). 2026-11-03.
-# Same-seed rerun on this box is bit-identical (tested 2026-11-03: 7 pairs, single and W=4/16, same tree nodes).
+# Same-seed rerun on this box is bit-identical (tested 2026-11-03 on m7i only: 7 pairs, single and W=4/16, same nodes).
+# 2026-11-04: box moved to c8i.metal-96xl (SMT + turbo on) for distacc_aaspo, distacc_exact300, colrep_distacc.
 """One resumable queue for tab:dist-accuracy (distacc), tab:column-replication (colrep, colrep_single; its r = 0
-cells are the in-worker arm of tab:cross-network) and tab:cc18-aa-spo arms (a), (d), (e) (cc18).
+cells are the in-worker arm of tab:cross-network), its AA+SPO and arm-(c) columns (distacc_aaspo,
+distacc_exact300), tab:column-replication on the distacc folds (colrep_distacc) and tab:cc18-aa-spo arms (a), (d), (e) (cc18).
 Cells run concurrently under a CPU-slot budget, datasets outer and arms inner, heaviest datasets first.
 Flags mirror run_table8_local.sh, run_replication_sweep.py, run_single_machine_cc18.sh, run_cc18_aa_spo_gbt.sh."""
 import argparse
@@ -20,6 +22,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "params"))
 import params as kdd28  # noqa: E402
+import evalsuite  # noqa: E402  (params/eval_suites.json: dataset/fold/hash/metric checks, warnings only)
 
 PR = "kdd28_ydf"
 SPLIT_AA = "--feature_split_type=Axis Aligned"
@@ -28,9 +31,14 @@ ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps 
     "colrep": "dataset,seed,replication,workers,threads,trees,max_depth,rc,test_acc,test_auc,test_logloss,"
               "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log",
     "colrep_single": "dataset,seed,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git",
+    "distacc_aaspo": "dataset,fold,arm,workers,split_axis,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git,bin_sha,machine",
+    "distacc_exact300": "dataset,fold,arm,workers,split_axis,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git,bin_sha,machine",
+    "colrep_distacc": "dataset,fold,replication,workers,threads,rc,test_acc,test_auc,test_logloss,"
+                      "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
     "cc18": "dataset,fold,arm,threads,rc,test_acc,test_auc,test_logloss,num_trees,train_s,wall_s,git,bin_sha",
 }
-KEYS = {"distacc": ("dataset", "fold", "arm"), "colrep": ("dataset", "seed", "replication"),
+KEYS = {"distacc": ("dataset", "fold", "arm"), "distacc_aaspo": ("dataset", "fold", "arm"),
+        "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "replication"), "colrep": ("dataset", "seed", "replication"),
         "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm")}
 
 
@@ -72,9 +80,9 @@ def build_cells(a):
     single_bin, dist_bin = os.path.join(B, "train_oblique_forest"), os.path.join(B, "train_distributed_gbt")
     tables, cells = a.tables.split(","), []
 
-    def single(table, key, prof, train, test, label, seed, split, model, ts, extra, cost):
+    def single(table, key, prof, train, test, label, seed, split, model, ts, extra, cost, ydf=True):
         argv = [single_bin, "--input_mode", "csv", "--train_csv", train, "--test_csv", test, "--label_col", label,
-                "--ensemble_method", "Boosting", "--ydf_defaults", *split, "--validation_set_ratio", "0",
+                "--ensemble_method", "Boosting", *(["--ydf_defaults"] if ydf else []), *split, "--validation_set_ratio", "0",
                 "--early_stopping", "NONE", "--num_threads", str(ts), "--seed", str(seed), "--model_out_dir", model]
         cells.append(Cell(table, key, prof, argv, ts, ts, cost, extra, False))
 
@@ -107,6 +115,13 @@ def build_cells(a):
         nf, n = shape(train)
         return n * (nf if aa else min(nf * nf, 6000))
 
+    def tab_folds():  # (dataset, fold, train, test) of tab:dist-accuracy, heaviest dataset first
+        ds = sorted(os.listdir(a.tab_folds))
+        ds.sort(key=lambda d: -cost(os.path.join(a.tab_folds, d, "fold0_train.csv"), False))
+        for d in ds:
+            for k in range(len(json.load(open(os.path.join(a.tab_folds, d, "folds.json")))["indices"])):
+                yield (d, k, *(os.path.join(a.tab_folds, d, f"fold{k}_{s}.csv") for s in ("train", "test")))
+
     if "distacc" in tables:
         ds = sorted(os.listdir(a.tab_folds))
         ds.sort(key=lambda d: -cost(os.path.join(a.tab_folds, d, "fold0_train.csv"), False))
@@ -129,6 +144,38 @@ def build_cells(a):
                         dist("distacc", key, f"{PR}.distacc_{A.lower()}", tr, te, int(W), 1, A == "AA", None, model,
                              os.path.join(o, "work", tag), {"workers": W, "split_axis": "AXIS_ALIGNED" if A == "AA"
                                                             else "SPARSE_OBLIQUE"}, c)
+    if "distacc_aaspo" in tables:  # single-machine AA+SPO column of tab:dist-accuracy, same folds (2026-11-04)
+        ds = sorted(os.listdir(a.tab_folds))
+        ds.sort(key=lambda d: -cost(os.path.join(a.tab_folds, d, "fold0_train.csv"), False))
+        for d in ds:
+            nf = len(json.load(open(os.path.join(a.tab_folds, d, "folds.json")))["indices"])
+            for k in range(nf):
+                tr, te = (os.path.join(a.tab_folds, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
+                single("distacc_aaspo", (d, k, "single:AA+SPO"), f"{PR}.distacc_single_aa_spo", tr, te, "label", 1,
+                       ["--feature_split_type=Oblique", "--oblique_also_axis_aligned"],
+                       os.path.join(a.out, "distacc_aaspo", "models", f"{d}__f{k}__single_AA+SPO"), a.single_threads,
+                       {"workers": "single", "split_axis": "AA+SPO"}, cost(tr, False))
+    if "distacc_exact300" in tables:  # arm (c) of tab:cc18-aa-spo (run_cc18_aa_spo_gbt.sh:24 flags), same folds
+        cp = kdd28.load_profile(f"{PR}.distacc_single_spo_harness_exact300")
+        split = ["--feature_split_type=Oblique", "--num_trees", str(cp["trees"]), "--numerical_split_type=Exact",
+                 "--num_projections_exponent", kdd28._fmt(cp["spo_exponent"]), "--max_num_projections",
+                 kdd28._fmt(cp["spo_max_projections"]), "--projection_density_factor", kdd28._fmt(cp["spo_density"])]
+        for d, k, tr, te in tab_folds():
+            single("distacc_exact300", (d, k, "single:SPO-harness-exact300"), f"{PR}.distacc_single_spo_harness_exact300",
+                   tr, te, "label", 1, split, os.path.join(a.out, "distacc_exact300", "models", f"{d}__f{k}__single_SPO_h300"),
+                   a.single_threads, {"workers": "single", "split_axis": "SPARSE_OBLIQUE"}, cost(tr, False), ydf=False)
+    if "colrep_distacc" in tables:  # tab:column-replication on the distacc datasets/folds, r = 0 only for --colrep_r0
+        cp = kdd28.load_profile(f"{PR}.colrep_distacc_spo")
+        r0 = {tuple(x.rsplit(":", 1)) for x in a.colrep_r0.split(",") if x}
+        o = os.path.join(a.out, "colrep_distacc")
+        for d, k, tr, te in tab_folds():
+            for r in cp["column_replication"]:
+                if r == 0 and (d, str(k)) not in r0:
+                    continue
+                tag = f"{d}__f{k}__r{r:.2f}"
+                dist("colrep_distacc", (d, k, float(r)), f"{PR}.colrep_distacc_spo", tr, te, cp["workers"][0], 1, False, r,
+                     os.path.join(o, "models", tag), os.path.join(o, "work", tag),
+                     {"workers": cp["workers"][0], "log": f"{d}__{k}__{float(r)}.log"}, cost(tr, False))
     if "colrep" in tables:
         cp = kdd28.load_profile(f"{PR}.colrep_spo")
         sp = kdd28.load_profile(f"{PR}.colrep_single_spo")
@@ -177,6 +224,8 @@ def main():
     ap.add_argument("--worker_threads", type=int, default=2, help="threads per in-process worker (model depends on it)")
     ap.add_argument("--max_weight", type=int, default=16, help="CPU slots one cell may claim at most")
     ap.add_argument("--git", default="")
+    ap.add_argument("--machine", default="", help="machine note for the 'machine' column (2026-11-04 tables)")
+    ap.add_argument("--colrep_r0", default="", help="colrep_distacc: dataset:fold,... that also run r = 0 (identity check)")
     ap.add_argument("--only", default="", help="comma list of dataset substrings")
     a = ap.parse_args()
     cells = build_cells(a)
@@ -188,7 +237,7 @@ def main():
                                  text=True).stdout[:12]
     except OSError:
         pass
-    lock, done, csvs = threading.Lock(), {}, {}
+    lock, done, csvs, eval_cols = threading.Lock(), {}, {}, {}
     for t in {c.table for c in cells}:
         os.makedirs(os.path.join(a.out, t, "logs"), exist_ok=True)
         path = csvs[t] = os.path.join(a.out, t, "results.csv")
@@ -201,7 +250,11 @@ def main():
                     done[(t,) + tuple(r[k] for k in KEYS[t])] = 1
         else:
             with open(path, "w", newline="") as f:
-                csv.writer(f).writerow(cols + kdd28.stamp_columns(cols))
+                csv.writer(f).writerow(cols + kdd28.stamp_columns(cols) + evalsuite.COLUMNS)
+        with open(path) as f:  # CSVs started before 2026-11-04 keep their header, rows stay eval-unstamped
+            eval_cols[t] = f.readline().strip().split(",")[-len(evalsuite.COLUMNS):] == evalsuite.COLUMNS
+        if not eval_cols[t]:
+            evalsuite.warn(f"{path}: no eval-suite columns (recorded before 2026-11-04), new rows unstamped eval")
     todo = [c for c in cells if (c.table,) + tuple(str(k) for k in c.key) not in done]
     print(f"{len(cells)} cells, {len(cells) - len(todo)} done, {len(todo)} to run on {a.cpus} CPU slots", flush=True)
     pre = set()
@@ -209,6 +262,8 @@ def main():
         if c.profile not in pre:
             pre.add(c.profile)
             kdd28.preflight(c.argv, c.profile, os.path.join(a.out, c.table, "logs", f"preflight_{c.profile}.log"))
+    ev = evalsuite.driver_preflight([(c.table, dict(zip(KEYS[c.table], c.key)), c.argv) for c in cells],
+                                    os.path.join(a.out, "eval_sha_cache.json"))
     left = {t: sum(1 for c in todo if c.table == t) for t in csvs}
     fails = {t: 0 for t in csvs}
     cv, state = threading.Condition(), {"free": a.cpus, "stop": False, "running": 0}
@@ -229,8 +284,11 @@ def main():
                 shutil.rmtree(c.work, ignore_errors=True)
             drift = kdd28.check_cell(c.profile, log)  # exit 2 on drift (ALLOW_DRIFT=1 -> "!drift")
             v = dict(zip(KEYS[c.table], c.key)) | c.extra | m | {"rc": rc, "wall_s": wall, "git": a.git,
-                                                                  "bin_sha": bin_sha, "threads": c.threads}
+                                                                  "bin_sha": bin_sha, "threads": c.threads,
+                                                                  "machine": a.machine}
             row = [v.get(k, "") for k in ROWS[c.table].split(",")] + kdd28.stamp_values(c.profile + drift, log)
+            if eval_cols[c.table]:
+                row += evalsuite.stamp(ev[(c.table,) + tuple(str(k) for k in c.key)], m)
             with lock:
                 with open(csvs[c.table], "a", newline="") as f:
                     csv.writer(f).writerow(row)

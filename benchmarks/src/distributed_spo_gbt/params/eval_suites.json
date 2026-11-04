@@ -1,0 +1,218 @@
+{
+ "_doc": "Eval suites of the KDD28 accuracy tables: datasets, fold ids, fold-file sha256, label rule, seeds, metric code, validation, early stopping. evalsuite.py checks rows and run plans against them and only warns ('WARN eval-suite:'). REPLICABILITY.md section K.",
+ "reference": "kdd28_tabarena33",
+ "reference_float": "tab:dist-accuracy-ydf",
+ "_driver_tables": {
+  "distacc": "kdd28_tabarena33",
+  "distacc_aaspo": "kdd28_tabarena33",
+  "distacc_exact300": "kdd28_tabarena33",
+  "colrep_distacc": "kdd28_tabarena33",
+  "colrep": "kdd28_cc18_fold0",
+  "colrep_single": "kdd28_cc18_fold0",
+  "cross_network": "kdd28_cc18_fold0",
+  "cc18": "kdd28_cc18_10fold"
+ },
+ "_generators": {
+  "make_paper_tables.py": "kdd28_tabarena33",
+  "make_column_replication_table.py": "kdd28_cc18_fold0",
+  "make_cross_network_table.py": "kdd28_cc18_fold0",
+  "make_cc18_aa_spo_table.py": "kdd28_cc18_10fold"
+ },
+ "metric_impls": {
+  "ydf_eval_v1": {
+   "test_auc": "YDF C++ metric evaluation (no sklearn): one-vs-other ROC of the last label-dictionary class on p = predicted distribution count(class) / sum, trapezoid over distinct thresholds (tied scores form one step, i.e. count 1/2), unweighted, every test row (prediction_sampling 1). yggdrasil_decision_forests/metric/metric.cc:1342 BuildROCCurve, :68 computeAUC",
+   "test_acc": "metric::Accuracy (argmax class) of the same evaluation",
+   "test_logloss": "metric::LogLoss of the same evaluation",
+   "train_oblique_forest": "examples/train_oblique_forest.cc:1777-1809: EvaluateWithStatus on --test_csv, test_auc = rocs(rocs_size-1).auc(), logged on the 'test-accuracy:' line",
+   "train_distributed_gbt": "examples/train_distributed_gbt.cc:338-347: Evaluate + TextReport. The driver takes the last '    auc:' line (metric/report.cc:488), i.e. the same last ROC",
+   "label_dictionary": "count-descending: train_oblique_forest.cc:1010 (ties value-ascending), YDF CreateDataSpec dataset/data_spec_inference.cc:345 (ties string-descending)"
+  }
+ },
+ "suites": {
+  "kdd28_tabarena33": {
+   "_note": "Reference suite (user decision 2026-11-04): every comparable KDD28 accuracy table shares it.",
+   "floats": [
+    "tab:dist-accuracy-ydf",
+    "fig:dist-accuracy-mean"
+   ],
+   "datasets": {
+    "APSFailure": [0, 1, 2, 3, 4],
+    "Amazon_employee_access": [0, 1, 2, 3, 4],
+    "Bank_Customer_Churn": [0, 1, 2, 3, 4],
+    "Bioresponse": [0, 1, 2, 3, 4],
+    "Diabetes130US": [0, 1, 2, 3, 4],
+    "E-CommereShippingData": [0, 1, 2, 3, 4],
+    "Fitness_Club": [0, 1, 2, 3, 4],
+    "GiveMeSomeCredit": [0, 1, 2, 3, 4],
+    "HR_Analytics_Job_Change_of_Data_Scientists": [0, 1, 2, 3, 4],
+    "Is-this-a-good-customer": [0, 1, 2, 3, 4],
+    "Marketing_Campaign": [0, 1, 2, 3, 4],
+    "NATICUSdroid": [0, 1, 2, 3, 4],
+    "bank-marketing": [0, 1, 2, 3, 4],
+    "blood-transfusion-service-center": [0, 1, 2, 3, 4],
+    "churn": [0, 1, 2, 3, 4],
+    "coil2000_insurance_policies": [0, 1, 2, 3, 4],
+    "credit-g": [0, 1, 2, 3, 4],
+    "credit_card_clients_default": [0, 1, 2, 3, 4],
+    "customer_satisfaction_in_airline": [0, 1, 2, 3, 4],
+    "diabetes": [0, 1, 2, 3, 4],
+    "ecom-offers": [0],
+    "hazelnut-spread-contaminant-detection": [0, 1, 2, 3, 4],
+    "heloc": [0, 1, 2, 3, 4],
+    "homecredit-default": [0],
+    "homesite-insurance": [0],
+    "in_vehicle_coupon_recommendation": [0, 1, 2, 3, 4],
+    "jm1": [0, 1, 2, 3, 4],
+    "kddcup09_appetency": [0, 1, 2, 3, 4],
+    "online_shoppers_intention": [0, 1, 2, 3, 4],
+    "polish_companies_bankruptcy": [0, 1, 2, 3, 4],
+    "qsar-biodeg": [0, 1, 2, 3, 4],
+    "seismic-bumps": [0, 1, 2, 3, 4],
+    "taiwanese_bankruptcy_prediction": [0, 1, 2, 3, 4]
+   },
+   "files": {
+    "train": "{dataset}/fold{fold}_train.csv",
+    "test": "{dataset}/fold{fold}_test.csv"
+   },
+   "hashes": {
+    "manifest": "benchmarks/results/runtime/speedup_map_by_dataset/MANIFEST/inputs.sha256",
+    "strip": "/home/ubuntu/spo_vs_gbt/folds/"
+   },
+   "data_root": "box ~/spo_vs_gbt/folds",
+   "folds_rule": "run_suite.make_folds: 5 CV folds, seed 0. Chronological 80/20 holdout (fold 0 only) for ecom-offers, homecredit-default, homesite-insurance (spaa27_experiments/REPLICABILITY.md section 4)",
+   "label_col": "label",
+   "label_rule": "benchmarks/data/tabular_suite_prep.py encode_binary_label: two classes, majority = 0",
+   "positive_class": "AUC positive class = the last label-dictionary class = the least frequent training-fold class (label 1 for 0/1 labels from encode_binary_label, majority class = 0)",
+   "seeds": [1],
+   "seed_protocol": "seed 1 per fold",
+   "metric_impl": "ydf_eval_v1",
+   "headline": "test_auc",
+   "validation": "none",
+   "early_stopping": "none"
+  },
+  "kdd28_cc18_fold0": {
+   "_note": "34 CC18 binary tasks, fold 0 only, prep_cc18_fold0.py. Not comparable with the reference suite.",
+   "floats": [
+    "tab:column-replication-ydf",
+    "fig:column-replication",
+    "tab:cross-network"
+   ],
+   "datasets": {
+    "task_10093_banknote-authentication": [0],
+    "task_10101_blood-transfusion-service-center": [0],
+    "task_125920_dresses-sales": [0],
+    "task_146819_climate-model-simulation-crashes": [0],
+    "task_146820_wilt": [0],
+    "task_14952_PhishingWebsites": [0],
+    "task_14954_cylinder-bands": [0],
+    "task_14965_bank-marketing": [0],
+    "task_15_breast-w": [0],
+    "task_167120_numerai28.6": [0],
+    "task_167125_Internet-Advertisements": [0],
+    "task_167141_churn": [0],
+    "task_219_electricity": [0],
+    "task_29_credit-approval": [0],
+    "task_31_credit-g": [0],
+    "task_37_diabetes": [0],
+    "task_3902_pc4": [0],
+    "task_3903_pc3": [0],
+    "task_3904_jm1": [0],
+    "task_3913_kc2": [0],
+    "task_3917_kc1": [0],
+    "task_3918_pc1": [0],
+    "task_3_kr-vs-kp": [0],
+    "task_43_spambase": [0],
+    "task_49_tic-tac-toe": [0],
+    "task_7592_adult": [0],
+    "task_9910_Bioresponse": [0],
+    "task_9946_wdbc": [0],
+    "task_9952_phoneme": [0],
+    "task_9957_qsar-biodeg": [0],
+    "task_9971_ilpd": [0],
+    "task_9976_madelon": [0],
+    "task_9977_nomao": [0],
+    "task_9978_ozone-level-8hr": [0]
+   },
+   "files": {
+    "train": "{dataset}/train.csv",
+    "test": "{dataset}/test.csv"
+   },
+   "hashes": {
+    "manifest": "benchmarks/src/distributed_spo_gbt/params/eval_suites/kdd28_cc18_fold0.sha256",
+    "strip": ""
+   },
+   "data_root": "ariel_notes/results/2026-10-28_column_replication/data_cc18_fold0 (box: rebuilt, byte-identical)",
+   "folds_rule": "column_replication/prep_cc18_fold0.py: OpenML CC18 split, fold 0",
+   "label_col": "label",
+   "label_rule": "encode_binary_label: two classes, majority train class = 0",
+   "positive_class": "AUC positive class = the last label-dictionary class = the least frequent training-fold class (label 1 for 0/1 labels from encode_binary_label, majority class = 0)",
+   "seeds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+   "seed_protocol": "fold 0, seeds 1-5 distributed, 1-10 single machine",
+   "metric_impl": "ydf_eval_v1",
+   "headline": "test_acc",
+   "validation": "none",
+   "early_stopping": "none"
+  },
+  "kdd28_cc18_10fold": {
+   "_note": "34 CC18 binary tasks, 10 OpenML folds, run_cc18_aa_spo_gbt.sh data/. Raw string labels, per-dataset label column. Not comparable with the reference suite, and its fold 0 files differ from kdd28_cc18_fold0 (label name everywhere, cell values in 5 datasets).",
+   "floats": [
+    "tab:cc18-aa-spo-ydf"
+   ],
+   "datasets": {
+    "Bioresponse": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "Internet-Advertisements": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "PhishingWebsites": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "adult": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "bank-marketing": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "banknote-authentication": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "blood-transfusion-service-center": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "breast-w": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "churn": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "climate-model-simulation-crashes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "credit-approval": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "credit-g": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "cylinder-bands": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "diabetes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "dresses-sales": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "electricity": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "ilpd": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "jm1": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "kc1": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "kc2": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "kr-vs-kp": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "madelon": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "nomao": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "numerai28.6": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "ozone-level-8hr": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "pc1": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "pc3": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "pc4": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "phoneme": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "qsar-biodeg": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "spambase": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "tic-tac-toe": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "wdbc": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "wilt": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+   },
+   "files": {
+    "train": "{dataset}/fold{fold}_train.csv",
+    "test": "{dataset}/fold{fold}_test.csv"
+   },
+   "hashes": {
+    "manifest": "benchmarks/src/distributed_spo_gbt/params/eval_suites/kdd28_cc18_10fold.sha256",
+    "strip": ""
+   },
+   "data_root": "ariel_notes/results/2026-10-29_cc18_aa_spo_gbt/data (box: rebuilt, byte-identical)",
+   "folds_rule": "OpenML CC18 10-fold CV splits",
+   "label_col": null,
+   "label_rule": "raw class strings, label column from <dataset>/meta.json",
+   "positive_class": "AUC positive class = the last label-dictionary class = the least frequent training-fold class",
+   "seeds": [1],
+   "seed_protocol": "seed 1 per fold",
+   "metric_impl": "ydf_eval_v1",
+   "headline": "test_acc",
+   "validation": "none",
+   "early_stopping": "none"
+  }
+ }
+}

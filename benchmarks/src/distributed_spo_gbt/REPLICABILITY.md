@@ -395,7 +395,50 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
 - Not rerun: the cross-network arm of tab:cross-network. Column shipping lives only on `cross-worker-col-comms` /
   `fix-disc-colcomms`, which predate the split budget and the effective-params line. Its in-worker arm equals the
   column-replication r = 0 cells.
+- AA+SPO and arm (c) columns of tab:dist-accuracy (2026-11-04): profile arms `kdd28_ydf.distacc_single_aa_spo` and
+  `kdd28_ydf.distacc_single_spo_harness_exact300` (the flags of `cc18_aa_spo.spo_harness_exact300`, P = min(F, 1000)),
+  `run_kdd28_ydf_ec2.py --tables distacc_aaspo,distacc_exact300` (153 dataset-folds each, single machine, 4 threads,
+  yesterday's binaries: no C++ change e3279f20..c3b01f56). Machine: the same instance resized to **c8i.metal-96xl**
+  (Xeon 6975P-C, 384 threads, SMT and turbo on, 755 GiB). The earlier §J runs ran on m7i.metal-24xl with SMT off.
+  Same-seed determinism was tested on m7i only. Rows carry a `machine` column. Tracked CSVs:
+  `benchmarks/results/accuracy/distributed_spo_gbt/kdd28_ydf_2026-11-04/distacc_aaspo/`. Argv goldens
+  `params/golden/kdd28_ydf_distacc_{aaspo,exact300}.argv`.
+- Column replication on the tab:dist-accuracy setup (2026-11-04, c8i.metal-96xl, SMT and turbo on): profile arm
+  `kdd28_ydf.colrep_distacc_spo` (= distacc_spo at W = 4 plus `--column_replication r`, r = 0.1..1.0),
+  `run_kdd28_ydf_ec2.py --tables colrep_distacc`, 1530 cells, box `~/results/2026-11-04_colrep_distacc/`, mirrored by
+  `ariel_notes/results/2026-11-04_colrep_distacc/wait_and_mirror.sh`. r = 0 and `single` reuse the distacc W = 4 SPO and
+  single SPO rows. Check: r = 0 rerun on 3 dataset-folds (blood-transfusion f1, diabetes f2, Fitness_Club f0), on m7i and
+  again on c8i, gave `nodes-*` and header byte-identical to the distacc W = 4 models and equal AUC.
 - Cross-network arm (added 2026-11-04, not yet run): branch `cross-worker-col-comms` @ d97fe698 (main merged in, split
   budget applies to ship mode), profile arm `kdd28_ydf.cross_network_ship`, `run_kdd28_ydf_ec2.py --tables cross_network`
   (34 CC18 fold 0 x seeds 1-5, W = 4). Results box `~/results/2026-11-04_cross_network_ydf/`, mirrored by
   `ariel_notes/results/2026-11-04_cross_network_ydf/mirror.sh`. The arm definition lives on that branch's kdd28_params.json.
+
+## K. Eval suites: which data and metric code an accuracy table used (user decision, 2026-11-04)
+
+Comparable KDD28 accuracy tables share eval suite `kdd28_tabarena33`, the setup of tab:dist-accuracy-ydf: 33
+TabArena/TabReD datasets, 5 CV folds (1 chronological holdout for ecom-offers, homecredit-default, homesite-insurance),
+seed 1 per fold, test ROC AUC, no validation split, no early stopping. Spec: `params/eval_suites.json` (datasets with
+fold ids, file templates, label and positive-class rule, seeds, metric implementation, validation, early stopping).
+Fold-file sha256: the TabArena suite reuses `benchmarks/results/runtime/speedup_map_by_dataset/MANIFEST/inputs.sha256`,
+the CC18 suites `params/eval_suites/*.sha256` (hashed from the Mac copies, 2026-11-04).
+
+- Metric `ydf_eval_v1` (both binaries, no sklearn): YDF's C++ evaluation, ROC of the last label-dictionary class (the
+  least frequent training class, label 1 under majority = 0), trapezoid over distinct scores (ties count 1/2), all test
+  rows. Sites: `examples/train_oblique_forest.cc:1777-1809`, `examples/train_distributed_gbt.cc:338-347`,
+  `metric/metric.cc:1342` (BuildROCCurve), `metric/report.cc:488` (the `auc:` line the EC2 driver parses).
+- Stamps: `run_kdd28_ydf_ec2.py` appends `eval_suite,data_sha,metric_impl` to new results CSVs (`data_sha` =
+  `<train sha256[:16]>+<test sha256[:16]>`, hashes cached in `<out>/eval_sha_cache.json`). CSVs started earlier keep
+  their header and stay unstamped.
+- Warnings, never stops, one grep-able line each (`WARN eval-suite:`): the driver pre-flight checks each table's plan
+  (datasets, fold ids, file hashes, label column, metric implementation, validation, early stopping) against the table's
+  suite (`_driver_tables`). Generators declare `--eval_suite` (default from `_generators`), warn on rows that differ,
+  on mixed suites, on profile arms with a validation split or early stopping, and once by name when the suite is not the
+  reference. The `% setup:` line ends with `| eval suite <name>`.
+- Check by hand: `python3 params/params.py check-eval <results.csv> [--suite <name>]` (default: the reference).
+  Rows without the new columns warn "unstamped eval" and are checked on dataset, fold, seed, validation and early stopping.
+- The other suites are not comparable with the reference: `kdd28_cc18_fold0` (tab:column-replication-ydf,
+  tab:cross-network) and `kdd28_cc18_10fold` (tab:cc18-aa-spo-ydf). Their fold-0 files differ byte-wise (label column
+  name in all 34 datasets, cell values in climate-model-simulation-crashes, credit-approval, cylinder-bands,
+  dresses-sales and jm1, measured 2026-11-04). The two datasets whose fold-0 seed-1 accuracy differs between the tables
+  (cylinder-bands, dresses-sales) are among them.

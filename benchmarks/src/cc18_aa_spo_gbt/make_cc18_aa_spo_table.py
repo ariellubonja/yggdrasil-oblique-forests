@@ -29,12 +29,15 @@ def main():
     ap.add_argument("out_pos", nargs="?", metavar="out_body.tex")
     ap.add_argument("--out", default=None, help="output body path (same as the 2nd positional)")
     ap.add_argument("--time", action="store_true")
+    ap.add_argument("--auc_first", action="store_true", help="ROC AUC column before Accuracy")
     ap.add_argument("--arm_map", default="", help="src_arm=row_arm,... (kdd28_ydf: cc18_aa=aa_ydf,cc18_spo=spo_ydf,...)")
     ap.add_argument("--recorded", default="", help="CSV with the rows --arm_map does not fill")
     ap.add_argument("--recorded_profile", default=kdd28.generator_profile(__file__))
     kdd28.add_profile_arg(ap, __file__)
     opt = ap.parse_intermixed_args()
     src, out, with_time = opt.src, opt.out or opt.out_pos, opt.time
+    if opt.auc_first:
+        METRICS[0], METRICS[1] = METRICS[1], METRICS[0]
     amap = dict(kv.split("=") for kv in opt.arm_map.split(",")) if opt.arm_map else {a: a for a, _ in ARMS}
     rest = [a for a, _ in ARMS if a not in amap.values()]
     if rest and not opt.recorded:

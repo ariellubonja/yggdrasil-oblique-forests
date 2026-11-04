@@ -139,6 +139,9 @@ Claude Code is the hub and this repo is the source of truth.
   `profile!drift`, which generators refuse. After editing a run script, run `params/check_argv_equivalence.sh`
   (goldens in `params/golden/`, `--update` after an intended argv change, `REAL=1` checks real binaries).
 - **CC18 arms (b) and (c) stay (2026-11-03):** old-harness comparison arms, never drop them.
+- **Comparable KDD28 accuracy tables share eval suite `kdd28_tabarena33` (2026-11-04)**, the setup of
+  tab:dist-accuracy-ydf (`params/eval_suites.json`). The harness warns (`WARN eval-suite:`) on dataset, fold, file-hash,
+  metric, validation or early-stopping mismatch. Check: `params.py check-eval <csv>`. REPLICABILITY.md §K.
 
 ## Distributed GBT
 
