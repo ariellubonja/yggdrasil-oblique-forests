@@ -12,25 +12,30 @@
 # float columns; the cache's default discretisation (<=16000 uniques -> bin midpoints) cost
 # SPO 0.01-0.035 AUC on the qsar-biodeg fold-0 smoke and does nothing for AA). Threads per
 # worker = driver default 6. Appends to suite_results.csv.
+# Values: params/kdd28_params.json profile table8 (arms suite_spo, suite_aa).
 set -uo pipefail
+PARAMS=$(cd "$(dirname "$0")" && pwd)/params/params.py
+. "$(dirname "$PARAMS")/drift.sh"  # run_cell: pre-flight + per-cell drift stop (ALLOW_DRIFT=1 warns)
+eval "$(python3 "$PARAMS" export table8.suite_spo Q_)"
 REPO=/home/ubuntu/yggdrasil-oblique-forests
 BIN=$REPO/bazel-bin/examples/train_distributed_gbt
 OUT=$REPO/benchmarks/results/runtime/distributed_spo_gbt
 FOLDS=/home/ubuntu/spo_vs_gbt/folds
 WORK=${WORK:-/home/ubuntu/dgbt_work/suite}
 RESULTS=${RESULTS:-$OUT/suite_results.csv}
-TREES=${TREES:-300}; MAX_DEPTH=${MAX_DEPTH:-6}
+TREES=${TREES:-$Q_TREES}; MAX_DEPTH=${MAX_DEPTH:-$Q_MAX_DEPTH}
 # Threads per worker: max(6, 48/W) (6 = driver default). Runtime-only: the distributed oblique
 # finder seeds its RNG per (seed, node), so results are thread-count independent (verified
 # bit-identical at 6 vs 48 threads on qsar-biodeg fold 0, 2026-10-12). At the default 6 the
 # 1-worker P=F cells were ~40x slower than the paper's 48-thread arm (APSFailure 683 s/fold).
 threads_for() { local t=$((48 / $1)); [ $t -lt 6 ] && t=6; echo $t; }
 # Resume: skip a cell whose (dataset, fold, workers, split_axis, trees) row already has rc=0.
-CELLS=${CELLS:-"1:SPARSE_OBLIQUE 4:SPARSE_OBLIQUE 8:SPARSE_OBLIQUE 16:SPARSE_OBLIQUE 1:AXIS_ALIGNED 4:AXIS_ALIGNED 8:AXIS_ALIGNED 16:AXIS_ALIGNED"}
+CELLS=${CELLS:-"$(for w in $Q_WORKERS; do printf '%s ' $w:SPARSE_OBLIQUE; done)$(for w in $Q_WORKERS; do printf '%s ' $w:AXIS_ALIGNED; done)"}
 DATASETS=${DATASETS:-$(ls $FOLDS)}
 GITSHA=$(git -C "$REPO" rev-parse --short HEAD)
+python3 "$PARAMS" require-stamped "$RESULTS" || exit 2
 mkdir -p "$OUT/logs/suite" "$WORK"
-[ -f "$RESULTS" ] || echo "dataset,fold,workers,threads_per_worker,split_axis,trees,max_depth,rc,train_took,wall_s,test_acc,test_auc,test_logloss,git,log" > "$RESULTS"
+[ -f "$RESULTS" ] || echo "dataset,fold,workers,threads_per_worker,split_axis,trees,max_depth,rc,train_took,wall_s,test_acc,test_auc,test_logloss,git,log,$(python3 "$PARAMS" stamp-header dataset,fold,workers,threads_per_worker,split_axis,trees,max_depth,rc,train_took,wall_s,test_acc,test_auc,test_logloss,git,log)" > "$RESULTS"
 for ds in $DATASETS; do
   LABEL=$(python3 -c "import json;print(json.load(open('$FOLDS/$ds/folds.json'))['label_col'])")
   NF=$(python3 -c "import json;print(len(json.load(open('$FOLDS/$ds/folds.json'))['indices']))")
@@ -45,24 +50,24 @@ for ds in $DATASETS; do
       rm -rf "$WD"
       echo "### $STAMP START $TAG"
       T0=$(date +%s.%N)
+      PROF=table8.suite_spo; [ $AXIS = AXIS_ALIGNED ] && PROF=table8.suite_aa
       # Legacy per-worker local count (recorded Table 9 cells): pin split budget off, else the guard rejects it.
-      "$BIN" --alsologtostderr --train_csv "$TRAIN" --test_csv "$TEST" --label "$LABEL" \
+      # SPO flags on SPO cells only: AXIS_ALIGNED fails on them (train_distributed_gbt.cc, never ignore a flag).
+      S1=(); [ $AXIS = AXIS_ALIGNED ] || S1=(--sparse_oblique_projection_density_factor $Q_SPO_DENSITY
+        --sparse_oblique_num_projections_exponent $Q_SPO_EXPONENT --sparse_oblique_max_num_projections $Q_SPO_MAX_PROJECTIONS
+        --sparse_oblique_local_projection_count=$Q_LOCAL_PROJECTION_COUNT --sparse_oblique_split_budget=$Q_SPLIT_BUDGET)
+      DRIFT_EXPECT="trees=$TREES max_depth=$MAX_DEPTH" run_cell $PROF "$LOG" "$BIN" --alsologtostderr --train_csv "$TRAIN" --test_csv "$TEST" --label "$LABEL" \
         --work_dir "$WD" --num_workers "$W" --num_threads "$THREADS" \
-        --num_trees "$TREES" --max_depth "$MAX_DEPTH" --split_axis "$AXIS" \
-        --sparse_oblique_projection_density_factor 1.5 \
-        --sparse_oblique_num_projections_exponent 1 \
-        --sparse_oblique_max_num_projections 2147483647 \
-        --sparse_oblique_local_projection_count=true \
-        --sparse_oblique_split_budget=false \
-        --max_unique_values_for_discretized_numerical=1 \
-        --worker_logs=false > "$LOG" 2>&1
+        --num_trees "$TREES" --max_depth "$MAX_DEPTH" --split_axis "$AXIS" ${S1[@]+"${S1[@]}"} \
+        --max_unique_values_for_discretized_numerical=$Q_MAX_UNIQUE_DISCRETIZED \
+        --worker_logs=false
       RC=$?
       T1=$(date +%s.%N); WALL=$(python3 -c "print(round($T1-$T0,2))")
       TRAIN_S=$(grep -o "Training (incl. cache creation) took [0-9.a-zµ]*" "$LOG" | tail -1 | awk '{print $NF}')
       ACC=$(grep -m1 -E "^Accuracy:" "$LOG" | awk '{print $2}')
       AUC=$(grep -m1 -E "^\s*auc:" "$LOG" | awk '{print $2}')
       LOGLOSS=$(grep -m1 -E "^LogLoss:" "$LOG" | sed -E 's/LogLoss: *:? *//' | awk '{print $1}')
-      echo "$ds,$k,$W,$THREADS,$AXIS,$TREES,$MAX_DEPTH,$RC,$TRAIN_S,$WALL,$ACC,$AUC,$LOGLOSS,$GITSHA,$(basename "$LOG")" >> "$RESULTS"
+      echo "$ds,$k,$W,$THREADS,$AXIS,$TREES,$MAX_DEPTH,$RC,$TRAIN_S,$WALL,$ACC,$AUC,$LOGLOSS,$GITSHA,$(basename "$LOG"),$(python3 "$PARAMS" stamp "$PROF$DRIFT" "$LOG")" >> "$RESULTS"
       echo "### $(date -u +%FT%TZ) END   $TAG rc=$RC wall=${WALL}s acc=$ACC auc=$AUC"
       rm -rf "$WD"
     done

@@ -11,9 +11,16 @@ Usage: run_replication_sweep.py --bin BIN --data DATA_DIR --out OUT [--jobs 2] [
 import argparse, csv, os, re, shutil, subprocess, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
+
+PROFILE = "colrep_inproc_smoke"
+P = kdd28.load_profile(PROFILE)
+
 FIELDS = ["dataset", "seed", "replication", "workers", "threads", "trees", "max_depth", "rc",
           "test_acc", "test_auc", "test_logloss", "num_conditions", "num_oblique", "num_multi_col",
           "held_cols", "train_s", "wall_s", "git", "log"]
+FIELDS += kdd28.stamp_columns(FIELDS)
 LOCK = threading.Lock()
 
 
@@ -45,12 +52,12 @@ def main():
     ap.add_argument("--data", required=True, help="prep_cc18_fold0.py output dir")
     ap.add_argument("--out", required=True)
     ap.add_argument("--jobs", type=int, default=2)
-    ap.add_argument("--threads", type=int, default=2)
-    ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--trees", type=int, default=20)
-    ap.add_argument("--max_depth", type=int, default=6)
-    ap.add_argument("--seeds", default="1,2,3,4,5")
-    ap.add_argument("--levels", default="0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1")
+    ap.add_argument("--threads", type=int, default=P["threads"])
+    ap.add_argument("--workers", type=int, default=P["workers"][0])
+    ap.add_argument("--trees", type=int, default=P["trees"])
+    ap.add_argument("--max_depth", type=int, default=P["max_depth"])
+    ap.add_argument("--seeds", default=",".join(map(str, P["seeds"])))
+    ap.add_argument("--levels", default=",".join(map(str, P["column_replication"])))
     ap.add_argument("--only", default="")
     ap.add_argument("--git", default="")
     a = ap.parse_args()
@@ -64,6 +71,8 @@ def main():
     os.makedirs(os.path.join(a.out, "work"), exist_ok=True)
     res = os.path.join(a.out, "results.csv")
     done = set()
+    if subprocess.run([sys.executable, kdd28.__file__, "require-stamped", res]).returncode:
+        sys.exit(2)
     if os.path.exists(res):
         for r in csv.DictReader(open(res)):
             if r["rc"] == "0":
@@ -75,27 +84,33 @@ def main():
     print(f"{len(cells)} cells to run ({len(done)} done), {a.jobs} parallel x W={a.workers} x T={a.threads}",
           flush=True)
 
+    def cell_cmd(d, s, r, work):
+        return [a.bin, "--alsologtostderr",
+               "--train_csv", os.path.join(a.data, d, "train.csv"),
+               "--test_csv", os.path.join(a.data, d, "test.csv"),
+               "--label", "label", *(["--force_numerical_features"] if P["force_numerical"] else []),
+               "--work_dir", work, "--num_workers", str(a.workers), "--num_threads", str(a.threads),
+               "--num_trees", str(a.trees), "--max_depth", str(a.max_depth),
+               "--split_axis", "SPARSE_OBLIQUE",
+               "--sparse_oblique_num_projections_exponent", str(P["spo_exponent"]),
+               "--sparse_oblique_max_num_projections", str(P["spo_max_projections"]),
+               f"--sparse_oblique_local_projection_count={kdd28._fmt(P['local_projection_count'])}",
+               f"--sparse_oblique_split_budget={kdd28._fmt(P['split_budget'])}",  # legacy per-worker P: reproduces the recorded cells
+               "--sparse_oblique_projection_density_factor", str(P["spo_density"]),
+               "--sparse_oblique_weights", "BINARY",
+               f"--max_unique_values_for_discretized_numerical={P['max_unique_discretized']}",
+               "--column_replication", str(r), "--seed", str(s), "--worker_logs=false"]
+
+    # The CLI knobs replace the profile's expectation; anything else that differs is drift.
+    expect = {"trees": a.trees, "max_depth": a.max_depth, "seed": seeds}
+
     def run(cell):
         d, s, r = cell
         tag = f"{d}__s{s}__r{r:.2f}"
         log = os.path.join(a.out, "logs", tag + ".log")
         work = os.path.join(a.out, "work", tag)
         shutil.rmtree(work, ignore_errors=True)
-        cmd = [a.bin, "--alsologtostderr",
-               "--train_csv", os.path.join(a.data, d, "train.csv"),
-               "--test_csv", os.path.join(a.data, d, "test.csv"),
-               "--label", "label", "--force_numerical_features",
-               "--work_dir", work, "--num_workers", str(a.workers), "--num_threads", str(a.threads),
-               "--num_trees", str(a.trees), "--max_depth", str(a.max_depth),
-               "--split_axis", "SPARSE_OBLIQUE",
-               "--sparse_oblique_num_projections_exponent", "1",
-               "--sparse_oblique_max_num_projections", "2147483647",
-               "--sparse_oblique_local_projection_count=false",
-               "--sparse_oblique_split_budget=false",  # legacy per-worker P: reproduces the recorded cells
-               "--sparse_oblique_projection_density_factor", "1.5",
-               "--sparse_oblique_weights", "BINARY",
-               "--max_unique_values_for_discretized_numerical=1",
-               "--column_replication", str(r), "--seed", str(s), "--worker_logs=false"]
+        cmd = cell_cmd(d, s, r, work)
         t0 = time.time()
         with open(log, "w") as lf:
             lf.write("# " + " ".join(cmd) + "\n")
@@ -104,18 +119,26 @@ def main():
         wall = round(time.time() - t0, 2)
         acc, auc, ll, (nc, no, nm), train_s, held = parse(log)
         shutil.rmtree(work, ignore_errors=True)
+        drift = kdd28.check_cell(PROFILE, log, expect=expect)  # exit 2 on drift; ALLOW_DRIFT=1 -> "!drift"
         row = [d, s, r, a.workers, a.threads, a.trees, a.max_depth, p.returncode, acc, auc, ll, nc, no, nm,
-               held, train_s, wall, a.git, os.path.basename(log)]
+               held, train_s, wall, a.git, os.path.basename(log)] + kdd28.stamp_values(PROFILE + drift, log)
         with LOCK:
             with open(res, "a", newline="") as f:
                 csv.writer(f).writerow(row)
         return tag, p.returncode, acc, wall
 
+    if cells:  # pre-flight: the first cell's argv + --print_params_only, exit 2 on drift
+        kdd28.preflight(cell_cmd(*cells[0], os.path.join(a.out, "work", "preflight")), PROFILE,
+                        os.path.join(a.out, "logs", "preflight.log"), expect=expect)
     with ThreadPoolExecutor(a.jobs) as ex:
         futs = [ex.submit(run, c) for c in cells]
-        for i, fu in enumerate(as_completed(futs), 1):
-            tag, rc, acc, wall = fu.result()
-            print(f"[{i}/{len(cells)}] {tag} rc={rc} acc={acc} {wall}s", flush=True)
+        try:
+            for i, fu in enumerate(as_completed(futs), 1):
+                tag, rc, acc, wall = fu.result()  # re-raises a cell's drift stop (SystemExit 2)
+                print(f"[{i}/{len(cells)}] {tag} rc={rc} acc={acc} {wall}s", flush=True)
+        except SystemExit:
+            ex.shutdown(wait=True, cancel_futures=True)
+            raise
 
 
 if __name__ == "__main__":

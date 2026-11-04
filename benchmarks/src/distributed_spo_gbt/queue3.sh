@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # Pass 3 (after queue2): matched budget at 4 workers via the legacy per-worker LOCAL count: each worker samples
 # ceil(F_local^e) from its ~F/4 columns, e chosen so the 4 together test ~ceil(sqrt F) per node (SUSY 4 vs 5,
 # Epsilon 48 vs 45, HIGGS 8 vs 6, YouTube-8M 36 vs 34). Split budget (library default since 2026-11-02) pinned off.

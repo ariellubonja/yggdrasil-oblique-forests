@@ -3,8 +3,12 @@
 Captions, labels and table environments live in main.tex, which \input{}s the bodies.
 Arms: "SPO in-node sequential" = rebased-main 23053344, "SPO in-node parallel" = in-node-parallelism-SPOGBT cee3b4c8.
 Sources: benchmarks/results/runtime/distributed_spo_gbt/in_node_parallelism_2026-10-22/{sm_thread_sweep_old_vs_new.csv,susy_and_distributed_old_vs_new.txt}."""
-import argparse, pathlib, re
+import argparse, pathlib, re, sys
 import pandas as pd
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
+PROFILE = kdd28.generator_profile(__file__)  # --profile
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 SRC = ROOT / "benchmarks/results/runtime/distributed_spo_gbt/in_node_parallelism_2026-10-22"
@@ -45,6 +49,7 @@ def parse_txt():
 
 def threads_table():
     d = pd.read_csv(SRC / "sm_thread_sweep_old_vs_new.csv", comment="#")
+    kdd28.check_frame(d, PROFILE, [""], "sm_thread_sweep_old_vs_new.csv")
     txt = parse_txt()
     lines = [HDR, r"\begin{tabular}{ll" + "r" * len(THREADS) + "}", r"\toprule",
              r"Dataset & Arm & \multicolumn{" + str(len(THREADS)) + r"}{c}{Threads $T$} \\",
@@ -68,7 +73,7 @@ def threads_table():
         if key != DATASETS[-1][0]:
             lines.append(r"\midrule")
     lines += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join(lines) + "\n"
+    return kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(PROFILE))
 
 
 def distributed_table():
@@ -87,11 +92,12 @@ def distributed_table():
             cells.append(f"{secs(v)} ({ref / v:.1f}$\\times$)")
         lines.append(f"{name} & {sort} & " + " & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}"]
-    return "\n".join(lines) + "\n"
+    return kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(PROFILE))
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("--out", default=str(OUT)); args = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument("--out", default=str(OUT)); kdd28.add_profile_arg(ap, __file__)
+    args = ap.parse_args(); PROFILE = args.profile
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
     for name, fn in (("table_in_node_threads_body.tex", threads_table), ("table_in_node_distributed_body.tex", distributed_table)):
         (out / name).write_text(fn()); print("wrote", out / name)

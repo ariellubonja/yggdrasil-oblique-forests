@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # Smoke / bit-identity checks of the column-replication build against the baseline binary.
 #   smoke_colrep.sh BASELINE_BIN COLREP_BIN DATA_DIR OUT_DIR
 # DATA_DIR = prep_cc18_fold0.py output. Prints PASS/FAIL per check; models are saved under OUT_DIR.

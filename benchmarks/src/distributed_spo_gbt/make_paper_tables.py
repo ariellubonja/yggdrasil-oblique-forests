@@ -2,8 +2,11 @@
 """Emit the Distributed SPO-GBT paper's accuracy table BODY (tabular only) and the accuracy figures.
 Table/figure environments, captions and labels live in main.tex, which \\input{}s the bodies.
 Accuracy: Table-9-style AUC suite (suite_results.csv) vs the SPAA paper's single-machine GBT arms."""
-import argparse, pathlib
+import argparse, pathlib, sys
 import pandas as pd
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 R = ROOT / "benchmarks/results/runtime"
@@ -19,6 +22,30 @@ def col(label):
 
 
 ACC_CSV = None  # --accuracy_csv: one rerun file (run_table8_local.sh) for every accuracy arm
+PROFILE = kdd28.generator_profile(__file__)  # --profile
+ARMS_SHOWN = ["single_spo", "single_aa", "dist_spo", "dist_aa"]
+_CHECKED = []
+
+
+def _rerun_arm(r):
+    """run_table8_local.sh arm label -> table8 arm."""
+    w, a = str(r["arm"]).split(":")
+    return ("single_" if w == "single" else "dist_") + a.lower()
+
+
+def check_inputs(p, d):
+    """Refuse drift of the rows used (once per run)."""
+    if _CHECKED:
+        return
+    _CHECKED.append(1)
+    if ACC_CSV:
+        x = pd.read_csv(ACC_CSV)
+        kdd28.check_frame(x[x.rc == 0], PROFILE, ARMS_SHOWN, pathlib.Path(ACC_CSV).name, arm_of=_rerun_arm)
+    else:
+        kdd28.check_frame(p, PROFILE, ["single_spo", "single_aa"], "speedup_map suite_results.csv",
+                          arm_of=lambda r: "single_spo" if r["method"] != "aa_gbt_exact" else "single_aa")
+        kdd28.check_frame(d, PROFILE, ["suite_spo", "suite_aa"], "distributed suite_results.csv",
+                          arm_of=lambda r: "suite_spo" if r["split_axis"] == "SPARSE_OBLIQUE" else "suite_aa")
 
 
 def _rerun_frames(path):
@@ -37,6 +64,7 @@ def accuracy_stats(metric="test_auc"):
     else:
         p = pd.read_csv(R / "speedup_map_by_dataset/suite_results.csv"); p = p[p.status == "OK"]
         d = pd.read_csv(R / "distributed_spo_gbt/suite_results.csv"); d = d[d.rc == 0]
+    check_inputs(p[p.method.isin(["spo_gbt_exact_hwy_fullproj", "aa_gbt_exact"])], d)
     d = d.drop_duplicates(["dataset", "fold", "workers", "split_axis"], keep="last")
     nfolds = p[p.method == "aa_gbt_exact"].groupby("dataset").fold.nunique()
     workers = sorted(d.workers.unique())
@@ -85,7 +113,7 @@ def accuracy_table(metric="test_auc"):
               for f, lab, _ in stats]
     lines += [r"\midrule", "Mean & " + " & ".join(mcells) + r" \\",
               r"\bottomrule", r"\end{tabular}}"]
-    return "\n".join(lines) + "\n"
+    return kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(PROFILE, ARMS_SHOWN))
 
 
 FIG_ARMS = (("SPO", "SPARSE_OBLIQUE", "spo_gbt_exact_hwy", ("0C447C", "378ADD", "B5D4F4")),
@@ -134,14 +162,16 @@ def accuracy_mean_figure(metric="test_auc"):
         lines += [rf"\addplot[color={_rgb(c)}, thick, densely dotted, no marks] coordinates {{({xs[0]},{v:.4f}) ({xs[-1]},{v:.4f})}};",
                   rf"\addlegendentry{{single-machine {f}-GBT}}"]
     lines += [r"\end{axis}", r"\end{tikzpicture}"]
-    return "\n".join(lines) + "\n"
+    return kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(PROFILE, ARMS_SHOWN))
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--accuracy_csv", default="", help="rerun results.csv for the accuracy table + figure")
     ap.add_argument("--accuracy_note", default="IN-PROCESS rerun on one EC2 box (Xeon 8259CL; workers = threads of one process)")
+    kdd28.add_profile_arg(ap, __file__)
     args = ap.parse_args()
+    PROFILE = args.profile
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
     if args.accuracy_csv:
         ACC_CSV = args.accuracy_csv

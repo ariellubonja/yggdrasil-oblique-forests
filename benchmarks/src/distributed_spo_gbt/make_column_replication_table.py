@@ -3,15 +3,27 @@
 Per replication level r: mean test accuracy over datasets (of per-dataset seed means), delta and
 wins/ties/losses vs single-machine SPO-GBT (same hyperparameters, single_machine_spo_gbt.csv), mean rank
 among the r levels. A bold last row gives single-machine SPO-GBT itself (the baseline, not ranked)."""
-import csv, os, pathlib, sys
+import argparse, csv, os, pathlib, sys
 from collections import defaultdict
 from statistics import mean
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 # argv: [src_dir (results.csv, summary_pooled.csv, single_machine_spo_gbt.csv)] [out_body.tex] [run note]
-SRC = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex"
-OUT = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "paper/distributed_spo_gbt_kdd28/tables/table_column_replication_body.tex"
-NOTE = sys.argv[3] if len(sys.argv) > 3 else "Vertex AI run full20261029b"
+_ap = argparse.ArgumentParser()
+_ap.add_argument("src", nargs="?", default=str(ROOT / "benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex"))
+_ap.add_argument("out_pos", nargs="?", default=None, metavar="out")
+_ap.add_argument("note", nargs="?", default="Vertex AI run full20261029b")
+_ap.add_argument("--out", default=None, help="output body path (same as the 2nd positional)")
+kdd28.add_profile_arg(_ap, __file__)
+_a = _ap.parse_intermixed_args()
+if _a.out and _a.out_pos:  # "src --out X note": the 2nd positional is the note
+    _a.note, _a.out_pos = _a.out_pos, None
+SRC = pathlib.Path(_a.src).resolve()
+OUT = pathlib.Path(_a.out or _a.out_pos or ROOT / "paper/distributed_spo_gbt_kdd28/tables/table_column_replication_body.tex")
+NOTE = _a.note
 EPS = 1e-9
 DASH = r"\multicolumn{1}{c}{---}"
 
@@ -60,6 +72,9 @@ def vs_single(path, dist_path):
 
 
 def main():
+    kdd28.check_csv(SRC / "results.csv", _a.profile, ["dist_split"], "results.csv (distributed)")
+    kdd28.check_csv(SRC / "single_machine_spo_gbt.csv", _a.profile, ["single_spo", "single_spo_audit"],
+                    "single_machine_spo_gbt.csv")
     p = pooled(SRC / "results.csv")
     # Cross-check against summarize_replication.py's output (same rounding).
     for r in csv.DictReader(open(SRC / "summary_pooled.csv")):
@@ -81,7 +96,7 @@ def main():
     lines += [r"\midrule",
               rf"\textbf{{single}} & \textbf{{{f'{sa:.4f}'.lstrip('0')}}} & {DASH} & {DASH} & {DASH} \\"]
     lines += [r"\bottomrule", r"\end{tabular}", ""]
-    OUT.write_text("\n".join(lines))
+    OUT.write_text(kdd28.add_setup("\n".join(lines), kdd28.setup_line(_a.profile, ["single_spo", "single_spo_audit"])))
     print(f"wrote {OUT} ({n} datasets, {len(p)} levels)", file=sys.stderr)
 
 

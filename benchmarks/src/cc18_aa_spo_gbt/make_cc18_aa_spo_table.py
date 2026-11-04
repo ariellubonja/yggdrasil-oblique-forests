@@ -1,24 +1,38 @@
 #!/usr/bin/env python3
 """KDD28 appendix table body: mean test accuracy / ROC AUC / log-loss per arm of the CC18 AA-vs-SPO GBT study.
 
-  python3 make_cc18_aa_spo_table.py <results.csv> <out_body.tex> [--time]
+  python3 make_cc18_aa_spo_table.py <results.csv> <out_body.tex> [--time] [--profile NAME]   (--out = <out_body.tex>)
 --time adds train_s (mean over datasets of the fold mean, seconds per model; same run as the metrics) and its ratio to AA.
 Mean over datasets of the per-dataset 10-fold mean; only (dataset, fold) cells finished in every arm. Best per column bold.
 """
+import argparse
+import pathlib
 import sys
 
 import pandas as pd
 
-ARMS = [("aa_ydf", "AA (YDF defaults)"), ("spo_harness", "SPO (harness defaults)"),
-        ("spo_ydf", "SPO (YDF defaults)"), ("aa_spo_ydf", "AA+SPO (YDF defaults)")]
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "distributed_spo_gbt" / "params"))
+import params as kdd28  # noqa: E402  (kdd28_params.json)
+
+# Row labels (a)-(e) are referenced from the hand-owned setup footnote.
+ARMS = [("aa_ydf", "(a) AA (YDF defaults)"), ("spo_harness", "(b) SPO (harness, 30 trees, Dyn Hist)"),
+        ("spo_harness_exact300", "(c) SPO (harness, 300 trees, exact)"),
+        ("spo_ydf", "(d) SPO (YDF defaults)"), ("aa_spo_ydf", "(e) AA+SPO (YDF defaults)")]
 METRICS = [("test_acc", "Accuracy", max), ("test_auc", "ROC AUC", max), ("test_logloss", "Log-loss", min)]
 
 
 def main():
-    src, out = sys.argv[1], sys.argv[2]
-    with_time = "--time" in sys.argv[3:]
+    ap = argparse.ArgumentParser()
+    ap.add_argument("src")
+    ap.add_argument("out_pos", nargs="?", metavar="out_body.tex")
+    ap.add_argument("--out", default=None, help="output body path (same as the 2nd positional)")
+    ap.add_argument("--time", action="store_true")
+    kdd28.add_profile_arg(ap, __file__)
+    opt = ap.parse_intermixed_args()
+    src, out, with_time = opt.src, opt.out or opt.out_pos, opt.time
     df = pd.read_csv(src)
     df = df[(df.rc == 0) & df.arm.isin([a for a, _ in ARMS])]
+    kdd28.check_frame(df, opt.profile, [x for x, _ in ARMS], pathlib.Path(src).name, arm_of=lambda r: r["arm"])
     n = df.groupby(["dataset", "fold"]).arm.nunique()
     df = df.set_index(["dataset", "fold"]).loc[n[n == len(ARMS)].index].reset_index()
     means = {m: df.pivot_table(index="dataset", columns="arm", values=m).mean() for m, _, _ in METRICS}
@@ -37,8 +51,9 @@ def main():
             "", "\\begin{tabular}{l" + "r" * (len(METRICS) + with_time) + "}", "\\toprule",
             "Arm & " + " & ".join([h for _, h, _ in METRICS] + (["Train (s)"] if with_time else [])) + " \\\\", "\\midrule", *rows,
             "\\bottomrule", "\\end{tabular}", ""]
-    open(out, "w").write("\n".join(body))
-    print("\n".join(body))
+    text = kdd28.add_setup("\n".join(body), kdd28.setup_line(opt.profile, [x for x, _ in ARMS]))
+    open(out, "w").write(text)
+    print(text)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # Runs after pass 1 releases the training lock: single-machine anchors, then pass 2 (4-worker axis-aligned; 8-worker oblique cells dropped 2026-10-12 per user).
 set -uo pipefail
 B=/home/ubuntu/yggdrasil-oblique-forests/benchmarks/src/distributed_spo_gbt

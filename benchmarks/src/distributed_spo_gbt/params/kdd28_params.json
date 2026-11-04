@@ -1,0 +1,399 @@
+{
+  "_doc": [
+    "KDD28 run parameters: one named profile per recorded setting. Sub-profiles (\"arms\") override fields of their parent and are named <profile>.<arm>.",
+    "Run scripts read values with params.py (export / get); generators check the stamp columns of their CSVs against the profile (params.py check).",
+    "_source paths: scripts relative to benchmarks/src/, ydf: = yggdrasil_decision_forests/, <commit>:<path>:<line> = git show <commit>:<path>.",
+    "null = not applicable (AA arms have no SPO fields, single-machine arms no worker fields). Lists = the set of values the float pools.",
+    "Formula strings (spo_exponent of vertex_grid_pf) are evaluated per row with F = numeric columns and W = workers."
+  ],
+  "_generators": {
+    "make_paper_tables.py": "table8",
+    "make_column_replication_table.py": "table2",
+    "make_column_replication_fig.py": "table2",
+    "make_cross_network_table.py": "table3",
+    "make_cross_network_fig.py": "table3",
+    "make_in_node_tables.py": "in_node_threads",
+    "make_barrier_figs.py": "vertex_grid_pf",
+    "make_scaling_tables.py": "vertex_scaling",
+    "make_cc18_aa_spo_table.py": "cc18_aa_spo",
+    "make_fig_tree_feature_hist.py": "cc18_feature_study",
+    "make_pf_grid_table.py": "vertex_grid_pf",
+    "make_pf_grid_fig.py": "vertex_grid_pf",
+    "make_pf_ablation_tables.py": "vertex_grid_pf"
+  },
+  "profiles": {
+    "table8": {
+      "_floats": ["tab:dist-accuracy", "fig:dist-accuracy-mean"],
+      "_note": "Base = the distributed SPO arm (in-process MULTI_THREAD workers). Paper data: fixed_reruns_2026-11-01/paper_inputs/table8_results.csv (build_paper_inputs.py).",
+      "trees": 300, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": 1, "spo_max_projections": 2147483647, "spo_density": 1.5, "spo_min_projections": 1,
+      "split_budget": false, "local_projection_count": true, "column_replication": 0, "force_numerical": false,
+      "max_unique_discretized": 1, "workers": [1, 4, 8, 16, 32], "folds": "5 CV folds (chronological sets: 1 holdout)",
+      "seeds": [123456],
+      "_source": {
+        "trees": "distributed_spo_gbt/run_table8_local.sh:41", "max_depth": "distributed_spo_gbt/run_table8_local.sh:41",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36 (driver sets none)",
+        "split_type": "ydf:learner/decision_tree/decision_tree.proto:528 + distributed_spo_gbt/run_table8_local.sh:45 (all columns exact)",
+        "spo_exponent": "distributed_spo_gbt/run_table8_local.sh:42", "spo_max_projections": "distributed_spo_gbt/run_table8_local.sh:43",
+        "spo_density": "distributed_spo_gbt/run_table8_local.sh:42", "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+        "split_budget": "distributed_spo_gbt/run_table8_local.sh:44", "local_projection_count": "distributed_spo_gbt/run_table8_local.sh:43",
+        "column_replication": "examples/train_distributed_gbt.cc:108 (default)", "force_numerical": "examples/train_distributed_gbt.cc:116 (default)",
+        "max_unique_discretized": "distributed_spo_gbt/run_table8_local.sh:45", "workers": "distributed_spo_gbt/run_table8_local.sh:12",
+        "folds": "distributed_spo_gbt/run_table8_local.sh:18 (folds.json) + paper main.tex tab:dist-accuracy footnote",
+        "seeds": "examples/train_distributed_gbt.cc:113 (no --seed) -> ydf:learner/abstract_learner.proto:122"
+      },
+      "arms": {
+        "dist_spo": {"_source": {"*": "distributed_spo_gbt/run_table8_local.sh:40-45"}},
+        "dist_aa": {
+          "_note": "The AA cells also pass the SPO flags (ignored for AXIS_ALIGNED).",
+          "spo_exponent": null, "spo_max_projections": null, "spo_density": null, "spo_min_projections": null,
+          "split_budget": null, "local_projection_count": null, "column_replication": null,
+          "_source": {"*": "distributed_spo_gbt/run_table8_local.sh:37 (AXIS_ALIGNED)"}
+        },
+        "fullfix_numeric": {"force_numerical": true, "_floats": [],
+          "_source": {"force_numerical": "distributed_spo_gbt/fixed_reruns/run_table8_fixed.sh:21"}},
+        "parity": {
+          "_floats": [], "force_numerical": true, "column_replication": 1, "split_budget": true, "local_projection_count": false,
+          "workers": [4, 8, 16, 32],
+          "_source": {"*": "distributed_spo_gbt/fixed_reruns/run_table8_fixed.sh:22-23"}
+        },
+        "suite_spo": {
+          "_floats": [], "_note": "2026-10-12 Table-9 suite (suite_results.csv), superseded by the 2026-11-01 fixed reruns.",
+          "workers": [1, 4, 8, 16],
+          "_source": {"*": "distributed_spo_gbt/run_dgbt_suite.sh:22,29,49-58"}
+        },
+        "suite_aa": {
+          "_floats": [], "workers": [1, 4, 8, 16],
+          "spo_exponent": null, "spo_max_projections": null, "spo_density": null, "spo_min_projections": null,
+          "split_budget": null, "local_projection_count": null, "column_replication": null,
+          "_source": {"*": "distributed_spo_gbt/run_dgbt_suite.sh:29 (AXIS_ALIGNED cells)"}
+        },
+        "single_spo": {
+          "_note": "Paper cells = speedup_map_by_dataset/suite_results.csv spo_gbt_exact_hwy_fullproj, rerun by this arm (REPLICABILITY.md G.2).",
+          "spo_density": 1.5, "split_budget": null, "local_projection_count": null, "column_replication": null,
+          "force_numerical": null, "max_unique_discretized": null, "workers": null, "seeds": [1],
+          "_source": {
+            "trees": "distributed_spo_gbt/run_table8_local.sh:31", "max_depth": "distributed_spo_gbt/run_table8_local.sh:31",
+            "min_examples": "distributed_spo_gbt/run_table8_local.sh:31", "split_type": "distributed_spo_gbt/run_table8_local.sh:31",
+            "spo_exponent": "distributed_spo_gbt/run_table8_local.sh:28", "spo_max_projections": "distributed_spo_gbt/run_table8_local.sh:28",
+            "spo_density": "not passed (distributed_spo_gbt/run_table8_local.sh:28): 9dc54c93^:examples/train_oblique_forest.cc:124 harness default",
+            "seeds": "distributed_spo_gbt/run_table8_local.sh:31"
+          }
+        },
+        "single_aa": {
+          "spo_exponent": null, "spo_max_projections": null, "spo_density": null, "spo_min_projections": null,
+          "split_budget": null, "local_projection_count": null, "column_replication": null,
+          "force_numerical": null, "max_unique_discretized": null, "workers": null, "seeds": [1], "num_candidate_attributes": -1,
+          "_source": {"*": "distributed_spo_gbt/run_table8_local.sh:29-31"}
+        },
+        "seed_sweep_single": {
+          "_floats": [], "spo_density": 1.5, "split_budget": null, "local_projection_count": null, "column_replication": null,
+          "force_numerical": null, "max_unique_discretized": null, "workers": null, "seeds": [1, 2, 3, 4, 5],
+          "_source": {"*": "distributed_spo_gbt/fixed_reruns/run_seed_sweep.sh:19-22", "seeds": "distributed_spo_gbt/REPLICABILITY.md:306"}
+        },
+        "seed_sweep_w1": {
+          "_floats": [], "force_numerical": true, "workers": [1], "seeds": [1, 2, 3, 4, 123456],
+          "_source": {"*": "distributed_spo_gbt/fixed_reruns/run_seed_sweep.sh:28-34",
+                      "seeds": "benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01/README.md (W = 1 seeds 1-4 + default)"}
+        }
+      }
+    },
+    "table2": {
+      "_floats": ["tab:column-replication", "fig:column-replication"],
+      "_note": "Base = the distributed arm of the paper (split budget, run colrep-fullparity_fullparity20261101, image fullfix-10509539).",
+      "trees": 10, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": 1, "spo_max_projections": 2147483647, "spo_density": 1.5, "spo_min_projections": 1,
+      "split_budget": true, "local_projection_count": false,
+      "column_replication": [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1], "max_unique_discretized": 1,
+      "workers": [4], "machine": "n2-highmem-4", "folds": "CC18 fold 0", "seeds": [1, 2, 3, 4, 5],
+      "_source": {
+        "trees": "distributed_spo_gbt/column_replication/run_vertex_colrep.py:33 + vertex_build/train_cells.py:37",
+        "max_depth": "distributed_spo_gbt/column_replication/run_vertex_colrep.py:34 + vertex_build/train_cells.py:38",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36 (train_cells.py sets none)",
+        "split_type": "ydf:learner/decision_tree/decision_tree.proto:528 + distributed_spo_gbt/vertex_build/train_cells.py:292",
+        "spo_exponent": "distributed_spo_gbt/vertex_build/train_cells.py:289", "spo_density": "distributed_spo_gbt/vertex_build/train_cells.py:290",
+        "spo_max_projections": "distributed_spo_gbt/vertex_build/train_cells.py:291", "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+        "split_budget": "distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh:50 (--split_budget) + paper tables/table_column_replication_body.tex:2",
+        "local_projection_count": "distributed_spo_gbt/vertex_build/train_cells.py:238",
+        "column_replication": "distributed_spo_gbt/column_replication/run_vertex_colrep.py:28",
+        "max_unique_discretized": "distributed_spo_gbt/vertex_build/train_cells.py:292",
+        "workers": "distributed_spo_gbt/column_replication/run_vertex_colrep.py:32", "machine": "distributed_spo_gbt/column_replication/run_vertex_colrep.py:31",
+        "folds": "distributed_spo_gbt/REPLICABILITY.md:202", "seeds": "distributed_spo_gbt/column_replication/run_vertex_colrep.py:27"
+      },
+      "arms": {
+        "dist_split": {"_source": {"*": "distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh:48-50"}},
+        "dist_per_worker": {"_floats": [], "split_budget": false,
+          "_note": "Table 2 as first published (table2/fullfix): P = F per worker, 4F per node.",
+          "_source": {"split_budget": "distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh:47 (image 10509539 predates the split budget, REPLICABILITY.md:326-327)"}},
+        "single_spo": {
+          "split_budget": null, "local_projection_count": null, "column_replication": null, "max_unique_discretized": null,
+          "workers": null, "machine": null,
+          "_source": {"*": "distributed_spo_gbt/fixed_reruns/run_single_machine_cc18.sh:15-18", "seeds": "distributed_spo_gbt/fixed_reruns/run_single_machine_cc18.sh:12",
+                      "min_examples": "2c0990f0:examples/train_oblique_forest.cc:1315 (Boosting default 5)"}
+        },
+        "single_spo_audit": {
+          "split_budget": null, "local_projection_count": null, "column_replication": null, "max_unique_discretized": null,
+          "workers": null, "machine": null, "seeds": [6, 7, 8, 9, 10],
+          "_source": {"seeds": "benchmarks/results/accuracy/distributed_spo_gbt/fixed_reruns_2026-11-01/paper_inputs/table2_single10/README.md:5"}
+        }
+      }
+    },
+    "table3": {
+      "_floats": ["tab:cross-network", "fig:cross-network"],
+      "_note": "In-worker (level 0) and cross-network (level ship) share every hyperparameter. Code: branch fix-disc-colcomms 1ad2062f.",
+      "trees": 300, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": 1, "spo_max_projections": 2147483647, "spo_density": 1.5, "spo_min_projections": 1,
+      "split_budget": false, "local_projection_count": true, "max_unique_discretized": 1,
+      "workers": [4], "machine": "n2-highmem-4", "folds": "CC18 fold 0", "seeds": [1, 2, 3, 4, 5],
+      "_source": {
+        "trees": "distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh:61", "max_depth": "distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh:61",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36",
+        "split_type": "1ad2062f:benchmarks/src/distributed_spo_gbt/vertex_build/train_cells.py:297",
+        "spo_exponent": "1ad2062f:benchmarks/src/distributed_spo_gbt/vertex_build/train_cells.py:294",
+        "spo_density": "1ad2062f:benchmarks/src/distributed_spo_gbt/vertex_build/train_cells.py:295",
+        "spo_max_projections": "1ad2062f:benchmarks/src/distributed_spo_gbt/vertex_build/train_cells.py:296",
+        "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+        "split_budget": "1ad2062f has no split_projections_across_workers (added in ae5ed038, REPLICABILITY.md:231): per-worker P",
+        "local_projection_count": "distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh:62",
+        "max_unique_discretized": "1ad2062f:benchmarks/src/distributed_spo_gbt/vertex_build/train_cells.py:297",
+        "workers": "distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh:61", "machine": "distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh:61",
+        "folds": "distributed_spo_gbt/REPLICABILITY.md:255",
+        "seeds": "paper tables/table_cross_network_body.tex:2 (mean of 5 seeds, table3/fullfix_seeds)"
+      },
+      "arms": {
+        "seed1": {"_floats": [], "seeds": [1], "_source": {"seeds": "distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh:60"}}
+      }
+    },
+    "kdd28_ydf": {
+      "_floats": [],
+      "_note": "Future runs (user decision 2026-11-03): single-machine and distributed SPO-GBT share the YDF defaults, P = min(F^2, 6000) per node, split across workers. Tables 2 and 3 and the single-machine rows move to this profile when rerun. No early stopping anywhere (2026-11-03).",
+      "trees": 300, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": 2, "spo_max_projections": 6000, "spo_density": 2, "spo_min_projections": 1,
+      "split_budget": true, "local_projection_count": false, "column_replication": 0, "max_unique_discretized": 1,
+      "validation_set_ratio": 0, "early_stopping": "NONE",
+      "workers": [4], "machine": "n2-highmem-4", "folds": "CC18 fold 0", "seeds": [1, 2, 3, 4, 5],
+      "_source": {
+        "*": "user decision 2026-11-03 (CLAUDE.md Unspecified parameters bullet): same SPO parameters single and distributed, YDF defaults",
+        "trees": "ydf:learner/gradient_boosted_trees/gradient_boosted_trees.proto:35",
+        "max_depth": "ydf:learner/gradient_boosted_trees/gradient_boosted_trees.cc:3689 (GBT default 6)",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36",
+        "split_type": "ydf:learner/decision_tree/decision_tree.proto:528",
+        "spo_exponent": "ydf:learner/decision_tree/decision_tree.proto:187",
+        "spo_max_projections": "ydf:learner/decision_tree/decision_tree.proto:201",
+        "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+        "spo_density": "ydf:learner/decision_tree/decision_tree.proto:222",
+        "split_budget": "ydf:learner/distributed_gradient_boosted_trees/distributed_gradient_boosted_trees.proto:105",
+        "local_projection_count": "ydf:learner/distributed_gradient_boosted_trees/distributed_gradient_boosted_trees.proto:92",
+        "validation_set_ratio": "CLAUDE.md No early stopping anywhere (2026-11-03)",
+        "early_stopping": "CLAUDE.md No early stopping anywhere (2026-11-03)",
+        "machine": "CLAUDE.md Distributed GBT (n2-highmem-4, 2026-10-29)"
+      },
+      "arms": {
+        "dist_spo": {"validation_set_ratio": null, "early_stopping": null,
+                     "_note": "Distributed SPO arm. Early stopping: none (the distributed learner has none, ydf:learner/distributed_gradient_boosted_trees/distributed_gradient_boosted_trees.cc:633), so nothing to pass and nothing stamped."},
+        "single_spo": {"split_budget": null, "local_projection_count": null, "column_replication": null,
+                       "max_unique_discretized": null, "workers": null, "machine": null,
+                       "_note": "Single machine: train_oblique_forest --ydf_defaults --feature_split_type Oblique --validation_set_ratio 0 --early_stopping NONE."}
+      }
+    },
+    "cc18_aa_spo": {
+      "_floats": ["tab:cc18-aa-spo"],
+      "_note": "Base = arm (a), YDF GBT defaults. Recorded binary 9a94b070 (before 9dc54c93): arms b and c need it, today's harness ignores the SPO flags.",
+      "trees": 300, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": null, "spo_max_projections": null, "spo_density": null, "spo_min_projections": null,
+      "split_budget": null, "local_projection_count": null, "num_candidate_attributes": -1,
+      "validation_set_ratio": 0.1, "early_stopping": "VALIDATION_LOSS_INCREASE", "include_axis_aligned": null,
+      "workers": null, "folds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "seeds": [1],
+      "_source": {
+        "trees": "ydf:learner/gradient_boosted_trees/gradient_boosted_trees.proto:35",
+        "max_depth": "ydf:learner/gradient_boosted_trees/gradient_boosted_trees.cc:3693",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36", "split_type": "ydf:learner/decision_tree/decision_tree.proto:528",
+        "num_candidate_attributes": "ydf:learner/gradient_boosted_trees/gradient_boosted_trees.cc:3697-3700, every arm: the SPO arms leave it unset (9a94b070:examples/train_oblique_forest.cc:1349-1363), REAL=1 pre-flight prints -1",
+        "early_stopping": "ydf:learner/gradient_boosted_trees/gradient_boosted_trees.proto:122,169",
+        "folds": "cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh:12", "seeds": "cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh:42"
+      },
+      "arms": {
+        "aa_ydf": {"_label": "(a)", "_source": {"*": "cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh:21"}},
+        "spo_harness": {
+          "_label": "(b)", "trees": 30, "split_type": "DYNAMIC_RANDOM_HISTOGRAM",
+          "spo_exponent": 1, "spo_max_projections": 1000, "spo_density": 1.5, "spo_min_projections": 1,
+          "validation_set_ratio": 0, "early_stopping": "NONE", "include_axis_aligned": false,
+          "_source": {
+            "*": "cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh:22 (harness defaults of the recorded binary)",
+            "trees": "9dc54c93^:examples/train_oblique_forest.cc:1280", "max_depth": "9dc54c93^:examples/train_oblique_forest.cc:1318",
+            "min_examples": "9dc54c93^:examples/train_oblique_forest.cc:1325", "split_type": "9dc54c93^:examples/train_oblique_forest.cc:202",
+            "spo_exponent": "9dc54c93^:examples/train_oblique_forest.cc:1333", "spo_max_projections": "9dc54c93^:examples/train_oblique_forest.cc:122",
+            "spo_density": "9dc54c93^:examples/train_oblique_forest.cc:124", "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+            "early_stopping": "9dc54c93^:examples/train_oblique_forest.cc:1302-1303", "include_axis_aligned": "ydf:learner/decision_tree/decision_tree.proto:302"
+          }
+        },
+        "spo_harness_exact300": {
+          "_label": "(c)", "trees": 300, "split_type": "EXACT",
+          "spo_exponent": 1, "spo_max_projections": 1000, "spo_density": 1.5, "spo_min_projections": 1,
+          "validation_set_ratio": 0, "early_stopping": "NONE", "include_axis_aligned": false,
+          "_source": {"trees": "cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh:24", "split_type": "cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh:24",
+                      "*": "as spo_harness (9dc54c93^:examples/train_oblique_forest.cc)"}
+        },
+        "spo_ydf": {
+          "_label": "(d)", "spo_exponent": 2, "spo_max_projections": 6000, "spo_density": 2, "spo_min_projections": 1,
+          "include_axis_aligned": false,
+          "_source": {"*": "cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh:25", "spo_exponent": "ydf:learner/decision_tree/decision_tree.proto:187",
+                      "spo_max_projections": "ydf:learner/decision_tree/decision_tree.proto:201", "spo_density": "ydf:learner/decision_tree/decision_tree.proto:222"}
+        },
+        "aa_spo_ydf": {
+          "_label": "(e)", "spo_exponent": 2, "spo_max_projections": 6000, "spo_density": 2, "spo_min_projections": 1,
+          "include_axis_aligned": true,
+          "_source": {"*": "cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh:26"}
+        }
+      }
+    },
+    "cc18_feature_study": {
+      "_floats": ["fig:cc18-tree-feature-hist"],
+      "trees": 300, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": null, "spo_max_projections": null, "spo_density": null, "spo_min_projections": null,
+      "split_budget": null, "local_projection_count": null, "num_candidate_attributes": -1, "shrinkage": 0.1,
+      "growing_strategy": "Local", "workers": null, "folds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "seeds": [1],
+      "_source": {
+        "trees": "cc18_gbt_feature_study/run_cc18_gbt.py:19", "max_depth": "cc18_gbt_feature_study/run_cc18_gbt.py:19",
+        "min_examples": "9dc54c93^:examples/train_oblique_forest.cc:1325 (Boosting default)",
+        "split_type": "cc18_gbt_feature_study/run_cc18_gbt.py:18", "num_candidate_attributes": "cc18_gbt_feature_study/run_cc18_gbt.py:18",
+        "shrinkage": "cc18_gbt_feature_study/run_cc18_gbt.py:19", "growing_strategy": "cc18_gbt_feature_study/run_cc18_gbt.py:20",
+        "folds": "cc18_gbt_feature_study/run_cc18_gbt.py:70", "seeds": "cc18_gbt_feature_study/run_cc18_gbt.py:20"
+      }
+    },
+    "vertex_grid_pf": {
+      "_floats": ["tab:vertex-hm4-pf-runtime", "fig:vertex-hm4-hm16-pf-runtime", "fig:yt8m-barriers", "tab:in-node-dist-vqsort-ablation", "tab:setup-cost"],
+      "_note": "Vertex AI grids, P = F in total with the per-W exponent of pre-2026-11-02 images (--budget per_worker). Paper cells: p_F/pfhm4fix20261101_*, pfgridfix20261101_* (run_vertex_grid_fixed.sh).",
+      "trees": 10, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_p_total": "F", "spo_exponent": "log(max(1, F // W) - 0.5) / log(F) if F // W > 1 else 0.0",
+      "spo_max_projections": 6000, "spo_density": 1.5, "spo_min_projections": 1,
+      "split_budget": false, "local_projection_count": false, "budget": "per_worker",
+      "workers": [1, 2, 4, 8, 16], "machine": ["n2-highmem-4", "n2-highmem-16"], "folds": "shipped test sets", "seeds": [123456],
+      "_source": {
+        "trees": "distributed_spo_gbt/runtime_reruns/run_vertex_grid_fixed.sh:13,16 (also run_pf_grid.sh:16, run_pf_followups.sh:17,19)",
+        "max_depth": "ydf:learner/gradient_boosted_trees/gradient_boosted_trees.cc:3693 (train.py sets none)",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36",
+        "split_type": "ydf:learner/decision_tree/decision_tree.proto:528 (cache default ydf:learner/distributed_decision_tree/dataset_cache/dataset_cache.proto:49-50 bins <=16000-value columns losslessly)",
+        "spo_p_total": "distributed_spo_gbt/runtime_reruns/run_vertex_grid_fixed.sh:12-13", "spo_exponent": "distributed_spo_gbt/run_vertex_barriers.py:80-84 (--budget per_worker)",
+        "spo_max_projections": "ydf:learner/decision_tree/decision_tree.proto:201 (train.py sets none)",
+        "spo_density": "distributed_spo_gbt/run_vertex_barriers.py:18", "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+        "split_budget": "distributed_spo_gbt/runtime_reruns/run_vertex_grid_fixed.sh:14 (--budget per_worker)",
+        "local_projection_count": "ydf:learner/distributed_gradient_boosted_trees/distributed_gradient_boosted_trees.proto:92",
+        "budget": "distributed_spo_gbt/runtime_reruns/run_vertex_grid_fixed.sh:14",
+        "workers": "distributed_spo_gbt/runtime_reruns/run_vertex_grid_fixed.sh:13,16", "machine": "distributed_spo_gbt/runtime_reruns/run_vertex_grid_fixed.sh:14,17",
+        "folds": "distributed_spo_gbt/run_vertex_barriers.py:19-41", "seeds": "ydf:learner/abstract_learner.proto:122 (train.py sets none)"
+      },
+      "arms": {
+        "spo": {"_source": {"*": "distributed_spo_gbt/run_vertex_barriers.py:154,173-174 (--budget per_worker)"}},
+        "aa": {"spo_p_total": null, "spo_exponent": null, "spo_max_projections": null, "spo_density": null, "spo_min_projections": null,
+               "split_budget": null, "local_projection_count": null, "budget": null,
+               "_source": {"*": "distributed_spo_gbt/run_vertex_barriers.py:21 (AXIS_ALIGNED)"}},
+        "spo_split": {"_floats": [], "spo_exponent": "log(F - 0.5) / log(F)", "split_budget": true, "budget": "split",
+                      "_note": "Launcher default --budget split on images from 1311deba on: one exponent for every W, ceil(F^e) = F per node in total, the library divides it over the workers.",
+                      "_source": {"spo_exponent": "distributed_spo_gbt/run_vertex_barriers.py:80-84 (--budget split, P_TOTAL = F)",
+                                  "split_budget": "ydf:learner/distributed_gradient_boosted_trees/distributed_gradient_boosted_trees.proto:105 (default true, checked by run_vertex_barriers.py:107)",
+                                  "budget": "distributed_spo_gbt/run_vertex_barriers.py:63"}},
+        "aa_split": {"_floats": [], "spo_p_total": null, "spo_exponent": null, "spo_max_projections": null, "spo_density": null,
+                     "spo_min_projections": null, "split_budget": null, "local_projection_count": null, "budget": null,
+                     "_note": "AXIS_ALIGNED cells of a --budget split grid: same fields as aa (the budget only touches SPO).",
+                     "_source": {"*": "distributed_spo_gbt/run_vertex_barriers.py:21,154 (AXIS_ALIGNED)"}}
+      }
+    },
+    "inproc_grid": {
+      "_floats": [], "_note": "Section C in-process grid (results.csv): smoke tests since 2026-10-25. Legacy P = ceil(sqrt F) per worker.",
+      "trees": 50, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": 0.5, "spo_max_projections": 1000, "spo_density": 1.5, "spo_min_projections": 1,
+      "split_budget": false, "local_projection_count": false, "workers": [1, 4], "folds": "shipped test sets", "seeds": [123456],
+      "_source": {
+        "trees": "distributed_spo_gbt/REPLICABILITY.md:139 (TREES is run_dgbt.sh argv 4)", "max_depth": "distributed_spo_gbt/run_dgbt.sh:22",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36", "split_type": "ydf:learner/decision_tree/decision_tree.proto:528",
+        "spo_exponent": "distributed_spo_gbt/run_dgbt.sh:48", "spo_max_projections": "examples/train_distributed_gbt.cc:94 (default)",
+        "spo_density": "distributed_spo_gbt/run_dgbt.sh:47", "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+        "split_budget": "distributed_spo_gbt/run_dgbt.sh:49", "local_projection_count": "examples/train_distributed_gbt.cc:98 (default)",
+        "workers": "distributed_spo_gbt/REPLICABILITY.md:139", "seeds": "ydf:learner/abstract_learner.proto:122"
+      },
+      "arms": {
+        "spo": {"_source": {"*": "same as the profile"}},
+        "aa": {"spo_exponent": null, "spo_max_projections": null, "spo_density": null, "spo_min_projections": null,
+               "split_budget": null, "local_projection_count": null,
+               "_source": {"*": "AXIS_ALIGNED cells: train_distributed_gbt prints '-' for the SPO fields (2026-11-03)"}}
+      }
+    },
+    "barrier_smoke": {
+      "_floats": [], "_note": "run_barrier_cell.sh: in-process trunk cell, first barrier measurement (barriers/README.md).",
+      "trees": 50, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": 0.5, "spo_max_projections": 1000, "spo_density": 1.5, "spo_min_projections": 1,
+      "split_budget": false, "local_projection_count": false, "workers": [4], "threads": 2, "folds": "trunk test set", "seeds": [123456],
+      "_source": {
+        "trees": "distributed_spo_gbt/run_barrier_cell.sh:9", "max_depth": "distributed_spo_gbt/run_barrier_cell.sh:22",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36", "split_type": "ydf:learner/decision_tree/decision_tree.proto:528",
+        "spo_exponent": "distributed_spo_gbt/run_barrier_cell.sh:24", "spo_max_projections": "examples/train_distributed_gbt.cc:94 (default)",
+        "spo_density": "distributed_spo_gbt/run_barrier_cell.sh:23", "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+        "split_budget": "distributed_spo_gbt/run_barrier_cell.sh:25", "local_projection_count": "examples/train_distributed_gbt.cc:98 (default)",
+        "workers": "distributed_spo_gbt/run_barrier_cell.sh:9", "threads": "distributed_spo_gbt/run_barrier_cell.sh:9",
+        "seeds": "ydf:learner/abstract_learner.proto:122"
+      },
+      "arms": {
+        "spo": {"_source": {"*": "same as the profile"}},
+        "aa": {"spo_exponent": null, "spo_max_projections": null, "spo_density": null, "spo_min_projections": null,
+               "split_budget": null, "local_projection_count": null,
+               "_source": {"*": "AXIS_ALIGNED cells: train_distributed_gbt prints '-' for the SPO fields (2026-11-03)"}}
+      }
+    },
+    "colrep_inproc_smoke": {
+      "_floats": [], "_note": "EC2 in-process column-replication sweep (not reportable, REPLICABILITY.md:193).",
+      "trees": 20, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": 1, "spo_max_projections": 2147483647, "spo_density": 1.5, "spo_min_projections": 1,
+      "split_budget": false, "local_projection_count": false, "force_numerical": true, "max_unique_discretized": 1,
+      "column_replication": [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+      "workers": [4], "threads": 2, "folds": "CC18 fold 0", "seeds": [1, 2, 3, 4, 5],
+      "_source": {
+        "trees": "distributed_spo_gbt/column_replication/run_replication_sweep.py:50", "max_depth": "distributed_spo_gbt/column_replication/run_replication_sweep.py:51",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36", "split_type": "distributed_spo_gbt/column_replication/run_replication_sweep.py:97",
+        "spo_exponent": "distributed_spo_gbt/column_replication/run_replication_sweep.py:91",
+        "spo_max_projections": "distributed_spo_gbt/column_replication/run_replication_sweep.py:92",
+        "spo_density": "distributed_spo_gbt/column_replication/run_replication_sweep.py:95",
+        "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+        "split_budget": "distributed_spo_gbt/column_replication/run_replication_sweep.py:94",
+        "local_projection_count": "distributed_spo_gbt/column_replication/run_replication_sweep.py:93",
+        "force_numerical": "distributed_spo_gbt/column_replication/run_replication_sweep.py:87",
+        "max_unique_discretized": "distributed_spo_gbt/column_replication/run_replication_sweep.py:97",
+        "column_replication": "distributed_spo_gbt/column_replication/run_replication_sweep.py:53",
+        "workers": "distributed_spo_gbt/column_replication/run_replication_sweep.py:49", "threads": "distributed_spo_gbt/column_replication/run_replication_sweep.py:48",
+        "seeds": "distributed_spo_gbt/column_replication/run_replication_sweep.py:52"
+      }
+    },
+    "in_node_threads": {
+      "_floats": ["tab:in-node-dist-vqsort-vertex"],
+      "_note": "Single-machine thread sweep of 2026-10-22 (no converted run script; reconstructed CSV).",
+      "trees": 10, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": 0.5, "spo_max_projections": 1000, "spo_density": 1.5, "spo_min_projections": 1,
+      "split_budget": null, "local_projection_count": null, "workers": null, "folds": "shipped test sets", "seeds": [1],
+      "_source": {
+        "trees": "benchmarks/results/runtime/distributed_spo_gbt/in_node_parallelism_2026-10-22/sm_thread_sweep_old_vs_new.csv:1",
+        "max_depth": "benchmarks/results/runtime/distributed_spo_gbt/in_node_parallelism_2026-10-22/sm_thread_sweep_old_vs_new.csv:1",
+        "min_examples": "23053344:examples/train_oblique_forest.cc:95 (Boosting default 5)",
+        "split_type": "benchmarks/results/runtime/distributed_spo_gbt/in_node_parallelism_2026-10-22/sm_thread_sweep_old_vs_new.csv:2",
+        "spo_exponent": "23053344:examples/train_oblique_forest.cc:124 (harness default .5, paper footnote P=sqrt(F))",
+        "spo_max_projections": "23053344:examples/train_oblique_forest.cc:120", "spo_density": "23053344:examples/train_oblique_forest.cc:122",
+        "spo_min_projections": "ydf:learner/decision_tree/decision_tree.proto:210",
+        "seeds": "benchmarks/results/runtime/distributed_spo_gbt/in_node_parallelism_2026-10-22/sm_thread_sweep_old_vs_new.csv:2"
+      }
+    },
+    "vertex_scaling": {
+      "_floats": [], "_note": "Family B weak/strong scaling (removed from main.tex 2026-10-26).",
+      "trees": 50, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_p_total": "F", "spo_density": 1.5, "split_budget": false, "local_projection_count": false,
+      "machine": "n2-highmem-2", "workers": [1, 2, 4, 8, 16], "folds": "trunk test set", "seeds": [123456],
+      "_source": {
+        "trees": "distributed_spo_gbt/REPLICABILITY.md:109", "max_depth": "ydf:learner/gradient_boosted_trees/gradient_boosted_trees.cc:3693",
+        "min_examples": "ydf:learner/decision_tree/decision_tree.proto:36", "split_type": "ydf:learner/decision_tree/decision_tree.proto:528",
+        "spo_p_total": "distributed_spo_gbt/REPLICABILITY.md:109", "spo_density": "distributed_spo_gbt/Distributed_SPO_GBT_scaling.ipynb (density 1.5, binary weights)",
+        "split_budget": "REPLICABILITY.md:109 (per-W exponent, images before 2026-11-02)",
+        "local_projection_count": "ydf:learner/distributed_gradient_boosted_trees/distributed_gradient_boosted_trees.proto:92",
+        "machine": "distributed_spo_gbt/REPLICABILITY.md:109", "workers": "benchmarks/results/runtime/distributed_spo_gbt/vertex_scaling/20261015T035046Z_32c/results.csv (workers column)",
+        "seeds": "ydf:learner/abstract_learner.proto:122"
+      }
+    }
+  }
+}

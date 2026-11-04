@@ -12,10 +12,14 @@ summarized with summarize_barriers.py. Re-running with --run_id reuses finished 
 import argparse, datetime, fcntl, hashlib, json, math, os, re, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
+
+PROFILE = kdd28.load_profile("vertex_grid_pf")  # trees, P = F, density: the recorded Vertex grids
 PROJECT, REGION, BUCKET = "ydf-distributed-spo-gbt", "us-east1", "ariel_ydf_bucket"
 AR = f"{REGION}-docker.pkg.dev/{PROJECT}/ydf-repo"
 ARMS = {"aa": "AXIS_ALIGNED", "spo": "SPARSE_OBLIQUE"}
-SPO_DENSITY = 1.5  # paper's SPO-GBT arm (E[nnz] = 1.5); binary weights are set by train.py
+SPO_DENSITY = PROFILE["spo_density"]  # paper's SPO-GBT arm (E[nnz] = 1.5); binary weights are set by train.py
 DATASETS = {  # label + numeric column count drive the projection exponent
     "epsilon": dict(train=f"csv:gs://{BUCKET}/big/EPSILON/epsilon_normalized_train.csv",
                     test=f"csv:gs://{BUCKET}/big/EPSILON/epsilon_test_100k.csv", label="label", cols=2000, rows=400_000),
@@ -49,8 +53,8 @@ ap.add_argument("--workers", default="1,2,4,8")
 ap.add_argument("--arms", default="aa,spo")
 ap.add_argument("--machine", default="n2-highmem-16", help="worker machine type")
 ap.add_argument("--manager_machine", default=None, help="manager machine type; default = --machine (it only holds the test set)")
-ap.add_argument("--trees", type=int, default=50)
-ap.add_argument("--p_total", type=int, default=None, help="total SPO projections per node over all workers; default ceil(sqrt(cols))")
+ap.add_argument("--trees", type=int, default=PROFILE["trees"], help="default: profile vertex_grid_pf (%(default)s)")
+ap.add_argument("--p_total", type=int, default=None, help="total SPO projections per node over all workers; default F (profile vertex_grid_pf)")
 ap.add_argument("--image", default=None, help="training image; default <AR>/train-ydf:<commit8>-<build hash> like the notebooks")
 ap.add_argument("--run_id", default="", help="reuse a run id: finished cells are skipped, active jobs adopted")
 ap.add_argument("--extra_args", default="", help="extra train.py args appended to every cell, e.g. '--max_unique_values_for_discretized_numerical=1'")
@@ -59,7 +63,7 @@ ap.add_argument("--fresh_cache", action="store_true",
 ap.add_argument("--budget", choices=("split", "per_worker"), default="split",
                 help="split (default; images from 2026-11-02 on): one exponent, ceil(F^e) = P_TOTAL per node, the library divides it over W. "
                      "per_worker: pre-2026-11-02 images (every worker samples ceil(F^e)): per-W exponent, P_TOTAL // w per worker")
-ap.add_argument("--dry_run", action="store_true")
+ap.add_argument("--dry_run", action="store_true", help="print the cell table and every cell's container argv, then exit")
 args = ap.parse_args()
 
 ds = DATASETS[args.dataset]
@@ -68,7 +72,8 @@ ARM_LIST = args.arms.split(",")
 VCPUS = int(args.machine.rsplit("-", 1)[1])
 MGR_MACHINE = args.manager_machine or args.machine
 MGR_VCPUS = int(MGR_MACHINE.rsplit("-", 1)[1])
-P_TOTAL = args.p_total or math.ceil(math.sqrt(ds["cols"]))
+assert PROFILE["spo_p_total"] == "F", PROFILE["spo_p_total"]
+P_TOTAL = args.p_total or ds["cols"]
 now = lambda: datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S")
 
 
@@ -136,6 +141,29 @@ def cache_dir(arm):
 vcpus = lambda w: MGR_VCPUS + w * VCPUS
 CELLS = [(arm, w) for w in WORKERS for arm in ARM_LIST]
 
+
+def job_args(arm, w):
+    """Container argv of one cell (train.py flags)."""
+    tag, out = tag_of(arm, w), f"{RUN_DIR}/{tag_of(arm, w)}"
+    meta = {"dataset": args.dataset, "rows": ds["rows"], "cols": ds["cols"], "workers": w, "arm": arm, "machine_type": args.machine,
+            "manager_machine_type": MGR_MACHINE, "tag": tag, "trees": args.trees, "image": IMAGE,
+            "p_total": P_TOTAL if arm == "spo" else None, "budget": args.budget if arm == "spo" else None,
+            "projections_per_worker": proj_per_worker(w) if arm == "spo" else None,  # max share under split
+            "extra_args": args.extra_args,
+            # train.py checks the cell against this kdd28_params.json arm. In --meta, not a flag: older images reject unknown flags.
+            "profile": f"vertex_grid_pf.{arm}" + ("_split" if args.budget == "split" else "")}
+    # fresh cache per cell (never resume a stale one), under work/ so the bucket lifecycle rule deletes it after 2 days
+    work_dir = f"gs://{BUCKET}/work/{RUN_ID}_{args.dataset}/{tag}_{datetime.datetime.now(datetime.timezone.utc).strftime('%H%M%S')}"
+    a = [f"--train_ds={ds['train']}", f"--test_ds={ds['test']}", f"--model={out}/model", f"--work_dir={work_dir}",
+         f"--eval_json={out}/eval.json", "--distributed", f"--label={ds['label']}", f"--split_axis={ARMS[arm]}",
+         f"--num_trees={args.trees}", f"--meta={json.dumps(meta)}"]
+    if arm == "spo":
+        a += [f"--sparse_oblique_num_projections_exponent={spo_exponent(w):.6f}", f"--sparse_oblique_projection_density_factor={SPO_DENSITY}"]
+    if not args.fresh_cache:
+        a.append(f"--dataset_cache_path={cache_dir(arm)}")
+    return a + args.extra_args.split()
+
+
 print(f"dataset {args.dataset} ({ds['rows']} x {ds['cols']}, label {ds['label']}) | workers {args.machine} ({VCPUS} vCPU), manager {MGR_MACHINE} | "
       f"{args.trees} trees | SPO total projections {P_TOTAL}, density {SPO_DENSITY}\nimage {IMAGE}\nRUN_ID {RUN_ID} -> {RUN_DIR}")
 print(f"{'cell':8} {'nodes':>5} {'vCPUs':>5} {'proj/wk':>8} {'exponent':>9}   (budget: {args.budget}; proj/wk = max share under split)")
@@ -145,6 +173,8 @@ for arm, w in CELLS:
 if "spo" in ARM_LIST:
     check_image_budget()
 if args.dry_run:
+    for arm, w in CELLS:
+        print("argv", tag_of(arm, w), json.dumps(job_args(arm, w)))
     sys.exit(0)
 
 from google.cloud import aiplatform  # noqa: E402  (slow import; after --dry_run)
@@ -157,22 +187,7 @@ print(f"{args.machine}: quota {CPU_BUDGET} vCPUs in {REGION}; largest cell needs
 
 
 def make_job(arm, w):
-    tag, out = tag_of(arm, w), f"{RUN_DIR}/{tag_of(arm, w)}"
-    meta = {"dataset": args.dataset, "rows": ds["rows"], "cols": ds["cols"], "workers": w, "arm": arm, "machine_type": args.machine,
-            "manager_machine_type": MGR_MACHINE, "tag": tag, "trees": args.trees, "image": IMAGE,
-            "p_total": P_TOTAL if arm == "spo" else None, "budget": args.budget if arm == "spo" else None,
-            "projections_per_worker": proj_per_worker(w) if arm == "spo" else None,  # max share under split
-            "extra_args": args.extra_args}
-    # fresh cache per cell (never resume a stale one), under work/ so the bucket lifecycle rule deletes it after 2 days
-    work_dir = f"gs://{BUCKET}/work/{RUN_ID}_{args.dataset}/{tag}_{datetime.datetime.now(datetime.timezone.utc).strftime('%H%M%S')}"
-    a = [f"--train_ds={ds['train']}", f"--test_ds={ds['test']}", f"--model={out}/model", f"--work_dir={work_dir}",
-         f"--eval_json={out}/eval.json", "--distributed", f"--label={ds['label']}", f"--split_axis={ARMS[arm]}",
-         f"--num_trees={args.trees}", f"--meta={json.dumps(meta)}"]
-    if arm == "spo":
-        a += [f"--sparse_oblique_num_projections_exponent={spo_exponent(w):.6f}", f"--sparse_oblique_projection_density_factor={SPO_DENSITY}"]
-    if not args.fresh_cache:
-        a.append(f"--dataset_cache_path={cache_dir(arm)}")
-    a += args.extra_args.split()
+    tag, a = tag_of(arm, w), job_args(arm, w)
     pool = lambda n, m: {"machine_spec": {"machine_type": m}, "replica_count": n, "container_spec": {"image_uri": IMAGE, "args": a}}
     return aiplatform.CustomJob(display_name=f"bar-{args.dataset}-{tag}-{RUN_ID}", worker_pool_specs=[pool(1, MGR_MACHINE), pool(w, args.machine)])
 

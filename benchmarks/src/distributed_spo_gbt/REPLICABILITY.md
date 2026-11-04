@@ -50,7 +50,7 @@ predate both rules (n2-highmem-4, P = ceil(sqrt F)).
 |---|---|---|---|---|---|---|
 | `p_F/pfw1{base,vqsort,parstd,innode}20261025_{epsilon,higgs,susy}` | 10-25 | n2-highmem-16 | 10 | F | W = 1: aa + four SPO workers (`0e37d40d` main before the fix, `1a1934fa` VQSort only, `4df36453-stdsort` chunk jobs only, `4df36453` both) | `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` |
 | `p_F/pfhm4_20261025_*`, `p_F/pfgrid20261025_*` | 10-25 | n2-highmem-4 / n2-highmem-16 | 10 | F | aa, spo (parallel worker on `main`); W = 1..16 / 1..4; Epsilon, HIGGS, SUSY, YouTube-8M | `tables/table_vertex_hm4_hm16_pf_body.tex` (the paper's main runtime table); both columns of the setup-cost table |
-| `p_F/pfhm4bar20261025_*` | 10-25 | n2-highmem-4 | 10 | F | aa, spo at W = 16 with the barrier recorder on | `make_barrier_figs.py` -> the YouTube-8M barrier figures |
+| `p_F/pfhm4bar20261025_*` | 10-25 | n2-highmem-4 | 10 | F | aa, spo at W = 16 with the barrier recorder on | superseded: the barrier figures now come from `p_F/pfhm4fix20261101_youtube8m` (`make_barrier_figs.py` default) |
 
 Deleted on 2026-10-26 (recoverable from commits 9cb1fc0f / 88b70553): `20261024T003657Z_epsilon` (duplicate
 of `162251Z`), `20261024T225254Z_criteo` (2-tree probe), `20261024T224943Z_*` (dropped in-node branch at
@@ -147,24 +147,31 @@ What the CSVs hold:
 
 ## D. Paper artifacts and what regenerates them (`paper/distributed_spo_gbt_kdd28/`, checked 2026-10-26)
 
-Generators emit the tabular body only; `main.tex` owns the environments and captions.
+Generators emit the tabular body only; `main.tex` owns the environments and captions. Profile = the
+`params/kdd28_params.json` setting each float's CSVs must match (the generator's `--profile` default).
 
-| Input in `main.tex` | Generator | Data | Family |
-|---|---|---|---|
-| `tables/table_vertex_hm4_hm16_pf_body.tex` | `make_pf_grid_table.py --run_prefix pfhm4_20261025 --machine n2-highmem-4 --w 1,2,4,8,16 --oom_logs 'barriers/vertex/p_F/pfhm4_20261025_youtube8m/launcher.log' --right_run_prefix pfgrid20261025 --right_machine n2-highmem-16 --right_w 1,2,4` | `barriers/vertex/p_F/pfhm4_20261025*`, `pfgrid20261025*` | A |
-| `figures/evaluation/vertex_pf/fig_vertex_{hm4,hm16}_pf_body.tex` + `{hm4,hm16}.dat` | `make_pf_grid_fig.py` (writes in place; same cells/selection as the grid table, imports its `grid()`) | same as the grid table | A |
-| `figures/evaluation/grcp_n2/fig_yt8m_barriers_{budget,swimlane}_body.tex` + `yt8m_barriers/budget.dat` (`swimlane_spo_tree1.dat` is a side record, the swimlane body inlines it) | `make_barrier_figs.py` (writes in place) | `barriers/vertex/p_F/pfhm4bar20261025_youtube8m/{aa,spo}_w16/barriers.csv` | A |
-| `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` | `make_pf_ablation_tables.py` (writes in place) | ablation: `p_F/pfw1*`; setup cost: every n2-highmem-4 and n2-highmem-16 cell in `p_F` | A |
+| Input in `main.tex` | Generator | Data | Family | Profile |
+|---|---|---|---|---|
+| `tables/table_vertex_hm4_hm16_pf_body.tex` | `make_pf_grid_table.py --run_prefix pfhm4fix20261101 --machine n2-highmem-4 --w 1,2,4,8,16 --oom_logs <results>/barriers/vertex/p_F/pfhm4fix20261101_youtube8m/launcher.log --right_run_prefix pfgridfix20261101 --right_machine n2-highmem-16 --right_w 1,2,4 --out <paper>/tables/table_vertex_hm4_hm16_pf_body.tex` | `barriers/vertex/p_F/pfhm4fix20261101*`, `pfgridfix20261101*` | A | `vertex_grid_pf` |
+| `figures/evaluation/vertex_pf/fig_vertex_{hm4,hm16}_pf_body.tex` + `{hm4,hm16}.dat` | `make_pf_grid_fig.py --hm4_prefix pfhm4fix20261101 --hm4_oom_log <same launcher.log> --hm16_prefix pfgridfix20261101` (`--out DIR`, default in place; same cells/selection as the grid table, imports its `grid()`) | same as the grid table | A | `vertex_grid_pf` |
+| `figures/evaluation/grcp_n2/fig_yt8m_barriers_{budget,swimlane}_body.tex` + `yt8m_barriers/budget.dat` (`swimlane_spo_tree1.dat` is a side record, the swimlane body inlines it) | `make_barrier_figs.py` (`--out DIR`, default in place) | `barriers/vertex/p_F/pfhm4fix20261101_youtube8m/{aa,spo}_w16/barriers.csv` (2026-11-03: regenerated, equal to the paper bodies and `.dat` files except the `% setup:` line. `pfhm4bar20261025` does not reproduce them) | A | `vertex_grid_pf` |
+| `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` | `make_pf_ablation_tables.py` (`--out DIR`, default in place) | ablation: `p_F/pfw1*`; setup cost: every n2-highmem-4 and n2-highmem-16 cell in `p_F` | A | `vertex_grid_pf` |
 
 Regenerated locally on 2026-10-26 from the fetched cells: every body reproduced byte-for-byte except `table_setup_cost_body.tex`,
 whose hm16 ranges now include the `pfgrid` W = 1..4 cells (the Overleaf copy was made from the `pfw1` W = 1 cells alone) and whose
 hm4 column now reads the P = F n2-highmem-4 cells (`pfhm4*`) instead of the deleted sqrt(F) grids; pushed to Overleaf 2026-10-26.
-| `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body.tex` | `make_paper_tables.py` | `suite_results.csv` vs `speedup_map_by_dataset/suite_results.csv` | C |
-| `figures/evaluation/cc18_tree_feature_hist_body.tex` + `cc18_tree_feature_hist/*.dat` | `../cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out paper/distributed_spo_gbt_kdd28 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6` (byte-identical, 2026-10-28) | `results/misc/cc18_gbt_feature_study/nodes_all.tar.gz` + CC18 headers from `benchmarks/data/download_cc18_datasets.py` | CC18 study |
-| `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `in_node_parallelism_2026-10-22/` | C |
-| `figures/method/*.pdf` (`in_node_spo_sampling.pdf` only in a commented-out block), `listings/in_worker_oblique` | hand-made (SVG sources in `benchmarks/results/figures/`) | - | - |
-| `tables/table_column_replication_body.tex`, `figures/evaluation/fig_column_replication_body.tex` + `column_replication/*.dat` | `make_column_replication_{table,fig}.py` (**branch `column-replication`**) | `benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex/` (that branch) | E |
-| `tables/table_cross_network_body.tex`, `figures/evaluation/fig_cross_network_body.tex` + `cross_network/*.dat` | `make_cross_network_{table,fig}.py` (**branch `cross-worker-col-comms`**) | `naive_column_shipping/vertex_hm4_20261029/results.csv` (that branch) | F |
+2026-11-03: the three `make_pf_*` generators check the `eval.json` stamps (trees, exponent, density) against `vertex_grid_pf`
+and add a `% setup:` line. Regenerated into a scratch dir with the commands above: the grid table, both panels and the
+ablation table differ from the paper copies only by that line. `table_setup_cost_body.tex` does not: all 8 lower bounds
+(n2-highmem-4 and n2-highmem-16, all four datasets) differ from the paper copy because newer cells exist (the `pf*fix20261101`
+cells, e.g. SUSY hm4 63--262 vs the paper's 134--262). The upper bounds match. The HEAD generator gives the same numbers.
+| `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body.tex` | `make_paper_tables.py` | `suite_results.csv` vs `speedup_map_by_dataset/suite_results.csv` | C | `table8` |
+| `figures/evaluation/cc18_tree_feature_hist_body.tex` + `cc18_tree_feature_hist/*.dat` | `../cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out paper/distributed_spo_gbt_kdd28 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6` (byte-identical, 2026-10-28) | `results/misc/cc18_gbt_feature_study/nodes_all.tar.gz` + CC18 headers from `benchmarks/data/download_cc18_datasets.py` | CC18 study | `cc18_feature_study` |
+| `tables/table_cc18_aa_spo_body.tex` | `../cc18_aa_spo_gbt/make_cc18_aa_spo_table.py <results.csv> <out> --time` | `ariel_notes/results/2026-11-03_cc18_harness_exact300/results.csv` | CC18 study | `cc18_aa_spo` |
+| `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `in_node_parallelism_2026-10-22/` | C | `in_node_threads` |
+| `figures/method/*.pdf` (`in_node_spo_sampling.pdf` only in a commented-out block), `listings/in_worker_oblique` | hand-made (SVG sources in `benchmarks/results/figures/`) | - | - | - |
+| `tables/table_column_replication_body.tex`, `figures/evaluation/fig_column_replication_body.tex` + `column_replication/*.dat` | `make_column_replication_{table,fig}.py` (**branch `column-replication`**) | `benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex/` (that branch) | E | `table2` |
+| `tables/table_cross_network_body.tex`, `figures/evaluation/fig_cross_network_body.tex` + `cross_network/*.dat` | `make_cross_network_{table,fig}.py` (**branch `cross-worker-col-comms`**) | `naive_column_shipping/vertex_hm4_20261029/results.csv` (that branch) | F | `table3` |
 
 Generated files kept in the repo but not input by `main.tex` (2026-10-26): `tables/table_vertex_{weak,strong}_body.tex`
 and `figures/evaluation/grcp_n2/strong_weak_scaling.pdf` (family B), `tables/table_vertex_hm4_pf_body.tex`,
@@ -268,7 +275,8 @@ benchmarks/src/distributed_spo_gbt/fixed_reruns/run_table8_fixed.sh <out> bazel-
 ```
 Writes `<out>/{fullfix,fullfix_numeric,fullfix_rep,parity}/results.csv` (765/765/765/612 cells). Single-machine
 arms are unchanged by the fixes (their recorded cells in `speedup_map_by_dataset/suite_results.csv` stand);
-`run_table8_local.sh` with `ARMS="single:SPO single:AA"` reruns them.
+`run_table8_local.sh` with `ARMS="single:SPO single:AA"` reruns them (the SPO arm passes `--projection_density_factor 1.5`
+since 2026-11-03, when the harness flag default became YDF's 2, as does `run_seed_sweep.sh single`).
 
 **3. Tables 2-3 (Vertex AI; ~1.5 h, a few dollars).** Needs `gcloud` authenticated to project
 `ydf-distributed-spo-gbt` and a Python with `google-cloud-aiplatform` (the orchestrator box uses `~/vertex_venv`).
@@ -347,3 +355,16 @@ seeds 1-5, Mac in-process workers): Δ vs single machine (dataset-paired, SE ove
 log loss +0.0003 ± 0.0008; W = 4, r = 1 −0.06 ± 0.15 pts, −0.0001 ± 0.0011; legacy W = 4 +0.27 ± 0.19 pts,
 −0.0056 ± 0.0017 (27/34 datasets lower log loss). The default and legacy cells are bit-identical to the 2026-11-01
 split-budget prototype and old-default cells (170/170 each).
+
+## I. YDF SPO defaults for every new run (user decision, 2026-11-03)
+
+Single-machine and distributed SPO-GBT share the YDF proto defaults: exponent 2, max 6000, density 2, min 1, so
+P = min(F², 6000) per node, split across workers (split budget). No early stopping (single machine passes
+`--ydf_defaults --validation_set_ratio 0 --early_stopping NONE`, the distributed learner has none). Profile `kdd28_ydf`
+(arms `dist_spo`, `single_spo`) in `params/kdd28_params.json`. Tables 2 and 3 and the single-machine rows move to it
+when rerun. `examples/train_distributed_gbt` and `vertex_build/train_cells.py` (`--num_trees` 300) now default to these
+values. The recorded P = F profiles stay reproducible because their launchers pass the values explicitly:
+`run_vertex_colrep.py` (table2: exponent 1, max 2147483647, density 1.5), `run_dgbt.sh` and `run_barrier_cell.sh`
+(`--sparse_oblique_max_num_projections 1000`). Images built before this change reject the new `train_cells.py` flags.
+Cost probe (`ariel_notes/results/2026-11-03_spo_budget_cost_probe/`, qsar-biodeg CC18 fold 0, F = 41, W = 4 in-process,
+300 trees, seed 1, Mac, smoke only): tree training 0.99 s (P = F) vs 7.41 s (YDF), median of 3, test accuracy 0.8679 both.

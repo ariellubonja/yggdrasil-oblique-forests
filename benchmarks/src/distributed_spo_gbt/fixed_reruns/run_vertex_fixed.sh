@@ -9,6 +9,10 @@
 set -u
 OUT=${1:?out_root}; shift; STEPS=${*:-build table2 table2_split table3}
 HERE=$(cd "$(dirname "$0")" && pwd); REPO=$(cd $HERE/../../../.. && pwd)
+# Values: params/kdd28_params.json table2 (dist_per_worker, dist_split; trees/depth/W/seeds = the archived launcher's defaults)
+# and table3.seed1. The launchers run from the recorded commits, so their CSVs carry no stamp columns.
+eval "$(python3 $HERE/../params/params.py export table2.dist_split T2S_)"
+eval "$(python3 $HERE/../params/params.py export table3.seed1 T3_)"
 PY=${PY:-python3}
 R=us-east1-docker.pkg.dev/ydf-distributed-spo-gbt/ydf-repo
 # Recorded commits (images train-ydf:fullfix-10509539, colship-fullfix-1ad2062f already exist: skip `build`).
@@ -47,7 +51,7 @@ for s in $STEPS; do case $s in
     log "table2"; sweep $OUT/src/t2 $R/train-ydf:fullfix-${T2_COMMIT:0:8} $T2_COMMIT $RUN colrep-full $OUT/table2/fullfix "$EXTRA" ;;
   table2_split)
     log "table2_split"; sweep $OUT/src/t2 $R/train-ydf:fullfix-${T2_COMMIT:0:8} $T2_COMMIT $RUN colrep-fullsplit \
-      $OUT/table2/fullfix_splitbudget "$EXTRA --split_budget" ;;
+      $OUT/table2/fullfix_splitbudget "$EXTRA $([ "$T2S_SPLIT_BUDGET" = true ] && echo --split_budget)" ;;
   table3)
     # Datasets snake-split by size over 4 parallel jobs (the paper run's grouping), levels 0 (in-worker) and ship.
     log "table3"
@@ -57,9 +61,9 @@ for s in $STEPS; do case $s in
     for g in 0 1 2 3; do
       mkdir -p $OUT/table3/fullfix/g$g
       (cd $OUT/src/t3 && $PY column_replication/run_vertex_colrep.py --image $R/train-ydf:colship-fullfix-${T3_COMMIT:0:8} \
-        --git ${T3_COMMIT:0:8} --run_id $RUN --job_prefix colship-g$g --seeds 1 --levels 0,ship --datasets "${G[$g]}" \
-        --machine n2-highmem-4 --workers 4 --num_trees 300 --max_depth 6 --out_root $OUT/table3/fullfix/g$g \
-        --extra_args "$EXTRA --barrier_csv --local_projection_count" > $OUT/table3/fullfix/g$g/launcher.log 2>&1) &
+        --git ${T3_COMMIT:0:8} --run_id $RUN --job_prefix colship-g$g --seeds $T3_SEEDS --levels 0,ship --datasets "${G[$g]}" \
+        --machine $T3_MACHINE --workers $T3_WORKERS --num_trees $T3_TREES --max_depth $T3_MAX_DEPTH --out_root $OUT/table3/fullfix/g$g \
+        --extra_args "$EXTRA --barrier_csv$([ "$T3_LOCAL_PROJECTION_COUNT" = true ] && echo " --local_projection_count")" > $OUT/table3/fullfix/g$g/launcher.log 2>&1) &
       sleep 25
     done
     wait ;;

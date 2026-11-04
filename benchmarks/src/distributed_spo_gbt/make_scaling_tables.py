@@ -2,8 +2,11 @@
 """Emit the Vertex AI weak/strong scaling table BODIES (tabular only) from a vertex_scaling run's results.csv.
 The side-by-side minipages, captions and labels live in main.tex (\\twocolumn[...] block under the scaling figure), which \\input{}s the bodies.
 Times = tree_training_s (setup excluded); strong-scaling speedup = T(1 worker) / T(W)."""
-import argparse, pathlib
+import argparse, pathlib, sys
 import pandas as pd
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 RUN = ROOT / "benchmarks/results/runtime/distributed_spo_gbt/vertex_scaling/20261015T035046Z_32c"
@@ -35,17 +38,22 @@ def table(df, strong):
     return "\n".join(lines) + "\n"
 
 
-def scaling_tables(run=RUN):
+def scaling_tables(run=RUN, profile=kdd28.generator_profile(__file__)):
     """-> (weak body, strong body)."""
     df = pd.read_csv(run / "results.csv")
+    # num_trees = model.num_trees() of train.py (the stamp's trees); cols/workers drive no formula here.
+    kdd28.check_frame(df.rename(columns={"num_trees": "trees"}), profile, [""], f"{run.name}/results.csv")
     weak = df[df.rows == 100_000 * df.workers]
     strong = df[df.rows == df.rows.max()]
-    return HDR + "\n" + table(weak, strong=False), HDR + "\n" + table(strong, strong=True)
+    line = kdd28.setup_line(profile)
+    return (kdd28.add_setup(HDR + "\n" + table(weak, strong=False), line),
+            kdd28.add_setup(HDR + "\n" + table(strong, strong=True), line))
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--run", default=str(RUN)); ap.add_argument("--out", default=str(OUT))
+    kdd28.add_profile_arg(ap, __file__)
     a = ap.parse_args(); out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    weak, strong = scaling_tables(pathlib.Path(a.run))
+    weak, strong = scaling_tables(pathlib.Path(a.run), a.profile)
     (out / "table_vertex_weak_body.tex").write_text(weak); (out / "table_vertex_strong_body.tex").write_text(strong)
     print(f"wrote {out}/table_vertex_weak_body.tex, table_vertex_strong_body.tex")

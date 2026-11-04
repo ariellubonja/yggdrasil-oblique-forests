@@ -4,10 +4,14 @@ Deltas are distributed level r minus single-machine SPO-GBT (single_machine_spo_
 Writes .dat files and a pgfplots body; the figure environment and caption live in main.tex.
 """
 import argparse
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
 
 ROOT = Path(__file__).resolve().parents[3]
 CSV = ROOT / "benchmarks/results/accuracy/distributed_spo_gbt/column_replication_vertex/results.csv"
@@ -41,15 +45,18 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default=str(CSV))
     ap.add_argument("--out", default=str(OUT))
+    kdd28.add_profile_arg(ap, __file__)
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     single_path = Path(a.csv).parent / "single_machine_spo_gbt.csv"
     d = pd.read_csv(a.csv)
     d = d[d.rc == 0]
+    kdd28.check_frame(d, a.profile, ["dist_split"], Path(a.csv).name + " (distributed)")
     m = d.groupby(["dataset", "replication"]).test_acc.mean().unstack()
     R = m.columns.values
     sg = pd.read_csv(single_path)
+    kdd28.check_frame(sg[sg.rc == 0], a.profile, ["single_spo", "single_spo_audit"], single_path.name)
     sg = sg[sg.rc == 0].groupby("dataset").test_acc.mean().reindex(m.index)
     assert sg.notna().all(), "single-machine run misses datasets"
     delta = m.sub(sg, axis=0) * 100
@@ -80,7 +87,8 @@ def main():
     for name, pts in (("dots", dots),):
         with open(out / f"{name}.dat", "w") as f:
             f.write("x d\n" + "".join(f"{x:.4f} {y:.4f}\n" for x, y in pts))
-    (out.parent / "fig_column_replication_body.tex").write_text(BODY % {"clip": CLIP})
+    (out.parent / "fig_column_replication_body.tex").write_text(
+        kdd28.add_setup(BODY % {"clip": CLIP}, kdd28.setup_line(a.profile, ["single_spo", "single_spo_audit"])))
     print(f"{len(delta)} datasets; r=0 {delta[0.0].mean():+.2f} pts vs single-machine; "
           f"{n_out} of {len(delta) * len(R)} per-dataset deltas outside +-{CLIP:g} pts")
 

@@ -7,6 +7,8 @@ Usage: make_pf_grid_fig.py [--out_dir DIR] [--hm4_prefix P --hm4_oom_log LOG --h
 import argparse, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
 from make_pf_grid_table import DATASETS, grid  # noqa: E402
 from make_pf_grid_table import ARMS as _ARMS  # noqa: E402
 
@@ -26,7 +28,7 @@ YMIN, YMAX = 10, 12000
 LEGEND = "vertexpflegend"  # shared legend, centred under both panels by main.tex
 
 
-def panel(tag, title, g, out_dir, width, legend):
+def panel(tag, title, g, out_dir, width, legend, setup):
     W = g["W"]; cols = [f"{arm}_w{w}" for w in W for arm, _ in ARMS]
     dat = ["dataset " + " ".join(cols)]
     oom = []  # (dataset index, bar index) slots to label
@@ -69,20 +71,24 @@ def panel(tag, title, g, out_dir, width, legend):
         shift = (bi - (n - 1) / 2) * (bw + gap)
         lines.append(f"\\node[rotate=90, anchor=west, font=\\tiny, inner sep=1pt] at ([xshift={shift:.1f}pt]axis cs:{dsname.replace(' ', '')},{YMIN}) {{OOM}};")
     lines += ["\\end{axis}", "\\end{tikzpicture}"]
-    open(os.path.join(out_dir, f"fig_vertex_{tag}_pf_body.tex"), "w").write("\n".join(lines) + "\n")
+    open(os.path.join(out_dir, f"fig_vertex_{tag}_pf_body.tex"), "w").write(kdd28.add_setup("\n".join(lines) + "\n", setup))
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out_dir", default=OUT); ap.add_argument("--trees", type=int, default=10)
+    ap.add_argument("--out_dir", "--out", default=OUT); ap.add_argument("--trees", type=int, default=10)
     ap.add_argument("--hm4_prefix", default=PANELS[0][2]); ap.add_argument("--hm4_oom_log", default=PANELS[0][5])
     ap.add_argument("--hm16_prefix", default=PANELS[1][2])
+    kdd28.add_profile_arg(ap, __file__)
     a = ap.parse_args(); os.makedirs(a.out_dir, exist_ok=True)
+    setup = kdd28.setup_line(a.profile, ["aa"])
     over = {"hm4": (a.hm4_prefix, a.hm4_oom_log), "hm16": (a.hm16_prefix, None)}
     for tag, title, prefix, machine, w, oom_logs in PANELS:
         prefix, oom_logs = over[tag]
         g = grid(prefix, machine, a.trees, w, oom_logs)
-        panel(tag, title, g, a.out_dir, "0.52\\textwidth" if tag == "hm4" else "0.46\\textwidth", legend=(tag == "hm4"))
+        kdd28.check_evals(g["evals"], a.profile, f"{g['src']} eval.json")
+        panel(tag, title, g, a.out_dir, "0.52\\textwidth" if tag == "hm4" else "0.46\\textwidth", legend=(tag == "hm4"),
+              setup=setup)
         print("wrote", tag, "panel to", a.out_dir, file=sys.stderr)
 
 

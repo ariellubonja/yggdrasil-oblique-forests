@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # Same-boot single-machine SPO-GBT anchor (the paper's spo_gbt_exact_hwy arm, with test
 # evaluation) for one natural dataset: run_single_anchor.sh DATASET [TREES] [Oblique|AxisAligned]
 # Threads: harness default (-1 = all cores). Oblique weights: harness default (binary, density 1.5).

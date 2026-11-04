@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# not a paper source, parameters not governed by params/
 # VM-to-VM variance check (2026-10-26): HIGGS W=4 on n2-highmem-16, AA + SPO, 3 fresh clusters each
 # (run_ids hostvar{1,2,3}20261026). train.py logs the host CPU model into cpu_<role>.json.
 set -uo pipefail

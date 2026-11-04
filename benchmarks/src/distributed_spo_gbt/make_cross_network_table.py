@@ -5,16 +5,26 @@ Reads the Vertex run results.csv, writes only the tabular body; caption/label li
 With a seed column (several seeds per dataset and arm), times, wait, GB and accuracy are seed means.
   python make_cross_network_table.py [results.csv] [out_body.tex]
 """
+import argparse
 import csv
 import math
 import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    HERE, "../../results/runtime/distributed_spo_gbt/naive_column_shipping/vertex_hm4_20261029/results.csv")
-OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(
-    HERE, "../../../paper/distributed_spo_gbt_kdd28/tables/table_cross_network_body.tex")
+sys.path.insert(0, os.path.join(HERE, "params"))
+import params as kdd28  # noqa: E402  (params/kdd28_params.json)
+
+_ap = argparse.ArgumentParser()
+_ap.add_argument("src", nargs="?", default=os.path.join(
+    HERE, "../../results/runtime/distributed_spo_gbt/naive_column_shipping/vertex_hm4_20261029/results.csv"))
+_ap.add_argument("out_pos", nargs="?", metavar="out", default=os.path.join(
+    HERE, "../../../paper/distributed_spo_gbt_kdd28/tables/table_cross_network_body.tex"))
+_ap.add_argument("--out", default=None, help="output body path (same as the 2nd positional)")
+kdd28.add_profile_arg(_ap, __file__)
+_a = _ap.parse_args()
+SRC, OUT = _a.src, _a.out or _a.out_pos
+kdd28.check_csv(SRC, _a.profile, ["", "seed1"])
 
 def load(src):
     """{dataset: {arm: row}}; with a seed column, each (dataset, arm) is the mean over its seeds."""
@@ -70,5 +80,5 @@ lines += [
     r"\end{tabular}",
 ]
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
-open(OUT, "w").write("\n".join(lines) + "\n")
+open(OUT, "w").write(kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(_a.profile)))
 print(f"wrote {OUT} ({len(rows)} datasets, geomean speedup {geo:.2f}x)")
