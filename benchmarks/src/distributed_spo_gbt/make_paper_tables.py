@@ -182,15 +182,18 @@ def accuracy_mean_figure(metric="test_auc"):
     for (f, _, _, colors), mark in zip(FIG_ARMS, ("*", "diamond*")):
         m = [sum(st.loc[ds, "mean"] for ds in done) / len(done) for g, _, st in stats if g == f"{f}-GBT"]
         all_m += m
-        refs.append((f, colors[1], m[0]))  # m[0] = single machine, drawn flat across all W
+        refs.append((f"{f}-GBT", colors[1], m[0]))  # m[0] = single machine, drawn flat across all W
         style = "" if mark == "*" else ", dashed"
         lines += [rf"\addplot[color={_rgb(colors[1])}, mark={mark}, thick{style}] coordinates {{"
                   + " ".join(f"({x},{v:.4f})" for x, v in zip(xs, m[1:])) + "};", rf"\addlegendentry{{{f}-GBT}}"]
+    for (_, _, _, fam), col_ in zip(EXTRA, ("5A9E3C", "8A5CC8")):  # extra single-machine arms: dotted refs
+        v = next(sum(st.loc[ds, "mean"] for ds in done) / len(done) for g, _, st in stats if g == fam)
+        all_m.append(v); refs.append((fam, col_, v))
     lo, hi = min(all_m), max(all_m)  # legend sits above the axis
     lines[2] = lines[2].replace("height=4.6cm,", f"height=4.6cm, ymin={lo - 0.1 * (hi - lo):.4f}, ymax={hi + 0.1 * (hi - lo):.4f},")
     for f, c, v in refs:
         lines += [rf"\addplot[color={_rgb(c)}, thick, densely dotted, no marks] coordinates {{({xs[0]},{v:.4f}) ({xs[-1]},{v:.4f})}};",
-                  rf"\addlegendentry{{single-machine {f}-GBT}}"]
+                  rf"\addlegendentry{{single-machine {f}}}"]
     lines += [r"\end{axis}", r"\end{tikzpicture}"]
     return kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(PROFILE, ARMS_SHOWN))
 
@@ -229,6 +232,6 @@ if __name__ == "__main__":
                + "".join(" + " + e[0].split("benchmarks/")[-1] for e in EXTRA) + "\n")
     (out / f"table_dist_accuracy{args.suffix}_body.tex").write_text(accuracy_table())
     if not args.no_figure:
-        fig = out.parent / "figures/evaluation/multi_thread_m7i_metal_24x"; fig.mkdir(parents=True, exist_ok=True)
+        fig = out.parent / "figures/evaluation" / ("" if args.suffix else "multi_thread_m7i_metal_24x"); fig.mkdir(parents=True, exist_ok=True)
         (fig / f"fig_dist_accuracy_mean{args.suffix}_body.tex").write_text(accuracy_mean_figure())
     print(f"wrote accuracy bodies under {out}")
