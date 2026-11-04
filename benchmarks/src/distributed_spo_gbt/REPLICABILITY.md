@@ -395,3 +395,7 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
 - Not rerun: the cross-network arm of tab:cross-network. Column shipping lives only on `cross-worker-col-comms` /
   `fix-disc-colcomms`, which predate the split budget and the effective-params line. Its in-worker arm equals the
   column-replication r = 0 cells.
+- Cross-network arm (added 2026-11-04, not yet run): branch `cross-worker-col-comms` @ d97fe698 (main merged in, split
+  budget applies to ship mode), profile arm `kdd28_ydf.cross_network_ship`, `run_kdd28_ydf_ec2.py --tables cross_network`
+  (34 CC18 fold 0 x seeds 1-5, W = 4). Results box `~/results/2026-11-04_cross_network_ydf/`, mirrored by
+  `ariel_notes/results/2026-11-04_cross_network_ydf/mirror.sh`. The arm definition lives on that branch's kdd28_params.json.
