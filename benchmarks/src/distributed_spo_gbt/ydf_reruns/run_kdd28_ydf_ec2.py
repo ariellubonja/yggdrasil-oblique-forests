@@ -36,13 +36,16 @@ ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps 
     "distacc_exact300": "dataset,fold,arm,workers,split_axis,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git,bin_sha,machine",
     "colrep_distacc": "dataset,fold,replication,workers,threads,rc,test_acc,test_auc,test_logloss,"
                       "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
+    "colrep_w32_large": "dataset,fold,arm,replication,workers,threads,rc,test_acc,test_auc,test_logloss,"
+                        "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
     "cc18": "dataset,fold,arm,threads,rc,test_acc,test_auc,test_logloss,num_trees,train_s,wall_s,git,bin_sha",
     "cross_network": "dataset,seed,workers,threads,trees,max_depth,rc,test_acc,test_auc,test_logloss,num_conditions,"
                      "num_oblique,num_multi_col,held_cols,ship_bytes_in,ship_bytes_out,ship_cols_in,ship_s_max,"
                      "ship_s_sum,cross_worker_splits,train_s,wall_s,git,log",
 }
 KEYS = {"distacc": ("dataset", "fold", "arm"), "distacc_aaspo": ("dataset", "fold", "arm"),
-        "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "replication"), "colrep": ("dataset", "seed", "replication"),
+        "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "replication"),
+        "colrep_w32_large": ("dataset", "fold", "arm", "replication"), "colrep": ("dataset", "seed", "replication"),
         "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm"),
         "cross_network": ("dataset", "seed")}
 
@@ -96,7 +99,7 @@ def build_cells(a):
                 "--early_stopping", "NONE", "--num_threads", str(ts), "--seed", str(seed), "--model_out_dir", model]
         cells.append(Cell(table, key, prof, argv, ts, ts, cost, extra, False))
 
-    def dist(table, key, prof, train, test, w, seed, aa, r, model, work, extra, cost, ship=False):
+    def dist(table, key, prof, train, test, w, seed, aa, r, model, work, extra, cost, ship=False, label="label"):
         p = kdd28.load_profile(prof)
         spo = [] if aa else ["--sparse_oblique_num_projections_exponent", kdd28._fmt(p["spo_exponent"]),
                              "--sparse_oblique_max_num_projections", kdd28._fmt(p["spo_max_projections"]),
@@ -105,7 +108,7 @@ def build_cells(a):
                              f"--sparse_oblique_split_budget={kdd28._fmt(p['split_budget'])}",
                              "--sparse_oblique_weights", "BINARY"] + ([] if r is None else ["--column_replication", str(r)]) \
             + (["--sparse_oblique_ship_columns"] if ship else [])
-        argv = [dist_bin, "--alsologtostderr", "--train_csv", train, "--test_csv", test, "--label", "label",
+        argv = [dist_bin, "--alsologtostderr", "--train_csv", train, "--test_csv", test, "--label", label,
                 *(["--force_numerical_features"] if p["force_numerical"] else []), "--work_dir", work,
                 "--num_workers", str(w), "--num_threads", str(a.worker_threads), "--num_trees", str(p["trees"]),
                 "--max_depth", str(p["max_depth"]), "--split_axis", "AXIS_ALIGNED" if aa else "SPARSE_OBLIQUE", *spo,
@@ -189,6 +192,19 @@ def build_cells(a):
                 dist("colrep_distacc", (d, k, float(r)), f"{PR}.colrep_distacc_spo", tr, te, cp["workers"][0], 1, False, r,
                      os.path.join(o, "models", tag), os.path.join(o, "work", tag),
                      {"workers": cp["workers"][0]}, cost(tr, False))
+    if "colrep_w32_large" in tables:  # colrep_distacc setup at W = 32 on large sets with a shipped test set (2026-11-04)
+        cp = kdd28.load_profile(f"{PR}.colrep_w32_large_spo")
+        o = os.path.join(a.out, "colrep_w32_large")
+        for spec in a.large_csvs.split(","):
+            d, tr, te, lbl = re.match(r"([^=]+)=([^:]+):([^:]+):(.+)", spec).groups()
+            single("colrep_w32_large", (d, 0, "single:SPO", ""), f"{PR}.colrep_w32_large_single_spo", tr, te, lbl, 1,
+                   ["--feature_split_type=Oblique"], os.path.join(o, "models", f"{d}__single_SPO"), a.single_threads,
+                   {"workers": "single"}, cost(tr, False))
+            for r in cp["column_replication"]:
+                tag = f"{d}__r{r:.2f}"
+                dist("colrep_w32_large", (d, 0, f"{cp['workers'][0]}:SPO", float(r)), f"{PR}.colrep_w32_large_spo", tr, te,
+                     cp["workers"][0], 1, False, r, os.path.join(o, "models", tag), os.path.join(o, "work", tag),
+                     {"workers": cp["workers"][0]}, cost(tr, False), label=lbl)
     if "colrep" in tables:
         cp = kdd28.load_profile(f"{PR}.colrep_spo")
         sp = kdd28.load_profile(f"{PR}.colrep_single_spo")
@@ -250,18 +266,27 @@ def main():
     ap.add_argument("--git", default="")
     ap.add_argument("--machine", default="", help="machine note for the 'machine' column (2026-11-04 tables)")
     ap.add_argument("--colrep_r0", default="", help="colrep_distacc: dataset:fold,... that also run r = 0 (identity check)")
+    ap.add_argument("--large_csvs", default="", help="colrep_w32_large: name=train.csv:test.csv:label_col,...")
+    ap.add_argument("--eval_suite", default="", help="eval suite for every table (default: eval_suites.json _driver_tables)")
+    ap.add_argument("--work_root", default="", help="parent of the per-cell dataset-cache work dirs (default: <out>/<table>)")
     ap.add_argument("--only", default="", help="comma list of dataset substrings")
     ap.add_argument("--off_paper", default="", help="reason: run outside the table's eval suite, mismatches only warn and "
                     "rows are stamped eval_suite=off-paper:<reason>, which paper generators refuse")
     a = ap.parse_args()
     need = {"distacc": "tab_folds", "distacc_aaspo": "tab_folds", "distacc_exact300": "tab_folds",
-            "colrep_distacc": "tab_folds", "colrep": "cc18_fold0", "cross_network": "cc18_fold0", "cc18": "cc18_10fold"}
+            "colrep_distacc": "tab_folds",
+            "colrep_w32_large": "large_csvs", "colrep": "cc18_fold0", "cross_network": "cc18_fold0", "cc18": "cc18_10fold"}
     for t in a.tables.split(","):
         if t not in need:
             ap.error(f"unknown table {t!r} (known: {', '.join(need)})")
         if not getattr(a, need[t]):
             ap.error(f"--tables {t} needs --{need[t]}")
     cells = build_cells(a)
+    if a.work_root:  # dataset caches are scratch (deleted after each cell), e.g. /dev/shm when the disk is short
+        for c in cells:
+            if c.work:
+                c.work = os.path.join(a.work_root, c.table, os.path.basename(c.work))
+                c.argv[c.argv.index("--work_dir") + 1] = c.work
     if a.only:
         cells = [c for c in cells if any(o in c.key[0] for o in a.only.split(","))]
     bin_sha = ""
@@ -300,7 +325,7 @@ def main():
             kdd28.preflight(c.argv, c.profile, os.path.join(a.out, c.table, "logs", f"preflight_{c.profile}.log"),
                             expect=c.expect)
     ev = evalsuite.driver_preflight([(c.table, dict(zip(KEYS[c.table], c.key)), c.argv) for c in cells],
-                                    os.path.join(a.out, "eval_sha_cache.json"),
+                                    os.path.join(a.out, "eval_sha_cache.json"), a.eval_suite or None,
                                     off_paper=a.off_paper or None)
     left = {t: sum(1 for c in todo if c.table == t) for t in csvs}
     fails = {t: 0 for t in csvs}

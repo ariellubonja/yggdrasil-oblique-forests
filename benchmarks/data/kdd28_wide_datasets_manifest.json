@@ -1,0 +1,197 @@
+{
+ "_doc": "kdd28_wide_datasets: wide (>=100 feature) binary sets (OpenML, plus Epsilon from its Hugging Face parquet) added to the KDD28 accuracy evaluation. Built by benchmarks/src/distributed_spo_gbt/rebuild_wide_data.py <folds_dir>; sha256 of raw/data/fold files in kdd28_wide_datasets_manifest.sha256. Validation evidence: ariel_notes/results/2026-11-04_wide_datasets/validation/REPORT.md (2026-11-04).",
+ "suite": "kdd28_wide_datasets",
+ "encoding": "benchmarks/data/tabular_suite_prep.py: numeric -> float32, bool -> 0/1, categorical/string -> ordinal codes over sorted distinct values; label two classes -> majority 0, >2 classes majority-vs-rest. Only OpenML row-id/ID columns listed in drop_columns are removed; constant and duplicate columns are kept (CLAUDE.md: never drop rows or columns).",
+ "folds": "run_suite.make_folds: StratifiedKFold(5, shuffle=True, random_state=0) as kdd28_tabarena33 (fold seed 0; training seed 1 is separate). NaN kept in <data>/<name>/train_nan.csv; each fold imputes NaN with its training fold's column means (test reuses them, all-NaN -> 0.0).",
+ "files": {
+  "data": "<data_dir>/<name>/{train.csv,train_nan.csv,meta.json}",
+  "folds": "<folds_dir>/<name>/fold{k}_{train,test}.csv"
+ },
+ "datasets": [
+  {
+   "name": "epsilon",
+   "status": "built",
+   "source": "hf_parquet",
+   "parquet_url": "https://huggingface.co/datasets/jxie/epsilon-normalized/resolve/refs%2Fconvert%2Fparquet/default/{split}/{shard:04d}.parquet",
+   "shards": {
+    "train": 20,
+    "test": 5
+   },
+   "features_column": "inputs",
+   "target": "label",
+   "drop_columns": [],
+   "expected_rows": {
+    "train": 400000,
+    "test": 100000
+   },
+   "expected_features": 2000,
+   "folds": "shipped train/test split: one holdout fold (k=0), fold0_train = 400k train, fold0_test = 100k test",
+   "massage": "none: 2000 numeric, no NaN, label 0/1 as shipped, CSV bytes as benchmarks/data/download_epsilon.py",
+   "source_note": "LibSVM epsilon_normalized (PASCAL Large Scale Learning Challenge 2008) via the Hugging Face jxie/epsilon-normalized parquet conversion. The files the Vertex AI runs read: gs://ariel_ydf_bucket/big/EPSILON/{epsilon_normalized_train.csv, epsilon_test_100k.csv} (run_vertex_barriers.py:24). Never the OpenML Epsilon (data id 45575, train+test merged), user directive 2026-11-04",
+   "license": "LibSVM/challenge terms not verified"
+  },
+  {
+   "name": "santander_transaction",
+   "status": "built",
+   "openml_data_id": 42395,
+   "openml_name": "SantanderCustomerSatisfaction",
+   "openml_version": 1,
+   "openml_md5": "4f816b123bbe7b04c672e54bae91ddeb",
+   "parquet_url": "https://data.openml.org/datasets/0004/42395/dataset_42395.pq",
+   "openml_shape": [
+    200000,
+    202
+   ],
+   "target": "target",
+   "drop_columns": [
+    "ID_code"
+   ],
+   "expected_rows": 200000,
+   "expected_features": 200,
+   "expected_minority": 20098,
+   "massage": "drop ID_code (row id string, 200000 distinct); target bool -> majority False = 0",
+   "source": "Kaggle santander-customer-transaction-prediction train set (2019). OpenML name 'SantanderCustomerSatisfaction' is a misnomer: ID_code train_0.., var_0..var_199",
+   "license": "OpenML 'Public'; Kaggle competition rules not verified",
+   "raw_parquet_sha256_2026_11_04": "47ba23eadfa6b674804034effa0da9957ab9baa9acf615c6bc77cf4a62c89b15",
+   "features_after_removing_constant_and_duplicate_columns": 200
+  },
+  {
+   "name": "dota2",
+   "status": "built",
+   "openml_data_id": 45563,
+   "openml_name": "Dota2-Games-Results-Data-Set",
+   "openml_version": 1,
+   "openml_md5": "6a34ea4961e41345da5f50239f1896cc",
+   "parquet_url": "https://data.openml.org/datasets/0004/45563/dataset_45563.pq",
+   "openml_shape": [
+    102944,
+    117
+   ],
+   "target": "Team_won",
+   "drop_columns": [],
+   "expected_rows": 102944,
+   "expected_features": 116,
+   "expected_minority": 48660,
+   "massage": "116 nominal {-1,0,1} -> ordinal codes over sorted strings ('-1'<'0'<'1' -> 0,1,2, order preserved); Cluster_ID (47) and Game_mode (9) ordinal; Hero_023 and Hero_107 constant, kept",
+   "source": "UCI Dota2 Games Results (Tridgell 2016), train+test merged by OpenML uploader",
+   "license": "CC BY 4.0 (UCI page)",
+   "raw_parquet_sha256_2026_11_04": "6b2265eb9d69ce62caf40cc6b4a1e12f112f1500a1e7b41d03cb8164d13b8e95",
+   "features_after_removing_constant_and_duplicate_columns": 114
+  },
+  {
+   "name": "hcdr_main",
+   "status": "built",
+   "openml_data_id": 45567,
+   "openml_name": "hcdr_main",
+   "openml_version": 1,
+   "openml_md5": "f3add9a2adb52f1806c3ac612d65991e",
+   "parquet_url": "https://data.openml.org/datasets/0004/45567/dataset_45567.pq",
+   "openml_shape": [
+    307511,
+    122
+   ],
+   "target": "TARGET",
+   "drop_columns": [
+    "SK_ID_CURR"
+   ],
+   "expected_rows": 307511,
+   "expected_features": 120,
+   "expected_minority": 24825,
+   "massage": "drop SK_ID_CURR (OpenML row_id_attribute); 48 nominal (max 58 levels) -> ordinal; NaN (24.8% of cells, 67 cols) kept in train_nan.csv, train-fold mean per fold",
+   "source": "Kaggle home-credit-default-risk (2018) application_train main table, as used by TabTransformer (Huang et al. 2020)",
+   "license": "OpenML 'Public'; Kaggle competition rules not verified",
+   "raw_parquet_sha256_2026_11_04": "03994e1224642598aab37b8134576aa9fb1e69db420ddb71a2c8ad60b236f245",
+   "features_after_removing_constant_and_duplicate_columns": 120
+  },
+  {
+   "name": "christine",
+   "status": "built",
+   "openml_data_id": 41142,
+   "openml_name": "christine",
+   "openml_version": 1,
+   "openml_md5": "f5b5b6d6a9f71b5148315fc71deee632",
+   "parquet_url": "https://data.openml.org/datasets/0004/41142/dataset_41142.pq",
+   "openml_shape": [
+    5418,
+    1637
+   ],
+   "target": "class",
+   "drop_columns": [],
+   "expected_rows": 5418,
+   "expected_features": 1636,
+   "expected_minority": 2709,
+   "massage": "37 binary nominal -> ordinal 0/1; 25 constant + further duplicate columns kept (CLAUDE.md: never drop columns)",
+   "source": "ChaLearn AutoML challenge 2015-2018 (obfuscated, domain undisclosed)",
+   "license": "OpenML 'Public'; ChaLearn terms not verified",
+   "raw_parquet_sha256_2026_11_04": "e1d7da485d3a1e9ef9c540d5180d4e7b99e8a20dacaa11a1e2f22d3fcb6b280e",
+   "features_after_removing_constant_and_duplicate_columns": 1604
+  },
+  {
+   "name": "philippine",
+   "status": "built",
+   "openml_data_id": 41145,
+   "openml_name": "philippine",
+   "openml_version": 1,
+   "openml_md5": "82cbcec6a94818f97f67dd44c4ca847b",
+   "parquet_url": "https://data.openml.org/datasets/0004/41145/dataset_41145.pq",
+   "openml_shape": [
+    5832,
+    309
+   ],
+   "target": "class",
+   "drop_columns": [],
+   "expected_rows": 5832,
+   "expected_features": 308,
+   "expected_minority": 2916,
+   "massage": "none needed (all numeric, no NaN); 51 exact duplicate columns kept",
+   "source": "ChaLearn AutoML challenge 2015-2018 (obfuscated, domain undisclosed)",
+   "license": "OpenML 'Public'; ChaLearn terms not verified",
+   "raw_parquet_sha256_2026_11_04": "d68178a4e2945df609d24099986871b019fbd03faa63ec746272d4728b3531f5",
+   "features_after_removing_constant_and_duplicate_columns": 257
+  },
+  {
+   "name": "guillermo",
+   "status": "built",
+   "openml_data_id": 41159,
+   "openml_name": "guillermo",
+   "openml_version": 1,
+   "openml_md5": "e2beed58a7e38733e05b1bcfd2e04250",
+   "parquet_url": "https://data.openml.org/datasets/0004/41159/dataset_41159.pq",
+   "openml_shape": [
+    20000,
+    4297
+   ],
+   "target": "class",
+   "drop_columns": [],
+   "expected_rows": 20000,
+   "expected_features": 4296,
+   "expected_minority": 8003,
+   "massage": "none needed (all numeric, no NaN); 15 constant columns kept; 116 extra duplicate rows kept (0.8% of test rows have a train twin)",
+   "source": "ChaLearn AutoML challenge 2015-2018 (obfuscated, domain undisclosed)",
+   "license": "OpenML 'Public'; ChaLearn terms not verified",
+   "raw_parquet_sha256_2026_11_04": "caedcc0b539fcd0e8040c4c29773f15d86d44cb19c98048efa8e88fe62207296",
+   "features_after_removing_constant_and_duplicate_columns": 4281
+  },
+  {
+   "name": "vehicle_sensIT",
+   "status": "built",
+   "openml_data_id": 357,
+   "openml_name": "vehicle_sensIT",
+   "openml_version": 1,
+   "openml_md5": "b3a6a422fb3adf6bdcec25ea4006bd6b",
+   "parquet_url": "https://data.openml.org/datasets/0000/0357/dataset_357.pq",
+   "openml_shape": [
+    98528,
+    101
+   ],
+   "target": "Y",
+   "drop_columns": [],
+   "expected_rows": 98528,
+   "expected_features": 100,
+   "expected_minority": 49264,
+   "massage": "none: 100 numeric, no NaN. OpenML already maps SensIT classes 1,2 -> positive, 3 -> negative, which is majority-vs-rest (class 3 = 49264 = classes 1+2). Label tie -1/1 -> '-1' = 0. 28 duplicate rows with conflicting labels kept",
+   "source": "SensIT Vehicle (combined), Duarte and Hu, JPDC 64(7) 2004, via LibSVM (train+test merged by the OpenML uploader)",
+   "license": "OpenML 'Public'; LibSVM terms not verified"
+  }
+ ]
+}

@@ -301,8 +301,9 @@ def plan_row(table, key, argv, sha):
             "metric_impl": BINARY_METRIC.get(binary, f"unknown:{binary}")}
 
 
-def driver_preflight(cells, cache_path=None, off_paper=None):
-    """cells: [(table, key dict, argv)]. Exits 2 when the plan differs from the table's declared suite in identity; returns {(table, key tuple): [eval_suite, data_sha,
+def driver_preflight(cells, cache_path=None, suite_override=None, off_paper=None):
+    """cells: [(table, key dict, argv)]. Exits 2 when the plan differs from the table's declared suite
+    (suite_override replaces it for every table) in identity; returns {(table, key tuple): [eval_suite, data_sha,
     metric_impl]} for the result rows. off_paper: reason; mismatches only warn and rows are stamped off-paper:<reason>.
     Coverage (datasets a run leaves out, e.g. --only) is not checked here: the generators check it."""
     db = load_db()
@@ -313,7 +314,7 @@ def driver_preflight(cells, cache_path=None, off_paper=None):
     sha = ShaCache(cache_path).get_many(files)
     stamps = {}
     for t, items in by_table.items():
-        suite = db["_driver_tables"].get(t)
+        suite = suite_override or db["_driver_tables"].get(t)
         rows = [plan_row(t, k, argv, sha) for k, argv in items]
         if suite is None:
             warn(f"pre-flight {t}: table declares no eval suite (eval_suites.json _driver_tables), rows unstamped")

@@ -27,12 +27,27 @@ ARM_NAME = {a: a for a in ARMS_SHOWN}  # role -> profile arm (--arms)
 _CHECKED = []
 # Extra single-machine columns after AA-GBT, each its own block: (csv, row arm, profile arm, family label)
 EXTRA_SPECS = {"aaspo": ("single:AA+SPO", "distacc_single_aa_spo", "AA+SPO-GBT"),
-               "exact300": ("single:SPO-harness-exact300", "distacc_single_spo_harness_exact300", "SPO-GBT harness")}
+               "exact300": ("single:SPO-harness-exact300", "distacc_single_spo_harness_exact300", "SPO-GBT Hao")}
 EXTRA = []
 EXTRA_FIRST = False  # --extra_first: extra single-machine columns right after Dataset (default: after AA-GBT)
 ONE_BOLD = False  # --one_bold (implied by --purple): one bold per row = highest unrounded mean over all columns
 PURPLE_ON = False  # --purple: dist SPO cell == dist AA cell at the same W on every fold -> both purple, dataset gets *
 PURPLE = r"\cellcolor[RGB]{215,195,240}"
+SHAPES = {}  # dataset -> (rows, features) from --dataset_shapes, always printed after the name
+SHAPES_CSV = "benchmarks/results/runtime/speedup_map_by_dataset/analysis/per_dataset_summary.csv"  # same fold files
+SHORT = {"HR_Analytics_Job_Change_of_Data_Scientists": "HR_Data_Scientists"}
+
+
+def _k(n):
+    return f"{round(n / 1000)}k" if n >= 10000 else str(n)
+
+
+def ds_label(ds, mark=""):
+    name = SHORT.get(ds, ds).replace("_", r"\_") + mark
+    if ds not in SHAPES:
+        sys.exit(f"--dataset_shapes has no row for {ds}")
+    r, f = SHAPES[ds]
+    return f"{name} ({_k(r)}, {f})"
 
 
 def purple_pairs(d, metric):
@@ -133,7 +148,7 @@ def accuracy_table(metric="test_auc"):
                 else:
                     cells.append(_delta_color((r["mean"] - blk[0][1]["mean"]) * 1e3) + c if i else c)
         mark = "$^{*}$" if any(x == ds for x, _ in purple) else ""
-        lines.append(ds.replace("_", r"\_") + mark + " & " + " & ".join(cells) + r" \\")
+        lines.append(ds_label(ds, mark) + " & " + " & ".join(cells) + r" \\")
     # Mean row: bold the best per family, compared at the printed 4 decimals
     raw = {lab: sum(means[lab]) / len(means[lab]) for _, lab, _ in stats}
     avg = {lab: round(raw[lab], 4) for _, lab, _ in stats}
@@ -214,6 +229,7 @@ if __name__ == "__main__":
     ap.add_argument("--extra_first", action="store_true", help="put the --extra columns right after Dataset (default: after AA-GBT)")
     ap.add_argument("--extra", default="", help="name=results.csv,... extra single-machine columns after AA-GBT, in order; "
                     "names: " + ", ".join(EXTRA_SPECS))
+    ap.add_argument("--dataset_shapes", default=SHAPES_CSV, help="repo-relative CSV with dataset,rows,features for the (rows, cols) after each name")
     kdd28.add_profile_arg(ap, __file__)
     args = ap.parse_args()
     PROFILE = args.profile
@@ -224,6 +240,8 @@ if __name__ == "__main__":
     PURPLE_ON = args.purple
     EXTRA_FIRST = args.extra_first
     ONE_BOLD = args.one_bold or args.purple
+    sh = pd.read_csv(ROOT / args.dataset_shapes).drop_duplicates("dataset").set_index("dataset")
+    SHAPES = {d: (int(r.rows), int(r.features)) for d, r in sh.iterrows()}
     EXTRA = [(p, *EXTRA_SPECS[n]) for n, p in (kv.split("=", 1) for kv in args.extra.split(",") if kv)]
     if not args.accuracy_csv:
         ap.error("--accuracy_csv is required (dist-accuracy appendix: --profile table8 --accuracy_csv "

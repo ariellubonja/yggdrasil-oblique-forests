@@ -29,6 +29,24 @@
   }
  },
  "suites": {
+  "kdd28_wide_datasets": {
+   "_note": "Wide dataset eval (user directive 2026-11-04): F >= 100 features. Same protocol as kdd28_tabarena33 (SPAA paper eval) so its tables are comparable.",
+   "floats": [],
+   "datasets": {"epsilon": [0], "santander_transaction": [0, 1, 2, 3, 4], "dota2": [0, 1, 2, 3, 4], "hcdr_main": [0, 1, 2, 3, 4], "christine": [0, 1, 2, 3, 4], "philippine": [0, 1, 2, 3, 4], "guillermo": [0, 1, 2, 3, 4], "vehicle_sensIT": [0, 1, 2, 3, 4]},
+   "files": {"train": "{dataset}/fold{fold}_train.csv", "test": "{dataset}/fold{fold}_test.csv"},
+   "hashes": {"manifest": "benchmarks/data/kdd28_wide_datasets_manifest.sha256", "strip": "folds/"},
+   "data_root": "box ~/spo_vs_gbt/wide_folds (benchmarks/src/distributed_spo_gbt/rebuild_wide_data.py <folds_dir>)",
+   "folds_rule": "run_suite.make_folds: 5 CV folds, seed 0. Epsilon: its shipped train/test split as one holdout fold (k=0)",
+   "label_col": "label",
+   "label_rule": "benchmarks/data/tabular_suite_prep.py encode_binary_label: two classes, majority = 0",
+   "positive_class": "AUC positive class = the last label-dictionary class = the least frequent training-fold class (label 1 for 0/1 labels from encode_binary_label, majority class = 0)",
+   "seeds": [1],
+   "seed_protocol": "seed 1 per fold",
+   "metric_impl": "ydf_eval_v1",
+   "headline": "test_auc",
+   "validation": "none",
+   "early_stopping": "none"
+  },
   "kdd28_tabarena33": {
    "_note": "Reference suite (user decision 2026-11-04): every comparable KDD28 accuracy table shares it.",
    "floats": [
