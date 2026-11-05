@@ -59,9 +59,9 @@ Claude Code is the hub and this repo is the source of truth.
   Write it after the verifier pass.
 - **Times in chat: US Eastern (2026-09-24)**, labelled EDT/EST (`TZ=America/New_York date`). Logs and
   CSVs stay UTC.
-- **Implementation goes to an Opus subagent, Fable cross-checks (user directive, 2026-11-03):** for any multi-file
-  change, brief an Opus agent (medium effort unless the user says high), end the turn, then verify its result by
-  rerunning its checks, not by reading its report. Finish leftovers or hand them to the agent, never ask.
+- **Work runs in the current session, agents only on request (user directive, 2026-11-05):** implement, test and
+  verify here. Spawn a subagent only when the user explicitly asks for one. Supersedes the 2026-11-03 "Opus subagent
+  implements" rule and the default per-bug verifier agent. Finish leftovers, never ask.
 
 ## Code rules
 
@@ -141,8 +141,15 @@ Claude Code is the hub and this repo is the source of truth.
 - **CC18 arms (b) and (c) stay (2026-11-03):** old-harness comparison arms, never drop them.
 - **Comparable KDD28 accuracy tables share eval suite `kdd28_tabarena33` (2026-11-04)**, the setup of
   tab:dist-accuracy-ydf (`params/eval_suites.json`). The harness stops (exit 2, `STOP eval-suite:`) on dataset, fold,
-  file-hash, metric, validation or early-stopping mismatch, generators also on missing datasets/folds (since 2026-11-05).
-  `--off_paper "<reason>"` runs an off-paper study instead. Check: `params.py check-eval <csv>`. REPLICABILITY.md §K.
+  file-hash, metric, validation or early-stopping mismatch, generators also on missing datasets/folds (since 2026-11-05). `--off_paper "<reason>"` runs an
+  off-paper study instead. Check: `params.py check-eval <csv>`. REPLICABILITY.md §K.
+- **Eval names (user directive, 2026-11-04):** call the existing 33-dataset suite (`kdd28_tabarena33`) the
+  "SPAA paper eval" and the new >100-column suite the "wide dataset eval", in chat and docs. Never rename
+  `kdd28_tabarena33` in code or data. The wide suite ID is `kdd28_wide_datasets`, rebuilt on any machine by one
+  download-and-process script.
+  **Wide means F ≥ 100 features (user directive, 2026-11-04):** exactly 100 counts, after ID columns are removed.
+  **Epsilon = the Vertex AI files (user directive, 2026-11-04):** `gs://ariel_ydf_bucket/big/EPSILON/epsilon_normalized_train.csv`
+  (400k) + `epsilon_test_100k.csv`. Never the OpenML Epsilon (data id 45575, 500k merged), dropped from `kdd28_wide_datasets`.
 
 ## Distributed GBT
 
@@ -155,6 +162,10 @@ Claude Code is the hub and this repo is the source of truth.
 - **Vertex machine type `n2-highmem-4`, manager = worker (2026-10-29).** One type per comparison; never
   mix. Threads = YDF default. **Warn the user before anything changes the machine type.** N2 quota in
   us-east1 = 96 vCPUs (4 W=4 jobs at once).
+- **Threads = harness defaults, never revisit (user directive, 2026-11-05):** distributed `--num_threads` 6 per worker =
+  YDF's proto default (`abstract_learner.proto:46`, `train_distributed_gbt.cc:95`). Single machine `-1` = all hardware threads
+  (`train_oblique_forest.cc:1372`). Exception: §J accuracy reruns keep 4 single / 2 per worker for comparability, since the
+  thread count changes SPO models (measured 2026-11-05: qsar-biodeg AUC .9467 at 4 vs .9387 at 16 threads).
 - **No "70 % of RAM = OOM" rule (2026-10-25):** a cell is OOM only when a worker was actually killed.
 - **Checkpoints off in every harness (2026-10-29)** (`train.py`, `train_cells.py`, `train_distributed_gbt.cc`):
   checkpoint I/O falls inside `tree_training_s`. Never mix with pre-2026-10-29 cells.
@@ -202,6 +213,8 @@ Claude Code is the hub and this repo is the source of truth.
 - **No machine specs in captions (2026-09-18)** (CPU, threads, trees, instance type); the setup section has them.
 - **Don't commit paper figure/table edits (2026-09-25)** after pushing to Overleaf; the user picks between
   versions. Commit only when asked.
+- **Accuracy tables always show dataset shapes (user directive, 2026-11-04):** "Name (rows, cols)" after every
+  dataset. `make_paper_tables.py` always does it and fails if a dataset has no shape.
 - **Figures wait for final tables (2026-09-09):** regenerate tables only while numbers are in flux; one
   figure pass at the end.
 
@@ -219,6 +232,12 @@ same turn and report the result instead of offering to test it.
 
 Never use ";" in text written for the user. Split the clauses into separate sentences ending in "." and reword them so
 each reads naturally. Code, commands and quoted file contents are exempt.
+
+## Long-running scripts: check progress every hour (user directive, 2026-11-05)
+
+Background shell jobs, waiter loops and remote queues (EC2 tmux, Vertex) get a sanity read of their first output right after
+launch, then a progress check every 1 h (wakeup ~3600 s): log tail, CSV rows, box state. Fix or rerun on the spot. A silent
+waiter is not proof it works (2026-11-04: a broken waiter spun all night, the box auto-stopped). Agents stay unpolled (below).
 
 ## Agents: spawn, then wait for the notification (user directive, 2026-11-03)
 
