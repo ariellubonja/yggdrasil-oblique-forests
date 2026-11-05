@@ -1,6 +1,8 @@
 """KDD28 eval suites (eval_suites.json): datasets, folds, fold-file sha256, seeds, metric code, validation, early
-stopping a comparable accuracy table shares. Warnings only ("WARN eval-suite:"), nothing exits. Stamps: eval_suite,
-data_sha (<train sha256[:16]>+<test sha256[:16]>), metric_impl. REPLICABILITY.md section K."""
+stopping a comparable accuracy table shares. Identity mismatches (dataset, fold, file hash, metric, seed, validation,
+early stopping, suite, coverage) exit 2 ("STOP eval-suite:") unless the run is declared off-paper; provenance notes
+(unstamped rows) only warn. Stamps: eval_suite, data_sha (<train sha256[:16]>+<test sha256[:16]>), metric_impl.
+REPLICABILITY.md section K."""
 import collections
 import concurrent.futures
 import hashlib
@@ -13,6 +15,8 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", "..", "..", ".."))
 DB_PATH = os.path.join(HERE, "eval_suites.json")
 COLUMNS = ["eval_suite", "data_sha", "metric_impl"]
 PREFIX = "WARN eval-suite:"
+STOP_PREFIX = "STOP eval-suite:"
+OFF_PAPER = "off-paper:"  # eval_suite stamp of rows run with --off_paper "<reason>"
 # binary basename -> metric implementation id (eval_suites.json "metric_impls")
 BINARY_METRIC = {"train_oblique_forest": "ydf_eval_v1", "train_distributed_gbt": "ydf_eval_v1"}
 NO_VALIDATION = ("", "-", "0", "0.0", "none")
@@ -96,10 +100,17 @@ def _fold(spec, r, ds):
     return folds[0] if len(folds) == 1 else None
 
 
-def check_rows(rows, suite, label, max_lines=40, out=None):
-    """Warns per dataset where rows differ from the suite (dataset, fold, data_sha, metric_impl, seed, validation,
-    early stopping), on coverage gaps, on unstamped rows and on mixed eval_suite values. Returns the warning lines."""
+def check_rows(rows, suite, label, max_lines=40, out=None, strict=False, coverage=True):
+    """Reports per dataset where rows differ from the suite (dataset, fold, data_sha, metric_impl, seed, validation,
+    early stopping), coverage gaps, unstamped rows and mixed eval_suite values. Returns the lines.
+    strict: identity mismatches print STOP lines and exit 2 (unstamped rows stay a WARN). coverage=False skips the
+    missing-dataset/fold check (driver runs restricted with --only)."""
     out = [] if out is None else out
+    fatal = []
+
+    def bad(msg, _out=None):  # same call shape as warn(msg, out)
+        fatal.append(msg)
+        warn(msg, out)
     spec = load_suite(suite)
     name = spec.get("name", "?")
     rows = list(rows)
@@ -112,6 +123,7 @@ def check_rows(rows, suite, label, max_lines=40, out=None):
              "metric_impl, checked on dataset, fold, seed, validation, early stopping only", out)
     seen = collections.Counter(_v(r, "eval_suite") or "unstamped" for r in rows)
     if len(seen) > 1:
+        # a row from another suite is an identity mismatch below (eval_suite=...), this line is the overview
         warn(f"{label}: mixes eval suites: " + ", ".join(f"{k} ({n} rows)" for k, n in seen.most_common()), out)
     probs, not_in, folds_seen = collections.defaultdict(collections.Counter), collections.Counter(), collections.defaultdict(set)
     bad_folds = collections.defaultdict(collections.Counter)
@@ -152,34 +164,67 @@ def check_rows(rows, suite, label, max_lines=40, out=None):
             p[f"early_stopping={est} (suite: none)"] += 1
     if not_in:
         names = sorted(not_in)
-        warn(f"{label}: {len(names)} datasets not in suite {name} ({sum(not_in.values())} rows): "
+        bad(f"{label}: {len(names)} datasets not in suite {name} ({sum(not_in.values())} rows): "
              + ", ".join(names[:12]) + (f", ... {len(names) - 12} more" if len(names) > 12 else ""), out)
     for ds, c in bad_folds.items():
         probs[ds][f"folds {sorted(c)} not in suite folds {spec['datasets'][ds]}"] = sum(c.values())
     lines = [f"{label}: {ds}: " + ", ".join(f"{k} ({n} rows)" for k, n in c.most_common())
              for ds, c in sorted(probs.items()) if c]
-    missing_ds = sorted(set(spec["datasets"]) - set(probs))
+    missing_ds = sorted(set(spec["datasets"]) - set(probs)) if coverage else []
     if missing_ds:
-        warn(f"{label}: {len(missing_ds)} of {len(spec['datasets'])} suite datasets missing: "
+        bad(f"{label}: {len(missing_ds)} of {len(spec['datasets'])} suite datasets missing: "
              + ", ".join(missing_ds[:12]) + (f", ... {len(missing_ds) - 12} more" if len(missing_ds) > 12 else ""), out)
     lines += [f"{label}: {ds}: missing suite folds {sorted(set(spec['datasets'][ds]) - folds_seen[ds])}"
-              for ds in sorted(probs) if folds_seen[ds] and set(spec["datasets"][ds]) - folds_seen[ds]]
+              for ds in sorted(probs) if coverage and folds_seen[ds] and set(spec["datasets"][ds]) - folds_seen[ds]]
     for ln in lines[:max_lines]:
-        warn(ln, out)
+        bad(ln)
     if len(lines) > max_lines:
         warn(f"{label}: ... {len(lines) - max_lines} more dataset lines", out)
+    if fatal and strict:
+        print(f"{STOP_PREFIX} {label}: {len(fatal)} identity mismatch(es) with suite {name} (lines above). The number "
+              f"would not be the one the float claims. Fix the inputs, or rerun with --off_paper \"<reason>\" for an "
+              "off-paper study (no paper generator reads off-paper rows).", file=sys.stderr)
+        sys.exit(2)
     if not out:
         print(f"OK eval-suite: {label}: {len(rows)} rows match suite {name} (dataset, fold, data_sha, metric_impl, "
               "seed, validation, early stopping)", file=sys.stderr)
     return out
 
 
-def check_csv(path, suite, label=None):
+def backfill_csv(path, suite):
+    """Appends the eval columns to a CSV recorded before 2026-11-04: data_sha from the suite manifest (only when the
+    rows' files are known to equal it, REPLICABILITY.md section K), metric_impl when the row has a test_auc."""
+    import csv
+    spec = load_suite(suite)
+    with open(path, newline="") as f:
+        eol = "\r\n" if f.readline().endswith("\r\n") else "\n"  # keep the file's line ending
+        f.seek(0)
+        rd = csv.reader(f)
+        head, rows = next(rd), list(rd)
+    if head[-len(COLUMNS):] == COLUMNS:
+        sys.exit(f"{path}: already has the eval columns")
+    i_ds, i_fold, i_auc = head.index("dataset"), head.index("fold"), head.index("test_auc")
+    out = []
+    for r in rows:
+        ds, fold = r[i_ds], int(float(r[i_fold]))
+        sha = expected_sha(spec, ds, fold) if ds in spec["datasets"] and fold in spec["datasets"][ds] else None
+        if sha is None:
+            sys.exit(f"{path}: {ds} fold {fold} has no manifest hash in {spec['name']}, nothing written")
+        out.append(r + [spec["name"], sha, spec["metric_impl"] if r[i_auc].strip() else ""])
+    with open(path + ".part", "w", newline="") as f:
+        w = csv.writer(f, lineterminator=eol)
+        w.writerow(head + COLUMNS)
+        w.writerows(out)
+    os.replace(path + ".part", path)
+    print(f"{path}: {len(out)} rows stamped {spec['name']} from the manifest", file=sys.stderr)
+
+
+def check_csv(path, suite, label=None, strict=True):
     import csv
     with open(path, newline="") as f:
         rows = list(csv.DictReader(f))
     rows = [r for r in rows if r.get("rc", "0") in ("0", "")]  # failed cells never reach a table
-    return check_rows(rows, suite, label or path)
+    return check_rows(rows, suite, label or path, strict=strict)
 
 
 # ---------------------------------------------------------------- run-time hashing (driver)
@@ -256,9 +301,10 @@ def plan_row(table, key, argv, sha):
             "metric_impl": BINARY_METRIC.get(binary, f"unknown:{binary}")}
 
 
-def driver_preflight(cells, cache_path=None):
-    """cells: [(table, key dict, argv)]. Warns per table where the plan differs from the table's declared suite;
-    returns {(table, key tuple): [eval_suite, data_sha, metric_impl]} for the result rows."""
+def driver_preflight(cells, cache_path=None, off_paper=None):
+    """cells: [(table, key dict, argv)]. Exits 2 when the plan differs from the table's declared suite in identity; returns {(table, key tuple): [eval_suite, data_sha,
+    metric_impl]} for the result rows. off_paper: reason; mismatches only warn and rows are stamped off-paper:<reason>.
+    Coverage (datasets a run leaves out, e.g. --only) is not checked here: the generators check it."""
     db = load_db()
     by_table = collections.defaultdict(list)
     for t, key, argv in cells:
@@ -280,11 +326,20 @@ def driver_preflight(cells, cache_path=None):
             if nofile:
                 warn(f"pre-flight {t}: {len(nofile)} datasets with unreadable fold files (no data_sha): "
                      + ", ".join(nofile[:12]))
+            badlabel = []
             if spec.get("label_col"):
-                bad = sorted({r["dataset"] for r in rows if r["label"] and r["label"] != spec["label_col"]})
-                if bad:
-                    warn(f"pre-flight {t}: label column != {spec['label_col']} for " + ", ".join(bad[:12]))
-            check_rows([r | {"eval_suite": suite} for r in rows], spec, f"pre-flight {t}", max_lines=20)
+                badlabel = sorted({r["dataset"] for r in rows if r["label"] and r["label"] != spec["label_col"]})
+                if badlabel:
+                    warn(f"pre-flight {t}: label column != {spec['label_col']} for " + ", ".join(badlabel[:12]))
+            strict = not off_paper
+            if strict and (nofile or badlabel):
+                print(f"{STOP_PREFIX} pre-flight {t}: unreadable fold files or wrong label column (lines above)",
+                      file=sys.stderr)
+                sys.exit(2)
+            check_rows([r | {"eval_suite": suite} for r in rows], spec, f"pre-flight {t}", max_lines=20,
+                       strict=strict, coverage=False)
+            if off_paper:
+                suite_name = OFF_PAPER + off_paper
         for (k, _), r in zip(items, rows):
             stamps[(t,) + tuple(str(v) for v in k.values())] = [suite_name, r["data_sha"], r["metric_impl"]]
     return stamps

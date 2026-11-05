@@ -9,14 +9,16 @@
   python3 params.py show [profile]                         # profile table (values, floats)
   python3 params.py selftest                               # exit 1 unless the matcher / checks behave (stdlib only)
   python3 params.py check-eval <csv> [--suite <name>]       # WARN eval-suite: lines where rows differ from an eval suite
+  python3 params.py backfill-eval <csv> [--suite <name>]    # append eval columns from the suite manifest (pre-11-04 CSVs)
   python3 params.py check-effective <profile> <log> [F=.. W=..] [<stamp col>=<value> ...]
                                                            # exit 2 + field=got (profile: expected) on drift; col=value
                                                            # = the script's own knob (e.g. trees=$TREES) replaces the profile
 Run scripts source drift.sh (shell) or call preflight()/check_cell() (Python): exit 2 at the first drifted cell,
 ALLOW_DRIFT=1 warns and stamps the row's profile as <profile>!drift, which check_rows refuses.
 Profiles are named <profile> or <profile>.<arm>; an arm overrides its parent's fields. Python 3 stdlib only.
-Eval suites (datasets, folds, file hashes, metric code; eval_suites.json, evalsuite.py) only warn: generators declare
-one with --eval_suite (add_profile_arg), check_rows then checks it and setup_line names it.
+Eval suites (datasets, folds, file hashes, metric code; eval_suites.json, evalsuite.py): generators declare one with
+--eval_suite (add_profile_arg), check_rows exits 2 on identity mismatches (--off_paper "<reason>" turns them into
+warnings) and setup_line names it.
 """
 import json
 import math
@@ -60,6 +62,13 @@ RECORD_ONLY = {"validation_set_ratio", "early_stopping", "num_candidate_attribut
 # Checked against the effective-params line when the profile defines them, never CSV stamp columns
 # (profile field -> log key). column_shipping: cross-network arm, branch cross-worker-col-comms (2026-11-04).
 CHECK_ONLY = {"column_shipping": "column_shipping"}
+# Distributed-only fields (train_distributed_gbt prints them since 2026-11-04): profile field -> (log key, value
+# when the profile leaves the field undefined, None = skip). A log without the key fails: rebuild the binary.
+DIST_CHECK = {"column_replication": ("column_replication", 0), "column_shipping": ("column_shipping", False),
+              "max_unique_discretized": ("max_unique_discretized", None), "force_numerical": ("force_numerical", None),
+              "workers": ("num_workers", None)}
+# Every binary, every profile: SPO weights are BINARY (CLAUDE.md, 2026-10-12), "-" for AA.
+SPO_WEIGHTS_OK = ("BINARY", "-")
 # stamp column -> profile field (seed is checked against the profile's seed list)
 FIELD = {c: c for c in STAMP[1:]} | {"seed": "seeds", "oblique_also_axis_aligned": "include_axis_aligned"}
 SPLIT_FLAG = {"EXACT": "Exact", "DYNAMIC_RANDOM_HISTOGRAM": "Dynamic Random Histogram", "HISTOGRAM_RANDOM": "Random",
@@ -292,7 +301,7 @@ def check_rows(rows, profile, allowed, label, arm_of=None, ctx_of=None, columns=
 
 # ---------------------------------------------------------------- eval suite of a generator (warnings only)
 
-_EVAL = {"suite": None, "who": "", "seen": {}}
+_EVAL = {"suite": None, "who": "", "seen": {}, "off_paper": ""}
 
 
 def _declare_eval(name, script):
@@ -322,7 +331,7 @@ def _eval_rows(rows, label, exp=None):
             evalsuite.warn(f"{label}: profile {n} has validation_set_ratio={_fmt(vr)} (suite: none)")
         if spec.get("early_stopping") == "none" and es is not None and str(es).upper() != "NONE":
             evalsuite.warn(f"{label}: profile {n} has early_stopping={es} (suite: none)")
-    evalsuite.check_rows(rows, spec, label, max_lines=10)
+    evalsuite.check_rows(rows, spec, label, max_lines=10, strict=not _EVAL["off_paper"])
     seen = _EVAL["seen"]
     before = len(seen)
     for r in rows:
@@ -382,14 +391,39 @@ def _value(v):
         return v
 
 
+_OLD_BIN_WARNED = False
+
+
 def effective_mismatches(profile, eff, ctx=None, expect=None):
     """'field=got (profile: expected)' per stamp field of `eff` (parsed effective-params) that drifts from `profile`.
-    expect: stamp column -> value the caller chose (replaces the profile's). Undefined fields and formulas without
-    F/W in ctx are skipped."""
+    expect: stamp column or DIST_CHECK field -> value the caller chose (replaces the profile's, e.g. the cell's W and r).
+    Undefined fields and formulas without F/W in ctx are skipped."""
     if not eff:
         return ["effective-params=<missing> (profile: the binary must print it)"]
-    exp = load_profile(profile) | {FIELD[c]: v for c, v in (expect or {}).items()}
+    expect = expect or {}
+    exp = load_profile(profile) | {FIELD.get(c, c): v for c, v in expect.items()}
     out = []
+    new_bin = "spo_weights" in eff  # binaries built after 2026-11-04 print the fields below
+    if not new_bin:
+        if not _OLD_BIN_WARNED:
+            globals()["_OLD_BIN_WARNED"] = True  # once per process, not per cell
+            print("WARN effective-params: binary predates spo_weights/max_unique_discretized/force_numerical/num_workers, "
+                  "those fields unchecked: rebuild it", file=sys.stderr)
+    elif eff["spo_weights"] not in SPO_WEIGHTS_OK:
+        out.append(f"spo_weights={eff['spo_weights']} (profile: BINARY)")
+    if "split_budget" in eff:  # train_distributed_gbt
+        for field, (key, default) in DIST_CHECK.items():
+            want = exp.get(field, default)
+            if field not in exp and default is None:
+                continue
+            got = _norm(eff.get(key))
+            if key not in eff:
+                if new_bin or field in CHECK_ONLY or field == "column_replication":
+                    out.append(f"{field}=<missing> (profile: {_fmt(want) or 'null'}, the binary must print it)")
+            elif got == "-" and field in ("column_replication", "column_shipping"):
+                continue  # AA arm: no in-worker oblique settings
+            elif _match(want, got, ctx or {}) is False:
+                out.append(f"{field}={got or '<empty>'} (profile: {_fmt(want) or 'null'})")
     for c in STAMP[1:]:
         if FIELD[c] not in exp:
             continue
@@ -397,6 +431,8 @@ def effective_mismatches(profile, eff, ctx=None, expect=None):
         if _match(exp[FIELD[c]], got, ctx or {}) is False:
             out.append(f"{c}={got or '<empty>'} (profile: {_fmt(exp[FIELD[c]]) or 'null'})")
     for field, key in CHECK_ONLY.items():
+        if "split_budget" in eff and field in DIST_CHECK:
+            continue
         if field in exp and _match(exp[field], _norm(eff.get(key)), ctx or {}) is False:
             out.append(f"{field}={_norm(eff.get(key)) or '<empty>'} (profile: {_fmt(exp[field]) or 'null'})")
     return out
@@ -509,18 +545,20 @@ def _parts(p):
 
 
 def setup_line(profile, arms=()):
-    """'% setup: <trees> trees, depth <d>, <split>, P=<...>, <folds/seeds> (profile <name>)', then ' | arm: <diff>'."""
+    """'% setup: <trees> trees, depth <d>, <split>, P=<...>, <folds/seeds> (profile <name>)', then ' | arm: <diff>'.
+    A base part that any listed arm overrides (folds, seeds, W) is left out of the base text: each arm states its own."""
     bp = _parts(load_profile(profile))
-    line = f"% setup: {', '.join(t for t in bp.values() if t)} (profile {profile})"
-    for a in arms:
-        if not a:
-            continue
-        ap = _parts(load_profile(f"{profile}.{a}"))
-        diff = [ap[k] or ("single machine" if k == "W" else "") for k in ap if ap[k] != bp[k]]
+    aps = {a: _parts(load_profile(f"{profile}.{a}")) for a in arms if a}
+    shared = {k: t for k, t in bp.items() if all(ap[k] == t for ap in aps.values())}
+    line = f"% setup: {', '.join(t for t in shared.values() if t)} (profile {profile})"
+    for a, ap in aps.items():
+        diff = [ap[k] or ("single machine" if k == "W" else "") for k in ap if k not in shared]
         diff = [d for d in diff if d]
         line += f" | {a}: {', '.join(diff) if diff else 'same'}"
     if _EVAL["suite"]:
         line += f" | eval suite {_EVAL['suite']}"
+    if _EVAL["off_paper"]:
+        line += f" | OFF-PAPER: {_EVAL['off_paper']}"
     return line
 
 
@@ -538,7 +576,9 @@ def add_profile_arg(ap, script):
                     help="kdd28_params.json profile the input CSVs must match (default: %(default)s)")
     ap.add_argument("--eval_suite", default=evalsuite.load_db()["_generators"].get(os.path.basename(script), ""),
                     type=lambda s: _declare_eval(s, script),
-                    help="eval_suites.json suite the table declares, warns on rows that differ (default: %(default)s)")
+                    help="eval_suites.json suite the table declares, exits 2 on rows that differ (default: %(default)s)")
+    ap.add_argument("--off_paper", default="", type=lambda s: _EVAL.update(off_paper=s) or s,
+                    help="reason: an off-paper study, eval-suite mismatches only warn and the setup line says OFF-PAPER")
 
 
 # ---------------------------------------------------------------- CLI
@@ -583,7 +623,8 @@ def selftest():
     cases.append(("legacy + new eval.json rows", (rc, "1 of 2 rows have no effective_params" in err), (0, True)))
     rc, _ = code(check_evals, [dict(new, workers=4)], "vertex_grid_pf", "e")
     cases.append(("eval.json exponent drift still caught", rc, 2))
-    aaspo = {"oblique_also_axis_aligned": "false", "spo_exponent": "2", "spo_max": "6000", "spo_density": "2"}
+    aaspo = {"oblique_also_axis_aligned": "false", "spo_exponent": "2", "spo_max": "6000", "spo_density": "2",
+             "spo_weights": "BINARY"}
     cases.append(("AA+SPO profile vs SPO log drifts", any("oblique_also_axis_aligned" in m for m in
                   effective_mismatches("kdd28_ydf.cc18_aa_spo", aaspo)), True))
     cases.append(("SPO profile vs SPO log no flag drift", any("oblique_also_axis_aligned" in m for m in
@@ -593,12 +634,49 @@ def selftest():
     rc, _ = code(check_rows, [{"profile": "kdd28_ydf.cc18_aa_spo", "oblique_also_axis_aligned": "false"}],
                  "kdd28_ydf", ["cc18_aa_spo"], "o")
     cases.append(("CSV AA+SPO row stamped false exits 2", rc, 2))
+    cases += _dist_selftest(code)
     cases += _eval_selftest(code)
     cases += _layout_selftest()
     bad = [(n, got, want) for n, got, want in cases if got != want]
     for n, got, want in cases:
         print(f"{'FAIL' if (n, got, want) in bad else 'PASS'} selftest {n}: {got}" + (f" (want {want})" if got != want else ""))
     sys.exit(1 if bad else 0)
+
+
+def _dist_selftest(code):
+    """2026-11-04 effective-params fields: each knob the bulletproofing audit slipped past now drifts."""
+    good = {"num_trees": "300", "max_depth": "6", "min_examples": "5", "num_candidate_attributes": "-1", "split": "EXACT",
+            "spo_exponent": "2", "spo_max": "6000", "spo_density": "2", "spo_min": "1", "seed": "1",
+            "split_budget": "true", "local_projection_count": "false", "column_replication": "0",
+            "column_shipping": "false", "spo_weights": "BINARY", "max_unique_discretized": "1",
+            "force_numerical": "true", "num_workers": "4"}
+    cell = {"workers": 4, "column_replication": 0.0}
+
+    def drifts(field, value, prof="kdd28_ydf.distacc_spo", expect=cell):
+        m = effective_mismatches(prof, dict(good, **{field: value}) if field else good, expect=expect)
+        return [x.split("=")[0] for x in m]
+    old = {k: v for k, v in good.items() if k not in ("spo_weights", "max_unique_discretized", "force_numerical",
+                                                       "num_workers")}
+    rc, err = code(lambda: print(effective_mismatches("kdd28_ydf.distacc_spo", old, expect=cell), file=sys.stderr))
+    return [("dist: matching cell has no drift", drifts(None, None), []),
+            ("dist: CONTINUOUS weights drift", drifts("spo_weights", "CONTINUOUS"), ["spo_weights"]),
+            ("dist: discretization on drifts", drifts("max_unique_discretized", "16000"), ["max_unique_discretized"]),
+            ("dist: force_numerical off drifts", drifts("force_numerical", "false"), ["force_numerical"]),
+            ("dist: W=8 in the W=4 cell drifts", drifts("num_workers", "8"), ["workers"]),
+            ("dist: r=0.5 in an r=0 cell drifts", drifts("column_replication", "0.5"), ["column_replication"]),
+            ("dist: shipping in a no-ship arm drifts", drifts("column_shipping", "true"), ["column_shipping"]),
+            ("dist: colrep cell r=0.3 matches", drifts("column_replication", "0.3", "kdd28_ydf.colrep_distacc_spo",
+                                                       {"workers": 4, "column_replication": 0.3}), []),
+            ("dist: old binary warns, no drift", (rc, "binary predates" in err, "[]" in err), (0, True, True)),
+            ("dist: old binary again, no drift", effective_mismatches("kdd28_ydf.distacc_spo", old, expect=cell), []),
+            ("single: CONTINUOUS weights drift",
+             [x.split("=")[0] for x in effective_mismatches("kdd28_ydf.distacc_single_spo", {
+                 "num_trees": "300", "max_depth": "6", "min_examples": "5", "split": "EXACT", "spo_exponent": "2",
+                 "spo_max": "6000", "spo_density": "2", "seed": "1", "validation_set_ratio": "0",
+                 "early_stopping": "NONE", "num_candidate_attributes": "-1", "oblique_also_axis_aligned": "false",
+                 "spo_weights": "CONTINUOUS"})], ["spo_weights"]),
+            ("setup: base text drops folds/seeds the arms override",
+             "CC18" in setup_line("kdd28_ydf", ["distacc_single_spo", "distacc_spo"]).split(" | ")[0], False)]
 
 
 def _layout_selftest():
@@ -682,6 +760,16 @@ def _eval_selftest(code):
              ("v1 header width", stamp_width(["a"] + STAMP_V1), len(STAMP_V1)),
              ("eval: sha cache = hashlib", evalsuite.ShaCache().get_many([evalsuite.DB_PATH])[evalsuite.DB_PATH],
               evalsuite._sha_file(evalsuite.DB_PATH))]
+    def stops(rows, **k):
+        return code(evalsuite.check_rows, rows, spec, "t", strict=True, **k)[0]
+    cases += [("strict: matching table passes", stops(good), 0),
+              ("strict: dataset not in suite stops", stops(good + [dict(good[2], dataset="C")]), 2),
+              ("strict: other fold hash stops", stops([good[0], other, good[2]]), 2),
+              ("strict: off-paper row stops", stops(good[:2] + [dict(good[2], eval_suite="off-paper:x")]), 2),
+              ("strict: dataset subset stops", stops(good[:2]), 2),
+              ("strict: subset passes without coverage", stops(good[:2], coverage=False), 0),
+              ("strict: unstamped rows only warn", stops([{k: v for k, v in r.items() if k not in evalsuite.COLUMNS}
+                                                          for r in good]), 0)]
     saved = dict(_EVAL)
     _EVAL.update(suite=spec, who="gen.py", seen={})
     rc1, _ = code(_eval_rows, good, "in1")
@@ -718,11 +806,12 @@ def main(argv):
                       file=sys.stderr)
     elif cmd == "check-effective":
         kv = [a.split("=", 1) for a in argv[4:]]
-        bad = [k for k, _ in kv if k not in ("F", "W") and k not in FIELD]
+        bad = [k for k, _ in kv if k not in ("F", "W") and k not in FIELD and k not in DIST_CHECK]
         if bad:
-            sys.exit(f"check-effective: unknown key(s) {bad}; use F=, W= or a stamp column ({', '.join(FIELD)})")
+            sys.exit(f"check-effective: unknown key(s) {bad}; use F=, W=, a stamp column ({', '.join(FIELD)}) "
+                     f"or a distributed field ({', '.join(DIST_CHECK)})")
         ctx = {k: float(v) for k, v in kv if k in ("F", "W")}
-        expect = {k: _value(v) for k, v in kv if k in FIELD}
+        expect = {k: _value(v) for k, v in kv if k in FIELD or k in DIST_CHECK}
         mism = effective_mismatches(argv[2], parse_effective(argv[3]), ctx, expect)
         for m in mism:
             print(m)
@@ -735,6 +824,9 @@ def main(argv):
         label = os.path.basename(os.path.dirname(os.path.abspath(argv[2]))) + "/" + os.path.basename(argv[2])
         evalsuite.reference_note(suite, label, db=db)
         evalsuite.check_csv(argv[2], suite, label)
+    elif cmd == "backfill-eval":
+        evalsuite.backfill_csv(argv[2], argv[argv.index("--suite") + 1] if "--suite" in argv else
+                               evalsuite.load_db()["reference"])
     elif cmd == "selftest":
         selftest()
     elif cmd == "show":

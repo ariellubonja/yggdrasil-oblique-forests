@@ -29,6 +29,7 @@
 //   bazel-bin/examples/train_distributed_gbt --alsologtostderr \
 //     --num_workers=4 --num_trees=20
 //
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -237,6 +238,11 @@ int main(int argc, char** argv) {
     const auto& iw = dgbt->in_worker_oblique();
     auto spo_val = [spo](auto v) { return spo ? absl::StrCat(v) : std::string("-"); };
     auto spo_bool = [spo](bool v) { return spo ? (v ? "true" : "false") : "-"; };
+    // GRPC mode: one worker per address, --num_workers is not used.
+    const std::string addrs = absl::GetFlag(FLAGS_grpc_worker_addresses);
+    const int64_t num_workers =
+        addrs.empty() ? absl::GetFlag(FLAGS_num_workers)
+                      : static_cast<int64_t>(std::count(addrs.begin(), addrs.end(), ',')) + 1;
     LOG(INFO) << "effective-params: num_trees=" << gbt.num_trees()
               << " max_depth=" << dtc.max_depth()
               << " min_examples=" << dtc.min_examples()
@@ -253,7 +259,15 @@ int main(int argc, char** argv) {
               << " local_projection_count="
               << spo_bool(iw.num_projections_from_local_features())
               << " column_replication=" << spo_val(iw.column_replication())
-              << " column_shipping=" << spo_bool(iw.ship_foreign_columns());
+              << " column_shipping=" << spo_bool(iw.ship_foreign_columns())
+              << " spo_weights="
+              << (!spo ? "-" : so.has_binary() ? "BINARY"
+                     : so.has_continuous() ? "CONTINUOUS" : "OTHER")
+              << " max_unique_discretized="
+              << dgbt->create_cache().max_unique_values_for_discretized_numerical()
+              << " force_numerical="
+              << (absl::GetFlag(FLAGS_force_numerical_features) ? "true" : "false")
+              << " num_workers=" << num_workers;
   }
   if (absl::GetFlag(FLAGS_print_params_only)) return 0;
 

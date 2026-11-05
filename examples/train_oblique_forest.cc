@@ -1658,7 +1658,10 @@ int main(int argc, char** argv) {
               << " validation_set_ratio=" << vsr << " early_stopping=" << es
               << " seed=" << train_config.random_seed()
               << " oblique_also_axis_aligned="
-              << (spo ? (so.include_axis_aligned_splits() ? "true" : "false") : "-");
+              << (spo ? (so.include_axis_aligned_splits() ? "true" : "false") : "-")
+              << " spo_weights="
+              << (!spo ? "-" : so.has_binary() ? "BINARY"
+                     : so.has_continuous() ? "CONTINUOUS" : "OTHER");
   }
   if (print_params_only) return 0;
 

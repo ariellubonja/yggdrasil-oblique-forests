@@ -79,8 +79,8 @@ def parse_log(path, dist):
 
 
 class Cell:
-    def __init__(self, table, key, profile, argv, threads, weight, cost, extra, dist, work=None):
-        self.table, self.key, self.profile, self.argv = table, key, profile, argv
+    def __init__(self, table, key, profile, argv, threads, weight, cost, extra, dist, work=None, expect=None):
+        self.table, self.key, self.profile, self.argv, self.expect = table, key, profile, argv, expect
         self.threads, self.weight, self.cost, self.extra, self.dist, self.work = threads, weight, cost, extra, dist, work
         self.tag = "__".join(str(k) for k in key)
 
@@ -112,7 +112,9 @@ def build_cells(a):
                 f"--max_unique_values_for_discretized_numerical={p['max_unique_discretized']}", "--seed", str(seed),
                 "--worker_logs=false", "--model_out_dir", model]
         t = w * a.worker_threads
-        cells.append(Cell(table, key, prof, argv, t, min(t, a.max_weight), cost, extra, True, work))
+        # the cell's own W and r, checked against the binary's effective-params line
+        exp = {"workers": w, "column_replication": 0 if r is None else float(r)}
+        cells.append(Cell(table, key, prof, argv, t, min(t, a.max_weight), cost, extra, True, work, exp))
 
     def shape(train):  # (features, rows ~ bytes / 8 B per value); (0, 0) when unreadable
         try:
@@ -249,6 +251,8 @@ def main():
     ap.add_argument("--machine", default="", help="machine note for the 'machine' column (2026-11-04 tables)")
     ap.add_argument("--colrep_r0", default="", help="colrep_distacc: dataset:fold,... that also run r = 0 (identity check)")
     ap.add_argument("--only", default="", help="comma list of dataset substrings")
+    ap.add_argument("--off_paper", default="", help="reason: run outside the table's eval suite, mismatches only warn and "
+                    "rows are stamped eval_suite=off-paper:<reason>, which paper generators refuse")
     a = ap.parse_args()
     need = {"distacc": "tab_folds", "distacc_aaspo": "tab_folds", "distacc_exact300": "tab_folds",
             "colrep_distacc": "tab_folds", "colrep": "cc18_fold0", "cross_network": "cc18_fold0", "cc18": "cc18_10fold"}
@@ -293,9 +297,11 @@ def main():
     for c in todo:  # pre-flight per profile: first cell's argv + --print_params_only, exit 2 on drift
         if c.profile not in pre:
             pre.add(c.profile)
-            kdd28.preflight(c.argv, c.profile, os.path.join(a.out, c.table, "logs", f"preflight_{c.profile}.log"))
+            kdd28.preflight(c.argv, c.profile, os.path.join(a.out, c.table, "logs", f"preflight_{c.profile}.log"),
+                            expect=c.expect)
     ev = evalsuite.driver_preflight([(c.table, dict(zip(KEYS[c.table], c.key)), c.argv) for c in cells],
-                                    os.path.join(a.out, "eval_sha_cache.json"))
+                                    os.path.join(a.out, "eval_sha_cache.json"),
+                                    off_paper=a.off_paper or None)
     left = {t: sum(1 for c in todo if c.table == t) for t in csvs}
     fails = {t: 0 for t in csvs}
     cv, state = threading.Condition(), {"free": a.cpus, "stop": False, "running": 0}
@@ -314,7 +320,7 @@ def main():
             m = parse_log(log, c.dist)
             if c.work:
                 shutil.rmtree(c.work, ignore_errors=True)
-            drift = kdd28.check_cell(c.profile, log)  # exit 2 on drift (ALLOW_DRIFT=1 -> "!drift")
+            drift = kdd28.check_cell(c.profile, log, expect=c.expect)  # exit 2 on drift (ALLOW_DRIFT=1 -> "!drift")
             v = dict(zip(KEYS[c.table], c.key)) | c.extra | m | {"rc": rc, "wall_s": wall, "git": a.git,
                                                                   "bin_sha": bin_sha, "threads": c.threads,
                                                                   "machine": a.machine, "log": c.tag + ".log"}

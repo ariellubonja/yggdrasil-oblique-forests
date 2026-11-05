@@ -428,12 +428,23 @@ the CC18 suites `params/eval_suites/*.sha256` (hashed from the Mac copies, 2026-
   `metric/metric.cc:1342` (BuildROCCurve), `metric/report.cc:488` (the `auc:` line the EC2 driver parses).
 - Stamps: `run_kdd28_ydf_ec2.py` appends `eval_suite,data_sha,metric_impl` to new results CSVs (`data_sha` =
   `<train sha256[:16]>+<test sha256[:16]>`, hashes cached in `<out>/eval_sha_cache.json`). CSVs started earlier keep
-  their header and stay unstamped.
-- Warnings, never stops, one grep-able line each (`WARN eval-suite:`): the driver pre-flight checks each table's plan
-  (datasets, fold ids, file hashes, label column, metric implementation, validation, early stopping) against the table's
-  suite (`_driver_tables`). Generators declare `--eval_suite` (default from `_generators`), warn on rows that differ,
-  on mixed suites, on profile arms with a validation split or early stopping, and once by name when the suite is not the
-  reference. The `% setup:` line ends with `| eval suite <name>`.
+  their header. `params.py backfill-eval <csv>` adds the columns from the manifest: done 2026-11-05 for
+  `accuracy/tab-dist-accuracy-ydf/distacc/results.csv` (2026-11-03 rows), after all 153 dataset-folds the box read on
+  2026-11-04 (colrep_distacc and distacc_aaspo stamps) matched the manifest hashes.
+- Hard stops since 2026-11-05 (bulletproofing audit, `ariel_notes/results/2026-11-04_eval_bulletproofing/report.md`):
+  an identity mismatch (dataset or fold not in the suite, file hash, metric implementation, seed, validation, early
+  stopping, a row of another suite, and in generators a suite dataset or fold missing) prints `WARN eval-suite:` lines,
+  then `STOP eval-suite:` and exits 2. The driver pre-flight checks each table's plan against its suite
+  (`_driver_tables`, or `--eval_suite`) and also stops on unreadable fold files or a wrong label column. It skips
+  coverage, since `--only` runs a subset. Generators declare `--eval_suite` (default from `_generators`).
+  `--off_paper "<reason>"` (driver and generators) turns the stops into warnings, stamps driver rows
+  `eval_suite=off-paper:<reason>` (which a strict generator refuses) and appends `| OFF-PAPER: <reason>` to the
+  `% setup:` line. Unstamped rows stay a WARN (provenance, not identity). The `% setup:` line ends with
+  `| eval suite <name>`.
+- Effective-params since 2026-11-05: `train_distributed_gbt` also prints `spo_weights`, `max_unique_discretized`,
+  `force_numerical`, `num_workers`, and `train_oblique_forest` prints `spo_weights`. The drift check compares them
+  (weights must be BINARY, the others against the profile, `column_replication` and `column_shipping` always, W and r
+  against the cell's own values in the EC2 driver). A binary built before then gets one WARN and those fields unchecked.
 - Check by hand: `python3 params/params.py check-eval <results.csv> [--suite <name>]` (default: the reference).
   Rows without the new columns warn "unstamped eval" and are checked on dataset, fold, seed, validation and early stopping.
 - The other suites are not comparable with the reference: `kdd28_cc18_fold0` (tab:column-replication-ydf,
