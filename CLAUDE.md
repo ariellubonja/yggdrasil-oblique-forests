@@ -134,6 +134,9 @@ Claude Code is the hub and this repo is the source of truth.
 - **Agents may start EC2 instances on their own and must stop them when the job is done (2026-11-02):**
   `aws ec2 stop-instances --instance-ids <id>` (stop, never terminate; "ariel" boxes only) after mirroring the
   results off. Auto-stop is a backstop, not the plan.
+  **Only instances with "ariel" in the Name tag, ever (user directive, 2026-11-06):** never start another box in the
+  shared account, GPU boxes included. If a different machine type is needed, launch a new instance named `ariel-...`.
+  **No run state in Name tags (user directive, 2026-11-06):** never prefix "stopped:" or similar. The console shows state.
 - **KDD28 runs source a named profile (2026-11-03)** from `benchmarks/src/distributed_spo_gbt/params/kdd28_params.json`.
   A deviation happens only through a named override (sub-profile) that lands in the arm label, the CSV row's `profile`
   column and the float's footnote. Generators refuse unstamped drift (exit 2). Scripts pre-flight with

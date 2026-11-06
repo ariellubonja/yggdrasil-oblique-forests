@@ -147,7 +147,7 @@ def build_cells(a):
             for k in range(nf):
                 tr, te = (os.path.join(a.tab_folds, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
                 o = os.path.join(a.out, "distacc")
-                for arm in ["single:SPO", "single:AA"] + [f"{w}:{x}" for x in ("SPO", "AA") for w in dp["workers"]]:
+                for arm in ["single:SPO", "single:AA"] + [f"{w}:{x}" for x in a.dist_axes.split(",") for w in (map(int, a.workers.split(",")) if a.workers else dp["workers"])]:
                     W, A = arm.split(":")
                     key, tag = (d, k, arm), f"{d}__f{k}__{W}_{A}"
                     model, c = os.path.join(o, "models", tag), cost(tr, A == "AA")
@@ -270,6 +270,8 @@ def main():
     ap.add_argument("--eval_suite", default="", help="eval suite for every table (default: eval_suites.json _driver_tables)")
     ap.add_argument("--work_root", default="", help="parent of the per-cell dataset-cache work dirs (default: <out>/<table>)")
     ap.add_argument("--only", default="", help="comma list of dataset substrings")
+    ap.add_argument("--workers", default="", help="distacc: comma list of W replacing the profile's workers")
+    ap.add_argument("--dist_axes", default="SPO,AA", help="distacc: distributed split axes to run (SPO, AA)")
     ap.add_argument("--off_paper", default="", help="reason: run outside the table's eval suite, mismatches only warn and "
                     "rows are stamped eval_suite=off-paper:<reason>, which paper generators refuse")
     a = ap.parse_args()
@@ -281,6 +283,8 @@ def main():
             ap.error(f"unknown table {t!r} (known: {', '.join(need)})")
         if not getattr(a, need[t]):
             ap.error(f"--tables {t} needs --{need[t]}")
+    if set(a.dist_axes.split(",")) - {"SPO", "AA"}:
+        ap.error(f"--dist_axes takes SPO and/or AA, got {a.dist_axes!r}")
     cells = build_cells(a)
     if a.work_root:  # dataset caches are scratch (deleted after each cell), e.g. /dev/shm when the disk is short
         for c in cells:
