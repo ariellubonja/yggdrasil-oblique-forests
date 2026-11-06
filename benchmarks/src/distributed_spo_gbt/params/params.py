@@ -22,6 +22,7 @@ warnings) and setup_line names it.
 """
 import json
 import math
+import collections
 import os
 import re
 import shlex
@@ -247,7 +248,7 @@ def check_rows(rows, profile, allowed, label, arm_of=None, ctx_of=None, columns=
     if not rows:
         print(f"WARN {label}: no rows to check", file=sys.stderr)
         return
-    bad, unchecked = [], set()
+    bad, unchecked, empty = [], set(), collections.Counter()
     for i, r in enumerate(rows):
         ctx = ctx_of(r) if ctx_of else {}
         named = _norm(r.get(src["profile"])) if "profile" in present and src["profile"] in r else ""
@@ -276,6 +277,8 @@ def check_rows(rows, profile, allowed, label, arm_of=None, ctx_of=None, columns=
                 m = _match(exp[n].get(FIELD[c]), _norm(r.get(src[c])), ctx)
                 if m is None:
                     unchecked.add(c)
+                elif not m and c in RECORD_ONLY and not _norm(r.get(src[c])):  # older CSV vintage in a union: not recorded
+                    empty[c] += 1
                 elif not m:
                     errs.append(f"{src[c]}={_norm(r.get(src[c])) or '<empty>'} (profile {n}: {_fmt(exp[n].get(FIELD[c])) or 'null'})")
             errs_by[n] = errs
@@ -286,6 +289,9 @@ def check_rows(rows, profile, allowed, label, arm_of=None, ctx_of=None, columns=
             bad.append((i, r, "; ".join(errs_by[n])))
     if unchecked:
         print(f"WARN {label}: unchecked (formula without F/W in the row): {', '.join(sorted(unchecked))}", file=sys.stderr)
+    if empty:
+        print(f"WARN {label}: unchecked (empty, not recorded): " + ", ".join(f"{c} ({n} checks)" for c, n in empty.items()),
+              file=sys.stderr)
     if bad:
         print(f"ERROR {label}: {len(bad)} of {len(rows)} rows drift from profile {profile} ({', '.join(names)}):",
               file=sys.stderr)
@@ -631,6 +637,12 @@ def selftest():
                   effective_mismatches("kdd28_ydf.cc18_spo", aaspo)), False))
     rc, err = code(check_rows, [{"profile": "kdd28_ydf.cc18_aa_spo", "trees": "300"}], "kdd28_ydf", ["cc18_aa_spo"], "o")
     cases.append(("old CSV without the column warns, no exit", (rc, "oblique_also_axis_aligned" in err), (0, True)))
+    rc, err = code(check_rows, [{"profile": "kdd28_ydf.distacc_single_spo", "oblique_also_axis_aligned": ""}], "kdd28_ydf",
+                   ["distacc_single_spo"], "e")
+    cases.append(("empty record-only stamp warns, no exit", (rc, "not recorded" in err), (0, True)))
+    rc, _ = code(check_rows, [{"profile": "kdd28_ydf.distacc_single_spo", "oblique_also_axis_aligned": "true"}], "kdd28_ydf",
+                 ["distacc_single_spo"], "e")
+    cases.append(("wrong record-only stamp still exits", rc, 2))
     rc, _ = code(check_rows, [{"profile": "kdd28_ydf.cc18_aa_spo", "oblique_also_axis_aligned": "false"}],
                  "kdd28_ydf", ["cc18_aa_spo"], "o")
     cases.append(("CSV AA+SPO row stamped false exits 2", rc, 2))

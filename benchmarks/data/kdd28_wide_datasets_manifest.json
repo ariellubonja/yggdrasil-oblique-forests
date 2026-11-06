@@ -192,6 +192,28 @@
    "massage": "none: 100 numeric, no NaN. OpenML already maps SensIT classes 1,2 -> positive, 3 -> negative, which is majority-vs-rest (class 3 = 49264 = classes 1+2). Label tie -1/1 -> '-1' = 0. 28 duplicate rows with conflicting labels kept",
    "source": "SensIT Vehicle (combined), Duarte and Hu, JPDC 64(7) 2004, via LibSVM (train+test merged by the OpenML uploader)",
    "license": "OpenML 'Public'; LibSVM terms not verified"
+  },
+  {
+   "name": "youtube8m",
+   "status": "dropped",
+   "source": "csv",
+   "csv_url": {
+    "train": "gs://ariel_ydf_bucket/big/YOUTUBE8M/youtube8m_video_train.csv",
+    "test": "gs://ariel_ydf_bucket/big/YOUTUBE8M/youtube8m_video_validate.csv"
+   },
+   "target": "class",
+   "drop_columns": [],
+   "expected_rows": {
+    "train": 3888919,
+    "test": 1112356
+   },
+   "expected_features": 1152,
+   "folds": "shipped train/validate split: one holdout fold (k=0), fold0_train = 3.89M train, fold0_test = 1.11M validate",
+   "massage": "none: 1152 numeric (rgb_0..1023, audio), no NaN, header class -> label, other bytes as shipped",
+   "label_rule": "class = 1 iff the video's labels include label 0, the most frequent label (788288 of 3888919 train videos), majority-vs-rest",
+   "source_note": "YouTube-8M video-level features as CSV, the files the Vertex AI runs read (run_single_anchor.sh YOUTUBE8M, label class). Added 2026-11-05 (user directive)",
+   "license": "YouTube-8M CC BY 4.0 (not re-verified)",
+   "unbuilt_reason": "dropped 2026-11-05 (user): ~6 days per run on r8i.96xlarge (13 min/tree single SPO), see paper note in tab:dist-accuracy-ydf-wide"
   }
  ]
 }

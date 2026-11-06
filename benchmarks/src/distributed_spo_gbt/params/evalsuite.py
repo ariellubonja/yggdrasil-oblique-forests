@@ -58,6 +58,18 @@ def load_suite(suite, db=None):
         raise KeyError(f"unknown eval suite {suite!r}; known: {', '.join(db['suites'])}")
     spec = dict(db["suites"][suite], name=suite)
     spec["sha"] = _manifest(spec)
+    if "union_of" in spec:  # datasets of member suites, each row keeps (and is checked against) its member's stamp
+        spec["datasets"], spec["members"] = {}, {}
+        for member, names in spec["union_of"].items():
+            m = load_suite(member, db)
+            for k in ("files", "seeds", "metric_impl", "validation", "early_stopping", "label_col"):
+                if m.get(k) != spec.get(k):
+                    raise KeyError(f"union suite {suite}: {k} of member {member} is {m.get(k)!r}, union has {spec.get(k)!r}")
+            for ds in (m["datasets"] if names == "*" else names):
+                if ds in spec["datasets"]:
+                    raise KeyError(f"union suite {suite}: dataset {ds} in two members")
+                spec["datasets"][ds], spec["members"][ds] = m["datasets"][ds], member
+            spec["sha"].update({k: v for k, v in m["sha"].items() if k.split("/", 1)[0] in spec["members"]})
     return spec
 
 
@@ -143,7 +155,7 @@ def check_rows(rows, suite, label, max_lines=40, out=None, strict=False, coverag
         else:
             folds_seen[ds].add(f)
         es = _v(r, "eval_suite")
-        if es and es != name:
+        if es and es != name and es != spec.get("members", {}).get(ds):
             p[f"eval_suite={es}"] += 1
         sha = _v(r, "data_sha")
         if sha and f is not None:

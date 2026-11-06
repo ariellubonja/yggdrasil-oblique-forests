@@ -112,9 +112,49 @@ def build_hf(e, folds_dir):
     print(f"built {name}: train={e['expected_rows']['train']} test={e['expected_rows']['test']} labels={counts}", flush=True)
 
 
+def build_csv(e, folds_dir):
+    """Shipped train/test CSVs (gs:// or a local copy in the raw dir) -> fold0_{train,test}.csv: the label column is
+    renamed to "label" in the header, every other byte is copied. YouTube-8M: the files the Vertex runs read."""
+    name, out = e["name"], os.path.join(folds_dir, e["name"])
+    os.makedirs(out, exist_ok=True)
+    counts, parts = {}, []
+    for split in ("train", "test"):
+        src = os.path.join(e["_raw"], os.path.basename(e["csv_url"][split]))
+        if not os.path.isfile(src):
+            subprocess.run(["gcloud", "storage", "cp", e["csv_url"][split], src], check=True)
+        dst = os.path.join(out, f"fold0_{split}.csv")
+        rows, labels = 0, collections.Counter()
+        with open(src, "rb", buffering=1 << 24) as fi, open(dst + ".part", "wb", buffering=1 << 24) as fo:
+            head = fi.readline().rstrip(b"\n").split(b",")
+            if head[0] != e["target"].encode() or len(head) - 1 != e["expected_features"]:
+                sys.exit(f"{name} {split}: header {head[:2]}.. ({len(head) - 1} features) != manifest")
+            fo.write(b",".join([b"label"] + head[1:]) + b"\n")
+            for line in fi:
+                body = line.rstrip(b"\r\n")  # field count, empty cell, nan/inf token
+                if body.count(b",") != len(head) - 1 or b",," in body or body.endswith(b",") or b"n" in body.lower():
+                    os.remove(dst + ".part")
+                    sys.exit(f"{name} {split} row {rows}: wrong field count, missing or non-finite value")
+                labels[line[:line.index(b",")].decode()] += 1
+                fo.write(line)
+                rows += 1
+        parts.append(dst)
+        if rows != e["expected_rows"][split] or set(labels) != {"0", "1"}:
+            for d in parts:
+                os.remove(d + ".part")
+            sys.exit(f"{name} {split}: {rows} rows, labels {dict(labels)} != manifest {e['expected_rows'][split]}")
+        counts[split] = dict(sorted(labels.items()))
+    for d in parts:  # both splits valid: publish together
+        os.replace(d + ".part", d)
+    with open(os.path.join(out, "folds.json"), "w") as f:
+        json.dump({"dataset": name, "protocol": "shipped train/test split, one holdout fold (k=0)",
+                   "indices": [{"fold": 0, "train_rows": e["expected_rows"]["train"],
+                                "test_rows": e["expected_rows"]["test"]}], "label_counts": counts}, f, indent=1)
+    print(f"built {name}: train={e['expected_rows']['train']} test={e['expected_rows']['test']} labels={counts}", flush=True)
+
+
 def outputs(e, data_dir, folds_dir):
     name = e["name"]
-    if e.get("source") == "hf_parquet":
+    if e.get("source") in ("hf_parquet", "csv"):
         return {f"folds/{name}/fold0_{s}.csv": os.path.join(folds_dir, name, f"fold0_{s}.csv") for s in ("train", "test")}
     files = {f"raw/{name}/{os.path.basename(e['_raw'])}": e["_raw"]}
     for f in ("train.csv", "train_nan.csv"):
@@ -148,7 +188,7 @@ def main():
             print(f"skip {e['name']}: status {e['status']} ({e.get('unbuilt_reason', '')})")
     for e in todo:
         os.makedirs(os.path.join(raw_dir, e["name"]), exist_ok=True)
-        hf = e.get("source") == "hf_parquet"
+        hf = e.get("source") in ("hf_parquet", "csv")
         e["_raw"] = os.path.join(raw_dir, e["name"]) if hf else \
             os.path.join(raw_dir, e["name"], f"dataset_{e['openml_data_id']}.pq")
         if a.force:
@@ -157,8 +197,9 @@ def main():
             if a.redownload and os.path.exists(e["_raw"]):
                 shutil.rmtree(e["_raw"]) if hf else os.remove(e["_raw"])
         if hf:
-            if not all(os.path.isfile(p) for p in outputs(e, data_dir, folds_dir).values()):
-                build_hf(e, folds_dir)
+            if not all(os.path.isfile(p) for p in outputs(e, data_dir, folds_dir).values()) or \
+                    not os.path.isfile(os.path.join(folds_dir, e["name"], "folds.json")):
+                (build_csv if e["source"] == "csv" else build_hf)(e, folds_dir)
         else:
             check_pin(e)
             build(e, data_dir, folds_dir)
