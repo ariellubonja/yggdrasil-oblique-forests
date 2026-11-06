@@ -27,7 +27,7 @@ python3 benchmarks/src/distributed_spo_gbt/make_paper_tables.py --accuracy_csv b
   --accuracy_note "IN-PROCESS rerun on AWS m7i.metal-24xl (Xeon 8488C; workers = threads of one process)" \
   --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _ydf --purple \
   --extra aaspo=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_aaspo.csv,exact300=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_exact300.csv --extra_first \
-  --std_below --shape_below --no_figure  # table only (2026-11-06), figure: drop these flags
+  --std_below --shape_below --no_figure --time_row  # table only (2026-11-06), figure: drop these flags
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv`

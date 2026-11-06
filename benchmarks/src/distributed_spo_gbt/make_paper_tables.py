@@ -39,6 +39,7 @@ PLACEHOLDER_W = []  # --placeholder_workers: SPO dist columns printed as "--" un
 PLACEHOLDERS = set()  # labels of those columns (no rows yet)
 STD_BELOW = False  # --std_below: the +-std goes under the mean, in \tiny gray (white on dark cells)
 GROUP_HEADER = False  # --group_header: '<family> dist.' spans its W=... columns (narrower table, larger font)
+TIME_ROW = False  # --time_row: a "Mean time (s)" row (train_s) under Mean, single-machine columns only
 SHAPE_BELOW = False  # --shape_below: (rows, cols) under the dataset name, in \tiny gray
 GRAY = r"\color{black!55}"
 SHORT = {"HR_Analytics_Job_Change_of_Data_Scientists": "HR_Data_Scientists"}
@@ -104,9 +105,11 @@ def accuracy_stats(metric="test_auc"):
     d = d.drop_duplicates(["dataset", "fold", "workers", "split_axis"], keep="last")
     nfolds = p[p.method == "aa_gbt_exact"].groupby("dataset").fold.nunique()
     axis_arms, extra_arms = [], []  # (family, label, per-dataset fold values)
+    times = {}  # single-machine label -> per-dataset mean train_s (--time_row)
     for fam, axis, _ in AXES:
         parm = "spo_gbt_exact_hwy_fullproj" if axis == "SPARSE_OBLIQUE" else "aa_gbt_exact"
         axis_arms.append((fam, f"{fam} single machine", p[p.method == parm].groupby("dataset")[metric]))
+        times[f"{fam} single machine"] = p[p.method == parm].groupby("dataset").train_s.mean()
         da = d[d.split_axis == axis]  # per-axis W: AA need not run every W (2026-11-06)
         ws = set(da.workers.unique()) | (set(PLACEHOLDER_W) if axis == "SPARSE_OBLIQUE" else set())
         for w in sorted(ws):
@@ -119,6 +122,7 @@ def accuracy_stats(metric="test_auc"):
     for path, row_arm, _, fam in EXTRA:  # bold = best of all single-machine columns
         y = pd.read_csv(path); y = y[(y.rc == 0) & (y.arm == row_arm)]
         extra_arms.append((fam, f"{fam} single machine", y.groupby("dataset")[metric]))
+        times[f"{fam} single machine"] = y.groupby("dataset").train_s.mean()
     arms = extra_arms + axis_arms if EXTRA_FIRST else axis_arms + extra_arms
     allds = sorted(d.dataset.unique())
     empty = pd.DataFrame({"mean": float("nan"), "std": float("nan"), "count": 0}, index=allds)
@@ -127,6 +131,7 @@ def accuracy_stats(metric="test_auc"):
     done = [ds for ds in allds
             if all(ds in s.index and s.loc[ds, "count"] == nfolds.get(ds, -1) for _, lab, s in stats if lab not in PLACEHOLDERS)]
     accuracy_stats.purple = purple_pairs(d, metric) if PURPLE_ON else set()
+    accuracy_stats.times = times
     return stats, done, nfolds
 
 
@@ -200,8 +205,12 @@ def accuracy_table(metric="test_auc"):
     mcells = ["--" if lab in PLACEHOLDERS else ("" if "single" in lab else _delta_color((avg[lab] - ref[f]) * 1e3))
               + (r"\textbf{%s}" if (raw[lab] == max(raw.values()) if ONE_BOLD else avg[lab] == top[f]) else "%s") % f"{avg[lab]:.4f}"[1:] + pad
               for f, lab, _ in stats]
-    lines += [r"\midrule", "Mean & " + " & ".join(mcells) + r" \\",
-              r"\bottomrule", r"\end{tabular}}"]
+    lines += [r"\midrule", "Mean & " + " & ".join(mcells) + r" \\"]
+    if TIME_ROW:  # mean over the table's datasets of the per-dataset mean train_s, single-machine columns only
+        tm = accuracy_stats.times
+        sec = lambda x: f"{x:,.0f}".replace(",", "{,}") if x >= 10 else f"{x:.1f}"
+        lines.append("Mean time (s) & " + " & ".join(sec(tm[lab].loc[done].mean()) if lab in tm else "" for _, lab, _ in stats) + r" \\")
+    lines += [r"\bottomrule", r"\end{tabular}}"]
     return kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(PROFILE, ARMS_SHOWN + [e[2] for e in EXTRA]))
 
 
@@ -277,6 +286,7 @@ if __name__ == "__main__":
     ap.add_argument("--placeholder_workers", default="", help="comma list of W: SPO dist columns shown as '--' until run")
     ap.add_argument("--std_below", action="store_true", help="print the +-std under the mean in \\tiny gray")
     ap.add_argument("--group_header", action="store_true", help="one '<family> dist.' header over the W columns")
+    ap.add_argument("--time_row", action="store_true", help="add a Mean time (s) row (train_s), single-machine columns only")
     ap.add_argument("--shape_below", action="store_true", help="print (rows, cols) under the dataset name in \\tiny gray")
     ap.add_argument("--dataset_shapes", default=SHAPES_CSV, help="repo-relative CSV with dataset,rows,features for the (rows, cols) after each name")
     kdd28.add_profile_arg(ap, __file__)
@@ -290,6 +300,7 @@ if __name__ == "__main__":
     PLACEHOLDER_W = [int(w) for w in args.placeholder_workers.split(",") if w]
     STD_BELOW = args.std_below
     SHAPE_BELOW = args.shape_below
+    TIME_ROW = args.time_row
     GROUP_HEADER = args.group_header
     if PLACEHOLDER_W and not args.no_figure:
         sys.exit("--placeholder_workers needs --no_figure (the figure has no placeholder points)")

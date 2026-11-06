@@ -228,6 +228,34 @@
                        "max_unique_discretized": null, "workers": null, "machine": null, "num_candidate_attributes": -1, "include_axis_aligned": true, "folds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "seeds": [1], "_floats": [], "_source": {"*": "user decision 2026-11-03: KDD28 accuracy reruns in-process (MULTI_THREAD) on EC2 ariel-dist-accuracy-1, ariel_notes/results/2026-11-03_ydf_defaults_rerun/"}}
       }
     },
+    "kdd28_hao": {
+      "_floats": [],
+      "_note": "Hao's settings (formerly 'harness params', user request 2026-11-06): kdd28_ydf with P = F projections per node (exponent 1, max 1000) and density 1.5, single and distributed (split across workers). Same as kdd28_ydf.distacc_single_spo_harness_exact300 for the single-machine SPO arm. AA arms have no SPO fields, so they equal kdd28_ydf's.",
+      "trees": 300, "max_depth": 6, "min_examples": 5, "split_type": "EXACT",
+      "spo_exponent": 1, "spo_max_projections": 1000, "spo_density": 1.5, "spo_min_projections": 1,
+      "split_budget": true, "local_projection_count": false, "column_replication": 0, "max_unique_discretized": 1,
+      "validation_set_ratio": 0, "early_stopping": "NONE",
+      "workers": [4], "machine": "c8i.metal-96xl in-process", "folds": "5 CV folds (chronological sets: 1 holdout)", "seeds": [1],
+      "_source": {
+        "*": "user request 2026-11-06: named profile for Hao's settings; non-SPO fields as kdd28_ydf",
+        "spo_exponent": "cc18_aa_spo.spo_harness_exact300 (run_cc18_aa_spo_gbt.sh:24)",
+        "spo_max_projections": "cc18_aa_spo.spo_harness_exact300 (run_cc18_aa_spo_gbt.sh:24)",
+        "spo_density": "cc18_aa_spo.spo_harness_exact300 (run_cc18_aa_spo_gbt.sh:24)"
+      },
+      "arms": {
+        "distacc_single_spo": {"split_budget": null, "local_projection_count": null, "column_replication": null, "max_unique_discretized": null, "workers": null, "machine": null,
+                       "include_axis_aligned": false, "num_candidate_attributes": -1, "_floats": []},
+        "distacc_single_aa": {"split_budget": null, "local_projection_count": null, "column_replication": null, "max_unique_discretized": null, "workers": null, "machine": null,
+                       "num_candidate_attributes": -1, "spo_exponent": null, "spo_max_projections": null, "spo_density": null, "spo_min_projections": null, "_floats": []},
+        "distacc_single_aa_spo": {"split_budget": null, "local_projection_count": null, "column_replication": null, "max_unique_discretized": null, "workers": null, "machine": null,
+                       "num_candidate_attributes": -1, "include_axis_aligned": true, "_floats": []},
+        "distacc_spo": {"validation_set_ratio": null, "early_stopping": null, "force_numerical": true, "workers": [1, 4, 8, 16, 32], "_floats": []},
+        "distacc_aa": {"validation_set_ratio": null, "early_stopping": null, "force_numerical": true, "spo_exponent": null, "spo_max_projections": null, "spo_density": null,
+                       "spo_min_projections": null, "split_budget": null, "local_projection_count": null, "column_replication": null, "workers": [1, 4, 8, 16, 32], "_floats": []},
+        "colrep_distacc_spo": {"validation_set_ratio": null, "early_stopping": null, "force_numerical": true, "workers": [4],
+                       "column_replication": [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1], "_floats": [], "_note": "r = 0 reuses the distacc_spo W=4 cells, as in kdd28_ydf."}
+      }
+    },
     "cc18_aa_spo": {
       "_floats": ["tab:cc18-aa-spo"],
       "_note": "Base = arm (a), YDF GBT defaults. Recorded binary 9a94b070 (before 9dc54c93): arms b and c need it, today's harness ignores the SPO flags.",

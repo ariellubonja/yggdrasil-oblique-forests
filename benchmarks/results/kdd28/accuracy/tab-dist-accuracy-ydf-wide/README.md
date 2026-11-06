@@ -46,7 +46,7 @@ python3 benchmarks/src/distributed_spo_gbt/make_paper_tables.py --accuracy_csv $
   --accuracy_note "IN-PROCESS reruns (workers = threads of one process): SPAA paper eval rows on AWS m7i.metal-24xl, wide dataset eval rows on c8i.metal-96xl; datasets with F>=100" \
   --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _ydf_wide --purple \
   --extra aaspo=$U/distacc_aaspo/results.csv,exact300=$U/distacc_exact300/results.csv --extra_first --eval_suite kdd28_wide_union \
-  --std_below --shape_below --group_header --no_figure  # table only (2026-11-06), the figure needs the command without the last 4 flags
+  --std_below --shape_below --group_header --no_figure --time_row  # table only (2026-11-06), the figure needs the command without the last 4 flags
 python3 benchmarks/src/distributed_spo_gbt/make_column_replication_table.py $U/colrep_distacc \
   --out paper/distributed_spo_gbt_kdd28/tables/table_column_replication_ydf_wide_body.tex \
   "IN-PROCESS rerun, c8i.metal-96xl SMT+turbo, W=4; r=0 and single = the distacc rows of the same eval (SPAA paper eval rows: 2026-11-03 m7i); datasets with F>=100" --metric test_auc \

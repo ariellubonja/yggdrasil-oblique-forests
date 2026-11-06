@@ -19,7 +19,7 @@ python3 benchmarks/src/distributed_spo_gbt/make_paper_tables.py --accuracy_csv $
   --accuracy_note "IN-PROCESS reruns (workers = threads of one process): SPAA paper eval rows on AWS m7i.metal-24xl, wide dataset eval rows on c8i.metal-96xl; datasets where single SPO-GBT beats AA-GBT by >0.005 AUC" \
   --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _ydf_spo_advantage --purple --std_below \
   --extra aaspo=$E/distacc_aaspo/results.csv,exact300=$E/distacc_exact300/results.csv --extra_first --eval_suite kdd28_spo_advantage \
-  --std_below --shape_below --group_header --no_figure  # table (2026-11-06), figure: drop these flags
+  --std_below --shape_below --group_header --no_figure --time_row  # table (2026-11-06), figure: drop these flags
 python3 benchmarks/src/distributed_spo_gbt/make_column_replication_fig.py --csv $E/colrep_distacc/results.csv --suffix _ydf_spo_advantage --metric test_auc \
   --dist_arm colrep_distacc_spo --single_csv $E/distacc/results.csv --single_filter arm=single:SPO \
   --single_arms distacc_single_spo --r0_csv $E/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo \
