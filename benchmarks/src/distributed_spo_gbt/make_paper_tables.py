@@ -35,6 +35,12 @@ PURPLE_ON = False  # --purple: dist SPO cell == dist AA cell at the same W on ev
 PURPLE = r"\cellcolor[RGB]{215,195,240}"
 SHAPES = {}  # dataset -> (rows, features) from --dataset_shapes, always printed after the name
 SHAPES_CSV = "benchmarks/results/runtime/speedup_map_by_dataset/analysis/per_dataset_summary.csv"  # same fold files
+PLACEHOLDER_W = []  # --placeholder_workers: SPO dist columns printed as "--" until their rows exist
+PLACEHOLDERS = set()  # labels of those columns (no rows yet)
+STD_BELOW = False  # --std_below: the +-std goes under the mean, in \tiny gray (white on dark cells)
+GROUP_HEADER = False  # --group_header: '<family> dist.' spans its W=... columns (narrower table, larger font)
+SHAPE_BELOW = False  # --shape_below: (rows, cols) under the dataset name, in \tiny gray
+GRAY = r"\color{black!55}"
 SHORT = {"HR_Analytics_Job_Change_of_Data_Scientists": "HR_Data_Scientists"}
 
 
@@ -47,6 +53,8 @@ def ds_label(ds, mark=""):
     if ds not in SHAPES:
         sys.exit(f"--dataset_shapes has no row for {ds}")
     r, f = SHAPES[ds]
+    if SHAPE_BELOW:  # shape on a second, smaller gray line: narrower first column
+        return r"\shortstack[l]{" + name + r"\\[-2pt]{\tiny" + GRAY + f" ({_k(r)}, {f})" + "}}"
     return f"{name} ({_k(r)}, {f})"
 
 
@@ -95,23 +103,47 @@ def accuracy_stats(metric="test_auc"):
     check_inputs(p[p.method.isin(["spo_gbt_exact_hwy_fullproj", "aa_gbt_exact"])], d)
     d = d.drop_duplicates(["dataset", "fold", "workers", "split_axis"], keep="last")
     nfolds = p[p.method == "aa_gbt_exact"].groupby("dataset").fold.nunique()
-    workers = sorted(d.workers.unique())
     axis_arms, extra_arms = [], []  # (family, label, per-dataset fold values)
     for fam, axis, _ in AXES:
         parm = "spo_gbt_exact_hwy_fullproj" if axis == "SPARSE_OBLIQUE" else "aa_gbt_exact"
         axis_arms.append((fam, f"{fam} single machine", p[p.method == parm].groupby("dataset")[metric]))
-        for w in workers:
-            axis_arms.append((fam, f"{fam} dist.\\ $W{{=}}{w}$", d[(d.split_axis == axis) & (d.workers == w)].groupby("dataset")[metric]))
+        da = d[d.split_axis == axis]  # per-axis W: AA need not run every W (2026-11-06)
+        ws = set(da.workers.unique()) | (set(PLACEHOLDER_W) if axis == "SPARSE_OBLIQUE" else set())
+        for w in sorted(ws):
+            lab = f"{fam} dist.\\ $W{{=}}{w}$"
+            if w not in set(da.workers.unique()):
+                PLACEHOLDERS.add(lab)
+                axis_arms.append((fam, lab, None))
+                continue
+            axis_arms.append((fam, lab, da[da.workers == w].groupby("dataset")[metric]))
     for path, row_arm, _, fam in EXTRA:  # bold = best of all single-machine columns
         y = pd.read_csv(path); y = y[(y.rc == 0) & (y.arm == row_arm)]
         extra_arms.append((fam, f"{fam} single machine", y.groupby("dataset")[metric]))
     arms = extra_arms + axis_arms if EXTRA_FIRST else axis_arms + extra_arms
-    stats = [(fam, lab, g.agg(["mean", "std", "count"])) for fam, lab, g in arms]
-    # Only datasets whose every distributed cell has all folds (suite still running).
-    done = [ds for ds in sorted(d.dataset.unique())
-            if all(ds in s.index and s.loc[ds, "count"] == nfolds.get(ds, -1) for _, _, s in stats)]
+    allds = sorted(d.dataset.unique())
+    empty = pd.DataFrame({"mean": float("nan"), "std": float("nan"), "count": 0}, index=allds)
+    stats = [(fam, lab, empty if g is None else g.agg(["mean", "std", "count"])) for fam, lab, g in arms]
+    # Only datasets whose every distributed cell has all folds (suite still running); placeholders skipped.
+    done = [ds for ds in allds
+            if all(ds in s.index and s.loc[ds, "count"] == nfolds.get(ds, -1) for _, lab, s in stats if lab not in PLACEHOLDERS)]
     accuracy_stats.purple = purple_pairs(d, metric) if PURPLE_ON else set()
     return stats, done, nfolds
+
+
+def group_header(stats, fams):
+    """Two header rows: '<family> dist.' over its W columns (cmidrule), then W=..., so dist columns are number-wide."""
+    top, rules, bot, j = [], [], [], 2  # j = tabular column index (1 = Dataset)
+    for k, fam in enumerate(fams):
+        labs = [lab for f, lab, _ in stats if f == fam]
+        dist = [lab for lab in labs if "W{=}" in lab]
+        for lab in labs:
+            if "W{=}" not in lab:
+                top.append(r"\multicolumn{1}{c}{}"); bot.append(col(lab)); j += 1  # no | in the group row
+        if dist:
+            top.append(r"\multicolumn{%d}{c}{%s dist.}" % (len(dist), fam))
+            rules.append(r"\cmidrule(lr){%d-%d}" % (j, j + len(dist) - 1))
+            bot += [r"\multicolumn{1}{c}{$W{=}" + lab.split("W{=}")[1] + "}" for lab in dist]; j += len(dist)
+    return [" & " + " & ".join(top) + r" \\", "".join(rules), "Dataset & " + " & ".join(bot) + r" \\"]
 
 
 def accuracy_table(metric="test_auc"):
@@ -121,43 +153,52 @@ def accuracy_table(metric="test_auc"):
     singles = [lab for _, lab, _ in stats if "single" in lab]
     lines = [HDR, r"\resizebox{\linewidth}{!}{%",  # 13 columns at W up to 32
              r"\begin{tabular}{l" + "|".join("r" * sum(f == fam for f, _, _ in stats) for fam in fams) + "}",
-             r"\toprule", "Dataset & " + " & ".join(col(lab) for _, lab, _ in stats) + r" \\", r"\midrule"]
+             r"\toprule"] + (group_header(stats, fams) if GROUP_HEADER else
+             ["Dataset & " + " & ".join(col(lab) for _, lab, _ in stats) + r" \\"]) + [r"\midrule"]
     means = {lab: [] for _, lab, _ in stats}
     purple = accuracy_stats.purple
     for ds in done:
-        gbest = max(s.loc[ds, "mean"] for _, _, s in stats)
+        gbest = max(s.loc[ds, "mean"] for _, lab, s in stats if lab not in PLACEHOLDERS)
         cells = []
         for fam in fams:
             blk = [(lab, s.loc[ds]) for f, lab, s in stats if f == fam]
-            best = max(r["mean"] for _, r in blk)
+            best = max(r["mean"] for lab, r in blk if lab not in PLACEHOLDERS)
             if fam in extra_fams:
                 best = max(s.loc[ds, "mean"] for _, lab, s in stats if lab in singles)
             for i, (lab, r) in enumerate(blk):
+                if lab in PLACEHOLDERS:
+                    cells.append("--")
+                    continue
                 means[lab].append(r["mean"])
                 is_best = r["mean"] == gbest if ONE_BOLD else abs(r["mean"] - best) < 5e-5
                 mu, has_sd = f"{r['mean']:.4f}"[1:], r["count"] > 1
                 sd = r"$_{\pm" + f"{r['std']:.4f}"[1:] + "}$" if has_sd else r"\phantom{$_{\pm.0000}$}"
-                if is_best:
+                if STD_BELOW:  # mean on top, +-std under it in \tiny
+                    b = (lambda t: r"{\boldmath\textbf{" + t + "}}") if is_best else (lambda t: t)
+                    sd = r"\\[-2pt]{\tiny" + GRAY + " " + b(r"$\pm$" + f"{r['std']:.4f}"[1:]) + "}" if has_sd else ""
+                    c = r"\shortstack[r]{" + b(mu) + sd + "}"
+                elif is_best:
                     c = r"{\boldmath\textbf{" + mu + sd + "}}" if has_sd else r"\textbf{" + mu + "}" + sd
                 else:
                     c = mu + sd
                 # distributed cells colored by AUC delta (x1e3) vs the family's single machine, as the old heatmap
                 w = int(lab.split("W{=}")[1].rstrip("$")) if "W{=}" in lab else None
-                if w is not None and fam in axis_fams and (ds, w) in purple:
-                    cells.append(PURPLE + c)
-                else:
-                    cells.append(_delta_color((r["mean"] - blk[0][1]["mean"]) * 1e3) + c if i else c)
+                pre = PURPLE if w is not None and fam in axis_fams and (ds, w) in purple else (
+                    _delta_color((r["mean"] - blk[0][1]["mean"]) * 1e3) if i else "")
+                cells.append(pre + (c.replace(GRAY, "") if r"\color{white}" in pre else c))
         mark = "$^{*}$" if any(x == ds for x, _ in purple) else ""
         lines.append(ds_label(ds, mark) + " & " + " & ".join(cells) + r" \\")
     # Mean row: bold the best per family, compared at the printed 4 decimals
-    raw = {lab: sum(means[lab]) / len(means[lab]) for _, lab, _ in stats}
-    avg = {lab: round(raw[lab], 4) for _, lab, _ in stats}
-    top = {fam: max(avg[lab] for f, lab, _ in stats if f == fam) for fam in fams}
+    real = [(f, lab, s) for f, lab, s in stats if lab not in PLACEHOLDERS]
+    raw = {lab: sum(means[lab]) / len(means[lab]) for _, lab, _ in real}
+    avg = {lab: round(raw[lab], 4) for _, lab, _ in real}
+    top = {fam: max(avg[lab] for f, lab, _ in real if f == fam) for fam in fams}
     for fam in extra_fams:
         top[fam] = max(avg[lab] for lab in singles)
-    ref = {f: avg[lab] for f, lab, _ in reversed(stats)}  # first arm per family = single machine
-    mcells = [("" if "single" in lab else _delta_color((avg[lab] - ref[f]) * 1e3))
-              + (r"\textbf{%s}" if (raw[lab] == max(raw.values()) if ONE_BOLD else avg[lab] == top[f]) else "%s") % f"{avg[lab]:.4f}"[1:] + r"\phantom{$_{\pm.0000}$}"
+    ref = {f: avg[lab] for f, lab, _ in reversed(real)}  # first arm per family = single machine
+    pad = "" if STD_BELOW else r"\phantom{$_{\pm.0000}$}"
+    mcells = ["--" if lab in PLACEHOLDERS else ("" if "single" in lab else _delta_color((avg[lab] - ref[f]) * 1e3))
+              + (r"\textbf{%s}" if (raw[lab] == max(raw.values()) if ONE_BOLD else avg[lab] == top[f]) else "%s") % f"{avg[lab]:.4f}"[1:] + pad
               for f, lab, _ in stats]
     lines += [r"\midrule", "Mean & " + " & ".join(mcells) + r" \\",
               r"\bottomrule", r"\end{tabular}}"]
@@ -233,6 +274,10 @@ if __name__ == "__main__":
     ap.add_argument("--extra_first", action="store_true", help="put the --extra columns right after Dataset (default: after AA-GBT)")
     ap.add_argument("--extra", default="", help="name=results.csv,... extra single-machine columns after AA-GBT, in order; "
                     "names: " + ", ".join(EXTRA_SPECS))
+    ap.add_argument("--placeholder_workers", default="", help="comma list of W: SPO dist columns shown as '--' until run")
+    ap.add_argument("--std_below", action="store_true", help="print the +-std under the mean in \\tiny gray")
+    ap.add_argument("--group_header", action="store_true", help="one '<family> dist.' header over the W columns")
+    ap.add_argument("--shape_below", action="store_true", help="print (rows, cols) under the dataset name in \\tiny gray")
     ap.add_argument("--dataset_shapes", default=SHAPES_CSV, help="repo-relative CSV with dataset,rows,features for the (rows, cols) after each name")
     kdd28.add_profile_arg(ap, __file__)
     args = ap.parse_args()
@@ -242,6 +287,12 @@ if __name__ == "__main__":
         sys.exit("--arms needs 4 comma-separated arm names")
     ARMS_SHOWN = list(ARM_NAME.values())
     PURPLE_ON = args.purple
+    PLACEHOLDER_W = [int(w) for w in args.placeholder_workers.split(",") if w]
+    STD_BELOW = args.std_below
+    SHAPE_BELOW = args.shape_below
+    GROUP_HEADER = args.group_header
+    if PLACEHOLDER_W and not args.no_figure:
+        sys.exit("--placeholder_workers needs --no_figure (the figure has no placeholder points)")
     EXTRA_FIRST = args.extra_first
     ONE_BOLD = args.one_bold or args.purple
     sh = pd.read_csv(ROOT / args.dataset_shapes).drop_duplicates("dataset").set_index("dataset")

@@ -29,6 +29,18 @@
   }
  },
  "suites": {
+  "kdd28_spo_advantage": {
+   "_note": "SPO-advantage datasets for sec:accuracy-spo-advantage (user request 2026-11-06): datasets of kdd28_tabarena33 + kdd28_wide_datasets where single-machine SPO-GBT beats AA-GBT by > 0.005 test AUC (fold means), selected by benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf-spo-advantage/select_spo_advantage.py. Rows keep their member suite's stamp.",
+   "floats": ["tab:dist-accuracy-ydf-spo-advantage", "fig:dist-accuracy-mean-ydf-spo-advantage", "fig:column-replication-ydf-spo-advantage"],
+   "union_of": {"kdd28_tabarena33": ["churn", "credit-g", "hazelnut-spread-contaminant-detection", "in_vehicle_coupon_recommendation", "jm1", "Marketing_Campaign", "polish_companies_bankruptcy", "qsar-biodeg", "taiwanese_bankruptcy_prediction"], "kdd28_wide_datasets": ["epsilon", "philippine"]},
+   "files": {"train": "{dataset}/fold{fold}_train.csv", "test": "{dataset}/fold{fold}_test.csv"},
+   "label_col": "label",
+   "seeds": [1],
+   "metric_impl": "ydf_eval_v1",
+   "headline": "test_auc",
+   "validation": "none",
+   "early_stopping": "none"
+  },
   "kdd28_wide_union": {
    "_note": "Union for sec:accuracy-wide (user directive 2026-11-05): the 6 kdd28_tabarena33 datasets with F>100 plus every kdd28_wide_datasets dataset. Rows keep their member suite's eval_suite stamp and are checked against that member.",
    "floats": ["tab:dist-accuracy-ydf-wide", "fig:dist-accuracy-mean-ydf-wide", "tab:column-replication-ydf-wide", "fig:column-replication-ydf-wide"],

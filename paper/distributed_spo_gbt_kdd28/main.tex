@@ -378,7 +378,6 @@ Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at
 
 Both learners use YDF defaults with early stopping off, since the distributed learner has none, so every arm trains all 300 trees on the full training set.
 
-\TODO{find datasets set with high number of columns. these are too small for Distributed}
 
 \mbox{}\par\vskip0.5em
 \noindent\begin{minipage}{\textwidth}
@@ -427,7 +426,7 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 \caption{Test AUC of single-machine vs. $W$-distributed GBT on the datasets with $F>100$.}
 \label{tab:dist-accuracy-ydf-wide}
 \IfFileExists{tables/table_dist_accuracy_ydf_wide_body.tex}{\input{tables/table_dist_accuracy_ydf_wide_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize Datasets of Table~\ref{tab:dist-accuracy-ydf} with $F>100$, plus the 8 wide-eval datasets with $F\geq100$ (OpenML, Epsilon). YDF defaults, early stopping off, 300 trees, depth 6, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Chronological holdouts and Epsilon (shipped split). YouTube-8M (3.9M rows, 1152 cols) not run: it would need ${\approx}6$ days on an r8i.96xlarge (\$3.8k on demand), projected from 13\,min per tree for single-machine SPO-GBT.
+\par\smallskip\raggedright\footnotesize Datasets with $F>100$. YDF defaults: early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Chronological holdouts and Epsilon (shipped split). YouTube-8M (3.9M rows, 1152 cols) not run: it would need ${\approx}6$ days on an r8i.96xlarge (\$3.8k).
 \end{minipage}
 \par\vskip0.5em
 \noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
@@ -436,7 +435,7 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 % body sizes its axis to 0.5\textwidth; match it to the column
 \resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
 \IfFileExists{figures/evaluation/fig_dist_accuracy_mean_ydf_wide_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_ydf_wide_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-ydf-wide}.}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-ydf-wide}. \textcolor{orange}{The difference from single-machine is caused only by \texttt{homecredit-default} only}}
 \Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT on the datasets with more than 100 columns.}
 \label{fig:dist-accuracy-mean-ydf-wide}
 \end{minipage}\hfill
@@ -458,6 +457,43 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 \IfFileExists{tables/table_column_replication_ydf_wide_body.tex}{\input{tables/table_column_replication_ydf_wide_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
 \par\smallskip\raggedright\footnotesize Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns. YDF defaults, early stopping off, 300 trees, depth 6, $P{=}\min(F^2,6000)$ split across workers. $W{=}4$.
 \par\footnotesize \textbf{single} = single-machine SPO-GBT, same hyperparameters
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
+\section{Accuracy on Datasets Where SPO Outperforms AA}
+\label{sec:accuracy-spo-advantage}
+
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of single-machine vs. $W$-distributed GBT on the datasets where single-machine SPO-GBT beats AA-GBT.}
+\label{tab:dist-accuracy-ydf-spo-advantage}
+\IfFileExists{tables/table_dist_accuracy_ydf_spo_advantage_body.tex}{\input{tables/table_dist_accuracy_ydf_spo_advantage_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
+\par\smallskip\raggedright\footnotesize The 11 of the 41 datasets of Tables~\ref{tab:dist-accuracy-ydf} and~\ref{tab:dist-accuracy-ydf-wide} where single-machine SPO-GBT beats AA-GBT by more than 0.5 AUC points (mean over folds). Same runs as those tables. YDF defaults, early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Epsilon (shipped split).
+\end{minipage}
+\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+% body sizes its axis to 0.5\textwidth; match it to the column
+\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_ydf_spo_advantage_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_ydf_spo_advantage_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-ydf-spo-advantage}.}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT on the datasets where single-machine SPO-GBT beats AA-GBT.}
+\label{fig:dist-accuracy-mean-ydf-spo-advantage}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_ydf_spo_advantage_body.tex}{\input{figures/evaluation/fig_column_replication_ydf_spo_advantage_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-ydf-spo-advantage}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets where single-machine SPO-GBT beats AA-GBT. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
+\label{fig:column-replication-ydf-spo-advantage}
+\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT. pts = percentage points of test AUC. Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns.
 \end{minipage}
 }]
 

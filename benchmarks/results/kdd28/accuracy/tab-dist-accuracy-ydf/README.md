@@ -26,7 +26,8 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 python3 benchmarks/src/distributed_spo_gbt/make_paper_tables.py --accuracy_csv benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv \
   --accuracy_note "IN-PROCESS rerun on AWS m7i.metal-24xl (Xeon 8488C; workers = threads of one process)" \
   --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _ydf --purple \
-  --extra aaspo=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_aaspo.csv,exact300=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_exact300.csv --extra_first
+  --extra aaspo=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_aaspo.csv,exact300=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_exact300.csv --extra_first \
+  --std_below --shape_below --no_figure  # table only (2026-11-06), figure: drop these flags
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv`
@@ -35,3 +36,4 @@ python3 benchmarks/src/distributed_spo_gbt/make_paper_tables.py --accuracy_csv b
 - **Raw cells:** box `~/results/2026-11-03_ydf_defaults_rerun/distacc/` and `~/results/2026-11-04_distacc_aaspo/` on EC2 ariel-dist-accuracy-1 (i-0f90f7764082bf21a), mirrored (logs, models) to the gitignored `ariel_notes/results/2026-11-03_ydf_defaults_rerun/box/distacc/` and `ariel_notes/results/2026-11-04_distacc_aaspo/box/`. REPLICABILITY §J
 
 Regenerated 2026-11-04 from these paths: table and figure bodies equal the Overleaf copies in every non-`%` line.
+
