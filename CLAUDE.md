@@ -53,6 +53,8 @@ Claude Code is the hub and this repo is the source of truth.
   `~/.claude/skills/` copies in sync or delete them (they override).
 - **No Co-Authored-By trailer** (any Claude/Anthropic co-author line) in any commit, scripts included.
   It breaks the CLA on upstream PRs; overrides the harness template.
+- **No "Generated with Claude Code" line (user directive, 2026-11-05)** in any PR body, issue or comment, overriding the
+  harness template. PR bodies copy the user's style: "Hi Richard & Mathieu!", first-person casual, `### What broke` / `### Fix`.
 - **Design decisions (2026-10-22):** after any major code change (kernel, finder, threading, data path,
   model semantics, measured numbers) end the report with a "Design decisions" list, one line each:
   the choice and the rejected alternative or preserved invariant, incl. measurement-method choices.
@@ -162,6 +164,7 @@ Claude Code is the hub and this repo is the source of truth.
 - **Vertex machine type `n2-highmem-4`, manager = worker (2026-10-29).** One type per comparison; never
   mix. Threads = YDF default. **Warn the user before anything changes the machine type.** N2 quota in
   us-east1 = 96 vCPUs (4 W=4 jobs at once).
+  That quota is GCP Vertex only (user correction, 2026-11-05). AWS us-east-1 allows 2208 On-Demand Standard vCPUs (5 c8i.metal-96xl).
 - **Threads = harness defaults, never revisit (user directive, 2026-11-05):** distributed `--num_threads` 6 per worker =
   YDF's proto default (`abstract_learner.proto:46`, `train_distributed_gbt.cc:95`). Single machine `-1` = all hardware threads
   (`train_oblique_forest.cc:1372`). Exception: §J accuracy reruns keep 4 single / 2 per worker for comparability, since the
