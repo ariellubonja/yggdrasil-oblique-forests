@@ -209,8 +209,12 @@ def accuracy_mean_figure(metric="test_auc"):
         all_m.append(v); refs.append((fam, col_, v))
     lo, hi = min(all_m), max(all_m)  # legend sits above the axis
     lines[2] = lines[2].replace("height=4.6cm,", f"height=4.6cm, ymin={lo - 0.1 * (hi - lo):.4f}, ymax={hi + 0.1 * (hi - lo):.4f},")
-    for f, c, v in refs:
-        lines += [rf"\addplot[color={_rgb(c)}, thick, densely dotted, no marks] coordinates {{({xs[0]},{v:.4f}) ({xs[-1]},{v:.4f})}};",
+    same = {}  # refs that print at the same y interleave their dashes, so every colour shows
+    for i, (_, _, v) in enumerate(refs): same.setdefault(f"{v:.4f}", []).append(i)
+    for i, (f, c, v) in enumerate(refs):
+        grp = same[f"{v:.4f}"]; k = len(grp)
+        dash = "densely dotted" if k == 1 else f"dash pattern=on 4pt off {4 * (k - 1)}pt, dash phase={4 * grp.index(i)}pt"
+        lines += [rf"\addplot[color={_rgb(c)}, thick, {dash}, no marks] coordinates {{({xs[0]},{v:.4f}) ({xs[-1]},{v:.4f})}};",
                   rf"\addlegendentry{{single-machine {f}}}"]
     lines += [r"\end{axis}", r"\end{tikzpicture}"]
     return kdd28.add_setup("\n".join(lines) + "\n", kdd28.setup_line(PROFILE, ARMS_SHOWN))
