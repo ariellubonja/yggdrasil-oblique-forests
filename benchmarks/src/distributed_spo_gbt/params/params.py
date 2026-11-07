@@ -249,10 +249,12 @@ def check_rows(rows, profile, allowed, label, arm_of=None, ctx_of=None, columns=
         print(f"WARN {label}: no rows to check", file=sys.stderr)
         return
     bad, unchecked, empty = [], set(), collections.Counter()
+    reuse = {k: f"{profile}.{v}" for k, v in db["profiles"].get(_split(profile)[0], {}).get("_reuses", {}).items()}
     for i, r in enumerate(rows):
         ctx = ctx_of(r) if ctx_of else {}
         named = _norm(r.get(src["profile"])) if "profile" in present and src["profile"] in r else ""
         if named:
+            named = reuse.get(named, named)  # a profile's _reuses: rows of another profile it adopts, values still checked
             cands = [named] if named in exp else []
             if not cands:
                 bad.append((i, r, f"profile {named!r} not in {names}"))

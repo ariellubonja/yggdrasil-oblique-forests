@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "params"))
 import params as kdd28  # noqa: E402
 import evalsuite  # noqa: E402  (params/eval_suites.json: dataset/fold/hash/metric checks, warnings only)
 
-PR = "kdd28_ydf"
+PR = "kdd28_ydf"  # --profile (2026-11-06: kdd28_hao = Hao's SPO settings, seeds 1-5 via --seed)
 SPLIT_AA = "--feature_split_type=Axis Aligned"
 ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps appended)
     "distacc": "dataset,fold,arm,workers,split_axis,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git",
@@ -131,6 +131,12 @@ def build_cells(a):
         nf, n = shape(train)
         return n * (nf if aa else min(nf * nf, 6000))
 
+    def spo_split(prof):  # explicit SPO flags of a non-default profile (the arm-(c) argv form, no --ydf_defaults)
+        cp = kdd28.load_profile(prof)
+        return ["--feature_split_type=Oblique", "--num_trees", str(cp["trees"]), "--numerical_split_type=Exact",
+                "--num_projections_exponent", kdd28._fmt(cp["spo_exponent"]), "--max_num_projections",
+                kdd28._fmt(cp["spo_max_projections"]), "--projection_density_factor", kdd28._fmt(cp["spo_density"])]
+
     def tab_folds():  # (dataset, fold, train, test) of tab:dist-accuracy, heaviest dataset first
         ds = sorted(os.listdir(a.tab_folds))
         ds.sort(key=lambda d: -cost(os.path.join(a.tab_folds, d, "fold0_train.csv"), False))
@@ -141,23 +147,25 @@ def build_cells(a):
     if "distacc" in tables:
         ds = sorted(os.listdir(a.tab_folds))
         ds.sort(key=lambda d: -cost(os.path.join(a.tab_folds, d, "fold0_train.csv"), False))
-        dp = kdd28.load_profile(f"{PR}.distacc_spo")
+        wl = {x: list(map(int, a.workers.split(","))) if a.workers else kdd28.load_profile(f"{PR}.distacc_{x.lower()}")["workers"]
+              for x in ("SPO", "AA")}  # each axis's own W list (kdd28_hao: AA at W = 4 only)
         for d in ds:
             nf = len(json.load(open(os.path.join(a.tab_folds, d, "folds.json")))["indices"])
             for k in range(nf):
                 tr, te = (os.path.join(a.tab_folds, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
                 o = os.path.join(a.out, "distacc")
-                for arm in ["single:SPO", "single:AA"] + [f"{w}:{x}" for x in a.dist_axes.split(",") for w in (map(int, a.workers.split(",")) if a.workers else dp["workers"])]:
+                for arm in [f"single:{x}" for x in a.single_axes.split(",") if x] + [f"{w}:{x}" for x in a.dist_axes.split(",") if x for w in wl[x]]:
                     W, A = arm.split(":")
                     key, tag = (d, k, arm), f"{d}__f{k}__{W}_{A}"
                     model, c = os.path.join(o, "models", tag), cost(tr, A == "AA")
                     if W == "single":
                         prof = f"{PR}.distacc_single_{A.lower()}"
-                        split = ["--feature_split_type=Oblique"] if A == "SPO" else [SPLIT_AA]
-                        single("distacc", key, prof, tr, te, "label", 1, split, model, a.single_threads,
-                               {"workers": W, "split_axis": A}, c)
+                        explicit = A == "SPO" and PR != "kdd28_ydf"
+                        split = spo_split(prof) if explicit else ["--feature_split_type=Oblique"] if A == "SPO" else [SPLIT_AA]
+                        single("distacc", key, prof, tr, te, "label", a.seed, split, model, a.single_threads,
+                               {"workers": W, "split_axis": A}, c, ydf=not explicit)
                     else:
-                        dist("distacc", key, f"{PR}.distacc_{A.lower()}", tr, te, int(W), 1, A == "AA", None, model,
+                        dist("distacc", key, f"{PR}.distacc_{A.lower()}", tr, te, int(W), a.seed, A == "AA", None, model,
                              os.path.join(o, "work", tag), {"workers": W, "split_axis": "AXIS_ALIGNED" if A == "AA"
                                                             else "SPARSE_OBLIQUE"}, c)
     if "distacc_aaspo" in tables:  # single-machine AA+SPO column of tab:dist-accuracy, same folds (2026-11-04)
@@ -167,18 +175,17 @@ def build_cells(a):
             nf = len(json.load(open(os.path.join(a.tab_folds, d, "folds.json")))["indices"])
             for k in range(nf):
                 tr, te = (os.path.join(a.tab_folds, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
-                single("distacc_aaspo", (d, k, "single:AA+SPO"), f"{PR}.distacc_single_aa_spo", tr, te, "label", 1,
-                       ["--feature_split_type=Oblique", "--oblique_also_axis_aligned"],
+                prof, explicit = f"{PR}.distacc_single_aa_spo", PR != "kdd28_ydf"
+                split = spo_split(prof) if explicit else ["--feature_split_type=Oblique"]
+                single("distacc_aaspo", (d, k, "single:AA+SPO"), prof, tr, te, "label", a.seed,
+                       split + ["--oblique_also_axis_aligned"],
                        os.path.join(a.out, "distacc_aaspo", "models", f"{d}__f{k}__single_AA+SPO"), a.single_threads,
-                       {"workers": "single", "split_axis": "AA+SPO"}, cost(tr, False))
+                       {"workers": "single", "split_axis": "AA+SPO"}, cost(tr, False), ydf=not explicit)
     if "distacc_exact300" in tables:  # arm (c) of tab:cc18-aa-spo (run_cc18_aa_spo_gbt.sh:24 flags), same folds
-        cp = kdd28.load_profile(f"{PR}.distacc_single_spo_harness_exact300")
-        split = ["--feature_split_type=Oblique", "--num_trees", str(cp["trees"]), "--numerical_split_type=Exact",
-                 "--num_projections_exponent", kdd28._fmt(cp["spo_exponent"]), "--max_num_projections",
-                 kdd28._fmt(cp["spo_max_projections"]), "--projection_density_factor", kdd28._fmt(cp["spo_density"])]
+        split = spo_split(f"{PR}.distacc_single_spo_harness_exact300")
         for d, k, tr, te in tab_folds():
             single("distacc_exact300", (d, k, "single:SPO-harness-exact300"), f"{PR}.distacc_single_spo_harness_exact300",
-                   tr, te, "label", 1, split, os.path.join(a.out, "distacc_exact300", "models", f"{d}__f{k}__single_SPO_h300"),
+                   tr, te, "label", a.seed, split, os.path.join(a.out, "distacc_exact300", "models", f"{d}__f{k}__single_SPO_h300"),
                    a.single_threads, {"workers": "single", "split_axis": "SPARSE_OBLIQUE"}, cost(tr, False), ydf=False)
     if "colrep_distacc" in tables:  # tab:column-replication on the distacc datasets/folds, r = 0 only for --colrep_r0
         cp = kdd28.load_profile(f"{PR}.colrep_distacc_spo")
@@ -189,7 +196,7 @@ def build_cells(a):
                 if r == 0 and (d, str(k)) not in r0:
                     continue
                 tag = f"{d}__f{k}__r{r:.2f}"
-                dist("colrep_distacc", (d, k, float(r)), f"{PR}.colrep_distacc_spo", tr, te, cp["workers"][0], 1, False, r,
+                dist("colrep_distacc", (d, k, float(r)), f"{PR}.colrep_distacc_spo", tr, te, cp["workers"][0], a.seed, False, r,
                      os.path.join(o, "models", tag), os.path.join(o, "work", tag),
                      {"workers": cp["workers"][0]}, cost(tr, False))
     if "colrep_w32_large" in tables:  # colrep_distacc setup at W = 32 on large sets with a shipped test set (2026-11-04)
@@ -270,11 +277,17 @@ def main():
     ap.add_argument("--eval_suite", default="", help="eval suite for every table (default: eval_suites.json _driver_tables)")
     ap.add_argument("--work_root", default="", help="parent of the per-cell dataset-cache work dirs (default: <out>/<table>)")
     ap.add_argument("--only", default="", help="comma list of dataset substrings")
+    ap.add_argument("--exclude", default="", help="comma list of dataset substrings to skip (applied after --only)")
     ap.add_argument("--workers", default="", help="distacc: comma list of W replacing the profile's workers")
     ap.add_argument("--dist_axes", default="SPO,AA", help="distacc: distributed split axes to run (SPO, AA)")
+    ap.add_argument("--profile", default="kdd28_ydf", help="kdd28_ydf or kdd28_hao (arms <profile>.distacc_* etc.)")
+    ap.add_argument("--seed", type=int, default=1, help="distacc, distacc_aaspo, distacc_exact300, colrep_distacc seed")
+    ap.add_argument("--single_axes", default="SPO,AA", help="distacc: single-machine split axes to run (SPO, AA, or empty)")
     ap.add_argument("--off_paper", default="", help="reason: run outside the table's eval suite, mismatches only warn and "
                     "rows are stamped eval_suite=off-paper:<reason>, which paper generators refuse")
     a = ap.parse_args()
+    global PR
+    PR = a.profile
     need = {"distacc": "tab_folds", "distacc_aaspo": "tab_folds", "distacc_exact300": "tab_folds",
             "colrep_distacc": "tab_folds",
             "colrep_w32_large": "large_csvs", "colrep": "cc18_fold0", "cross_network": "cc18_fold0", "cc18": "cc18_10fold"}
@@ -283,8 +296,8 @@ def main():
             ap.error(f"unknown table {t!r} (known: {', '.join(need)})")
         if not getattr(a, need[t]):
             ap.error(f"--tables {t} needs --{need[t]}")
-    if set(a.dist_axes.split(",")) - {"SPO", "AA"}:
-        ap.error(f"--dist_axes takes SPO and/or AA, got {a.dist_axes!r}")
+    if set(a.dist_axes.split(",")) - {"SPO", "AA", ""} or set(a.single_axes.split(",")) - {"SPO", "AA", ""}:
+        ap.error(f"--dist_axes/--single_axes take SPO and/or AA, got {a.dist_axes!r}/{a.single_axes!r}")
     cells = build_cells(a)
     if a.work_root:  # dataset caches are scratch (deleted after each cell), e.g. /dev/shm when the disk is short
         for c in cells:
@@ -293,6 +306,8 @@ def main():
                 c.argv[c.argv.index("--work_dir") + 1] = c.work
     if a.only:
         cells = [c for c in cells if any(o in c.key[0] for o in a.only.split(","))]
+    if a.exclude:
+        cells = [c for c in cells if not any(o in c.key[0] for o in a.exclude.split(","))]
     bin_sha = ""
     try:
         bin_sha = subprocess.run(["sha256sum", os.path.join(a.bin_dir, "train_oblique_forest")], capture_output=True,
@@ -397,7 +412,7 @@ def main():
         if not os.path.exists(os.path.join(a.out, t, "DONE")) and left[t] == 0:
             with open(os.path.join(a.out, t, "DONE"), "w") as f:
                 f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} failed={fails[t]}\n")
-    if set(a.tables.split(",")) <= set(csvs) and not a.only:
+    if set(a.tables.split(",")) <= set(csvs) and not a.only and not a.exclude:
         with open(os.path.join(a.out, "ALL_DONE"), "w") as f:
             f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ\n", time.gmtime()) + json.dumps(fails) + "\n")
     print("### DONE", json.dumps(fails), flush=True)

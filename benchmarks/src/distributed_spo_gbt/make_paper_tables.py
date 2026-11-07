@@ -42,6 +42,7 @@ GROUP_HEADER = False  # --group_header: '<family> dist.' spans its W=... columns
 TIME_ROW = False  # --time_row: a "Mean time (s)" row (train_s) under Mean, single-machine columns only
 SHAPE_BELOW = False  # --shape_below: (rows, cols) under the dataset name, in \tiny gray
 GRAY = r"\color{black!55}"
+SEED_MEAN = False  # --seed_mean: each (dataset, fold, arm) cell = mean over the profile's seeds, all required
 SHORT = {"HR_Analytics_Job_Change_of_Data_Scientists": "HR_Data_Scientists"}
 
 
@@ -89,9 +90,25 @@ def check_inputs(p, d):
         kdd28.check_frame(y, PROFILE, [parm], pathlib.Path(path).name, arm_of=lambda r, parm=parm: parm)
 
 
+def _seed_mean(x, keys):
+    """--seed_mean: one row per `keys` = mean over the profile's seeds (exit 2 unless every cell has exactly them)."""
+    if not SEED_MEAN:
+        return x
+    want = sorted(int(v) for v in kdd28.load_profile(PROFILE)["seeds"])
+    got = x.groupby(keys).seed.agg(lambda v: sorted(int(t) for t in v))
+    bad = got[got.map(lambda v: v != want)]
+    if len(bad):
+        print(f"ERROR --seed_mean: {len(bad)} cells lack seeds {want} or repeat one, e.g. {bad.index[0]}: {bad.iloc[0]}",
+              file=sys.stderr)
+        sys.exit(2)
+    num = [c for c in ("test_acc", "test_auc", "test_logloss", "train_s") if c in x]
+    return x.groupby(keys, as_index=False)[num].mean()
+
+
 def _rerun_frames(path):
     """run_table8_local.sh results.csv -> the (single-machine, distributed) frames of the recorded CSVs."""
     x = pd.read_csv(path); x = x[x.rc == 0]
+    x = _seed_mean(x.assign(workers=x.workers.astype(str)), ["dataset", "fold", "arm", "workers", "split_axis"])
     one = x[x.workers == "single"]
     p = one.assign(status="OK", method=one.arm.map({"single:SPO": "spo_gbt_exact_hwy_fullproj", "single:AA": "aa_gbt_exact"}))
     d = x[x.workers != "single"].assign(workers=lambda f: f.workers.astype(int))
@@ -120,7 +137,7 @@ def accuracy_stats(metric="test_auc"):
                 continue
             axis_arms.append((fam, lab, da[da.workers == w].groupby("dataset")[metric]))
     for path, row_arm, _, fam in EXTRA:  # bold = best of all single-machine columns
-        y = pd.read_csv(path); y = y[(y.rc == 0) & (y.arm == row_arm)]
+        y = pd.read_csv(path); y = _seed_mean(y[(y.rc == 0) & (y.arm == row_arm)], ["dataset", "fold", "arm"])
         extra_arms.append((fam, f"{fam} single machine", y.groupby("dataset")[metric]))
         times[f"{fam} single machine"] = y.groupby("dataset").train_s.mean()
     arms = extra_arms + axis_arms if EXTRA_FIRST else axis_arms + extra_arms
@@ -249,11 +266,12 @@ def accuracy_mean_figure(metric="test_auc"):
     all_m, refs = [], []
     for (f, _, _, colors), mark in zip(FIG_ARMS, ("*", "diamond*")):
         m = [sum(st.loc[ds, "mean"] for ds in done) / len(done) for g, _, st in stats if g == f"{f}-GBT"]
+        fx = [lab.split("W{=}")[1].rstrip("$") for g, lab, _ in stats if g == f"{f}-GBT" and "W{=}" in lab]  # own W
         all_m += m
         refs.append((f"{f}-GBT", colors[1], m[0]))  # m[0] = single machine, drawn flat across all W
         style = "" if mark == "*" else ", dashed"
         lines += [rf"\addplot[color={_rgb(colors[1])}, mark={mark}, thick{style}] coordinates {{"
-                  + " ".join(f"({x},{v:.4f})" for x, v in zip(xs, m[1:])) + "};", rf"\addlegendentry{{{f}-GBT}}"]
+                  + " ".join(f"({x},{v:.4f})" for x, v in zip(fx, m[1:])) + "};", rf"\addlegendentry{{{f}-GBT}}"]
     for (_, _, _, fam), col_ in zip(EXTRA, ("5A9E3C", "8A5CC8")):  # extra single-machine arms: dotted refs
         v = next(sum(st.loc[ds, "mean"] for ds in done) / len(done) for g, _, st in stats if g == fam)
         all_m.append(v); refs.append((fam, col_, v))
@@ -287,6 +305,8 @@ if __name__ == "__main__":
     ap.add_argument("--std_below", action="store_true", help="print the +-std under the mean in \\tiny gray")
     ap.add_argument("--group_header", action="store_true", help="one '<family> dist.' header over the W columns")
     ap.add_argument("--time_row", action="store_true", help="add a Mean time (s) row (train_s), single-machine columns only")
+    ap.add_argument("--seed_mean", action="store_true", help="average each (dataset, fold, arm) over the profile's seeds "
+                    "first (all required), then mean/std over folds")
     ap.add_argument("--shape_below", action="store_true", help="print (rows, cols) under the dataset name in \\tiny gray")
     ap.add_argument("--dataset_shapes", default=SHAPES_CSV, help="repo-relative CSV with dataset,rows,features for the (rows, cols) after each name")
     kdd28.add_profile_arg(ap, __file__)
@@ -300,6 +320,7 @@ if __name__ == "__main__":
     PLACEHOLDER_W = [int(w) for w in args.placeholder_workers.split(",") if w]
     STD_BELOW = args.std_below
     SHAPE_BELOW = args.shape_below
+    SEED_MEAN = args.seed_mean
     TIME_ROW = args.time_row
     GROUP_HEADER = args.group_header
     if PLACEHOLDER_W and not args.no_figure:

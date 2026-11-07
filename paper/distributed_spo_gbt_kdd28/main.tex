@@ -498,6 +498,77 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 }]
 
 \twocolumn[{\floatblock
+\section{Accuracy with Hao's Settings over 5 Seeds}
+\label{sec:accuracy-hao}
+
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of single-machine vs. $W$-distributed GBT with $P{=}\min(F,1000)$ projections per node, mean over 5 seeds.}
+\label{tab:dist-accuracy-hao}
+\IfFileExists{tables/table_dist_accuracy_hao_body.tex}{\input{tables/table_dist_accuracy_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}
+\par\smallskip\raggedright\footnotesize Hao's settings: $P{=}\min(F,1000)$ projections per node, density 1.5, split across workers. Otherwise YDF defaults, early stopping off, 300 trees, depth 6. Seeds 1--5 averaged per fold, then mean $\pm$ std over 5 CV folds except Chronological holdouts. Distributed AA-GBT run at $W{=}4$ only (same AUC at every $W$ in Table~\ref{tab:dist-accuracy-ydf}). Seed 1 of single-machine SPO-GBT and AA-GBT reuses the runs of Table~\ref{tab:dist-accuracy-ydf}.
+\end{minipage}
+\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+% body sizes its axis to 0.5\textwidth; match it to the column
+\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-hao}.}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT, with distributed AA-GBT at W equals 4 and single-machine references, under Hao's settings.}
+\label{fig:dist-accuracy-mean-hao}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_body.tex}{\input{figures/evaluation/fig_column_replication_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-hao}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1, under Hao's settings. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean.}
+\label{fig:column-replication-hao}
+\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). pts = percentage points of test AUC. Seeds 1--5 pooled.
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of single-machine vs. $W$-distributed GBT with $P{=}\min(F,1000)$ projections per node on the datasets with $F\geq100$, mean over 5 seeds.}
+\label{tab:dist-accuracy-hao-wide}
+\IfFileExists{tables/table_dist_accuracy_hao_wide_body.tex}{\input{tables/table_dist_accuracy_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}
+\par\smallskip\raggedright\footnotesize The datasets of Table~\ref{tab:dist-accuracy-ydf-wide}. Same settings and seeds as Table~\ref{tab:dist-accuracy-hao}. 5 CV folds except Chronological holdouts and Epsilon (shipped split).
+\end{minipage}
+\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+% body sizes its axis to 0.5\textwidth; match it to the column
+\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_wide_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-hao-wide}.}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT, with distributed AA-GBT at W equals 4 and single-machine references, on the datasets with at least 100 columns under Hao's settings.}
+\label{fig:dist-accuracy-mean-hao-wide}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_wide_body.tex}{\input{figures/evaluation/fig_column_replication_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-hao-wide}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets with at least 100 columns under Hao's settings. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean.}
+\label{fig:column-replication-hao-wide}
+\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). pts = percentage points of test AUC. Seeds 1--5 pooled.
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
 \section{Runtime}
 
 Skew in tree nodes doesn't create skew in workers. Skew in columns does. 

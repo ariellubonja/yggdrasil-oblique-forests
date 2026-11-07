@@ -12,6 +12,8 @@ How to recreate a run: `benchmarks/src/distributed_spo_gbt/REPLICABILITY.md`.
 | Accuracy | `accuracy/tab-column-replication-ydf/` | tab:column-replication-ydf, fig:column-replication-ydf | kdd28_ydf.colrep_distacc_spo |
 | Accuracy >100 cols | `accuracy/tab-dist-accuracy-ydf-wide/` | tab:dist-accuracy-ydf-wide, fig:dist-accuracy-mean-ydf-wide, fig:column-replication-ydf-wide, tab:column-replication-ydf-wide | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
 | Accuracy, SPO-advantage datasets | `accuracy/tab-dist-accuracy-ydf-spo-advantage/` | tab:dist-accuracy-ydf-spo-advantage, fig:dist-accuracy-mean-ydf-spo-advantage, fig:column-replication-ydf-spo-advantage | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
+| Accuracy, Hao's settings, 5 seeds | `accuracy/tab-dist-accuracy-hao/` | tab:dist-accuracy-hao, fig:dist-accuracy-mean-hao, fig:column-replication-hao | kdd28_hao.distacc_*, kdd28_hao.colrep_distacc_spo |
+| Accuracy, Hao's settings, 5 seeds, >100 cols | `accuracy/tab-dist-accuracy-hao-wide/` | tab:dist-accuracy-hao-wide, fig:dist-accuracy-mean-hao-wide, fig:column-replication-hao-wide | kdd28_hao.distacc_*, kdd28_hao.colrep_distacc_spo |
 | Runtime | `runtime/tab-vertex-hm4-pf-runtime/` | tab:vertex-hm4-pf-runtime, fig:vertex-hm4-hm16-pf-runtime | vertex_grid_pf |
 | Runtime | `runtime/fig-yt8m-barriers/` | fig:yt8m-barriers | vertex_grid_pf |
 | Runtime (cross-worker communication) | `runtime/tab-cross-network/` | tab:cross-network, fig:cross-network | table3 (old settings) |
