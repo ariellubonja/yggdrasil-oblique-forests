@@ -2281,12 +2281,14 @@ inline bool CpuSupportsAvx512f() {
 // slot. AVX2-gated; the target attribute allows intrinsics in a non-mavx2 TU.
 __attribute__((target("avx2,popcnt"))) inline int Avx2UpperBoundIndex64(
     const float x, const float* thr64, const float* coarse8) {
+  // broadcast
   const __m256 vx = _mm256_set1_ps(x);
   const unsigned mc = static_cast<unsigned>(
       _mm256_movemask_ps(_mm256_cmp_ps(vx, _mm256_load_ps(coarse8),
                                        _CMP_GE_OQ)));
   const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(mc));
   if (K >= 8) return 63;
+  // K << 3 = K * 8
   const __m256 vthr = _mm256_load_ps(thr64 + (K << 3));
   const unsigned mf = static_cast<unsigned>(
       _mm256_movemask_ps(_mm256_cmp_ps(vx, vthr, _CMP_GE_OQ)));
