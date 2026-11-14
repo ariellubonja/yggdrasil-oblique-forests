@@ -47,7 +47,9 @@ build:disable_std_upper_bound_vectorization --cxxopt="-DDISABLE_STD_UPPER_BOUND_
 # This flag swaps back to the original std::sort
 build:exact_std_sort --cxxopt="-DEXACT_STD_SORT=1"
 
-build --copt=-march=native --cxxopt="-O3"
+# Not on macOS: Apple clang's -march=native drops AES, which breaks BoringSSL.
+build:linux --copt=-march=native
+build --cxxopt="-O3"
 
 
 # DEFAULTS
@@ -177,6 +179,8 @@ build:macos --cxxopt=-std=c++17
 build:macos --host_cxxopt=-std=c++17
 # abseil's aligned new needs macOS >= 10.13.
 build:macos --macos_minimum_os=12.0 --host_macos_minimum_os=12.0
+# gRPC's BUILD files fail clang's layering_check on Xcode 27.
+build:macos --features=-layering_check --host_features=-layering_check
 
 build:windows_cpp17 --cxxopt=/std:c++17
 build:windows_cpp17 --host_cxxopt=/std:c++17
