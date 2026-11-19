@@ -42,18 +42,18 @@ python3 $D/filter_wide.py $SH $A/tab-dist-accuracy-ydf/distacc_aaspo/distacc_aas
 python3 $D/filter_wide.py $SH $A/tab-dist-accuracy-ydf/distacc_aaspo/distacc_exact300.csv $D/distacc_aaspo/distacc_exact300.csv
 python3 $D/filter_wide.py $SH $A/tab-column-replication-ydf/colrep_distacc/results.csv $D/colrep_distacc/results.csv
 python3 $D/union_wide.py && python3 $D/make_wide_shapes.py
-python3 benchmarks/src/distributed_spo_gbt/make_paper_tables.py --accuracy_csv $U/distacc/results.csv --dataset_shapes $D/wide_shapes.csv \
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --accuracy_csv $U/distacc/results.csv --dataset_shapes $D/wide_shapes.csv \
   --accuracy_note "IN-PROCESS reruns (workers = threads of one process): SPAA paper eval rows on AWS m7i.metal-24xl, wide dataset eval rows on c8i.metal-96xl; datasets with F>=100" \
   --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _ydf_wide --purple \
   --extra aaspo=$U/distacc_aaspo/results.csv,exact300=$U/distacc_exact300/results.csv --extra_first --eval_suite kdd28_wide_union \
   --std_below --shape_below --group_header --no_figure --time_row  # table only (2026-11-06), the figure needs the command without the last 4 flags
-python3 benchmarks/src/distributed_spo_gbt/make_column_replication_table.py $U/colrep_distacc \
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_column_replication_table.py $U/colrep_distacc \
   --out paper/distributed_spo_gbt_kdd28/tables/table_column_replication_ydf_wide_body.tex \
   "IN-PROCESS rerun, c8i.metal-96xl SMT+turbo, W=4; r=0 and single = the distacc rows of the same eval (SPAA paper eval rows: 2026-11-03 m7i); datasets with F>=100" --metric test_auc \
   --single_csv $U/distacc/results.csv --single_filter arm=single:SPO --single_arms distacc_single_spo \
   --dist_arm colrep_distacc_spo --r0_csv $U/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo \
   --profile kdd28_ydf --eval_suite kdd28_wide_union
-python3 benchmarks/src/distributed_spo_gbt/make_column_replication_fig.py --csv $U/colrep_distacc/results.csv --suffix _ydf_wide --metric test_auc \
+python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_column_replication_fig.py --csv $U/colrep_distacc/results.csv --suffix _ydf_wide --metric test_auc \
   --dist_arm colrep_distacc_spo --single_csv $U/distacc/results.csv --single_filter arm=single:SPO \
   --single_arms distacc_single_spo --r0_csv $U/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo \
   --profile kdd28_ydf --eval_suite kdd28_wide_union

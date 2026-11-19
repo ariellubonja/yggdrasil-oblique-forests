@@ -9,11 +9,11 @@ for v in "" _wide; do
   COMMON=(--accuracy_csv $D/distacc/results.csv --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa
     --profile kdd28_hao --suffix _hao$v --purple --extra aaspo=$D/distacc_aaspo/results.csv --extra_first --seed_mean
     --eval_suite $S "${SH[@]}" --accuracy_note "IN-PROCESS reruns, kdd28_hao, mean over seeds 1-5, $NOTE")
-  python3 $G/make_paper_tables.py "${COMMON[@]}"
+  python3 $G/paper/tables/make_paper_tables.py "${COMMON[@]}"
   # SPAA: 33 rows only fit the page with one-line rows (std as subscript, shape inline)
   if [ -z "$v" ]; then TF=(--group_header); else TF=(--std_below --shape_below --group_header); fi
-  python3 $G/make_paper_tables.py "${COMMON[@]}" "${TF[@]}" --time_row --no_figure
-  python3 $G/make_column_replication_fig.py --csv $D/colrep_distacc/results.csv --suffix _hao$v --metric test_auc \
+  python3 $G/paper/tables/make_paper_tables.py "${COMMON[@]}" "${TF[@]}" --time_row --no_figure
+  python3 $G/paper/figures/make_column_replication_fig.py --csv $D/colrep_distacc/results.csv --suffix _hao$v --metric test_auc \
     --dist_arm colrep_distacc_spo --single_csv $D/distacc/results.csv --single_filter arm=single:SPO --single_arms distacc_single_spo \
     --r0_csv $D/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo --profile kdd28_hao --eval_suite $S
 done

@@ -23,7 +23,7 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/make_paper_tables.py --accuracy_csv benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv \
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --accuracy_csv benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv \
   --accuracy_note "IN-PROCESS rerun on AWS m7i.metal-24xl (Xeon 8488C; workers = threads of one process)" \
   --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _ydf --purple \
   --extra aaspo=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_aaspo.csv,exact300=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_exact300.csv --extra_first \

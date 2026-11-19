@@ -21,7 +21,7 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/make_paper_tables.py --profile table8 --accuracy_csv benchmarks/results/kdd28/appendix-earlier-settings/tab-dist-accuracy/table8_results.csv \
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --profile table8 --accuracy_csv benchmarks/results/kdd28/appendix-earlier-settings/tab-dist-accuracy/table8_results.csv \
   --accuracy_note "IN-PROCESS runs on AWS m7i.metal-24xl (Xeon 8488C; workers = threads of one process); SPO dist. = dgbt-spo-full-fixes 10509539"
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)

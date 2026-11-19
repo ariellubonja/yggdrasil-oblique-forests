@@ -20,13 +20,13 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/make_column_replication_table.py benchmarks/results/kdd28/accuracy/tab-column-replication-ydf/colrep_distacc \
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_column_replication_table.py benchmarks/results/kdd28/accuracy/tab-column-replication-ydf/colrep_distacc \
   --out paper/distributed_spo_gbt_kdd28/tables/table_column_replication_ydf_body.tex \
   "IN-PROCESS rerun, c8i.metal-96xl SMT+turbo, W=4; r=0 and single = 2026-11-03 m7i distacc rows" --metric test_auc \
   --single_csv benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv --single_filter arm=single:SPO --single_arms distacc_single_spo \
   --dist_arm colrep_distacc_spo --r0_csv benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo \
   --profile kdd28_ydf --eval_suite kdd28_tabarena33
-python3 benchmarks/src/distributed_spo_gbt/make_column_replication_fig.py --csv benchmarks/results/kdd28/accuracy/tab-column-replication-ydf/colrep_distacc/results.csv --suffix _ydf --metric test_auc \
+python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_column_replication_fig.py --csv benchmarks/results/kdd28/accuracy/tab-column-replication-ydf/colrep_distacc/results.csv --suffix _ydf --metric test_auc \
   --dist_arm colrep_distacc_spo --single_csv benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv --single_filter arm=single:SPO \
   --single_arms distacc_single_spo --r0_csv benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo \
   --profile kdd28_ydf --eval_suite kdd28_tabarena33

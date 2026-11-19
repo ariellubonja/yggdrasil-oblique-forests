@@ -18,7 +18,7 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/make_barrier_figs.py   # --run_dir benchmarks/results/kdd28/cells/vertex_p_F/pfhm4fix20261101_youtube8m (default)
+python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_barrier_figs.py   # --run_dir benchmarks/results/kdd28/cells/vertex_p_F/pfhm4fix20261101_youtube8m (default)
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/cells/vertex_p_F/pfhm4fix20261101_youtube8m/aa_w16/barriers.csv`

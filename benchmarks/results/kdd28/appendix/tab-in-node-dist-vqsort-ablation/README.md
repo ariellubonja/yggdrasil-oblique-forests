@@ -18,7 +18,7 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/make_pf_ablation_tables.py   # writes this body and tab:setup-cost's, each from its inputs.txt
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_pf_ablation_tables.py   # writes this body and tab:setup-cost's, each from its inputs.txt
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/cells/vertex_p_F/pfw1base20261025_epsilon/aa_w1/eval.json`

@@ -17,7 +17,7 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/make_in_node_tables.py
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_in_node_tables.py
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/appendix/tab-in-node-dist-vqsort-vertex/in_node_parallelism_2026-10-22/sm_thread_sweep_old_vs_new.csv`

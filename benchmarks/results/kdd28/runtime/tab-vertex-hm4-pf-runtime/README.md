@@ -19,8 +19,8 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/make_pf_grid_table.py --out paper/distributed_spo_gbt_kdd28/tables/table_vertex_hm4_hm16_pf_body.tex
-python3 benchmarks/src/distributed_spo_gbt/make_pf_grid_fig.py
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_pf_grid_table.py --out paper/distributed_spo_gbt_kdd28/tables/table_vertex_hm4_hm16_pf_body.tex
+python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_pf_grid_fig.py
 # defaults = pfhm4fix20261101 (n2-highmem-4, OOM marks from its youtube8m launcher.log) + pfgridfix20261101
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)

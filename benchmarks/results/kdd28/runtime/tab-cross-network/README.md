@@ -18,8 +18,8 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/make_cross_network_table.py   # default src = benchmarks/results/kdd28/runtime/tab-cross-network/table3_results_5seed.csv
-python3 benchmarks/src/distributed_spo_gbt/make_cross_network_fig.py
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_cross_network_table.py   # default src = benchmarks/results/kdd28/runtime/tab-cross-network/table3_results_5seed.csv
+python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_cross_network_fig.py
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/runtime/tab-cross-network/table3_results_5seed.csv`

@@ -20,8 +20,8 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/make_column_replication_table.py   # default src = benchmarks/results/kdd28/appendix-earlier-settings/tab-column-replication/table2_single10
-python3 benchmarks/src/distributed_spo_gbt/make_column_replication_fig.py
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_column_replication_table.py   # default src = benchmarks/results/kdd28/appendix-earlier-settings/tab-column-replication/table2_single10
+python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_column_replication_fig.py
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/appendix-earlier-settings/tab-column-replication/table2_single10/results.csv`
