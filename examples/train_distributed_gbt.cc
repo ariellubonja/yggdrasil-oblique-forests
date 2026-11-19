@@ -282,6 +282,8 @@ int main(int argc, char** argv) {
   auto* label_guide = guide.add_column_guides();
   label_guide->set_column_name_pattern(absl::StrCat("^", label, "$"));
   label_guide->set_type(ydf::dataset::proto::ColumnType::CATEGORICAL);
+  // Keep labels seen fewer than 5 times (toy datasets). - Vova experiment
+  // label_guide->mutable_categorial()->set_min_vocab_frequency(1);
   if (absl::GetFlag(FLAGS_force_numerical_features)) {
     guide.set_detect_boolean_as_numerical(true);
     guide.mutable_default_column_guide()->set_type(

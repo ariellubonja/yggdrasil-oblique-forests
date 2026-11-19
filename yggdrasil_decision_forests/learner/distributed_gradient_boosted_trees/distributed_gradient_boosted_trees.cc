@@ -528,6 +528,7 @@ TrainWithCache(
   // Accumulator of validation loss and metrics.
   PartialEvaluationAggregator validation_aggregator(num_eval_workers);
 
+  // Ariel: Columns are round-robined here
   ASSIGN_OR_RETURN(auto load_balancer,
                    distributed_decision_tree::LoadBalancer::Create(
                        input_features, num_train_workers, cache_metadata,
