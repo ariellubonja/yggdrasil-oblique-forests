@@ -267,7 +267,9 @@ def main():
     ap.add_argument("--cc18_10fold", default="", help="run_cc18_aa_spo_gbt.sh data/ (<ds>/fold<k>_*.csv, meta.json)")
     ap.add_argument("--tables", default="distacc,colrep,cc18")
     ap.add_argument("--cpus", type=int, default=os.cpu_count())
-    ap.add_argument("--single_threads", type=int, default=-1, help="train_oblique_forest --num_threads (model does not depend on it)")
+    # TODO is this thread count maximizing utilization when measuring runtime? OK for accuracy
+    ap.add_argument("--single_threads", type=int, default=4, help="train_oblique_forest --num_threads (model changes based on it - GBT parallelism has seed difference. Only RF is same)")
+    # TODO is this thread count maximizing utilization when measuring runtime? OK for accuracy
     ap.add_argument("--worker_threads", type=int, default=2, help="threads per in-process worker (model depends on it)")
     ap.add_argument("--max_weight", type=int, default=16, help="CPU slots one cell may claim at most")
     ap.add_argument("--git", default="")
