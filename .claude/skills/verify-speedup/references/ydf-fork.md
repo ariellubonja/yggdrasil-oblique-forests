@@ -43,7 +43,7 @@ copy the scripts over, regenerate the harness with
 |---|---|---|
 | `benchmarks/src/runtime.sh [--runs=N] <suffix>` | e2e wall time, median of N (default 3), builds first | `EXTRA_BAZEL_CONFIGS`, `EXTRA_TRAIN_ARGS`, `CSV_DATASETS_OVERRIDE`, `TRUNK_DATASETS_OVERRIDE` ("none" skips a group) |
 | `benchmarks/src/accuracy.sh <suffix>` | CC18 10-fold held-out accuracy (34 tasks) | `EXTRA_BAZEL_CONFIGS`, `EXTRA_TRAIN_ARGS`, `ACCURACY_DATA_DIR` |
-| `benchmarks/src/compare_models.sh <dirA> <dirB>` | sha256 of saved models; exit 0 = bit-identical | — |
+| `benchmarks/src/compare_models.sh <dirA> <dirB>` | saved models: nodes by sha256, .pb decoded (map order, random uid/created_date ignored); exit 0 = identical | `PROTOC`, `PROTOC_INCLUDE` |
 | `benchmarks/src/utils/bench_common.sh` | shared: icx pin (Linux), post-build compiler check, e-core toggle (185H only), provenance, tree count | `ONEAPI_SETVARS`, `NUM_TREES_DIVISOR` (default 1; **10 for every preliminary pass, on every machine**) |
 | `benchmarks/src/utils/parse_log_to_csv.py` | log → CSV; derives `algorithm` from the command line | pass flags as `--flag "value"` or `--flag=value`; older CSVs may carry `SPORF_unknown`/mislabelled families, so match priors on provenance, not on `algorithm` |
 
@@ -109,10 +109,10 @@ size, arm A: Bioresponse 35.7 s, Internet-Ads 25.1 s, madelon 10.1 s, nomao
    10 fixed numeric NaN-free CC18 tasks (banknote, diabetes, wdbc, kc1, pc4,
    qsar-biodeg, spambase, madelon, Bioresponse, phoneme), fold 0, model
    hashes via `compare_models.sh`. Seconds per task.
-   `compare_models.sh` exits 1 whenever any file differs; for GBT the header
-   proto carries training logs that change run to run, so read its RESULT
-   line: "TREES IDENTICAL" = trees bit-identical, only "MODEL CHANGED" means
-   the change altered the model (an A-vs-A control confirmed this 2026-09-05).
+   `compare_models.sh` decodes .pb files since 2026-11-19, so A-vs-A now exits 0
+   (the earlier run-to-run header diffs were the random uid and map order).
+   "TREES IDENTICAL" = trees bit-identical, metadata differs. "MODEL CHANGED" =
+   the change altered the model. Whole-project check: `benchmarks/src/utils/model_identity_check.sh`.
 3. `NUM_TREES_DIVISOR=10 accuracy.sh <suffix>` for both arms with the same
    `EXTRA_BAZEL_CONFIGS`/`EXTRA_TRAIN_ARGS` (34 tasks × 10 folds, a few
    minutes at 30 GBT / 5 RF trees); `diff` the CSV bodies. Identical bodies

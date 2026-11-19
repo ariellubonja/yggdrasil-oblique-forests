@@ -381,7 +381,7 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
 
 - Code: worktree `~/wt/kdd28-ydf-rerun` at e3279f20 plus the uncommitted profile arms and driver (`code.diff` in the
   results folder). Binaries `bazel build -c opt` (icx), copied to `bin/`.
-- Driver: `accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py`, one resumable queue for tab:dist-accuracy (33 TabArena/TabReD, 5 folds or
+- Driver: `accuracy_multi_thread/run_kdd28_ydf_ec2.py`, one resumable queue for tab:dist-accuracy (33 TabArena/TabReD, 5 folds or
   1 holdout, single + W = 1/4/8/16/32, SPO and AA), tab:column-replication (34 CC18 fold 0, W = 4, r = 0..1, seeds 1-5,
   single row seeds 1-10), tab:cc18-aa-spo arms (a), (d), (e) (10 folds, seed 1). Arms (b) and (c) stay as recorded.
   Profile arms `kdd28_ydf.{distacc_*,colrep_*,cc18_*}`. Seed 1 everywhere except the seed lists. Threads: single 4,
@@ -398,6 +398,12 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   (single, W = 4), credit-g (single, W = 4) and heloc (single, W = 4, W = 16), 300 trees. All 7 pairs have byte-identical
   `nodes-*` and identical test metrics. Only `header.pb` (creation metadata) and `data_spec.pb` (label dictionary
   serialized in another order) differ. No worker-reply-order effect was seen in the distributed pairs.
+- Thread count vs model (2026-11-05, 2026-11-19): GBT models depend on threads, RF models do not. Single machine: qsar-biodeg
+  AUC .9467 at 4 vs .9387 at 16 threads (`ariel_notes/results/2026-11-04_wide_eval/ariel-ydf-1/thread_check/`). 2026-11-19 Mac
+  sweep (`ariel_notes/results/2026-11-19_worker_threads_check/`): single-machine trees differ at every thread count below
+  ceil(P/10) on 7 CC18 cells, because `training.cc:1755` splits P into min(T, ceil(P/10)) jobs, each seeded at :1867.
+  Distributed W=4 at 1/2/8 threads per worker: 5 of 6 cells identical, spambase gave 3 models (root label stats are
+  summed in thread-count blocks, `distributed_decision_tree/training.cc:98`). RF at 1/4/10 threads: identical (2 cells).
 - Not rerun on 2026-11-03: the cross-network arm of tab:cross-network (column shipping then lived only on
   `cross-worker-col-comms` / `fix-disc-colcomms`). Its in-worker arm equals the column-replication r = 0 cells.
 - AA+SPO and arm (c) columns of tab:dist-accuracy (2026-11-04): profile arms `kdd28_ydf.distacc_single_aa_spo` and

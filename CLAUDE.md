@@ -67,6 +67,14 @@ Claude Code is the hub and this repo is the source of truth.
 
 ## Code rules
 
+- **Model checks after every core-library change, any session model (user directive, 2026-11-19):** core =
+  `yggdrasil_decision_forests/` and `examples/`. (1) Models should not change: run
+  `benchmarks/src/utils/model_identity_check.sh <pre-change commit>` (7 same-seed arms, RF/GBT/DGBT, SPO and AA).
+  Byte-identical or FAIL, reported first. (2) Models change on purpose, a new model path, or (1) failed: open the
+  report with "⚠️ This change may change the underlying model, and there is no obvious reference available. Would you
+  like to start a Fable-xhigh verifier?" and wait. That verifier compares against the closest reference and checks
+  train/inference value parity. Procedure: `~/.claude/skills/verify/SKILL.md` "Model checks".
+
 - **Always VQSort, never std::sort (2026-10-22).** Every hot-path sort uses `hwy::VQSort` on `K32V32` /
   `K64V64` packed pairs (as in `FindBestSplitFlatHighway`), new code included, so arms compare the
   method, not the sort. Before finishing a kernel change, grep the diff for `std::sort`.
@@ -160,7 +168,8 @@ Claude Code is the hub and this repo is the source of truth.
 
 - **KDD28 accuracy tables run in-process on EC2 (user decision, 2026-11-03):** distributed accuracy arms of
   tab:dist-accuracy, tab:column-replication, tab:cross-network use MULTI_THREAD workers on `ariel-dist-accuracy-1`
-  (i-0f90f7764082bf21a). Timing stays Vertex only. Same-seed reruns there are bit-identical (tested 2026-11-03).
+  (i-0f90f7764082bf21a). Timing stays Vertex only. Same-seed reruns are bit-identical for RF. GBT, single
+  or distributed, also needs the same thread count (tested 2026-11-03, 2026-11-19).
 - **Real distributed numbers come only from Vertex AI CustomJobs (2026-10-25).** The in-process driver
   `examples/train_distributed_gbt` and `run_dgbt*.sh` / `run_barrier_cell.sh` are smoke tests only;
   never report them as distributed.
@@ -171,7 +180,7 @@ Claude Code is the hub and this repo is the source of truth.
 - **Threads = harness defaults, never revisit (user directive, 2026-11-05):** distributed `--num_threads` 6 per worker =
   YDF's proto default (`abstract_learner.proto:46`, `train_distributed_gbt.cc:95`). Single machine `-1` = all hardware threads
   (`train_oblique_forest.cc:1372`). Exception: §J accuracy reruns keep 4 single / 2 per worker for comparability, since the
-  thread count changes SPO models (measured 2026-11-05: qsar-biodeg AUC .9467 at 4 vs .9387 at 16 threads).
+  thread count changes GBT models (evidence: `distributed_spo_gbt/REPLICABILITY.md` §J).
 - **No "70 % of RAM = OOM" rule (2026-10-25):** a cell is OOM only when a worker was actually killed.
 - **Checkpoints off in every harness (2026-10-29)** (`train.py`, `train_cells.py`, `train_distributed_gbt.cc`):
   checkpoint I/O falls inside `tree_training_s`. Never mix with pre-2026-10-29 cells.

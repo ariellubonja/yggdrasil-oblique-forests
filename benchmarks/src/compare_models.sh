@@ -1,124 +1,66 @@
 #!/usr/bin/env bash
+# Usage: compare_models.sh <dir_a> <dir_b>  (two --model_out_dir models)  exit 0 identical, 1 differ, 2 usage/IO error
+# nodes-* compare as bytes. Known .pb files compare as protoc-decoded text (maps sorted), ignoring only the
+# random metadata uid/created_date. Without protoc ($PROTOC or bazel-bin) they fall back to bytes.
 set -euo pipefail
 
-# Bit-identity check for two saved models (--model_out_dir outputs).
-#
-# The bit-identity contract (OBLIQUE_CONTEXT.md §12.1) is: a code change must
-# produce bit-identical trees at the same seed and scheduler. Test accuracy is
-# NECESSARY BUT NOT SUFFICIENT -- two builds can tie on accuracy while producing
-# structurally different trees. This tool proves the model itself is unchanged
-# by hashing the serialized forest byte-for-byte.
-#
-# Compares two model directories produced by
-#   train_oblique_forest --model_out_dir=<dir>
-# On-disk files (model/random_forest/random_forest.cc):
-#   nodes-NNNNN-of-MMMMM  <- tree topology, thresholds, oblique weights. THE signal.
-#   header.pb / random_forest_header.pb / data_spec.pb  <- metadata & counts.
-#   done                  <- empty completion marker (ignored).
-# These RF files carry no embedded timestamps, so an exact hash match is
-# meaningful.
-#
-# Usage:  $0 <dir_a> <dir_b>
-#   e.g.  $0 dw1_sr_baseline dw1_sr_no_block
-#
-# Exit code: 0 = models bit-identical, 1 = differ, 2 = usage/IO error.
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; exit 0; fi
+if [[ $# -ne 2 ]]; then echo "Usage: $0 <dir_a> <dir_b>" >&2; exit 2; fi
+DIR_A="$1"; DIR_B="$2"
+for d in "$DIR_A" "$DIR_B"; do [[ -d "$d" ]] || { echo "ERROR: not a directory: $d" >&2; exit 2; }; done
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  sed -n '3,26p' "$0" | sed 's/^# \{0,1\}//'
-  exit 0
-fi
-
-if [[ $# -ne 2 ]]; then
-  echo "ERROR: expected 2 directories, got $#" >&2
-  echo "Usage: $0 <dir_a> <dir_b>" >&2
-  exit 2
-fi
-
-DIR_A="$1"
-DIR_B="$2"
-
-for d in "$DIR_A" "$DIR_B"; do
-  if [[ ! -d "$d" ]]; then
-    echo "ERROR: not a directory: $d" >&2
-    exit 2
-  fi
-done
-
-# Pick a sha256 tool (macOS: shasum -a 256; Linux: sha256sum).
-if command -v sha256sum >/dev/null 2>&1; then
-  hash_of() { sha256sum "$1" | awk '{print $1}'; }
-elif command -v shasum >/dev/null 2>&1; then
-  hash_of() { shasum -a 256 "$1" | awk '{print $1}'; }
+REPO=$(cd "$(dirname "$0")/../.." && pwd)
+PROTOC=${PROTOC:-$REPO/bazel-bin/external/protobuf~/protoc}
+if [[ -x "$PROTOC" ]]; then
+  PINC=${PROTOC_INCLUDE:-$(cd "$REPO" && bazel info output_base 2>/dev/null)/external/protobuf~/src}
 else
-  echo "ERROR: need sha256sum or shasum on PATH" >&2
-  exit 2
+  echo "WARNING: no protoc (set PROTOC or bazel build @com_google_protobuf//:protoc): .pb files compare as bytes" >&2
+  PROTOC=""
 fi
+proto_of() {  # <file> -> "<proto path> <message>" for known model protos, else empty
+  case "$1" in
+    header.pb) echo "model/abstract_model.proto model.proto.AbstractModel" ;;
+    data_spec.pb) echo "dataset/data_spec.proto dataset.proto.DataSpecification" ;;
+    gradient_boosted_trees_header.pb) echo "model/gradient_boosted_trees/gradient_boosted_trees.proto model.gradient_boosted_trees.proto.Header" ;;
+    random_forest_header.pb) echo "model/random_forest/random_forest.proto model.random_forest.proto.Header" ;;
+  esac
+}
+decode() {  # <proto path> <message> <pb file>
+  (cd "$REPO" && "$PROTOC" -I. -I"$PINC" --decode="yggdrasil_decision_forests.$2" "yggdrasil_decision_forests/$1" < "$3") |
+    if [[ "$2" == model.proto.AbstractModel ]]; then grep -v -E '^  (uid|created_date): ' || true; else cat; fi
+}
+if command -v sha256sum >/dev/null 2>&1; then hash_of() { sha256sum "$1" | awk '{print $1}'; }
+else hash_of() { shasum -a 256 "$1" | awk '{print $1}'; }; fi
 
-# Union of relative filenames across both dirs, excluding the empty 'done'
-# marker. Portable to BSD find (macOS) and bash 3.2 -- no -printf, no mapfile.
 list_files() { ( cd "$1" && find . -type f ! -name done | sed 's|^\./||' ); }
-
 FILES=()
-while IFS= read -r f; do
-  [[ -n "$f" ]] && FILES+=("$f")
-done < <(
-  { list_files "$DIR_A"; list_files "$DIR_B"; } 2>/dev/null | sort -u
-)
+while IFS= read -r f; do [[ -n "$f" ]] && FILES+=("$f"); done < <({ list_files "$DIR_A"; list_files "$DIR_B"; } | sort -u)
+[[ ${#FILES[@]} -gt 0 ]] || { echo "ERROR: no model files found in either directory" >&2; exit 2; }
 
-if [[ ${#FILES[@]} -eq 0 ]]; then
-  echo "ERROR: no model files found in either directory" >&2
-  exit 2
-fi
-
-printf '%-32s %-12s %s\n' "FILE" "STATUS" "SHA256 (a / b)"
-printf '%s\n' "--------------------------------------------------------------------------------"
-
-overall_match=1
-nodes_match=1
-nodes_seen=0
-
+printf '%-34s %-12s %s\n' "FILE" "STATUS" "SHA256 (a / b)"
+overall_match=1; nodes_match=1; nodes_seen=0
 for f in "${FILES[@]}"; do
-  pa="$DIR_A/$f"
-  pb="$DIR_B/$f"
-
-  if [[ ! -f "$pa" ]]; then
-    printf '%-32s %-12s %s\n' "$f" "MISSING-A" "(only in $DIR_B)"
-    overall_match=0
-    [[ "$f" == nodes-* ]] && { nodes_match=0; nodes_seen=1; }
-    continue
-  fi
-  if [[ ! -f "$pb" ]]; then
-    printf '%-32s %-12s %s\n' "$f" "MISSING-B" "(only in $DIR_A)"
-    overall_match=0
-    [[ "$f" == nodes-* ]] && { nodes_match=0; nodes_seen=1; }
-    continue
-  fi
-
-  ha=$(hash_of "$pa")
-  hb=$(hash_of "$pb")
-
-  if [[ "$ha" == "$hb" ]]; then
-    printf '%-32s %-12s %s\n' "$f" "MATCH" "${ha:0:16}…"
-  else
-    printf '%-32s %-12s %s\n' "$f" "DIFFER" "${ha:0:16}… / ${hb:0:16}…"
-    overall_match=0
-    [[ "$f" == nodes-* ]] && nodes_match=0
-  fi
+  pa="$DIR_A/$f"; pb="$DIR_B/$f"
   [[ "$f" == nodes-* ]] && nodes_seen=1
+  if [[ ! -f "$pa" || ! -f "$pb" ]]; then
+    printf '%-34s %-12s\n' "$f" "MISSING-$([[ -f "$pa" ]] && echo B || echo A)"
+    overall_match=0; [[ "$f" == nodes-* ]] && nodes_match=0; continue
+  fi
+  ha=$(hash_of "$pa"); hb=$(hash_of "$pb")
+  if [[ "$ha" == "$hb" ]]; then printf '%-34s %-12s %s\n' "$f" "MATCH" "${ha:0:16}…"; continue; fi
+  spec=$(proto_of "$f")
+  if [[ -n "$PROTOC" && -n "$spec" ]] && diff <(decode $spec "$pa") <(decode $spec "$pb") > "${TMPDIR:-/tmp}/cmpmodels.$$" 2>&1; then
+    printf '%-34s %-12s %s\n' "$f" "MATCH-DEC" "(decoded; bytes differ by map order / uid)"; continue
+  fi
+  printf '%-34s %-12s %s\n' "$f" "DIFFER" "${ha:0:16}… / ${hb:0:16}…"
+  [[ -s "${TMPDIR:-/tmp}/cmpmodels.$$" ]] && head -20 "${TMPDIR:-/tmp}/cmpmodels.$$" | sed 's/^/    /'
+  overall_match=0; [[ "$f" == nodes-* ]] && nodes_match=0
 done
+rm -f "${TMPDIR:-/tmp}/cmpmodels.$$"
 
 echo
-if [[ "$nodes_seen" -eq 0 ]]; then
-  echo "WARNING: no nodes-* shard found -- is this a saved RF model dir?" >&2
-fi
-
-if [[ "$overall_match" -eq 1 ]]; then
-  echo "RESULT: BIT-IDENTICAL ✅  (all model files match)"
-  exit 0
+[[ "$nodes_seen" -eq 1 ]] || echo "WARNING: no nodes-* shard found -- is this a saved model dir?" >&2
+if [[ "$overall_match" -eq 1 ]]; then echo "RESULT: BIT-IDENTICAL ✅  (all model files match)"; exit 0
 elif [[ "$nodes_match" -eq 1 && "$nodes_seen" -eq 1 ]]; then
-  echo "RESULT: TREES IDENTICAL ✅ but metadata differs ⚠️  (nodes-* match; other files differ above)"
-  exit 1
-else
-  echo "RESULT: MODEL CHANGED ❌  (tree nodes differ)"
-  exit 1
-fi
+  echo "RESULT: TREES IDENTICAL ✅ but metadata differs ⚠️  (nodes-* match; other files differ above)"; exit 1
+else echo "RESULT: MODEL CHANGED ❌  (tree nodes differ)"; exit 1; fi
