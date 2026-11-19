@@ -1,13 +1,13 @@
 # KDD28 accuracy results rerun with the 2026-10-31/11-01 bug fixes
 
 **Moved 2026-11-04.** The folder names below are the old `fixed_reruns_2026-11-01/` layout. The parts now live in
-`benchmarks/results/kdd28/` (map: `benchmarks/src/distributed_spo_gbt/fixed_reruns/layout.py`): `paper_inputs/table8_results.csv`
+`benchmarks/results/kdd28/` (map: `benchmarks/src/distributed_spo_gbt/accuracy_multi_thread/fixed_reruns/layout.py`): `paper_inputs/table8_results.csv`
 -> `appendix-earlier-settings/tab-dist-accuracy/`, `paper_inputs/table2_single10/` -> `appendix-earlier-settings/tab-column-replication/`,
 `paper_inputs/table3_results_5seed.csv` -> `runtime/tab-cross-network/`, raw all-fixes runs -> the float's `raw/`, fix stages,
 duplicates and `paper_refs/` -> `outdated/`, `table8/{parity,seed_sweep}` and `comparisons/` -> here.
 
 How to recreate everything here: `benchmarks/src/distributed_spo_gbt/REPLICABILITY.md` §G.
-Comparison (prints every table below): `python benchmarks/src/distributed_spo_gbt/fixed_reruns/compare_fixed_reruns.py`
+Comparison (prints every table below): `python benchmarks/src/distributed_spo_gbt/accuracy_multi_thread/fixed_reruns/compare_fixed_reruns.py`
 (writes `comparisons/`).
 
 | Folder | Paper table | Code | Where it ran |

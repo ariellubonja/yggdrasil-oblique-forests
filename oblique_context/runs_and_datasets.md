@@ -87,7 +87,7 @@ each arm as speedup = exact_hwy / arm.
 `DGBT_BARRIER_CSV=<path>` makes the manager write one row per request round (`internal::Monitoring` in
 `learner/distributed_gradient_boosted_trees/`): stage, layer, barrier length, manager serial time,
 fan-out, worker max/median/min runtime, idle worker-seconds, comm residual, bytes. Off by default.
-Summarize with `benchmarks/src/distributed_spo_gbt/summarize_barriers.py`; taxonomy in
+Summarize with `benchmarks/src/distributed_spo_gbt/runtime_vertex_ai/summarize_barriers.py`; taxonomy in
 `benchmarks/results/kdd28/analysis/barrier_smoke_inprocess_20261022/README.md`.
 
 ## History behind standing rules

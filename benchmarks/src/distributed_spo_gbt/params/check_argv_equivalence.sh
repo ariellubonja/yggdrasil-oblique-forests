@@ -86,7 +86,7 @@ make_tree() { # old|new
   for i in $(seq 1 24); do mkdir -p "$v/pfgrid20261025_x/c$i" && echo '{}' > "$v/pfgrid20261025_x/c$i/eval.json"; done
   for s in run_dgbt_suite.sh; do  # same path rewrite in both trees: the script hardcodes the m7i paths
     sed -e "s#^REPO=/home/ubuntu/yggdrasil-oblique-forests#REPO=$T/fakerepo#" -e "s#^FOLDS=/home/ubuntu/spo_vs_gbt/folds#FOLDS=$D/folds#" \
-      "$T/benchmarks/src/distributed_spo_gbt/$s" > "$T/benchmarks/src/distributed_spo_gbt/argvcheck_$s"
+      "$T/benchmarks/src/distributed_spo_gbt/accuracy_multi_thread/$s" > "$T/benchmarks/src/distributed_spo_gbt/accuracy_multi_thread/argvcheck_$s"
   done
   mkdir -p "$T/fakerepo/bazel-bin/examples" && cp "$STUB/train_distributed_gbt" "$T/fakerepo/bazel-bin/examples/"
 }
@@ -100,42 +100,42 @@ CASES=${CASES:-"table8_local table8_fixed dgbt_suite dgbt_spo dgbt_aa barrier_sp
 run_case() { # case -> runs it inside $T with argv captured in $ARGV_LOG
   local O=$W/out/$1; rm -rf "$O"; mkdir -p "$O"
   case $1 in
-    table8_local) mkdir -p "$O/bin"; cp "$STUB"/train_* "$O/bin/"; ln -s "$D/folds" "$O/folds"; NCPU=8 bash $DS/run_table8_local.sh "$O" ;;
-    table8_fixed) NCPU=16 bash $DS/fixed_reruns/run_table8_fixed.sh "$O" "$STUB/train_distributed_gbt" "$D/folds" ;;
-    dgbt_suite) RESULTS=$O/suite.csv WORK=$O/work bash $DS/argvcheck_run_dgbt_suite.sh ;;
-    dgbt_spo) BIN=$STUB/train_distributed_gbt OUT=$O WORK=$O/work GITSHA=x bash $DS/run_dgbt.sh HIGGS 4 SPARSE_OBLIQUE 50 --seed 123456 ;;
-    dgbt_aa) BIN=$STUB/train_distributed_gbt OUT=$O WORK=$O/work GITSHA=x bash $DS/run_dgbt.sh SUSY 1 AXIS_ALIGNED 300 ;;
-    barrier_spo) TRUNK_DIR=$D/trunk OUT=$O WORK=$O/work bash $DS/run_barrier_cell.sh SPARSE_OBLIQUE ;;
-    barrier_aa) TRUNK_DIR=$D/trunk OUT=$O WORK=$O/work bash $DS/run_barrier_cell.sh AXIS_ALIGNED 10 2 1 ;;
-    pf_grid) bash $DS/run_pf_grid.sh ;;
-    pf_followups) bash $DS/run_pf_followups.sh ;;
-    vertex_grid_fixed) bash $DS/runtime_reruns/run_vertex_grid_fixed.sh ;;
-    single_cc18) bash $DS/fixed_reruns/run_single_machine_cc18.sh "$STUB/train_oblique_forest" "$D/cc18" "$O" ;;
-    seed_single) FOLDS=$D/folds SINGLE=$STUB/train_oblique_forest bash $DS/fixed_reruns/run_seed_sweep.sh single 3 4 "$O" ;;
-    seed_w1) FOLDS=$D/folds DIST=$STUB/train_distributed_gbt bash $DS/fixed_reruns/run_seed_sweep.sh w1 2 4 "$O" ;;
-    vertex_fixed) PY=$STUB/python bash $DS/fixed_reruns/run_vertex_fixed.sh "$O" build table2 table2_split table3 ;;
-    colrep_default) PYTHONPATH=$T/pystub python3 $DS/column_replication/run_vertex_colrep.py --image $IMG:x --run_id R --out_root "$O" ;;
-    colrep_table3) PYTHONPATH=$T/pystub python3 $DS/column_replication/run_vertex_colrep.py --image $IMG:x --run_id R --out_root "$O" \
+    table8_local) mkdir -p "$O/bin"; cp "$STUB"/train_* "$O/bin/"; ln -s "$D/folds" "$O/folds"; NCPU=8 bash $DS/accuracy_multi_thread/run_table8_local.sh "$O" ;;
+    table8_fixed) NCPU=16 bash $DS/accuracy_multi_thread/fixed_reruns/run_table8_fixed.sh "$O" "$STUB/train_distributed_gbt" "$D/folds" ;;
+    dgbt_suite) RESULTS=$O/suite.csv WORK=$O/work bash $DS/accuracy_multi_thread/argvcheck_run_dgbt_suite.sh ;;
+    dgbt_spo) BIN=$STUB/train_distributed_gbt OUT=$O WORK=$O/work GITSHA=x bash $DS/accuracy_multi_thread/run_dgbt.sh HIGGS 4 SPARSE_OBLIQUE 50 --seed 123456 ;;
+    dgbt_aa) BIN=$STUB/train_distributed_gbt OUT=$O WORK=$O/work GITSHA=x bash $DS/accuracy_multi_thread/run_dgbt.sh SUSY 1 AXIS_ALIGNED 300 ;;
+    barrier_spo) TRUNK_DIR=$D/trunk OUT=$O WORK=$O/work bash $DS/accuracy_multi_thread/run_barrier_cell.sh SPARSE_OBLIQUE ;;
+    barrier_aa) TRUNK_DIR=$D/trunk OUT=$O WORK=$O/work bash $DS/accuracy_multi_thread/run_barrier_cell.sh AXIS_ALIGNED 10 2 1 ;;
+    pf_grid) bash $DS/runtime_vertex_ai/run_pf_grid.sh ;;
+    pf_followups) bash $DS/runtime_vertex_ai/run_pf_followups.sh ;;
+    vertex_grid_fixed) bash $DS/runtime_vertex_ai/runtime_reruns/run_vertex_grid_fixed.sh ;;
+    single_cc18) bash $DS/accuracy_multi_thread/fixed_reruns/run_single_machine_cc18.sh "$STUB/train_oblique_forest" "$D/cc18" "$O" ;;
+    seed_single) FOLDS=$D/folds SINGLE=$STUB/train_oblique_forest bash $DS/accuracy_multi_thread/fixed_reruns/run_seed_sweep.sh single 3 4 "$O" ;;
+    seed_w1) FOLDS=$D/folds DIST=$STUB/train_distributed_gbt bash $DS/accuracy_multi_thread/fixed_reruns/run_seed_sweep.sh w1 2 4 "$O" ;;
+    vertex_fixed) PY=$STUB/python bash $DS/runtime_vertex_ai/fixed_reruns/run_vertex_fixed.sh "$O" build table2 table2_split table3 ;;
+    colrep_default) PYTHONPATH=$T/pystub python3 $DS/runtime_vertex_ai/column_replication/run_vertex_colrep.py --image $IMG:x --run_id R --out_root "$O" ;;
+    colrep_table3) PYTHONPATH=$T/pystub python3 $DS/runtime_vertex_ai/column_replication/run_vertex_colrep.py --image $IMG:x --run_id R --out_root "$O" \
                      --seeds 1 --levels 0,ship --workers 4 --num_trees 300 --max_depth 6 --extra_args=--local_projection_count ;;
-    replication_sweep) python3 $DS/column_replication/run_replication_sweep.py --bin "$STUB/train_distributed_gbt" --data "$D/cc18" --out "$O" --jobs 1 ;;
-    barriers_per_worker) PYTHONPATH=$T/pystub python3 $DS/run_vertex_barriers.py --dataset susy --workers 1,2,16 --arms aa,spo --trees 10 \
+    replication_sweep) python3 $DS/accuracy_multi_thread/column_replication/run_replication_sweep.py --bin "$STUB/train_distributed_gbt" --data "$D/cc18" --out "$O" --jobs 1 ;;
+    barriers_per_worker) PYTHONPATH=$T/pystub python3 $DS/runtime_vertex_ai/run_vertex_barriers.py --dataset susy --workers 1,2,16 --arms aa,spo --trees 10 \
                      --p_total 18 --machine n2-highmem-4 --image $IMG:fullfix-10509539 --run_id R --budget per_worker ;;
-    barriers_split) PYTHONPATH=$T/pystub python3 $DS/run_vertex_barriers.py --dataset epsilon --workers 1,4 --arms spo --trees 50 \
+    barriers_split) PYTHONPATH=$T/pystub python3 $DS/runtime_vertex_ai/run_vertex_barriers.py --dataset epsilon --workers 1,4 --arms spo --trees 50 \
                      --p_total 2000 --image $IMG:47fe64fa-bdad5080 --run_id R --budget per_worker --fresh_cache \
                      --extra_args=--max_unique_values_for_discretized_numerical=1 ;;
-    barriers_split_budget) PYTHONPATH=$T/pystub python3 $DS/run_vertex_barriers.py --dataset susy --workers 1,4 --arms aa,spo --trees 10 \
+    barriers_split_budget) PYTHONPATH=$T/pystub python3 $DS/runtime_vertex_ai/run_vertex_barriers.py --dataset susy --workers 1,4 --arms aa,spo --trees 10 \
                      --machine n2-highmem-4 --image $IMG:1311deba-x --run_id R ;;  # --budget split (default) on a split-budget image
     cc18_aa_spo) FOLDS="0 1" bash benchmarks/src/cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh "$D/cc18aa" "$STUB/train_oblique_forest"; rm -rf "$D/cc18aa/logs" "$D/cc18aa/models" "$D/cc18aa/results.csv" ;;
     cc18_exact300) ARMS=spo_harness_exact300 bash benchmarks/src/cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh "$D/cc18aa" "$STUB/train_oblique_forest"; rm -rf "$D/cc18aa/logs" "$D/cc18aa/models" "$D/cc18aa/results.csv" ;;
-    kdd28_ydf_ec2) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" --cc18_fold0 "$D/cc18" \
+    kdd28_ydf_ec2) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" --cc18_fold0 "$D/cc18" \
                      --cc18_10fold "$D/cc18aa/data" --cpus 4 --off_paper stub-data ;;
-    kdd28_ydf_distacc_aaspo) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
+    kdd28_ydf_distacc_aaspo) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
                      --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --off_paper stub-data --tables distacc_aaspo ;;
-    kdd28_ydf_distacc_exact300) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
+    kdd28_ydf_distacc_exact300) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
                      --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --off_paper stub-data --tables distacc_exact300 ;;
-    kdd28_ydf_colrep_distacc) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
+    kdd28_ydf_colrep_distacc) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
                      --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --off_paper stub-data --tables colrep_distacc --colrep_r0 dsA:0 ;;
-    kdd28_ydf_cross_network) python3 $DS/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --cc18_fold0 "$D/cc18" \
+    kdd28_ydf_cross_network) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --cc18_fold0 "$D/cc18" \
                      --tables cross_network --cpus 4 --off_paper stub-data ;;
     cc18_gbt) python3 benchmarks/src/cc18_gbt_feature_study/run_cc18_gbt.py --jobs 1; rm -rf "$W/home/featstudy" ;;
     train_cells) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s2 --seed 2 --levels 0,1) ;;

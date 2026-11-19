@@ -26,6 +26,6 @@ python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --p
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/appendix-earlier-settings/tab-dist-accuracy/table8_results.csv`
-- **Raw cells:** `benchmarks/results/kdd28/appendix-earlier-settings/tab-dist-accuracy/raw/table8_fullfix/` (SPO), `raw/table8_rerun_20261030/` (AA, pre-7c0eebd3 but AA is unaffected), built by `fixed_reruns/build_paper_inputs.py` (reproduces `table8_results.csv` byte-identically, checked 2026-11-04)
+- **Raw cells:** `benchmarks/results/kdd28/appendix-earlier-settings/tab-dist-accuracy/raw/table8_fullfix/` (SPO), `raw/table8_rerun_20261030/` (AA, pre-7c0eebd3 but AA is unaffected), built by `accuracy_multi_thread/fixed_reruns/build_paper_inputs.py` (reproduces `table8_results.csv` byte-identically, checked 2026-11-04)
 
 Regenerated 2026-11-04: equal to the Overleaf copies in every non-`%` line.

@@ -2,8 +2,8 @@
 
 First measurement with the manager-side barrier recorder (2026-10-22). Files here: one
 `<tag>.csv` (one row per request round) and the matching driver `<tag>.log` per arm.
-Summaries: `python benchmarks/src/distributed_spo_gbt/summarize_barriers.py <csv> [tree_training_s]`.
-Reproduce: `benchmarks/src/distributed_spo_gbt/run_barrier_cell.sh SPARSE_OBLIQUE` (see its header).
+Summaries: `python benchmarks/src/distributed_spo_gbt/runtime_vertex_ai/summarize_barriers.py <csv> [tree_training_s]`.
+Reproduce: `benchmarks/src/distributed_spo_gbt/accuracy_multi_thread/run_barrier_cell.sh SPARSE_OBLIQUE` (see its header).
 
 ## Are communication barriers the only barriers? No
 

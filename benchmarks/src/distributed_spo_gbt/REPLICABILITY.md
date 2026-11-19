@@ -12,16 +12,21 @@ learner (this fork's `learner/distributed_gradient_boosted_trees`, in-worker spa
 not the harness. **Only family A yields numbers the paper may report as "distributed"** (user directive
 2026-10-25); B is out of the paper and C is in-process on one box (smoke tests, kept as history).
 
+Run scripts sit in two folders by where they run (moved 2026-11-19, names unchanged). `runtime_vertex_ai/` holds the
+Vertex AI launchers (families A, E, the Vertex half of G, the runtime reruns). `accuracy_multi_thread/` holds the
+in-process MULTI_THREAD and single-box runs (family C, the m7i half of G, `ydf_reruns/`). Paths below are relative to
+this folder.
+
 | Family | Where it runs | Driver | Results |
 |---|---|---|---|
-| A. Vertex AI grids on natural datasets (GRPC, one VM per manager and per worker) | GCP project `ydf-distributed-spo-gbt`, `us-east1` | `run_vertex_barriers.py` + `vertex_build/` | `kdd28/cells/vertex_p_F/<RUN_ID>_<dataset>/<arm>_w<W>/` (P = F), superseded grids in `kdd28/outdated/` |
+| A. Vertex AI grids on natural datasets (GRPC, one VM per manager and per worker) | GCP project `ydf-distributed-spo-gbt`, `us-east1` | `runtime_vertex_ai/run_vertex_barriers.py` + `vertex_build/` | `kdd28/cells/vertex_p_F/<RUN_ID>_<dataset>/<arm>_w<W>/` (P = F), superseded grids in `kdd28/outdated/` |
 | B. Vertex AI weak/strong scaling on trunk data (2026-10-15) | same project, `n2-highmem-2` | the two notebooks + `vertex_build/` | `kdd28/outdated/vertex_scaling_20261015/<RUN_ID>_<cols>c/`; removed from `main.tex` on 2026-10-26 |
-| C. Single box, workers as threads in one process | AWS `m7i.metal-24xl` | `examples/train_distributed_gbt` via `run_dgbt*.sh`, `queue*.sh` | `kdd28/outdated/inprocess_m7i_grid_20261012/`, `kdd28/appendix/tab-in-node-dist-vqsort-vertex/`; smoke tests since 2026-10-25 |
-| E. Column replication on CC18 (Vertex, n2-highmem-4) | same project | `column_replication/run_vertex_colrep.py` + `vertex_build/train_cells.py` | **branch `column-replication`** (b64346ca), see §E |
+| C. Single box, workers as threads in one process | AWS `m7i.metal-24xl` | `examples/train_distributed_gbt` via `accuracy_multi_thread/run_dgbt*.sh`, `accuracy_multi_thread/queue*.sh` | `kdd28/outdated/inprocess_m7i_grid_20261012/`, `kdd28/appendix/tab-in-node-dist-vqsort-vertex/`; smoke tests since 2026-10-25 |
+| E. Column replication on CC18 (Vertex, n2-highmem-4) | same project | `runtime_vertex_ai/column_replication/run_vertex_colrep.py` + `vertex_build/train_cells.py` | **branch `column-replication`** (b64346ca), see §E |
 | F. Naive column shipping / cross-network (Vertex, n2-highmem-4) | same project | see the branch | **branch `cross-worker-col-comms`** (f4548d37), see §F |
-| G. Fixed reruns of Tables 2, 3, 8 + distributed-vs-single parity (2026-11-01) | Vertex (2, 3) and the m7i (8) | `fixed_reruns/` | code `dgbt-spo-full-fixes` (63d05422), results on `main` spread over `kdd28/` by `fixed_reruns/layout.py`, see §G |
+| G. Fixed reruns of Tables 2, 3, 8 + distributed-vs-single parity (2026-11-01) | Vertex (2, 3) and the m7i (8) | `accuracy_multi_thread/fixed_reruns/` (8), `runtime_vertex_ai/fixed_reruns/` (2, 3) | code `dgbt-spo-full-fixes` (63d05422), results on `main` spread over `kdd28/` by `accuracy_multi_thread/fixed_reruns/layout.py`, see §G |
 
-## A. Vertex AI grids on natural datasets (`run_vertex_barriers.py`)
+## A. Vertex AI grids on natural datasets (`runtime_vertex_ai/run_vertex_barriers.py`)
 
 One `CustomJob` per (dataset, arm, W) cell: worker pool 0 = manager, pool 1 = W workers, all one machine
 type. The training image is built from `vertex_build/` (below); the manager writes `barriers.csv` (the
@@ -37,7 +42,7 @@ W), built by the first cell of that key while its siblings wait; `eval.json["dat
 `setup_s` excludes the build. `--fresh_cache` restores one cache per cell, and is required for images whose `train.py`
 predates `--dataset_cache_path` (everything before `train-ydf:fullfix-10509539-cache`).
 
-    python run_vertex_barriers.py --dataset epsilon --workers 1,2,4 --arms aa,spo --trees 10 --p_total 2000
+    python runtime_vertex_ai/run_vertex_barriers.py --dataset epsilon --workers 1,2,4 --arms aa,spo --trees 10 --p_total 2000
 
 Rules (CLAUDE.md): **`n2-highmem-16` for every node, one machine type per comparison, never mixed**
 (2026-10-25; N2 custom-training quota in `us-east1` is 96 vCPUs, so W <= 5 per cell on -16). Threads per
@@ -182,7 +187,7 @@ Question: how much accuracy the disjoint F/W column split costs. YDF assigns col
 cost-sorted features, and dynamic re-balancing is off for oblique splits. With `in_worker_oblique.column_replication = r`,
 each worker also holds a seeded random fraction r of the other workers' numerical columns; r = 1 means every worker
 holds all of them. On `main` since 8ddb03f7: the knob, `vertex_build/train_cells.py` (many cells per CustomJob,
-resumable), the launcher `column_replication/run_vertex_colrep.py`, `prep_cc18_fold0.py`, and the GCS/cache
+resumable), the launcher `runtime_vertex_ai/column_replication/run_vertex_colrep.py`, `prep_cc18_fold0.py`, and the GCS/cache
 speedups that cut a 374-cell job from ~2 h to ~10 min (all bit-identical).
 
 **Results: branch `column-replication` @ b64346ca, `benchmarks/results/accuracy/distributed_spo_gbt/`.** Pre-fix (stale-bug): the
@@ -226,7 +231,7 @@ That branch is not merged into `main` yet.
 
 Branch `kdd27-fixed-reruns` does not exist (checked 2026-11-04, local and origin). The code is `dgbt-spo-full-fixes` @ 63d05422
 plus `fixed_reruns/` on `main`. The results folder `fixed_reruns_2026-11-01/` was split over `benchmarks/results/kdd28/`
-on 2026-11-04: `fixed_reruns/layout.py` maps every old subpath (paper inputs to their float dirs, raw runs to the float's
+on 2026-11-04: `accuracy_multi_thread/fixed_reruns/layout.py` maps every old subpath (paper inputs to their float dirs, raw runs to the float's
 `raw/`, fix stages and paper_refs to `outdated/`, parity and comparisons to `analysis/`).
 
 ### Bugs fixed (each with a regression test or A/B; write-ups under `ariel_notes/results/2026-10-3*`/`2026-11-01_*`)
@@ -260,7 +265,7 @@ means, not cells.
   13 that spaa27 §10 mentions, and the hashes still match).
 - Tables 2-3 (34 CC18 binary datasets, fold 0, fully numeric): already at `gs://ariel_ydf_bucket/cc18_fold0/`. To
   rebuild: `python benchmarks/data/download_cc18_datasets.py`, then
-  `python benchmarks/src/distributed_spo_gbt/column_replication/prep_cc18_fold0.py --repo <repo> --out <dir>` and
+  `python benchmarks/src/distributed_spo_gbt/accuracy_multi_thread/column_replication/prep_cc18_fold0.py --repo <repo> --out <dir>` and
   `gcloud storage cp -r <dir>/* gs://<bucket>/cc18_fold0/` (pass `--data` to the launcher if not the default bucket).
   A venv with openml 0.15.1, pandas 3.1.0, numpy 2.5.4, scikit-learn 1.9.1 rebuilt the 68 CSVs byte-identical to GCS.
 
@@ -270,7 +275,7 @@ Keep the script's default `NCPU=16` (threads per worker = 16 / W, as recorded) t
 git checkout dgbt-spo-full-fixes   # + benchmarks/src/distributed_spo_gbt/fixed_reruns/ from main
 source /opt/intel/oneapi/setvars.sh            # icx toolchain; before any `set -u`
 bazel build //examples:train_distributed_gbt
-benchmarks/src/distributed_spo_gbt/fixed_reruns/run_table8_fixed.sh <out> bazel-bin/examples/train_distributed_gbt <folds_dir>
+benchmarks/src/distributed_spo_gbt/accuracy_multi_thread/fixed_reruns/run_table8_fixed.sh <out> bazel-bin/examples/train_distributed_gbt <folds_dir>
 ```
 Writes `<out>/{fullfix,fullfix_numeric,fullfix_rep,parity}/results.csv` (765/765/765/612 cells). Single-machine
 arms are unchanged by the fixes (their recorded cells in `speedup_map_by_dataset/suite_results.csv` stand);
@@ -280,7 +285,7 @@ since 2026-11-03, when the harness flag default became YDF's 2, as does `run_see
 **3. Tables 2-3 (Vertex AI; ~1.5 h, a few dollars).** Needs `gcloud` authenticated to project
 `ydf-distributed-spo-gbt` and a Python with `google-cloud-aiplatform` (the orchestrator box uses `~/vertex_venv`).
 ```
-PY=~/vertex_venv/bin/python benchmarks/src/distributed_spo_gbt/fixed_reruns/run_vertex_fixed.sh <out>
+PY=~/vertex_venv/bin/python benchmarks/src/distributed_spo_gbt/runtime_vertex_ai/fixed_reruns/run_vertex_fixed.sh <out>
 ```
 Defaults to the recorded commits (`T2_COMMIT` 10509539, `T3_COMMIT` 1ad2062f), whose images
 `train-ydf:fullfix-10509539` and `train-ydf:colship-fullfix-1ad2062f` already exist in the project's Artifact
@@ -293,7 +298,7 @@ binned columns (SPO now refuses it with FAILED_PRECONDITION). Run it from a box 
 `ariel Small VertexAI Orchestrator` EC2); each launcher blocks until its jobs finish.
 
 **4. Compare.**
-`python benchmarks/src/distributed_spo_gbt/fixed_reruns/compare_fixed_reruns.py --results <dir>` where `<dir>` has the
+`python benchmarks/src/distributed_spo_gbt/accuracy_multi_thread/fixed_reruns/compare_fixed_reruns.py --results <dir>` where `<dir>` has the
 old `fixed_reruns_2026-11-01/` layout (your `<out>/table2`, `<out>/table3`, `<out>/table8` subfolders next to a copy of
 `kdd28/outdated/paper_refs_pre_7c0eebd3/` named `paper_refs/`). Without `--results` it reads the kdd28 tree via `layout.py`. Prints Tables 2, 3, 8 (paper vs fixed) and the parity deltas.
 
@@ -310,12 +315,12 @@ budget the two match: Table 2 Δacc −0.17 ± 0.12 pts, Δlogloss +0.0000 ± 0.
 Table 8 ΔAUC vs the 5-seed single-machine mean −0.00001 / −0.00022 / −0.00009 / −0.00021 at W = 4/8/16/32, and
 W = 1 − single = +0.00001 ± 0.00028 (5 seeds each). Against the paper's single seed-1 run alone the gap looks like
 −0.0008, but that run sits 0.0007 above its own seed mean: compare against multi-seed single-machine numbers.
-Recreate the seed sweep on the Table 8 box with `fixed_reruns/run_seed_sweep.sh <single|w1> <seed> <threads> <out>`
-(env `FOLDS`, `SINGLE`, `DIST` = binaries), then `fixed_reruns/analyze_seed_sweep.py <out>`. The split budget refuses
+Recreate the seed sweep on the Table 8 box with `accuracy_multi_thread/fixed_reruns/run_seed_sweep.sh <single|w1> <seed> <threads> <out>`
+(env `FOLDS`, `SINGLE`, `DIST` = binaries), then `accuracy_multi_thread/fixed_reruns/analyze_seed_sweep.py <out>`. The split budget refuses
 `num_projections_from_local_features` at r < 1 (63d05422): that combination divided an already-local count by W.
 Analyses: `ariel_notes/results/2026-11-01_dist_vs_local_parity/report.md`, `.../2026-11-01_final_verify/report.md`. The Table 2 single-machine row
 (`kdd28/outdated/paper_refs_pre_7c0eebd3/table2_single_machine_spo_gbt.csv`) was made at commit 2c0990f0 on an Apple-silicon Mac with the default
-thread count; rerun it with `fixed_reruns/run_single_machine_cc18.sh <train_oblique_forest built at 2c0990f0>
+thread count; rerun it with `accuracy_multi_thread/fixed_reruns/run_single_machine_cc18.sh <train_oblique_forest built at 2c0990f0>
 <cc18_fold0 dir> <out>` (reproduced 170/170 cells on an M1 Pro). It is bit-reproducible only on such a Mac: the
 single-machine finder's job split depends on the thread count. (`kdd28/outdated/paper_refs_pre_7c0eebd3/table2_single_machine_run_local.sh` is
 the original, with paths from the author's machine.)
@@ -334,12 +339,12 @@ Semantics of the recorded results and how to reproduce each:
   `train_cells.py --no_split_budget`, or `run_vertex_fixed.sh table2` (archived sources and image at a pre-change commit).
 - **Table 8 / Table 9 cells**: per-worker local count, P = F per node in total only at r = 0. Driver flags
   `--sparse_oblique_local_projection_count=true --sparse_oblique_split_budget=false`; `run_table8_local.sh`,
-  `run_dgbt_suite.sh`, `fixed_reruns/run_seed_sweep.sh` and `queue3.sh` pin them.
+  `run_dgbt_suite.sh`, `accuracy_multi_thread/fixed_reruns/run_seed_sweep.sh` and `queue3.sh` pin them.
 - **Parity runs** (`table2/fullfix_splitbudget`, Table 8 `parity`): split budget = the new default.
 - **Column-replication sweep / smoke** (`run_replication_sweep.py`, `smoke_colrep.sh`): pin `--sparse_oblique_split_budget=false`.
 - **§C in-process drivers** (`run_dgbt.sh`, hence `run_grid.sh`/`queue*.sh`, and `run_barrier_cell.sh`): pin
   `--sparse_oblique_split_budget=false` (the recorded `results.csv` SPO rows and the first barrier measurement are per-worker P).
-- **§A Vertex grids**: cells before 2026-11-02 (incl. `runtime_reruns/run_vertex_grid_fixed.sh`, image `fullfix-10509539`) used a
+- **§A Vertex grids**: cells before 2026-11-02 (incl. `runtime_vertex_ai/runtime_reruns/run_vertex_grid_fixed.sh`, image `fullfix-10509539`) used a
   per-W exponent, P_TOTAL // W per worker, recorded in each cell's `eval.json["learner_kwargs"]`. `run_vertex_barriers.py --budget`
   selects the semantics: `split` (default) sends one exponent with ceil(F^e) = P_TOTAL and the library divides it; `per_worker`
   keeps the per-W exponent for old images. The launcher reads the image tag's YDF commit (first 8-hex token that is a commit of
@@ -376,7 +381,7 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
 
 - Code: worktree `~/wt/kdd28-ydf-rerun` at e3279f20 plus the uncommitted profile arms and driver (`code.diff` in the
   results folder). Binaries `bazel build -c opt` (icx), copied to `bin/`.
-- Driver: `ydf_reruns/run_kdd28_ydf_ec2.py`, one resumable queue for tab:dist-accuracy (33 TabArena/TabReD, 5 folds or
+- Driver: `accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py`, one resumable queue for tab:dist-accuracy (33 TabArena/TabReD, 5 folds or
   1 holdout, single + W = 1/4/8/16/32, SPO and AA), tab:column-replication (34 CC18 fold 0, W = 4, r = 0..1, seeds 1-5,
   single row seeds 1-10), tab:cc18-aa-spo arms (a), (d), (e) (10 folds, seed 1). Arms (b) and (c) stay as recorded.
   Profile arms `kdd28_ydf.{distacc_*,colrep_*,cc18_*}`. Seed 1 everywhere except the seed lists. Threads: single 4,

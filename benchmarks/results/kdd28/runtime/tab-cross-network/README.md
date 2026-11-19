@@ -23,6 +23,6 @@ python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_cross_network_fig.
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/runtime/tab-cross-network/table3_results_5seed.csv`
-- **Raw cells:** `benchmarks/results/kdd28/runtime/tab-cross-network/raw/table3_fullfix{,_seeds}/g0..g3/` (Vertex runs `colship-g*_fullfix20261101`, built into the 5-seed CSV by `fixed_reruns/build_paper_inputs.py`). GCS URIs not recorded. REPLICABILITY §G
+- **Raw cells:** `benchmarks/results/kdd28/runtime/tab-cross-network/raw/table3_fullfix{,_seeds}/g0..g3/` (Vertex runs `colship-g*_fullfix20261101`, built into the 5-seed CSV by `accuracy_multi_thread/fixed_reruns/build_paper_inputs.py`). GCS URIs not recorded. REPLICABILITY §G
 
 Regenerated 2026-11-04: table, figure and `cross_network/*.dat` equal the Overleaf copies in every non-`%` line.
