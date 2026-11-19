@@ -133,6 +133,8 @@
 
 \begin{abstract}
 
+% \TODO{SPO-GBT results ran with $\sqrt{F}$ instead of $F$! Accuracy is updated. runtime in progress on ydf-1}
+
 Sparse oblique (SPO), part of the top-ranked configuration of Google's Yggdrasil Decision Forests (YDF), improve the accuracy while maintaining interpretability of Random Forests (RF) and Gradient Boosted Trees (GBT) by scanning a sparse linear combination of features instead of a single feature. Because projections are sampled at runtime, training is significantly slower, as pre-run optimizations such as presorting cannot be used.
 We overhaul SPO training in YDF, first by fixing inefficiencies in the released version, achieving 2--5$\times$ speedup, then by devising two novel methods, one aimed at GBTs and the other at RFs: (1) Hierarchical AVX2 and AVX-512-vectorized histogram filling speeds up typical GBT-depth trees by up to 1.6$\times$ in SPO-GBT and 2$\times$ for SPO-RF, and (2) runtime-dynamic histograms between vectorized histograms and exact splits, speeds up deeper, RF depth-typical trees (depths 16 to purity) by up to 1.6$\times$ with no detectable effect on accuracy. Our optimizations bring SPO-RF training time on par with YDF's axis-aligned RF. We extensively evaluate on 8 natural and 11 synthetic datasets of up to 10.5 million rows and 1.6 million features, from depth 6 to purity, and open-source the implementation.
 
@@ -316,7 +318,7 @@ We describe the per-node computation of sparse oblique splitting and its cost, t
     \label{fig:computenode}
 \end{figure*}
 
-YDF stores the data column by column and never copies it; a node is a sorted list of row indices, and each split partitions the parent's list in place. For RF the root holds a bootstrap sample of $n$ rows drawn with replacement, about 63\% of them distinct. At each node SPO draws $P=\lceil\sqrt{d}\,\rceil$ projections, capped at 1000~\cite{tomita2020sparse}, each a sparse vector with Binomial$(d,\,1.5/d)$ non-zeros, i.e.\ 1.5 on average, features chosen without replacement and weights uniform in $[-1,1]$. Every projection passes through four stages (Figure~\ref{fig:computenode}):
+YDF stores the data column by column and never copies it; a node is a sorted list of row indices, and each split partitions the parent's list in place. For RF the root holds a bootstrap sample of $n$ rows drawn with replacement, about 63\% of them distinct. At each node SPO draws $P=\lceil\sqrt{d}\,\rceil$ projections, capped at 1000~\cite{tomita2020sparse}, each a sparse vector with Binomial$(d,\,1.5/d)$ non-zeros, i.e.\ 1.5 on average, features chosen without replacement and weights in $\{-1,1\}$. Every projection passes through four stages (Figure~\ref{fig:computenode}):
 \begin{enumerate}
 \item \emph{Sample Projection}: draw the non-zero features and weights.
 \item \emph{Build Projected Feature}: gather the selected columns at the active rows and accumulate the weighted sum into $n$ values. Sparse in both dimensions and increasingly scattered with depth.
@@ -356,7 +358,7 @@ Building histograms dominates at every depth. Its cost per depth is flat while n
 \Description{Illustration of mapping sample points to histograms using binary search (default, left) and our vectorized implementation (right).}
 \end{figure*}
 
-YDF bins a value with \texttt{std::upper\_bound}, a binary search over the $k$ sorted thresholds (Figure~\ref{fig:vectorization-illustration}, left): $\log_2 k$ dependent steps, each ending in a data-dependent branch that can cause mispredictions. A linear scan avoids the branches but costs $k$ comparisons per value.
+YDF bins a value with \texttt{std::upper\_bound}, a binary search over the $k$ sorted thresholds (Figure~\ref{fig:vectorization-illustration}, left): $\log_2 k$ steps that are likely to cause branch mispredictions. A linear scan avoids the branches but costs $k$ comparisons per value.
 
 We replace the search by two levels of SIMD comparisons (Figure~\ref{fig:vectorization-illustration} right). With $w$ lanes, $w=8$ for AVX2 and $w=16$ for AVX-512, we use $k=w^2$ bins. Once per histogram we copy the sorted thresholds $T[0,k)$ into an aligned array and build a coarse table $C[0,w)$ of the last threshold of each group of $w$ bins, $C[g]=T[w(g+1)-1]$. Per value $x$, one broadcast, one compare against $C$ and one \texttt{popcnt} give $K$, the number of groups whose thresholds are all at most $x$, i.e.\ the group containing $x$; a second compare against the $w$ thresholds of group $K$ and a second \texttt{popcnt} give the count $j$ of thresholds at most $x$ within it, and the bin is $wK+j-1$, or $-1$ if $x$ lies below every threshold. If $K=w$ the value belongs to the last bin.
 
@@ -377,12 +379,12 @@ We replace the search by two levels of SIMD comparisons (Figure~\ref{fig:vectori
 % \label{v2:lst:binsearch}
 % \end{figure}
 
-The lookup is seven vector and bit-count instructions on AVX2 and five on AVX-512, whose compares write a mask register directly, with no data-dependent branch. Thresholds are drawn, sorted and used exactly as before, and the lookup returns the same index as \texttt{std::upper\_bound} for every input, which debug builds assert, so the trees are bit-identical to the scalar implementation. The kernel is selected at run time from the CPU and the bin count, with a scalar fallback, and serves the axis-aligned histogram finder unchanged. The two widths are not interchangeable: the lookup costs the same, but the $O(k)$ per-projection work is four times larger with 256 bins, so AVX-512 wins only where $n$ is large relative to $k$ and loses in deep trees (Figure~\ref{fig:AVX-512-slower}).
+The lookup is seven vector and bit-count instructions on AVX2 and five on AVX-512, whose compares write a mask register directly, with no data-dependent branch. Thresholds are drawn, sorted and used exactly as before, and the lookup returns the same index as \texttt{std::upper\_bound} for every input (with debug build asserts, so the trees are ensured bit-identical to the scalar implementation). The kernel is selected at run time from the CPU and the bin count, with a scalar fallback, and serves the axis-aligned histogram finder unchanged. The two widths cost different amounts because though the lookup costs the same, the $O(k)$ per-projection work is four times larger with 256 bins, so AVX-512 wins only where $n$ is large relative to $k$ and loses in deep trees (Figure~\ref{fig:AVX-512-slower}).
 
 \subsection{Dynamic Histogramming}
 \label{v2:method:dynamic}
 
-\begin{figure}[h!]
+\begin{figure}[!ht]
     \centering
     \includegraphics[width=1\linewidth]{figures/method/dynamic_histogram/dynamic_histogram_tree_illustration.pdf}
     \caption{Illustration of the selection of exact splitting and histogram splitting as a function of the number of active samples in a tree node with a breakeven point of 1300.}
@@ -461,7 +463,7 @@ We report each contribution in the setting described in the introduction. Sectio
 \subsection{Experimental Setup}
 \label{app:parameters}
 
-\begin{table}[]
+\begin{table}[t]
     \centering
     \begin{tabular}{c|c|c|c}
 Dataset & Task & Rows & Feat. \\
@@ -480,7 +482,7 @@ Jane Street~\cite{jane-street-real-time-market-data-forecasting}       & reg$^*$
 
 \paragraph{Hardware and software} All timings come from one AWS m7i.metal-24xl instance (Intel Xeon Platinum 8488C, 48 physical cores, 384\,GiB, Ubuntu 24.04) running YDF compiled with Intel ICX 2025.2.1 and AVX-512 enabled, with 48 threads. Random forests train one tree per thread; gradient-boosted trees parallelize the split search within each tree. Times cover training only: dataset loading and model serialization are excluded.
 
-\paragraph{Learners} SPO-RF: 240 trees, bootstrap sampling with replacement and a bag size equal to the number of rows, \code{min\_examples}=1, maximum depth 6, 10, 16, 20, 24 or unlimited (purity). SPO-GBT: 300 trees of depth 6, shrinkage 0.1, \code{min\_examples}=5. Every node samples $\lceil\sqrt{F}\rceil$ sparse projections (at most 1000) with 1.5 expected non-zero features each. YDF defaults apply elsewhere.
+\paragraph{Learners} SPO-RF: 240 trees, bootstrap sampling with replacement and a bag size equal to the number of rows, \code{min\_examples}=1, maximum depth 6, 10, 16, 20, 24 or unlimited (purity). SPO-GBT: 300 trees of depth 6, shrinkage 0.1, \code{min\_examples}=5. In GBT, every node scans all $F$ features (axis-aligned methods) or samples $F$ projections (sparse oblique methods). In RF, each node samples $\lceil\sqrt{F}\rceil$ features (axis-aligned) or sparse projections (SPO), with at most 1000. All SPO projections in turn sample 1.5 features each. All other parameters are YDF defaults.
 
 \paragraph{Split finders and baseline} Exact splits sort the projected values with Highway VQSort and are the baseline for every speedup below: speedup $= T_{\mathrm{Exact}}/T_{\mathrm{method}}$, so values above 1 are faster. Table~\ref{tab:stdsort-vs-highway} in the appendix relates this baseline to the \texttt{std::sort} exact finder of the released YDF, which it improves by 1.8--3.5$\times$. Random histograms draw their bin boundaries per projection and use 64 bins with the scalar (\texttt{std::upper\_bound}) and AVX2 binners and 256 bins with the scalar and AVX-512 binners. The dynamic variants bin nodes with at least $\tau$ rows and sort the rest, with $\tau=250$ for AVX2/64 bins and $\tau=1000$ for AVX-512/256 bins (Section~\ref{app:threshold-sensitivity}). The scalar 64-bin binner has a breakeven threshold $\tau>50000$, and therefore appears only as an non-Dynamic baseline.
 
@@ -539,7 +541,7 @@ At purity the trend completes (Tables~\ref{tab:train-time-by-depth},~\ref{tab:tr
 
 \begin{figure*}[t]
     \centering
-    % Generated by benchmarks/src/spaa27_experiments/make_rowcol_map_depths.py -- regenerate, never hand-edit.
+    % Generated by benchmarks/src/spo_vs_gbt/make_rowcol_map_depths.py -- regenerate, never hand-edit.
     \input{figures/results/speedup_heatmap_rows_features.tex}
     \caption{Speedup heatmap by dataset dimensions, simulated using Trunk synthetic data (circles), of our SPO-RF Dyn-Vec method over Exact. Also added are natural datasets HIGGS, SUSY, Epsilon, YouTube-8M, Shifts weather, ClimSim and Jane Street (squares). Each marker is labelled
     with its measured speedup. The background shading interpolates the speedup by
@@ -618,7 +620,7 @@ Figure~\ref{fig:threshold-sensitivity} varies the switch threshold $\tau$ from 1
 \subsection{Accuracy}
 \label{sec:res-accuracy}
 
-\TODO{SPO-GBT mistakenly used $\sqrt{\mathbf{F}}$ projections instead of $\mathbf{F}$, putting it at an unfair disadvantage}
+% \TODO{SPO-GBT mistakenly used $\sqrt{\mathbf{F}}$ projections instead of $\mathbf{F}$, putting it at an unfair disadvantage}
 
 Vectorization changes no model: the scalar and vectorized binners bin identically and produce identical forests, which is why their accuracy columns coincide in Table~\ref{tab:auc-vs-libraries-per-dataset-auc}. The dynamic switch does change the model, since nodes below $\tau$ take an exact split where an all-histogram forest would take a binned one. Table~\ref{tab:hist-vs-exact-summary} measures the effect on held-out accuracy against Exact on 34 OpenML CC18 binary tasks (10-fold cross-validation $\times$ 3 seeds) plus HIGGS and SUSY. For SPO-RF the mean difference of the dynamic forest to Exact is $+5\times10^{-3}$ with a 95\% interval of $[-4, +14]\times10^{-3}$ that includes zero; it wins on 13 datasets, ties on 17 and loses on 6, and only two per-dataset differences survive Holm correction. For SPO-GBT the difference is $+1\times10^{-3}$ $[-1, +3]$ (9 wins, 20 ties, 7 losses), with electricity and adult significantly below Exact by 1.6 and 0.1 points. The dynamic forests are non-inferior to Exact within $2.5\times10^{-3}$ (RF) and $1\times10^{-3}$ (GBT) accuracy at $\alpha=0.05$, and the all-histogram forests fall in the same intervals. On the large datasets the SPO-RF finders agree to three decimals (HIGGS 0.762 and SUSY 0.802 for Exact and Dynamic alike) and the SPO-GBT ones within 0.2 points. Against XGBoost, LightGBM, CatBoost and axis-aligned YDF (Table ~\ref{tab:train-time-vs-libraries}, ~\ref{tab:auc-vs-libraries-per-dataset-auc}), the RF and GBT learners are very similar, and the dynamic vectorized configuration ties the exact baseline on 34 of 36 datasets.
 
@@ -654,10 +656,11 @@ responsibility for the accuracy of the content, references, data, and figures.
 % Datasets table first: it is the only [t] float here, so it shares a page with the text spill-over.
 \begin{table*}[t]
 \centering
-\caption{Datasets used, by source. Categorical columns are numbered ordinally, and NaNs are column mean-imputed. Task: bin = binary classification, mul = multi-class classification, reg = regression. Multi-class classification problems was converted to 1-vs-all binary classification. Eight datasets appear in both CC18 and TabArena. $^\dagger$ datasets were truncated to fit into memory.}
-\label{tab:all-datasets}
+\caption{Datasets used, by source. Categorical columns are numbered ordinally (in order of appearance, categories are assigned incremental numbers). NaNs are column mean imputed. Multi-class classification problems was converted to 1-vs-all binary classification. Eight datasets appear in both CC18 and TabArena. }
 \footnotesize
 \setlength{\tabcolsep}{4pt}
+bin = binary classification, mul = multi-class classification, reg = regression, $^\dagger$ datasets were truncated to fit into memory.
+\label{tab:all-datasets}
 \begin{tabular}[t]{@{}l c r r@{}}
 \toprule
 Dataset & Task & Rows & Feat. \\
@@ -716,51 +719,55 @@ wilt & bin & 4,839 & 5 \\
 Dataset & Task & Rows & Feat. \\
 \midrule
 \multicolumn{4}{@{}l}{\textit{TabArena~\cite{tabarena}}} \\
-airfoil\_self\_noise & reg & 1,503 & 4 \\
-used-Fiat-500 & reg & 1,538 & 6 \\
+airfoil\_self\_noise & reg & 1,503 & 5 \\
+used-Fiat-500 & reg & 1,538 & 7 \\
+Amazon\_employee\_access & bin & 32,769 & 9 \\
 APSFailure & bin & 76,000 & 170 \\
-bank-marketing & bin & 45,211 & 5 \\
-Bank\_Customer\_Churn & bin & 10,000 & 6 \\
+bank-marketing & bin & 45,211 & 13 \\
+Bank\_Customer\_Churn & bin & 10,000 & 10 \\
 Bioresponse & bin & 3,751 & 1,776 \\
 blood-transfusion & bin & 748 & 4 \\
-churn & bin & 5,000 & 15 \\
-coil2000\_insurance\_policies & bin & 9,822 & 80 \\
+churn & bin & 5,000 & 19 \\
+coil2000\_insurance\_policies & bin & 9,822 & 85 \\
 concrete\_compressive & reg & 1,030 & 8 \\
-credit-g & bin & 1,000 & 7 \\
-credit\_card\_default & bin & 30,000 & 20 \\
-customer\_satisf.\_airline & bin & 129,880 & 5 \\
+credit-g & bin & 1,000 & 20 \\
+credit\_card\_default & bin & 30,000 & 23 \\
+customer\_satisf.\_airline & bin & 129,880 & 21 \\
 diabetes & bin & 768 & 8 \\
-Diabetes130US & bin & 71,518 & 8 \\
-diamonds & reg & 53,940 & 6 \\
-E-CommereShippingData & bin & 10,999 & 6 \\
-Fitness\_Club & bin & 1,500 & 3 \\
-Food\_Delivery\_Time & reg & 45,451 & 6 \\
+Diabetes130US & bin & 71,518 & 47 \\
+diamonds & reg & 53,940 & 9 \\
+E-CommereShippingData & bin & 10,999 & 10 \\
+Fitness\_Club & bin & 1,500 & 6 \\
+Food\_Delivery\_Time & reg & 45,451 & 9 \\
 GiveMeSomeCredit & bin & 150,000 & 10 \\
 hazelnut-spread-contam. & bin & 2,400 & 30 \\
-healthcare\_insurance & reg & 1,338 & 3 \\
+healthcare\_insurance & reg & 1,338 & 6 \\
 heloc & bin & 10,459 & 23 \\
 houses & reg & 20,640 & 8 \\
-HR\_Analytics\_Job\_Change & bin & 19,158 & 2 \\
-in\_vehicle\_coupon & bin & 12,684 & 2 \\
-Is-this-a-good-customer & bin & 1,723 & 5 \\
+HR\_Analytics\_Job\_Change & bin & 19,158 & 12 \\
+in\_vehicle\_coupon & bin & 12,684 & 24 \\
+Is-this-a-good-customer & bin & 1,723 & 13 \\
 jm1 & bin & 10,885 & 21 \\
-Marketing\_Campaign & bin & 2,240 & 16 \\
-miami\_housing & reg & 13,776 & 14 \\
-online\_shoppers\_intention & bin & 12,330 & 10 \\
+kddcup09\_appetency & bin & 50,000 & 212 \\
+Marketing\_Campaign & bin & 2,240 & 25 \\
+miami\_housing & reg & 13,776 & 15 \\
+NATICUSdroid & bin & 7,491 & 86 \\
+online\_shoppers\_intention & bin & 12,330 & 17 \\
 physiochemical\_protein & reg & 45,730 & 9 \\
 polish\_bankruptcy & bin & 5,910 & 64 \\
-qsar-biodeg & bin & 1,054 & 36 \\
+qsar-biodeg & bin & 1,054 & 41 \\
 QSAR-TID-11 & reg & 5,742 & 1,024 \\
 QSAR\_fish\_toxicity & reg & 907 & 6 \\
-seismic-bumps & bin & 2,584 & 11 \\
+seismic-bumps & bin & 2,584 & 15 \\
 superconductivity & reg & 21,263 & 81 \\
 taiwanese\_bankruptcy & bin & 6,819 & 94 \\
-wine\_quality & reg & 6,497 & 11 \\\\
+wine\_quality & reg & 6,497 & 12 \\\\
 \multicolumn{4}{@{}l}{\textit{TabReD~\cite{tabred}}} \\
-cooking-time & reg & 319,986 & 186 \\
-ecom-offers & bin & 160,057 & 113 \\
-homesite-insurance & bin & 260,753 & 253 \\
-weather & reg & 423,795 & 100 \\
+cooking-time & reg & 319,986 & 192 \\
+ecom-offers & bin & 40,000$^\dagger$ & 119 \\
+homecredit-default & bin & 40,000$^\dagger$ & 696 \\
+homesite-insurance & bin & 40,000$^\dagger$ & 299 \\
+weather & reg & 423,795 & 103 \\
 \bottomrule
 \end{tabular}
 \label{tab:datasets-used}
@@ -770,7 +777,7 @@ weather & reg & 423,795 & 100 \\
 \input{tables/table_train_time_by_depth}
 % The SPO-GBT depth-6 table is emitted by the same generator; no \clearpage, so it can share a float page.
 
-% Generated by benchmarks/src/spaa27_experiments/make_overall_depth_table.py --sort -- regenerate, don't edit.
+% Generated by benchmarks/src/spo_vs_gbt/make_overall_depth_table.py --sort -- regenerate, don't edit.
 \input{tables/table_train_time_exact_sort}
 
 

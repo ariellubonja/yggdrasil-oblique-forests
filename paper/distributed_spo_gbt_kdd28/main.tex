@@ -150,11 +150,46 @@
 
 \section{Work log - Weekly TODOs}
 
-\textit{Ariel TODOs by Nov-10}
+\textbf{\textit{Ariel TODOs by Nov-21} - Various Partitioning Strategies}
 
-\textbf{\textit{Accuracy cost of parititioning columns: }}
 
-\TODO{ensure we're measuring on datasets where SPO > AA accuracy}
+\textbf{\textit{Clarifications}}
+
+\begin{todolist}
+    \item How does GBT splitting work?
+    \item Why does \texttt{homecredit} perform so much worse even on $W=1?$
+    \item Do categorical features play in sparse oblique? Ensure scale of ordinal vs. numeric matches. What does Catboost do?
+    \item After training, look at what SPO splits used. Which features were used together? Repeat idea of Fig 3. but w/ SPO. Goal: "$20\%$ of splits are good, so that's all the overhead we need".
+    \item Why does AA and Dist-AA $W=1$ accuracy differ slightly?
+    \item \textcolor{gray}{Compare Hao to YDF \& to Richard AA+SPO on single-machine.}
+\end{todolist}
+
+\textbf{\textit{Methods \& Experiments}}
+
+\begin{todolist}
+    \item Bias projection sampling after tree $i$ by useful feature in tree $i-1$
+    \item CoreSet on features: use a small amount of data.
+    \item Covariance - repeat fig \ref{fig:cc18-tree-feature-hist} for all 2-pairs and 3-pairs column combos. Figure out what scoring function GBT uses in Regression. Understand what a "good" projection is?
+    \item Can optimal trees be used? would it tell us the best projection/column ? Can do this at a tiny dataset?
+\end{todolist}
+
+\textbf{\textit{Datasets \& Eval}}
+
+\begin{todolist}
+    \item Expand into more datasets. Verify BeyondArena Rossman store prediction (SPO should significantly outperform).
+    \item Try Hao's parameters with $F^2$ projections but keep 1.5 columns per projection
+\end{todolist}
+
+\textbf{\textit{Performance Improvement}}
+
+\begin{todolist}
+    \item A lot of sampled projections are identical in distributed - skip. Projects should be ensured distinct
+\end{todolist}
+
+
+\subsection{Ariel TODOs by Nov-9 - Ensure Accuracy of our evaluation}
+
+
 
 \textcolor{cyan}{\done~2. Fix single vs. Distributed full replication accuracy + cross-column comms.} Fig.~\ref{fig:column-replication-ydf}, Sec.~\ref{sec:cross-network-projections}
 
@@ -162,14 +197,16 @@ Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs
     \begin{todolist}
         \item[\textcolor{gray}{\done}] \textcolor{gray}{Round-robin}. Fig.~\ref{fig:column-replication-ydf}
         \item Random
-        \item if AA acc = SPO acc, any partition strategy should get similar accuracy. Start with datasets where SPO is better (perhaps trunk)
+        \item[\done] \textcolor{cyan}{ensure we're measuring on datasets where SPO > AA accuracy} if AA acc = SPO acc, any partition strategy should get similar accuracy. Start with datasets where SPO is better (perhaps trunk) Section \ref{sec:accuracy-spo-advantage}
         \item Important columns in model trained on 1\% of the dataset
-        \item Correlation-based: all pairs uplift graph. Together or apart?
-        \item Jovo methods: Feature information, mini-patches
+        \item Uplift graph all pairs Correlation. Together or apart?
+        \item Jovo methods: Stratified sampling based on Feature information, mini-patches
+        \item Train a forest/GBT and store the projections that perform well (winners, + those that don't win but have high score)
+        \item Use an agent to predict important features by their feature name? :)
         \item[\textcolor{gray}{\done}] \textcolor{gray}{Do selected columns remain constant along trees?} See Fig.~\ref{fig:cc18-tree-feature-hist}
     \end{todolist}
 
-\textbf{\textit{Procedural}}
+\textbf{\textit{Engineering}}
 
 \begin{todolist}
     \item[\textcolor{cyan}{\done}] \textcolor{cyan}{\href{https://github.com/google/yggdrasil-decision-forests/commit/2fe3a7fae5a3e8646401cd98f5c0a2a9d5d81653}{Richard's new} AA + SPO scan.} Table~\ref{tab:dist-accuracy-ydf}
@@ -178,7 +215,7 @@ Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs
         \item[\textcolor{cyan}{\done}] \textcolor{cyan}{AA, SPO (train\_oblique\_forest.cc default params) vs. SPO (YDF default params). Table~\ref{tab:dist-accuracy-ydf}}
         \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Richard's AA+SPO. \textbf{Include?} Didn't see much accuracy diff. Table~\ref{tab:dist-accuracy-ydf}}
     \end{todolist}
-    \item \Claude{why is SPO faster than AA despite Presort time excluded?} Opus-high then Fable-max to verify.
+    \item \Claude{why is SPO faster than AA despite Presort time excluded?} %Opus-high then Fable-max to verify.
     \item[\textcolor{gray}{\done}] \textcolor{gray}{Plot Barrier results} See Fig.~\ref{fig:yt8m-barriers}
     \begin{todolist}
         \item[\textcolor{gray}{\done}] \textcolor{gray}{Naive SPO with cross-node communication}. See Sec. \ref{sec:cross-network-projections}
@@ -373,7 +410,7 @@ Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at
 \end{description}
 
 \twocolumn[{\floatblock
-\section{Accuracy}
+\section{Accuracy on SPAA paper datasets}
 \label{sec:accuracy}
 
 Both learners use YDF defaults with early stopping off, since the distributed learner has none, so every arm trains all 300 trees on the full training set.
@@ -416,6 +453,8 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 \twocolumn[{\floatblock
 \section{Accuracy on Datasets with $\geq$100 Columns}
 \label{sec:accuracy-wide}
+
+Avoids the \textcolor{magenta}{purple issue} above where Workers would end up with 1 column each, matching Axis-Aligned.
 
 \mbox{}\par\vskip0.5em
 \noindent\begin{minipage}{\textwidth}
@@ -473,7 +512,7 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 \caption{Test AUC of single-machine vs. $W$-distributed GBT on the datasets where single-machine SPO-GBT beats AA-GBT.}
 \label{tab:dist-accuracy-ydf-spo-advantage}
 \IfFileExists{tables/table_dist_accuracy_ydf_spo_advantage_body.tex}{\input{tables/table_dist_accuracy_ydf_spo_advantage_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize The 11 of the 41 datasets of Tables~\ref{tab:dist-accuracy-ydf} and~\ref{tab:dist-accuracy-ydf-wide} where single-machine SPO-GBT beats AA-GBT by more than 0.5 AUC points (mean over folds). Same runs as those tables. YDF defaults, early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Epsilon (shipped split).
+\par\smallskip\raggedright\footnotesize The 11 of the 41 datasets of Tables~\ref{tab:dist-accuracy-ydf} and~\ref{tab:dist-accuracy-ydf-wide} where single-machine SPO-GBT beats AA-GBT by more than 0.5 AUC points (mean over folds). Same runs as those tables. YDF defaults, early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Epsilon (shipped split). \TODO{Why is single-machine AA vs Dist AA different?}
 \end{minipage}
 \par\vskip0.5em
 \noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
@@ -500,6 +539,8 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 \twocolumn[{\floatblock
 \section{Accuracy with Hao's Settings over 5 Seeds}
 \label{sec:accuracy-hao}
+
+Switched back to Hao's settings bcs. the runtime is 5x faster and accuracy isn't obviously different.
 
 \mbox{}\par\vskip0.5em
 \noindent\begin{minipage}{\textwidth}
@@ -651,6 +692,24 @@ Naive baseline for communication cost. \textbf{Should match local SPO-GBT accura
 \twocolumn[{\floatblock
 \section{Appendix}
 
+\subsection{Evaluation Setup}
+
+Starting off with the datasets of the SPAA paper, 
+
+\textbf{Categorical features} are numbered ordinally (in order of appearance, categories are assigned incremental numbers). \textcolor{purple}{Are they scaled w.r.t other columns? e.g. if numerical columns have mean 0, variance 0.1, categoricals will overflow}
+
+YDF has no native way to convert \texttt{CATEGORICAL} features into \texttt{NUMERICAL}. % source https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticdiscretized_numerical
+
+\textbf{How does YDF process CATEGORICAL data?}
+
+\texttt{DISCRETIZED\_NUMERICAL} should NOT be used. It "tell the learning algorithm to optimize training with a special discretization algorithm. Any NUMERICAL feature can be configured as DISCRETIZED\_NUMERICAL."
+
+NaNs are column mean imputed.
+
+Multi-class classification problems was converted to 1-vs-all binary classification, where 1 is the majority class (if a tie, the smaller index is chosen). % From a systems runtime perspective, this should have no impact. From an accuracy perspective, it should still be OK to compare across methods
+
+\subsubsection{What happens to NANs?}
+
 \begin{table}[H]
 \centering\footnotesize\setlength{\tabcolsep}{3pt}
 \caption{Test accuracy of distributed SPO-GBT vs.\ column replication $r$.}
@@ -689,6 +748,143 @@ FYI Local SPO only parallelizes in-node when >10 projections. Ensure you're usin
 \end{minipage}
 \par\vskip1em
 }]
+
+\begin{table*}[t]
+\centering
+\caption{Datasets used, by source. Categorical columns are numbered ordinally (in order of appearance, categories are assigned incremental numbers). NaNs are column mean imputed. Multi-class classification problems was converted to 1-vs-all binary classification. Eight datasets appear in both CC18 and TabArena. }
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+bin = binary classification, mul = multi-class classification, reg = regression, $^\dagger$ datasets were truncated to fit into memory.
+\label{tab:all-datasets}
+
+\begin{tabular}[t]{@{}l c r r@{}}
+\toprule
+Dataset & Task & Rows & Feat. \\
+\midrule
+\multicolumn{4}{@{}l}{\textit{Large Natural Datasets}} \\
+HIGGS~\cite{higgs_280} & bin & 11,000,000 & 28 \\
+SUSY~\cite{susy_279} & bin & 5,000,000 & 18 \\
+Epsilon~\cite{chang2011libsvm} & bin & 400,000 & 2,000 \\
+YouTube-8M~\cite{abu2016youtube}         & mul$^*$   & 3,888,919            & 1152 \\
+Shifts Weather~\cite{malinin2021shifts}   & reg$^*$   & 3,129,592            & 127 \\
+ClimSim~\cite{yu2023climsim}              & reg$^*$   & 10,091,520$^\dagger$           & 124 \\
+Jane Street~\cite{jane-street-real-time-market-data-forecasting}       & reg$^*$   & 10,213,190$^\dagger$ & 82
+\\\\
+\multicolumn{4}{@{}l}{\textit{Synthetic}} \\
+Trunk~\cite{trunk} & bin & - & - \\\\
+\multicolumn{4}{@{}l}{\textit{OpenML CC18 (34 datasets)~\cite{bischl2017openml}}} \\
+adult & bin & 48,842 & 14 \\
+bank-marketing & bin & 45,211 & 16 \\
+banknote-authentication & bin & 1,372 & 4 \\
+Bioresponse & bin & 3,751 & 1,776 \\
+blood-transfusion-service-center & bin & 748 & 4 \\
+breast-w & bin & 699 & 9 \\
+churn & bin & 5,000 & 20 \\
+climate-model-simulation-crashes & bin & 540 & 18 \\
+credit-approval & bin & 690 & 15 \\
+credit-g & bin & 1,000 & 20 \\
+cylinder-bands & bin & 540 & 37 \\
+diabetes & bin & 768 & 8 \\
+dresses-sales & bin & 500 & 12 \\
+electricity & bin & 45,312 & 8 \\
+ilpd & bin & 583 & 10 \\
+Internet-Advertisements & bin & 3,279 & 1,558 \\
+jm1 & bin & 10,885 & 21 \\
+kc1 & bin & 2,109 & 21 \\
+kc2 & bin & 522 & 21 \\
+kr-vs-kp & bin & 3,196 & 36 \\
+madelon & bin & 2,600 & 500 \\
+nomao & bin & 34,465 & 118 \\
+numerai28.6 & bin & 96,320 & 21 \\
+ozone-level-8hr & bin & 2,534 & 72 \\
+pc1 & bin & 1,109 & 21 \\
+pc3 & bin & 1,563 & 37 \\
+pc4 & bin & 1,458 & 37 \\
+PhishingWebsites & bin & 11,055 & 30 \\
+phoneme & bin & 5,404 & 5 \\
+qsar-biodeg & bin & 1,055 & 41 \\
+spambase & bin & 4,601 & 57 \\
+tic-tac-toe & bin & 958 & 9 \\
+wdbc & bin & 569 & 30 \\
+wilt & bin & 4,839 & 5 \\
+\bottomrule
+\end{tabular}
+\hspace{1.5em}
+\begin{tabular}[t]{@{}l c r r@{}}
+\toprule
+Dataset & Task & Rows & Feat. \\
+\midrule
+\multicolumn{4}{@{}l}{\textit{TabArena (51 datasets)~\cite{tabarena}}} \\
+airfoil\_self\_noise & reg & 1,503 & 5 \\
+used-Fiat-500 & reg & 1,538 & 7 \\
+Amazon\_employee\_access & bin & 32,769 & 9 \\
+anneal & mul & 898 & 38 \\
+APSFailure & bin & 76,000 & 170 \\
+bank-marketing & bin & 45,211 & 13 \\
+Bank\_Customer\_Churn & bin & 10,000 & 10 \\
+Bioresponse & bin & 3,751 & 1,776 \\
+blood-transfusion & bin & 748 & 4 \\
+churn & bin & 5,000 & 19 \\
+coil2000\_insurance\_policies & bin & 9,822 & 85 \\
+concrete\_compressive & reg & 1,030 & 8 \\
+credit-g & bin & 1,000 & 20 \\
+credit\_card\_default & bin & 30,000 & 23 \\
+customer\_satisf.\_airline & bin & 129,880 & 21 \\
+diabetes & bin & 768 & 8 \\
+Diabetes130US & bin & 71,518 & 47 \\
+diamonds & reg & 53,940 & 9 \\
+E-CommereShippingData & bin & 10,999 & 10 \\
+Fitness\_Club & bin & 1,500 & 6 \\
+Food\_Delivery\_Time & reg & 45,451 & 9 \\
+GiveMeSomeCredit & bin & 150,000 & 10 \\
+hazelnut-spread-contam. & bin & 2,400 & 30 \\
+healthcare\_insurance & reg & 1,338 & 6 \\
+heloc & bin & 10,459 & 23 \\
+hiva\_agnostic & mul & 3,845 & 1,617 \\
+houses & reg & 20,640 & 8 \\
+HR\_Analytics\_Job\_Change & bin & 19,158 & 12 \\
+in\_vehicle\_coupon & bin & 12,684 & 24 \\
+Is-this-a-good-customer & bin & 1,723 & 13 \\
+jm1 & bin & 10,885 & 21 \\
+kddcup09\_appetency & bin & 50,000 & 212 \\
+Marketing\_Campaign & bin & 2,240 & 25 \\
+maternal\_health\_risk & mul & 1,014 & 6 \\
+miami\_housing & reg & 13,776 & 15 \\
+MIC & mul & 1,699 & 111 \\
+NATICUSdroid & bin & 7,491 & 86 \\
+online\_shoppers\_intention & bin & 12,330 & 17 \\
+physiochemical\_protein & reg & 45,730 & 9 \\
+polish\_bankruptcy & bin & 5,910 & 64 \\
+qsar-biodeg & bin & 1,054 & 41 \\
+QSAR-TID-11 & reg & 5,742 & 1,024 \\
+QSAR\_fish\_toxicity & reg & 907 & 6 \\
+SDSS17 & mul & 78,053 & 11 \\
+seismic-bumps & bin & 2,584 & 15 \\
+splice & mul & 3,190 & 60 \\
+students\_dropout & mul & 4,424 & 36 \\
+superconductivity & reg & 21,263 & 81 \\
+taiwanese\_bankruptcy & bin & 6,819 & 94 \\
+website\_phishing & mul & 1,353 & 9 \\
+wine\_quality & reg & 6,497 & 12 \\\\
+\multicolumn{4}{@{}l}{\textit{TabReD (8 datasets)~\cite{tabred}}} \\
+cooking-time & reg & 319,986 & 192 \\
+delivery-eta & reg & 416,451 & 223 \\
+ecom-offers & bin & 40,000$^\dagger$ & 119 \\
+homecredit-default & bin & 40,000$^\dagger$ & 696 \\
+homesite-insurance & bin & 40,000$^\dagger$ & 299 \\
+maps-routing & reg & 340,981 & 986 \\
+sberbank-housing & reg & 28,321 & 392 \\
+weather & reg & 423,795 & 103 \\
+\bottomrule
+\end{tabular}
+\label{tab:datasets-used}
+\end{table*}
+
+\subsection{Discretization Bug}
+
+
+The issue: By default, YDF Dataset cache bins columns with $<16000$ distinct values (\texttt{dataset\_cache.proto:num\_numerical\_less\_16k\_values}) (\textbf{why?}). When asked to implement Distributed SPO, Claude decided to map discretized columns approximately back to raw values (\textbf{!!}). The split was being learned on combinations of these approximately-inverted columns. Presumably, during inference, the raw value was not being discretized, and so the inference would go down the wrong path (Caused Internet-Ads .146 -> .976).
+
 
 
 \subsection{Setup cost}
@@ -737,11 +933,70 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 \captionsetup{type=figure}
 \centering
 \input{figures/evaluation/cc18_tree_feature_hist_body}
-\caption{Features split on by the first tree of a AA-GBT. Top: most Pareto-like. Bottom: least-pareto like. See animation \href{https://drive.google.com/file/d/1BLq98ab_YEgCxTeb6eLGhEEZw2BVsqCO/view?usp=drive_link}{here}.}
+\caption{Features split on by the first tree of a AA-GBT. Top: most Pareto-like. Bottom: least-pareto like. See animation \href{https://drive.google.com/file/d/1BLq98ab_YEgCxTeb6eLGhEEZw2BVsqCO/view?usp=sharing}{here}.}
 \Description{Bar charts of per-feature split share against feature index for the same six datasets and trees 1, 100, 200 and 300.}
 \label{fig:cc18-tree-feature-hist}
 \par\smallskip\raggedright\footnotesize pooled over the 10 cross-validation models of a dataset. 300 trees, depth 6.
 \end{minipage}
 }]
+
+
+\section{Vova question on degenerate dataset}
+
+Say we have data with three columns and we have two rows 
+
+(1,1,1, Blue)
+(1,1,2, Red) 
+
+The numbers are column values, and the colors are labels.
+
+Say we split the columns: the first two columns go to worker 1, and the last column goes to worker 2.
+
+Then the learning problem becomes unclear since 
+Worker 1 has now data
+
+(1,1,Blue) 
+(1,1,Red)
+
+What am I missing? I am sure this is not what you mean… and some basic explanation will resolve this
+
+
+\textbf{Hey Vova! Great question! Had to debug the code for this! here's what i found}
+
+By default, YDF responds with \texttt{No default loss available for a categorical label with a single unique value.}
+This is because \texttt{data\_spec.proto:CategoricalGuide} defines \texttt{min\_\allowbreak vocab\_\allowbreak frequency} and \texttt{max\_vocab\_count}:
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\columnwidth}
+\begin{lstlisting}
+// Minimum frequency of a categorical value not to be replaced by the <OOD>
+// special value.
+optional int32 min_vocab_frequency = 1 [default = 5];
+// Maximum number of unique categorical values. If more values are present,
+// the less frequent values are considered <OOD>.
+optional int32 max_vocab_count = 2 [default = 2000];
+\end{lstlisting}
+\end{minipage}
+
+Manually setting this to 1, and forcing YDF to treat columns as numeric I can see the columns are separated as:
+
+$W_0: {0,2}$ and $W_1:1$. So $W_0$ will contain rows (1,1,Blue), (1,2,Red) and $W_1$ will contain (1,Blue), (1,Red). $W_1$ has a problem: same feature belongs to 2 classes
+
+P.s. this is your literal dataset, which doesn't result in your exact example, since columns are round-robined (odds go to $W_0$, evens to $W_1$). But I think it covers your question.
+
+The answer is there's a check that checks : \texttt{for row: if (... value != previous\_value ...) } == \texttt{if (example\_bucket\_set.items.size() <= 1) }
+
+So a split is only evaluated if there's at least 2 distinct values in the column. Otherwise, that column is not processed and no split is proposed
+
+(GBT always runs in Regression mode).
+
+One also needs to \texttt{force\_numerical\_features}, as the example above reads as boolean.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.6\columnwidth]{figures/appendix/vova_worker_features.png}
+\caption{Feature columns assigned to each worker in the debugger.}
+\Description{Debugger watch panel: worker 0 holds features 2 and 0, worker 1 holds feature 1.}
+\label{fig:vova-worker-features}
+\end{figure}
 
 \end{document}
