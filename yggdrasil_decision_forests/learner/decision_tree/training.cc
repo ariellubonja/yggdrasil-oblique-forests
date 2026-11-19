@@ -2288,7 +2288,7 @@ __attribute__((target("avx2,popcnt"))) inline int Avx2UpperBoundIndex64(
                                        _CMP_GE_OQ)));
   const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(mc));
   if (K >= 8) return 63;
-  // K << 3 = K * 8
+  // K << 3 == K * 8
   const __m256 vthr = _mm256_load_ps(thr64 + (K << 3));
   const unsigned mf = static_cast<unsigned>(
       _mm256_movemask_ps(_mm256_cmp_ps(vx, vthr, _CMP_GE_OQ)));
@@ -2298,12 +2298,18 @@ __attribute__((target("avx2,popcnt"))) inline int Avx2UpperBoundIndex64(
 // Same scheme, 16x16 over 256 thresholds. Only called when CpuSupportsAvx512f().
 __attribute__((target("avx512f,popcnt"))) inline int Avx512UpperBoundIndex256(
     const float x, const float* thr256, const float* coarse16) {
+  // broadcast
   const __m512 vx = _mm512_set1_ps(x);
+  // 1. load coarse16 into packed rep
+  // 2. compare packed mask
+  // mc - mask-coarse
   const __mmask16 mc =
       _mm512_cmp_ps_mask(vx, _mm512_load_ps(coarse16), _CMP_GE_OQ);
   const unsigned K = static_cast<unsigned>(_mm_popcnt_u32(mc));
   if (K >= 16) return 255;
+  // load memory address at position K*16 of thr256
   const __m512 vthr = _mm512_load_ps(thr256 + (K << 4));
+  // mask_fine
   const __mmask16 mf = _mm512_cmp_ps_mask(vx, vthr, _CMP_GE_OQ);
   return static_cast<int>((K << 4) + _mm_popcnt_u32(mf)) - 1;
 }
