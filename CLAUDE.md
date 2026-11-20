@@ -153,7 +153,7 @@ Claude Code is the hub and this repo is the source of truth.
   (goldens in `params/golden/`, `--update` after an intended argv change, `REAL=1` checks real binaries).
 - **CC18 arms (b) and (c) stay (2026-11-03):** old-harness comparison arms, never drop them.
 - **Comparable KDD28 accuracy tables share eval suite `kdd28_tabarena33` (2026-11-04)**, the setup of
-  tab:dist-accuracy-ydf (`params/eval_suites.json`). The harness stops (exit 2, `STOP eval-suite:`) on dataset, fold,
+  tab:accuracy-on-spaa-datasets (`params/eval_suites.json`). The harness stops (exit 2, `STOP eval-suite:`) on dataset, fold,
   file-hash, metric, validation or early-stopping mismatch, generators also on missing datasets/folds (since 2026-11-05). `--off_paper "<reason>"` runs an
   off-paper study instead. Check: `params.py check-eval <csv>`. REPLICABILITY.md §K.
 - **Eval names (user directive, 2026-11-04):** call the existing 33-dataset suite (`kdd28_tabarena33`) the

@@ -1,4 +1,4 @@
-# Union inputs of sec:accuracy-wide: the F>100 rows of the SPAA paper eval (filter_wide.py outputs) + the wide dataset eval.
+# Union inputs of sec:accuracy-on-datasets-over-100-columns: the F>100 rows of the SPAA paper eval (filter_wide.py outputs) + the wide dataset eval.
 # Header = union of both (columns a CSV lacks stay empty). Run from the repo root, writes union/<table>/results.csv.
 import csv, os
 D = os.path.dirname(os.path.abspath(__file__))

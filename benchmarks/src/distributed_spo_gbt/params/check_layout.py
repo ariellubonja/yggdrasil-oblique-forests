@@ -39,6 +39,8 @@ def tex_floats(text):
             labels.append(lab)
             if lab.startswith("fig:"):
                 lo, hi = ms[i - 1].end() if i else 0, m.start()
+                secs = [s.end() for s in re.finditer(r"\\section\{", text[lo:hi])]
+                lo += secs[-1] if secs else 0  # a figure never inputs a body from before its own section
             else:
                 lo, hi = m.end(), ms[i + 1].start() if i + 1 < len(ms) else len(text)
             if re.search(r"\\input\{[^}]*_body\}", text[lo:hi]):

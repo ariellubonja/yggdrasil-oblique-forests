@@ -156,12 +156,12 @@
 \textbf{\textit{Clarifications}}
 
 \begin{todolist}
-    \item How does GBT splitting work?
+    \item [\done] How does GBT splitting work? Sec.~\ref{sec:gbt-training-nutshel}
     \item Why does \texttt{homecredit} perform so much worse even on $W=1?$
-    \item Do categorical features play in sparse oblique? Ensure scale of ordinal vs. numeric matches. What does Catboost do?
+    \item How do ordinal categorical features play in sparse oblique? Do they penalize accuracy vs. Axis-Aligned \texttt{CATEGORICAL}? Ensure scale of ordinal vs. numeric matches. % What does Catboost do?
     \item After training, look at what SPO splits used. Which features were used together? Repeat idea of Fig 3. but w/ SPO. Goal: "$20\%$ of splits are good, so that's all the overhead we need".
-    \item Why does AA and Dist-AA $W=1$ accuracy differ slightly?
-    \item \textcolor{gray}{Compare Hao to YDF \& to Richard AA+SPO on single-machine.}
+    \item Why does AA and Dist-AA $W=1$ accuracy differ slightly? Likely seed
+    \item [\done] \textcolor{gray}{Compare Hao's parameters to YDF \& to Richard AA+SPO on single-machine. Sec.~\ref{}}
 \end{todolist}
 
 \textbf{\textit{Methods \& Experiments}}
@@ -191,13 +191,13 @@
 
 
 
-\textcolor{cyan}{\done~2. Fix single vs. Distributed full replication accuracy + cross-column comms.} Fig.~\ref{fig:column-replication-ydf}, Sec.~\ref{sec:cross-network-projections}
+\textcolor{cyan}{\done~2. Fix single vs. Distributed full replication accuracy + cross-column comms.} Fig.~\ref{fig:column-replication-on-spaa-datasets}, Sec.~\ref{sec:cross-network-projections}
 
 Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs accuracy. \textbf{4 plots}: $0\% \to 100\%$ replication, under column assignment method. \textbf{100\% replication is equivalent to local SPO}
     \begin{todolist}
-        \item[\textcolor{gray}{\done}] \textcolor{gray}{Round-robin}. Fig.~\ref{fig:column-replication-ydf}
+        \item[\textcolor{gray}{\done}] \textcolor{gray}{Round-robin}. Fig.~\ref{fig:column-replication-on-spaa-datasets}
         \item Random
-        \item[\done] \textcolor{cyan}{ensure we're measuring on datasets where SPO > AA accuracy} if AA acc = SPO acc, any partition strategy should get similar accuracy. Start with datasets where SPO is better (perhaps trunk) Section \ref{sec:accuracy-spo-advantage}
+        \item[\done] \textcolor{cyan}{ensure we're measuring on datasets where SPO > AA accuracy} if AA acc = SPO acc, any partition strategy should get similar accuracy. Start with datasets where SPO is better (perhaps trunk) Section \ref{sec:accuracy-where-spo-outperforms-aa}
         \item Important columns in model trained on 1\% of the dataset
         \item Uplift graph all pairs Correlation. Together or apart?
         \item Jovo methods: Stratified sampling based on Feature information, mini-patches
@@ -209,11 +209,11 @@ Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs
 \textbf{\textit{Engineering}}
 
 \begin{todolist}
-    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{\href{https://github.com/google/yggdrasil-decision-forests/commit/2fe3a7fae5a3e8646401cd98f5c0a2a9d5d81653}{Richard's new} AA + SPO scan.} Table~\ref{tab:dist-accuracy-ydf}
+    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{\href{https://github.com/google/yggdrasil-decision-forests/commit/2fe3a7fae5a3e8646401cd98f5c0a2a9d5d81653}{Richard's new} AA + SPO scan.} Table~\ref{tab:accuracy-on-spaa-datasets}
     \begin{todolist}
         \item[\textcolor{cyan}{\done}] \textcolor{cyan}{implement and vastly increase projections (to YDF defaults).}
-        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{AA, SPO (train\_oblique\_forest.cc default params) vs. SPO (YDF default params). Table~\ref{tab:dist-accuracy-ydf}}
-        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Richard's AA+SPO. \textbf{Include?} Didn't see much accuracy diff. Table~\ref{tab:dist-accuracy-ydf}}
+        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{AA, SPO (train\_oblique\_forest.cc default params) vs. SPO (YDF default params). Table~\ref{tab:accuracy-on-spaa-datasets}}
+        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Richard's AA+SPO. \textbf{Include?} Didn't see much accuracy diff. Table~\ref{tab:accuracy-on-spaa-datasets}}
     \end{todolist}
     \item \Claude{why is SPO faster than AA despite Presort time excluded?} %Opus-high then Fable-max to verify.
     \item[\textcolor{gray}{\done}] \textcolor{gray}{Plot Barrier results} See Fig.~\ref{fig:yt8m-barriers}
@@ -221,7 +221,7 @@ Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs
         \item[\textcolor{gray}{\done}] \textcolor{gray}{Naive SPO with cross-node communication}. See Sec. \ref{sec:cross-network-projections}
     \end{todolist}
     \stepcounter{enumi}\item[\textcolor{gray}{\done}] \textcolor{gray}{(in-worker oblique) Replace std::sort with Highway VQSort}
-    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Multiple runs for Training and accuracy (seed)} 5 seeds: Table~\ref{tab:column-replication-ydf}, Table~\ref{tab:cross-network}
+    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Multiple runs for Training and accuracy (seed)} 5 seeds: Table~\ref{tab:column-replication-on-spaa-datasets}, Table~\ref{tab:cross-network}
     \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Related Work review. Fable: are there any previous work red flags that strongly challenge the novelty of this work? something a reviewer would point to and say "how is this different from that?" run a review with fable-max, then run a 2nd fable-max agent to verify the first, and iterate until both are happy} Sec.~\ref{sec:related-work}
 \end{todolist}
 
@@ -410,98 +410,8 @@ Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at
 \end{description}
 
 \twocolumn[{\floatblock
-\section{Accuracy on SPAA paper datasets}
-\label{sec:accuracy}
-
-Both learners use YDF defaults with early stopping off, since the distributed learner has none, so every arm trains all 300 trees on the full training set.
-
-
-\mbox{}\par\vskip0.5em
-\noindent\begin{minipage}{\textwidth}
-\captionsetup{type=table}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{2pt}
-\caption{Test AUC of single-machine vs. $W$-distributed GBT. Single-machine SPO-GBT samples $\min(F^2,6000)$ projections per node, distributed SPO-GBT splits them across the $W$ workers, each sampling from its $F/W$ columns.}
-\label{tab:dist-accuracy-ydf}
-\IfFileExists{tables/table_dist_accuracy_ydf_body.tex}{\input{tables/table_dist_accuracy_ydf_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize YDF defaults, early stopping off, 300 trees, depth 6, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Chronological holdouts.
-Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textcolor{RoyalPurple}{SPO matches AA bcs. shard ends up with 1 column per worker}
-\end{minipage}
-\par\vskip0.5em
-\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-% body sizes its axis to 0.5\textwidth; match it to the column
-\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_ydf_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_ydf_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-ydf}. \textcolor{RoyalPurple}{*Some datasets have few columns, so as $W$ increases, accuracy actually approaches} \textcolor{red}{AA-GBT}}
-\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}
-\label{fig:dist-accuracy-mean-ydf}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_ydf_body.tex}{\input{figures/evaluation/fig_column_replication_ydf_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Table~\ref{tab:column-replication-ydf} as charts: mean (top) and per-dataset (bottom) $\Delta$ test accuracy at \texttt{MULTI\_THREAD} $W=4$ vs.\ \texttt{single}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
-\label{fig:column-replication-ydf}
-\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy.
-\end{minipage}
-}]
-
-\twocolumn[{\floatblock
-\section{Accuracy on Datasets with $\geq$100 Columns}
-\label{sec:accuracy-wide}
-
-Avoids the \textcolor{magenta}{purple issue} above where Workers would end up with 1 column each, matching Axis-Aligned.
-
-\mbox{}\par\vskip0.5em
-\noindent\begin{minipage}{\textwidth}
-\captionsetup{type=table}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{2pt}
-\caption{Test AUC of single-machine vs. $W$-distributed GBT on the datasets with $F>100$.}
-\label{tab:dist-accuracy-ydf-wide}
-\IfFileExists{tables/table_dist_accuracy_ydf_wide_body.tex}{\input{tables/table_dist_accuracy_ydf_wide_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize Datasets with $F>100$. YDF defaults: early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Chronological holdouts and Epsilon (shipped split). YouTube-8M (3.9M rows, 1152 cols) not run: it would need ${\approx}6$ days on an r8i.96xlarge (\$3.8k).
-\end{minipage}
-\par\vskip0.5em
-\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-% body sizes its axis to 0.5\textwidth; match it to the column
-\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_ydf_wide_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_ydf_wide_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-ydf-wide}. \textcolor{orange}{The difference from single-machine is caused only by \texttt{homecredit-default} only}}
-\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT on the datasets with more than 100 columns.}
-\label{fig:dist-accuracy-mean-ydf-wide}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_ydf_wide_body.tex}{\input{figures/evaluation/fig_column_replication_ydf_wide_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Table~\ref{tab:column-replication-ydf-wide} as charts: mean (top) and per-dataset (bottom) $\Delta$ test accuracy at \texttt{MULTI\_THREAD} $W=4$ vs.\ \texttt{single}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets with more than 100 columns. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
-\label{fig:column-replication-ydf-wide}
-\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy.
-\end{minipage}
-\par\vskip0.5em
-\noindent\begin{minipage}{\textwidth}
-\captionsetup{type=table}
-\centering\footnotesize\setlength{\tabcolsep}{3pt}
-\caption{Test accuracy of distributed SPO-GBT vs.\ column replication $r$ on the datasets with $F>100$.}
-\label{tab:column-replication-ydf-wide}
-\IfFileExists{tables/table_column_replication_ydf_wide_body.tex}{\input{tables/table_column_replication_ydf_wide_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns. YDF defaults, early stopping off, 300 trees, depth 6, $P{=}\min(F^2,6000)$ split across workers. $W{=}4$.
-\par\footnotesize \textbf{single} = single-machine SPO-GBT, same hyperparameters
-\end{minipage}
-}]
-
-\twocolumn[{\floatblock
 \section{Accuracy on Datasets Where SPO Outperforms AA}
-\label{sec:accuracy-spo-advantage}
+\label{sec:accuracy-where-spo-outperforms-aa}
 
 \mbox{}\par\vskip0.5em
 \noindent\begin{minipage}{\textwidth}
@@ -510,9 +420,9 @@ Avoids the \textcolor{magenta}{purple issue} above where Workers would end up wi
 \scriptsize
 \setlength{\tabcolsep}{2pt}
 \caption{Test AUC of single-machine vs. $W$-distributed GBT on the datasets where single-machine SPO-GBT beats AA-GBT.}
-\label{tab:dist-accuracy-ydf-spo-advantage}
-\IfFileExists{tables/table_dist_accuracy_ydf_spo_advantage_body.tex}{\input{tables/table_dist_accuracy_ydf_spo_advantage_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize The 11 of the 41 datasets of Tables~\ref{tab:dist-accuracy-ydf} and~\ref{tab:dist-accuracy-ydf-wide} where single-machine SPO-GBT beats AA-GBT by more than 0.5 AUC points (mean over folds). Same runs as those tables. YDF defaults, early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Epsilon (shipped split). \TODO{Why is single-machine AA vs Dist AA different?}
+\label{tab:accuracy-where-spo-outperforms-aa}
+\IfFileExists{tables/table_dist_accuracy_where_spo_outperforms_aa_body.tex}{\input{tables/table_dist_accuracy_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
+\par\smallskip\raggedright\footnotesize The 11 of the 41 datasets of Tables~\ref{tab:accuracy-on-spaa-datasets} and~\ref{tab:accuracy-on-datasets-over-100-columns} where single-machine SPO-GBT beats AA-GBT by more than 0.5 AUC points (mean over folds). Same runs as those tables. YDF defaults, early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Epsilon (shipped split). \TODO{Why is single-machine AA vs Dist AA different?}
 \end{minipage}
 \par\vskip0.5em
 \noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
@@ -520,92 +430,19 @@ Avoids the \textcolor{magenta}{purple issue} above where Workers would end up wi
 \centering
 % body sizes its axis to 0.5\textwidth; match it to the column
 \resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_ydf_spo_advantage_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_ydf_spo_advantage_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-ydf-spo-advantage}.}
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_where_spo_outperforms_aa_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
 \Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT on the datasets where single-machine SPO-GBT beats AA-GBT.}
-\label{fig:dist-accuracy-mean-ydf-spo-advantage}
+\label{fig:accuracy-where-spo-outperforms-aa}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
 \captionsetup{type=figure}
 \centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_ydf_spo_advantage_body.tex}{\input{figures/evaluation/fig_column_replication_ydf_spo_advantage_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-ydf-spo-advantage}.}
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body.tex}{\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
 \Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets where single-machine SPO-GBT beats AA-GBT. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
-\label{fig:column-replication-ydf-spo-advantage}
+\label{fig:column-replication-where-spo-outperforms-aa}
 \par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT. pts = percentage points of test AUC. Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns.
-\end{minipage}
-}]
-
-\twocolumn[{\floatblock
-\section{Accuracy with Hao's Settings over 5 Seeds}
-\label{sec:accuracy-hao}
-
-Switched back to Hao's settings bcs. the runtime is 5x faster and accuracy isn't obviously different.
-
-\mbox{}\par\vskip0.5em
-\noindent\begin{minipage}{\textwidth}
-\captionsetup{type=table}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{2pt}
-\caption{Test AUC of single-machine vs. $W$-distributed GBT with $P{=}\min(F,1000)$ projections per node, mean over 5 seeds.}
-\label{tab:dist-accuracy-hao}
-\IfFileExists{tables/table_dist_accuracy_hao_body.tex}{\input{tables/table_dist_accuracy_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}
-\par\smallskip\raggedright\footnotesize Hao's settings: $P{=}\min(F,1000)$ projections per node, density 1.5, split across workers. Otherwise YDF defaults, early stopping off, 300 trees, depth 6. Seeds 1--5 averaged per fold, then mean $\pm$ std over 5 CV folds except Chronological holdouts. Distributed AA-GBT run at $W{=}4$ only (same AUC at every $W$ in Table~\ref{tab:dist-accuracy-ydf}). Seed 1 of single-machine SPO-GBT and AA-GBT reuses the runs of Table~\ref{tab:dist-accuracy-ydf}.
-\end{minipage}
-\par\vskip0.5em
-\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-% body sizes its axis to 0.5\textwidth; match it to the column
-\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-hao}.}
-\Description{Line chart of mean AUC versus number of workers for SPO-GBT, with distributed AA-GBT at W equals 4 and single-machine references, under Hao's settings.}
-\label{fig:dist-accuracy-mean-hao}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_body.tex}{\input{figures/evaluation/fig_column_replication_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-hao}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1, under Hao's settings. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean.}
-\label{fig:column-replication-hao}
-\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). pts = percentage points of test AUC. Seeds 1--5 pooled.
-\end{minipage}
-}]
-
-\twocolumn[{\floatblock
-\mbox{}\par\vskip0.5em
-\noindent\begin{minipage}{\textwidth}
-\captionsetup{type=table}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{2pt}
-\caption{Test AUC of single-machine vs. $W$-distributed GBT with $P{=}\min(F,1000)$ projections per node on the datasets with $F\geq100$, mean over 5 seeds.}
-\label{tab:dist-accuracy-hao-wide}
-\IfFileExists{tables/table_dist_accuracy_hao_wide_body.tex}{\input{tables/table_dist_accuracy_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}
-\par\smallskip\raggedright\footnotesize The datasets of Table~\ref{tab:dist-accuracy-ydf-wide}. Same settings and seeds as Table~\ref{tab:dist-accuracy-hao}. 5 CV folds except Chronological holdouts and Epsilon (shipped split).
-\end{minipage}
-\par\vskip0.5em
-\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-% body sizes its axis to 0.5\textwidth; match it to the column
-\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_wide_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-hao-wide}.}
-\Description{Line chart of mean AUC versus number of workers for SPO-GBT, with distributed AA-GBT at W equals 4 and single-machine references, on the datasets with at least 100 columns under Hao's settings.}
-\label{fig:dist-accuracy-mean-hao-wide}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_wide_body.tex}{\input{figures/evaluation/fig_column_replication_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-hao-wide}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets with at least 100 columns under Hao's settings. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean.}
-\label{fig:column-replication-hao-wide}
-\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). pts = percentage points of test AUC. Seeds 1--5 pooled.
 \end{minipage}
 }]
 
@@ -689,18 +526,95 @@ Naive baseline for communication cost. \textbf{Should match local SPO-GBT accura
 \bibliography{main}
 
 \appendix
-\twocolumn[{\floatblock
 \section{Appendix}
 
 \subsection{Evaluation Setup}
 
 Starting off with the datasets of the SPAA paper, 
 
-\textbf{Categorical features} are numbered ordinally (in order of appearance, categories are assigned incremental numbers). \textcolor{purple}{Are they scaled w.r.t other columns? e.g. if numerical columns have mean 0, variance 0.1, categoricals will overflow}
+\textbf{Categorical features} are numbered ordinally (in order of appearance, categories are assigned incremental numbers). \textcolor{purple}{Are they scaled w.r.t other columns? e.g. if numerical columns have mean 0, variance 0.1, categoricals will overflow}. \textbf{This works surprisingly well, as even fully-categorical datasets SPO wins}, but it does cost some accuracy. This was done to extend the list of available natural datasets, as SPO methods cannot natively train on non-numerical features.
 
-YDF has no native way to convert \texttt{CATEGORICAL} features into \texttt{NUMERICAL}. % source https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticdiscretized_numerical
+\begin{table}[h]
+\centering\footnotesize
+\caption{Test AUC of single-machine AA-GBT with categorical features as ordinal codes vs.\ native YDF categoricals.}
+\Description{Table of test AUC per dataset for ordinal and native categorical encoding, their difference, and the number of folds where native wins.}
+\label{tab:ordinal-vs-native}
+\IfFileExists{tables/table_ordinal_vs_native_body.tex}{\input{tables/table_ordinal_vs_native_body}}{\TODO{rerun pending}}
+\par\smallskip\raggedright\footnotesize Same folds and codes, only the column type differs. YDF defaults, early stopping off, 300 trees, seed 1. Diabetes130US omitted: its imputed categoricals are not integer codes.
+\end{table}
 
-\textbf{How does YDF process CATEGORICAL data?}
+YDF has no native way to convert \texttt{CATEGORICAL} features into ordinal \texttt{NUMERICAL}. % source https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticdiscretized_numerical
+
+\subsection{How does YDF process CATEGORICAL data?}
+
+
+\textbf{\textit{DataSpec dictionary forming}}
+
+\begin{enumerate}
+    \item (count, cat) for each category
+    \item If count < 5 or $\|cats\| > 2000$, replace those with OOD.
+\end{enumerate}
+
+
+\section{GBT Training in a Nutshell}
+\label{sec:gbt-training-nutshel}
+
+
+
+Define gradient as appropriate for your downstream task:
+
+\begin{equation}
+    g := 
+    \begin{cases}
+        y - \dfrac{1}{1 + \exp(-F)} & \text{(Binomial)} \\[4pt]
+        y - p & \text{(MSE)}
+    \end{cases}
+\end{equation}
+
+\textcolor{gray}{Observation: The residuals $y-F$ are proportional to the negative gradient of the MSE, so they're used as placeholder} $\frac{\partial L_{MSE}}{\partial F(x)}=\frac{2}{n}\underbrace{(y-F_m(x))}_{-residual}$
+
+Computing $g$ requires predictions of previous trees $F$.
+
+If tree 0: define previous prediction as the Log-odds of how many positives (classif.) i.e. $F_0=\log(\frac{pos}{1-pos})$ (so not random). \textcolor{gray}{Refresher: Odds is $\frac{p}{!p}$ i.e. "odds are 4:1". This is in $[0,+\infty)$. Claude says Log-odds is used bcs. it makes it $(-\infty,+\infty)$ and therefore makes updates simpler - not constrained in $[0,1]$. Makes sense but not convinced.}
+
+If tree !0: Each row $i$'s gradient is $g_i=F_0+\sum_{i-1}F_j$. Why sum and not avg? Bcs. $F_i$ corrects previous - \textbf{its not a voting Ensemble, it's additive corrections}. leaf value $:= shrinkage \cdot \frac{\sum g}{(\sum h + \lambda)}$. Leaf values differ bcs. they have their own set of rows. I don't understand the math reason behind choosing this formula (skipped as too granular).
+
+How to scan splits? Find biggest mean difference in gradients (see Gain score below, but \textbf{why this objective?}).
+
+
+
+In YDF, there's a per-row gradient $g$ as a pseudolabel (trained as regression). $g$ is the residual
+
+
+
+Where $y$ is the ground truth label and $p$ is the probability of label=1 (Classification task - Binomial loss), or prediction (MSE).
+
+
+
+\texttt{\textbf{NUMERICAL}}
+
+Missing values replaced by column mean.
+
+\begin{enumerate}
+    \item Buckets (\texttt{(value, gradient)} pairs) are sorted by value. Here, 1 bucket contains exactly 1 row, for code generality.
+    \item Iterate over the \texttt{(value, $g_i$)} pairs in \texttt{FindSplit}
+    \begin{enumerate}
+        \item Per each +/- child (aka. on each side of the threshold), keep a running counter of $(count, \sum g, \sum g^2)$.
+        \item Attempt moving 1 row to from positive to negative, trying to maximize gain: $gain = \frac{N^- \cdot N^+}{N^2} \cdot (\mu^- - \mu^+)^2$ (same for every loss), aka. \textbf{biggest difference in mean gradient}, but scaling to keep it balanced.
+        \item If subsequent rows are identical (i.e. when your Numerical column is really discretized), that row is skipped.
+    \end{enumerate}
+    
+\end{enumerate}
+
+\texttt{\textbf{CATEGORICAL}}
+
+\begin{enumerate}
+    \item Missing values replaced by most frequent category
+    \item Buckets ((class, gradient-sum) pairs) i.e. there's as many vectors as unique classes
+\end{enumerate}
+
+\textit{SPO does not use }\texttt{CATEGORICAL}. \textbf{\textit{Presumably bcs. CATEGORICAL are not in "Euclidean" space aka. their relative order has no geometric meaning}}
+
 
 \texttt{DISCRETIZED\_NUMERICAL} should NOT be used. It "tell the learning algorithm to optimize training with a special discretization algorithm. Any NUMERICAL feature can be configured as DISCRETIZED\_NUMERICAL."
 
@@ -708,16 +622,6 @@ NaNs are column mean imputed.
 
 Multi-class classification problems was converted to 1-vs-all binary classification, where 1 is the majority class (if a tie, the smaller index is chosen). % From a systems runtime perspective, this should have no impact. From an accuracy perspective, it should still be OK to compare across methods
 
-\subsubsection{What happens to NANs?}
-
-\begin{table}[H]
-\centering\footnotesize\setlength{\tabcolsep}{3pt}
-\caption{Test accuracy of distributed SPO-GBT vs.\ column replication $r$.}
-\label{tab:column-replication-ydf}
-\IfFileExists{tables/table_column_replication_ydf_body.tex}{\input{tables/table_column_replication_ydf_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns. Mean over CC18 w/ 5 seeds. YDF defaults, early stopping off, 300 trees, depth 6, $P{=}\min(F^2,6000)$ split across workers. $W{=}4$.
-\par\footnotesize \textbf{single} = single-machine SPO-GBT, same hyperparameters
-\end{table}
 
 
 \subsection{Enabling Parallelism for Distributed SPO}
@@ -728,6 +632,7 @@ Added VQSort 25-Oct-2026. 22-Oct-26: Added In-node parallelism in SPO-GBT. singl
 
 FYI Local SPO only parallelizes in-node when >10 projections. Ensure you're using YDF defaults for num projections, etc. so this doesn't apply.
 
+\begin{table*}[t]
 \noindent\begin{minipage}[t]{0.45\textwidth}\vspace{0pt}
 \captionsetup{type=table}
 \centering\scriptsize\setlength{\tabcolsep}{2pt}
@@ -746,12 +651,11 @@ FYI Local SPO only parallelizes in-node when >10 projections. Ensure you're usin
 \input{tables/table_in_node_threads_body}
 \par\smallskip\raggedright\footnotesize Single \texttt{m7i.24x}, $P=\sqrt{F}$. Sequential: $P$ projections in $\min(T,\lceil P/10\rceil)$ threads, i.e.\ single-threaded when $P\le 10$. Parallel: $\min(T,P)$. Existing method was due to PR 403 overhead, which is now gone. 10 trees, depth 6.
 \end{minipage}
-\par\vskip1em
-}]
+\end{table*}
 
 \begin{table*}[t]
 \centering
-\caption{Datasets used, by source. Categorical columns are numbered ordinally (in order of appearance, categories are assigned incremental numbers). NaNs are column mean imputed. Multi-class classification problems was converted to 1-vs-all binary classification. Eight datasets appear in both CC18 and TabArena. }
+\caption{Datasets used, by source. Categorical columns are numbered ordinally (in order of appearance, categories are assigned incremental numbers). NaNs are column mean imputed. Multi-class classification problems was converted to 1-vs-all binary on the majority class. Eight datasets appear in both CC18 and TabArena. }
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 bin = binary classification, mul = multi-class classification, reg = regression, $^\dagger$ datasets were truncated to fit into memory.
@@ -940,6 +844,159 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 \end{minipage}
 }]
 
+
+\twocolumn[{\floatblock
+\section{Accuracy with Hao's Settings, over 5 Seeds}
+\label{sec:accuracy-hao}
+
+This table shows using Hao's parameters instead of YDF defaults. They outperform in mean across-dataset AUC in the Accuracy tables. Running this over 5 different seeds to ensure it wasn't a seed cause. Switched back to Hao's settings bcs. the runtime is 5x faster and accuracy isn't obviously different.
+
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of single-machine vs. $W$-distributed GBT with $P{=}\min(F,1000)$ projections per node, mean over 5 seeds.}
+\label{tab:dist-accuracy-hao}
+\IfFileExists{tables/table_dist_accuracy_hao_body.tex}{\input{tables/table_dist_accuracy_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}
+\par\smallskip\raggedright\footnotesize Hao's settings: $P{=}\min(F,1000)$ projections per node, density 1.5, split across workers. Otherwise YDF defaults, early stopping off, 300 trees, depth 6. Seeds 1--5 averaged per fold, then mean $\pm$ std over 5 CV folds except Chronological holdouts. Distributed AA-GBT run at $W{=}4$ only (same AUC at every $W$ in Table~\ref{tab:accuracy-on-spaa-datasets}). Seed 1 of single-machine SPO-GBT and AA-GBT reuses the runs of Table~\ref{tab:accuracy-on-spaa-datasets}.
+\end{minipage}
+\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+% body sizes its axis to 0.5\textwidth; match it to the column
+\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-hao}.}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT, with distributed AA-GBT at W equals 4 and single-machine references, under Hao's settings.}
+\label{fig:dist-accuracy-mean-hao}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_body.tex}{\input{figures/evaluation/fig_column_replication_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-hao}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1, under Hao's settings. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean.}
+\label{fig:column-replication-hao}
+\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). pts = percentage points of test AUC. Seeds 1--5 pooled.
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of single-machine vs. $W$-distributed GBT with $P{=}\min(F,1000)$ projections per node on the datasets with $F\geq100$, mean over 5 seeds.}
+\label{tab:dist-accuracy-hao-wide}
+\IfFileExists{tables/table_dist_accuracy_hao_wide_body.tex}{\input{tables/table_dist_accuracy_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}
+\par\smallskip\raggedright\footnotesize The datasets of Table~\ref{tab:accuracy-on-datasets-over-100-columns}. Same settings and seeds as Table~\ref{tab:dist-accuracy-hao}. 5 CV folds except Chronological holdouts and Epsilon (shipped split).
+\end{minipage}
+\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+% body sizes its axis to 0.5\textwidth; match it to the column
+\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_wide_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-hao-wide}.}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT, with distributed AA-GBT at W equals 4 and single-machine references, on the datasets with at least 100 columns under Hao's settings.}
+\label{fig:dist-accuracy-mean-hao-wide}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_wide_body.tex}{\input{figures/evaluation/fig_column_replication_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-hao-wide}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets with at least 100 columns under Hao's settings. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean.}
+\label{fig:column-replication-hao-wide}
+\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). pts = percentage points of test AUC. Seeds 1--5 pooled.
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
+\section{Accuracy on SPAA paper datasets}
+\label{sec:accuracy-on-spaa-datasets}
+
+Both learners use YDF defaults with early stopping off, since the distributed learner has none, so every arm trains all 300 trees on the full training set.
+
+
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of single-machine vs. $W$-distributed GBT. Single-machine SPO-GBT samples $\min(F^2,6000)$ projections per node, distributed SPO-GBT splits them across the $W$ workers, each sampling from its $F/W$ columns.}
+\label{tab:accuracy-on-spaa-datasets}
+\IfFileExists{tables/table_dist_accuracy_on_spaa_datasets_body.tex}{\input{tables/table_dist_accuracy_on_spaa_datasets_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
+\par\smallskip\raggedright\footnotesize YDF defaults, early stopping off, 300 trees, depth 6, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Chronological holdouts.
+Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textcolor{RoyalPurple}{SPO matches AA bcs. shard ends up with 1 column per worker}
+\end{minipage}
+\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+% body sizes its axis to 0.5\textwidth; match it to the column
+\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_on_spaa_datasets_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_on_spaa_datasets_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-on-spaa-datasets}. \textcolor{RoyalPurple}{*Some datasets have few columns, so as $W$ increases, accuracy actually approaches} \textcolor{red}{AA-GBT}}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}
+\label{fig:accuracy-on-spaa-datasets}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_on_spaa_datasets_body.tex}{\input{figures/evaluation/fig_column_replication_on_spaa_datasets_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Accuracy by column replication: mean (top) and per-dataset (bottom) $\Delta$ test accuracy at \texttt{MULTI\_THREAD} $W=4$ vs.\ \texttt{single}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
+\label{fig:column-replication-on-spaa-datasets}
+\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy.
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
+\section{Accuracy on Datasets with $\geq$100 Columns}
+\label{sec:accuracy-on-datasets-over-100-columns}
+
+Avoids the \textcolor{magenta}{purple issue} above where Workers would end up with 1 column each, matching Axis-Aligned.
+
+\mbox{}\par\vskip0.5em
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of single-machine vs. $W$-distributed GBT on the datasets with $F>100$.}
+\label{tab:accuracy-on-datasets-over-100-columns}
+\IfFileExists{tables/table_dist_accuracy_over_100_columns_body.tex}{\input{tables/table_dist_accuracy_over_100_columns_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
+\par\smallskip\raggedright\footnotesize Datasets with $F>100$. YDF defaults: early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Chronological holdouts and Epsilon (shipped split). YouTube-8M (3.9M rows, 1152 cols) not run: it would need ${\approx}6$ days on an r8i.96xlarge (\$3.8k).
+\end{minipage}
+\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+% body sizes its axis to 0.5\textwidth; match it to the column
+\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_over_100_columns_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_over_100_columns_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-on-datasets-over-100-columns}. \textcolor{orange}{The difference from single-machine is caused only by \texttt{homecredit-default} only}}
+\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT on the datasets with more than 100 columns.}
+\label{fig:accuracy-on-datasets-over-100-columns}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_over_100_columns_body.tex}{\input{figures/evaluation/fig_column_replication_over_100_columns_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Accuracy by column replication: mean (top) and per-dataset (bottom) $\Delta$ test accuracy at \texttt{MULTI\_THREAD} $W=4$ vs.\ \texttt{single}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets with more than 100 columns. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
+\label{fig:column-replication-over-100-columns}
+\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy.
+\end{minipage}
+}]
 
 \section{Vova question on degenerate dataset}
 

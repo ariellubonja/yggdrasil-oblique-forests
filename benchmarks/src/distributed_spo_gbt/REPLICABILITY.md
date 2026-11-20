@@ -160,9 +160,9 @@ cells, and an `inputs.txt`. Profile = the `params/kdd28_params.json` setting the
 
 | Label(s) (main.tex, Overleaf 86e929e + e57222c) | Body | Generator | Data dir | Profile |
 |---|---|---|---|---|
-| tab:dist-accuracy-ydf, fig:dist-accuracy-mean-ydf | `tables/table_dist_accuracy_ydf_body.tex`, `figures/evaluation/fig_dist_accuracy_mean_ydf_body.tex` | `make_paper_tables.py --profile kdd28_ydf --suffix _ydf --purple --extra ...` | `K/accuracy/tab-dist-accuracy-ydf/` | `kdd28_ydf.distacc_*` |
-| tab:dist-accuracy-ydf-spo-advantage, fig:dist-accuracy-mean-ydf-spo-advantage, fig:column-replication-ydf-spo-advantage | `tables/table_dist_accuracy_ydf_spo_advantage_body.tex`, `figures/evaluation/fig_{dist_accuracy_mean,column_replication}_ydf_spo_advantage_body.tex` + `column_replication_ydf_spo_advantage/*.dat` | `select_spo_advantage.py`, then `make_paper_tables.py --suffix _ydf_spo_advantage`, `make_column_replication_fig.py --suffix _ydf_spo_advantage` (README) | `K/accuracy/tab-dist-accuracy-ydf-spo-advantage/` | `kdd28_ydf.distacc_*`, `kdd28_ydf.colrep_distacc_spo` |
-| tab:column-replication-ydf, fig:column-replication-ydf | `tables/table_column_replication_ydf_body.tex`, `figures/evaluation/fig_column_replication_ydf_body.tex` + `column_replication_ydf/*.dat` | `make_column_replication_{table,fig}.py --metric test_auc ...` | `K/accuracy/tab-column-replication-ydf/` | `kdd28_ydf.colrep_distacc_spo` |
+| tab:accuracy-on-spaa-datasets, fig:accuracy-on-spaa-datasets | `tables/table_dist_accuracy_on_spaa_datasets_body.tex`, `figures/evaluation/fig_dist_accuracy_mean_on_spaa_datasets_body.tex` | `make_paper_tables.py --profile kdd28_ydf --suffix _on_spaa_datasets --purple --extra ...` | `K/accuracy/tab-accuracy-on-spaa-datasets/` | `kdd28_ydf.distacc_*` |
+| tab:accuracy-where-spo-outperforms-aa, fig:accuracy-where-spo-outperforms-aa, fig:column-replication-where-spo-outperforms-aa | `tables/table_dist_accuracy_where_spo_outperforms_aa_body.tex`, `figures/evaluation/fig_{dist_accuracy_mean,column_replication}_where_spo_outperforms_aa_body.tex` + `column_replication_where_spo_outperforms_aa/*.dat` | `select_spo_advantage.py`, then `make_paper_tables.py --suffix _where_spo_outperforms_aa`, `make_column_replication_fig.py --suffix _where_spo_outperforms_aa` (README) | `K/accuracy/tab-accuracy-where-spo-outperforms-aa/` | `kdd28_ydf.distacc_*`, `kdd28_ydf.colrep_distacc_spo` |
+| fig:column-replication-on-spaa-datasets | `figures/evaluation/fig_column_replication_on_spaa_datasets_body.tex` + `column_replication_on_spaa_datasets/*.dat` | `make_column_replication_fig.py --metric test_auc ...` | `K/accuracy/fig-column-replication-on-spaa-datasets/` | `kdd28_ydf.colrep_distacc_spo` |
 | tab:vertex-hm4-pf-runtime, fig:vertex-hm4-hm16-pf-runtime | `tables/table_vertex_hm4_hm16_pf_body.tex`, `figures/evaluation/vertex_pf/fig_vertex_{hm4,hm16}_pf_body.tex` + `.dat` | `make_pf_grid_table.py`, `make_pf_grid_fig.py` (defaults = the paper) | `K/runtime/tab-vertex-hm4-pf-runtime/` | `vertex_grid_pf` |
 | fig:yt8m-barriers | `figures/evaluation/grcp_n2/fig_yt8m_barriers_{budget,swimlane}_body.tex` + `yt8m_barriers/*.dat` | `make_barrier_figs.py` | `K/runtime/fig-yt8m-barriers/` | `vertex_grid_pf` |
 | tab:cross-network, fig:cross-network | `tables/table_cross_network_body.tex`, `figures/evaluation/fig_cross_network_body.tex` + `cross_network/*.dat` | `make_cross_network_{table,fig}.py` | `K/runtime/tab-cross-network/` | `table3` (old settings, kdd28_ydf rerun pending, §J) |
@@ -392,7 +392,7 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   climate-model train.csv (one value printed differently in the last digit) was replaced by the Mac copy.
 - Results: box `~/results/2026-11-03_ydf_defaults_rerun/{distacc,colrep,colrep_single,cc18}/results.csv` (stamped rows,
   `models/`, `logs/`, `DONE` per table, `ALL_DONE`), mirrored by `ariel_notes/results/2026-11-03_ydf_defaults_rerun/mirror.sh`. Tracked copies of the result CSVs (2026-11-04):
-  `kdd28/accuracy/tab-dist-accuracy-ydf/distacc/`, `kdd28/outdated/tab-column-replication-ydf-cc18/{colrep,colrep_single}/`
+  `kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc/`, `kdd28/outdated/tab-column-replication-ydf-cc18/{colrep,colrep_single}/`
   (superseded by colrep_distacc), `kdd28/outdated/tab-cc18-aa-spo-ydf/cc18/` (float dropped).
 - Determinism (tested 2026-11-03, `determinism/` there): same seed, same threads, two concurrent runs per cell for qsar-biodeg
   (single, W = 4), credit-g (single, W = 4) and heloc (single, W = 4, W = 16), 300 trees. All 7 pairs have byte-identical
@@ -412,7 +412,7 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   yesterday's binaries: no C++ change e3279f20..c3b01f56). Machine: the same instance resized to **c8i.metal-96xl**
   (Xeon 6975P-C, 384 threads, SMT and turbo on, 755 GiB). The earlier §J runs ran on m7i.metal-24xl with SMT off.
   Same-seed determinism was tested on m7i only. Rows carry a `machine` column. Tracked CSVs:
-  `benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/`. Argv goldens
+  `benchmarks/results/kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc_aaspo/`. Argv goldens
   `params/golden/kdd28_ydf_distacc_{aaspo,exact300}.argv`.
 - Column replication on the tab:dist-accuracy setup (2026-11-04, c8i.metal-96xl, SMT and turbo on): profile arm
   `kdd28_ydf.colrep_distacc_spo` (= distacc_spo at W = 4 plus `--column_replication r`, r = 0.1..1.0),
@@ -432,7 +432,7 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
 
 ## K. Eval suites: which data and metric code an accuracy table used (user decision, 2026-11-04)
 
-Comparable KDD28 accuracy tables share eval suite `kdd28_tabarena33`, the setup of tab:dist-accuracy-ydf: 33
+Comparable KDD28 accuracy tables share eval suite `kdd28_tabarena33`, the setup of tab:accuracy-on-spaa-datasets: 33
 TabArena/TabReD datasets, 5 CV folds (1 chronological holdout for ecom-offers, homecredit-default, homesite-insurance),
 seed 1 per fold, test ROC AUC, no validation split, no early stopping. Spec: `params/eval_suites.json` (datasets with
 fold ids, file templates, label and positive-class rule, seeds, metric implementation, validation, early stopping).
@@ -446,7 +446,7 @@ the CC18 suites `params/eval_suites/*.sha256` (hashed from the Mac copies, 2026-
 - Stamps: `run_kdd28_ydf_ec2.py` appends `eval_suite,data_sha,metric_impl` to new results CSVs (`data_sha` =
   `<train sha256[:16]>+<test sha256[:16]>`, hashes cached in `<out>/eval_sha_cache.json`). CSVs started earlier keep
   their header. `params.py backfill-eval <csv>` adds the columns from the manifest: done 2026-11-05 for
-  `accuracy/tab-dist-accuracy-ydf/distacc/results.csv` (2026-11-03 rows), after all 153 dataset-folds the box read on
+  `accuracy/tab-accuracy-on-spaa-datasets/distacc/results.csv` (2026-11-03 rows), after all 153 dataset-folds the box read on
   2026-11-04 (colrep_distacc and distacc_aaspo stamps) matched the manifest hashes.
 - Hard stops since 2026-11-05 (bulletproofing audit, `ariel_notes/results/2026-11-04_eval_bulletproofing/report.md`):
   an identity mismatch (dataset or fold not in the suite, file hash, metric implementation, seed, validation, early

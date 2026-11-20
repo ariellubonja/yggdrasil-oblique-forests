@@ -7,8 +7,8 @@ import pandas as pd
 
 A = pathlib.Path("benchmarks/results/kdd28/accuracy")
 BOX = pathlib.Path("ariel_notes/results/2026-11-06_hao_seeds/box")  # gitignored mirror of ~/results/2026-11-06_hao_seeds
-YDF, WEV = A / "tab-dist-accuracy-ydf", A / "tab-dist-accuracy-ydf-wide/wide_eval"
-WIDE = set(pd.read_csv(A / "tab-dist-accuracy-ydf-wide/wide_shapes.csv").dataset)  # the 14 datasets with F >= 100
+YDF, WEV = A / "tab-accuracy-on-spaa-datasets", A / "tab-accuracy-on-datasets-over-100-columns/wide_eval"
+WIDE = set(pd.read_csv(A / "tab-accuracy-on-datasets-over-100-columns/wide_shapes.csv").dataset)  # the 14 datasets with F >= 100
 
 
 def hao(parts, table):

@@ -1,6 +1,6 @@
 """KDD28 column-replication figure data: mean delta + bootstrap CI (top), per-dataset delta boxes (bottom).
 Deltas are distributed level r minus single-machine SPO-GBT (single_machine_spo_gbt.csv), so 0 = single.
-kdd28_ydf (tab:column-replication-ydf): --suffix _ydf --metric test_auc --single_csv/--r0_csv = the distacc results.csv
+kdd28_ydf (fig:column-replication-on-spaa-datasets): --suffix _on_spaa_datasets --metric test_auc --single_csv/--r0_csv = the distacc results.csv
 (same row filters and arms as make_column_replication_table.py).
 
 Writes .dat files and a pgfplots body; the figure environment and caption live in main.tex.

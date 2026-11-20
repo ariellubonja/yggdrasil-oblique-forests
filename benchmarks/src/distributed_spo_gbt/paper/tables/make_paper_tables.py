@@ -35,6 +35,8 @@ PURPLE_ON = False  # --purple: dist SPO cell == dist AA cell at the same W on ev
 PURPLE = r"\cellcolor[RGB]{215,195,240}"
 SHAPES = {}  # dataset -> (rows, features) from --dataset_shapes, always printed after the name
 SHAPES_CSV = "benchmarks/results/runtime/speedup_map_by_dataset/analysis/per_dataset_summary.csv"  # same fold files
+CATS = {}  # dataset -> categorical feature count from --dataset_categoricals, printed as cat=X in the shape
+CATS_CSV = "benchmarks/data/dataset_properties/kdd28_dataset_categoricals.csv"  # benchmarks/data/build_kdd28_categoricals.py
 PLACEHOLDER_W = []  # --placeholder_workers: SPO dist columns printed as "--" until their rows exist
 PLACEHOLDERS = set()  # labels of those columns (no rows yet)
 STD_BELOW = False  # --std_below: the +-std goes under the mean, in \tiny gray (white on dark cells)
@@ -55,9 +57,14 @@ def ds_label(ds, mark=""):
     if ds not in SHAPES:
         sys.exit(f"--dataset_shapes has no row for {ds}")
     r, f = SHAPES[ds]
+    if ds not in CATS:
+        sys.exit(f"--dataset_categoricals has no row for {ds}")
+    c, cf = CATS[ds]
+    if cf != f:  # both files must describe the same feature set
+        sys.exit(f"{ds}: --dataset_categoricals says {cf} features, --dataset_shapes {f}")
     if SHAPE_BELOW:  # shape on a second, smaller gray line: narrower first column
-        return r"\shortstack[l]{" + name + r"\\[-2pt]{\tiny" + GRAY + f" ({_k(r)}, {f})" + "}}"
-    return f"{name} ({_k(r)}, {f})"
+        return r"\shortstack[l]{" + name + r"\\[-2pt]{\tiny" + GRAY + f" ({_k(r)}, {f}, cat={c})" + "}}"
+    return f"{name} ({_k(r)}, {f}, cat={c})"
 
 
 def purple_pairs(d, metric):
@@ -308,6 +315,7 @@ if __name__ == "__main__":
     ap.add_argument("--seed_mean", action="store_true", help="average each (dataset, fold, arm) over the profile's seeds "
                     "first (all required), then mean/std over folds")
     ap.add_argument("--shape_below", action="store_true", help="print (rows, cols) under the dataset name in \\tiny gray")
+    ap.add_argument("--dataset_categoricals", default=CATS_CSV, help="repo-relative CSV with dataset,categorical,features for cat=X")
     ap.add_argument("--dataset_shapes", default=SHAPES_CSV, help="repo-relative CSV with dataset,rows,features for the (rows, cols) after each name")
     kdd28.add_profile_arg(ap, __file__)
     args = ap.parse_args()
@@ -329,6 +337,8 @@ if __name__ == "__main__":
     ONE_BOLD = args.one_bold or args.purple
     sh = pd.read_csv(ROOT / args.dataset_shapes).drop_duplicates("dataset").set_index("dataset")
     SHAPES = {d: (int(r.rows), int(r.features)) for d, r in sh.iterrows()}
+    ca = pd.read_csv(ROOT / args.dataset_categoricals).set_index("dataset")
+    CATS = {d: (int(r.categorical), int(r.features)) for d, r in ca.iterrows()}
     EXTRA = [(p, *EXTRA_SPECS[n]) for n, p in (kv.split("=", 1) for kv in args.extra.split(",") if kv)]
     if not args.accuracy_csv:
         ap.error("--accuracy_csv is required (dist-accuracy appendix: --profile table8 --accuracy_csv "

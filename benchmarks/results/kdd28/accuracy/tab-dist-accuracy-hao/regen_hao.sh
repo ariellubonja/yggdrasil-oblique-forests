@@ -5,7 +5,7 @@ A=benchmarks/results/kdd28/accuracy; G=benchmarks/src/distributed_spo_gbt
 python3 $A/tab-dist-accuracy-hao/assemble_hao.py
 for v in "" _wide; do
   D=$A/tab-dist-accuracy-hao${v/_/-}
-  if [ -z "$v" ]; then S=kdd28_tabarena33; SH=(); NOTE="SPAA paper eval"; else S=kdd28_wide_union; SH=(--dataset_shapes $A/tab-dist-accuracy-ydf-wide/wide_shapes.csv); NOTE="wide union (F>=100)"; fi
+  if [ -z "$v" ]; then S=kdd28_tabarena33; SH=(); NOTE="SPAA paper eval"; else S=kdd28_wide_union; SH=(--dataset_shapes $A/tab-accuracy-on-datasets-over-100-columns/wide_shapes.csv); NOTE="wide union (F>=100)"; fi
   COMMON=(--accuracy_csv $D/distacc/results.csv --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa
     --profile kdd28_hao --suffix _hao$v --purple --extra aaspo=$D/distacc_aaspo/results.csv --extra_first --seed_mean
     --eval_suite $S "${SH[@]}" --accuracy_note "IN-PROCESS reruns, kdd28_hao, mean over seeds 1-5, $NOTE")

@@ -1,14 +1,14 @@
-# tab:dist-accuracy-ydf-wide
+# tab:accuracy-on-datasets-over-100-columns
 
 Results behind the KDD28 float(s) below. Rebuild the bodies with the commands. Index and rules:
 `benchmarks/results/kdd28/README.md`.
 
-- **Labels:** `tab:dist-accuracy-ydf-wide`, `fig:dist-accuracy-mean-ydf-wide`, `fig:column-replication-ydf-wide`, `tab:column-replication-ydf-wide` (section `sec:accuracy-wide`, "Accuracy on Datasets with >=100 Columns")
-- **Status:** current (main body), added 2026-11-04. Metric: test ROC AUC
+- **Labels:** `tab:accuracy-on-datasets-over-100-columns`, `fig:accuracy-on-datasets-over-100-columns`, `fig:column-replication-over-100-columns` (tab:column-replication-over-100-columns dropped from the paper 2026-11-20, user) (section `sec:accuracy-on-datasets-over-100-columns`, "Accuracy on Datasets with >=100 Columns")
+- **Status:** current (appendix, moved 2026-11-20), added 2026-11-04. Metric: test ROC AUC
 - **What (union, user directive 2026-11-05):** 14 datasets, eval suite `kdd28_wide_union` (`params/eval_suites.json`). (a) The 6
   SPAA paper eval datasets with more than 100 features: APSFailure (170), Bioresponse (1776), ecom-offers (119),
-  homecredit-default (696), homesite-insurance (299), kddcup09_appetency (212). Row subsets of `tab-dist-accuracy-ydf/` and
-  `tab-column-replication-ydf/`, made by `filter_wide.py` (the CSVs directly under `distacc/`, `distacc_aaspo/`,
+  homecredit-default (696), homesite-insurance (299), kddcup09_appetency (212). Row subsets of `tab-accuracy-on-spaa-datasets/` and
+  `fig-column-replication-on-spaa-datasets/`, made by `filter_wide.py` (the CSVs directly under `distacc/`, `distacc_aaspo/`,
   `colrep_distacc/`). (b) The wide dataset eval `kdd28_wide_datasets` (8 sets, F >= 100): epsilon, santander_transaction,
   hcdr_main, dota2, vehicle_sensIT, guillermo, philippine, christine. Run 2026-11-05 on c8i.metal-96xl (ariel-ydf-1 and
   ariel-ydf-7, same binaries 0416519f-dirty, same flags as (a)), `wide_eval/<table>/results.csv` = both boxes merged, rc=0,
@@ -32,28 +32,22 @@ Results behind the KDD28 float(s) below. Rebuild the bodies with the commands. I
 - **Raw cells:** (a) as in the source READMEs. (b) EC2 ariel-ydf-1 (i-0f90f7764082bf21a) and ariel-ydf-7 (i-04668dc60810fb749)
   `~/results/2026-11-04_wide_eval/`, mirrored to `ariel_notes/results/2026-11-04_wide_eval/{ariel-ydf-1,ariel-ydf-7}`;
   shard scripts `ariel_notes/results/2026-11-05_wide_eval_shards/`
-- **Commands:** run from the repo root, write `_ydf_wide` bodies into the paper dir
+- **Commands:** run from the repo root, write `_over_100_columns` bodies into the paper dir
 
 ```
-D=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf-wide; A=benchmarks/results/kdd28/accuracy; U=$D/union
+D=benchmarks/results/kdd28/accuracy/tab-accuracy-on-datasets-over-100-columns; A=benchmarks/results/kdd28/accuracy; U=$D/union
 SH=benchmarks/results/runtime/speedup_map_by_dataset/analysis/per_dataset_summary.csv
-python3 $D/filter_wide.py $SH $A/tab-dist-accuracy-ydf/distacc/results.csv $D/distacc/results.csv
-python3 $D/filter_wide.py $SH $A/tab-dist-accuracy-ydf/distacc_aaspo/distacc_aaspo.csv $D/distacc_aaspo/distacc_aaspo.csv
-python3 $D/filter_wide.py $SH $A/tab-dist-accuracy-ydf/distacc_aaspo/distacc_exact300.csv $D/distacc_aaspo/distacc_exact300.csv
-python3 $D/filter_wide.py $SH $A/tab-column-replication-ydf/colrep_distacc/results.csv $D/colrep_distacc/results.csv
+python3 $D/filter_wide.py $SH $A/tab-accuracy-on-spaa-datasets/distacc/results.csv $D/distacc/results.csv
+python3 $D/filter_wide.py $SH $A/tab-accuracy-on-spaa-datasets/distacc_aaspo/distacc_aaspo.csv $D/distacc_aaspo/distacc_aaspo.csv
+python3 $D/filter_wide.py $SH $A/tab-accuracy-on-spaa-datasets/distacc_aaspo/distacc_exact300.csv $D/distacc_aaspo/distacc_exact300.csv
+python3 $D/filter_wide.py $SH $A/fig-column-replication-on-spaa-datasets/colrep_distacc/results.csv $D/colrep_distacc/results.csv
 python3 $D/union_wide.py && python3 $D/make_wide_shapes.py
 python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --accuracy_csv $U/distacc/results.csv --dataset_shapes $D/wide_shapes.csv \
   --accuracy_note "IN-PROCESS reruns (workers = threads of one process): SPAA paper eval rows on AWS m7i.metal-24xl, wide dataset eval rows on c8i.metal-96xl; datasets with F>=100" \
-  --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _ydf_wide --purple \
+  --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _over_100_columns --purple \
   --extra aaspo=$U/distacc_aaspo/results.csv,exact300=$U/distacc_exact300/results.csv --extra_first --eval_suite kdd28_wide_union \
   --std_below --shape_below --group_header --no_figure --time_row  # table only (2026-11-06), the figure needs the command without the last 4 flags
-python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_column_replication_table.py $U/colrep_distacc \
-  --out paper/distributed_spo_gbt_kdd28/tables/table_column_replication_ydf_wide_body.tex \
-  "IN-PROCESS rerun, c8i.metal-96xl SMT+turbo, W=4; r=0 and single = the distacc rows of the same eval (SPAA paper eval rows: 2026-11-03 m7i); datasets with F>=100" --metric test_auc \
-  --single_csv $U/distacc/results.csv --single_filter arm=single:SPO --single_arms distacc_single_spo \
-  --dist_arm colrep_distacc_spo --r0_csv $U/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo \
-  --profile kdd28_ydf --eval_suite kdd28_wide_union
-python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_column_replication_fig.py --csv $U/colrep_distacc/results.csv --suffix _ydf_wide --metric test_auc \
+python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_column_replication_fig.py --csv $U/colrep_distacc/results.csv --suffix _over_100_columns --metric test_auc \
   --dist_arm colrep_distacc_spo --single_csv $U/distacc/results.csv --single_filter arm=single:SPO \
   --single_arms distacc_single_spo --r0_csv $U/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo \
   --profile kdd28_ydf --eval_suite kdd28_wide_union

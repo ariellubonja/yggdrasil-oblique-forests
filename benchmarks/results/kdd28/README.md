@@ -8,10 +8,10 @@ How to recreate a run: `benchmarks/src/distributed_spo_gbt/REPLICABILITY.md`.
 
 | Paper section | Dir | Labels | Profile |
 |---|---|---|---|
-| Accuracy | `accuracy/tab-dist-accuracy-ydf/` | tab:dist-accuracy-ydf, fig:dist-accuracy-mean-ydf | kdd28_ydf.distacc_* |
-| Accuracy | `accuracy/tab-column-replication-ydf/` | tab:column-replication-ydf, fig:column-replication-ydf | kdd28_ydf.colrep_distacc_spo |
-| Accuracy >100 cols | `accuracy/tab-dist-accuracy-ydf-wide/` | tab:dist-accuracy-ydf-wide, fig:dist-accuracy-mean-ydf-wide, fig:column-replication-ydf-wide, tab:column-replication-ydf-wide | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
-| Accuracy, SPO-advantage datasets | `accuracy/tab-dist-accuracy-ydf-spo-advantage/` | tab:dist-accuracy-ydf-spo-advantage, fig:dist-accuracy-mean-ydf-spo-advantage, fig:column-replication-ydf-spo-advantage | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
+| Accuracy | `accuracy/tab-accuracy-on-spaa-datasets/` | tab:accuracy-on-spaa-datasets, fig:accuracy-on-spaa-datasets | kdd28_ydf.distacc_* |
+| Accuracy | `accuracy/fig-column-replication-on-spaa-datasets/` | fig:column-replication-on-spaa-datasets | kdd28_ydf.colrep_distacc_spo |
+| Accuracy >100 cols | `accuracy/tab-accuracy-on-datasets-over-100-columns/` | tab:accuracy-on-datasets-over-100-columns, fig:accuracy-on-datasets-over-100-columns, fig:column-replication-over-100-columns | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
+| Accuracy, SPO-advantage datasets | `accuracy/tab-accuracy-where-spo-outperforms-aa/` | tab:accuracy-where-spo-outperforms-aa, fig:accuracy-where-spo-outperforms-aa, fig:column-replication-where-spo-outperforms-aa | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
 | Accuracy, Hao's settings, 5 seeds | `accuracy/tab-dist-accuracy-hao/` | tab:dist-accuracy-hao, fig:dist-accuracy-mean-hao, fig:column-replication-hao | kdd28_hao.distacc_*, kdd28_hao.colrep_distacc_spo |
 | Accuracy, Hao's settings, 5 seeds, >100 cols | `accuracy/tab-dist-accuracy-hao-wide/` | tab:dist-accuracy-hao-wide, fig:dist-accuracy-mean-hao-wide, fig:column-replication-hao-wide | kdd28_hao.distacc_*, kdd28_hao.colrep_distacc_spo |
 | Runtime | `runtime/tab-vertex-hm4-pf-runtime/` | tab:vertex-hm4-pf-runtime, fig:vertex-hm4-hm16-pf-runtime | vertex_grid_pf |

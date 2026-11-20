@@ -1,4 +1,4 @@
-# tab:dist-accuracy-ydf extra single-machine columns (2026-11-04)
+# tab:accuracy-on-spaa-datasets extra single-machine columns (2026-11-04)
 
 - `distacc_aaspo.csv`: AA+SPO-GBT, profile arm `kdd28_ydf.distacc_single_aa_spo` (YDF defaults, `--oblique_also_axis_aligned`).
 - `distacc_exact300.csv`: arm (c) of tab:cc18-aa-spo, `kdd28_ydf.distacc_single_spo_harness_exact300`

@@ -1,4 +1,4 @@
-# dataset,rows,features for sec:accuracy-wide: SPAA paper eval shapes (make_paper_tables.SHAPES_CSV) for the union's 6,
+# dataset,rows,features for sec:accuracy-on-datasets-over-100-columns: SPAA paper eval shapes (make_paper_tables.SHAPES_CSV) for the union's 6,
 # kdd28_wide_datasets_manifest.json (whole dataset: train+test rows, features after drop_columns) for the rest.
 import csv, json, os, sys
 R = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), *[".."] * 5))

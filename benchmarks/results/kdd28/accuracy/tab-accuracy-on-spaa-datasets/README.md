@@ -1,11 +1,11 @@
-# tab:dist-accuracy-ydf
+# tab:accuracy-on-spaa-datasets
 
 Results behind the KDD28 float(s) below. Rebuild the body with the generator command. Index and rules:
 `benchmarks/results/kdd28/README.md`.
 
-- **Labels:** `tab:dist-accuracy-ydf`, `fig:dist-accuracy-mean-ydf`
-  - `tab:dist-accuracy-ydf`: "Test AUC of single-machine vs. $W$-distributed GBT. Single-machine SPO-GBT samples $\min(F^2,6000)$ projections per node, distributed SPO-GBT splits them across the $W$ workers, each sampling from ..."
-  - `fig:dist-accuracy-mean-ydf`: "Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-ydf}."
+- **Labels:** `tab:accuracy-on-spaa-datasets`, `fig:accuracy-on-spaa-datasets`
+  - `tab:accuracy-on-spaa-datasets`: "Test AUC of single-machine vs. $W$-distributed GBT. Single-machine SPO-GBT samples $\min(F^2,6000)$ projections per node, distributed SPO-GBT splits them across the $W$ workers, each sampling from ..."
+  - `fig:accuracy-on-spaa-datasets`: "Mean test AUC over the datasets of Table~\ref{tab:accuracy-on-spaa-datasets}."
 - **Status:** current (main body, Accuracy section)
 - **Profile:** `kdd28_ydf.distacc_single_spo`, `kdd28_ydf.distacc_single_aa`, `kdd28_ydf.distacc_spo`, `kdd28_ydf.distacc_aa`, `kdd28_ydf.distacc_single_aa_spo`, `kdd28_ydf.distacc_single_spo_harness_exact300` (`benchmarks/src/distributed_spo_gbt/params/kdd28_params.json`)
 - **Settings:** effective values from the profile (`params.py show <arm>`), checked against the CSV stamp columns
@@ -23,16 +23,16 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --accuracy_csv benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv \
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --accuracy_csv benchmarks/results/kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc/results.csv \
   --accuracy_note "IN-PROCESS rerun on AWS m7i.metal-24xl (Xeon 8488C; workers = threads of one process)" \
-  --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _ydf --purple \
-  --extra aaspo=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_aaspo.csv,exact300=benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_exact300.csv --extra_first \
+  --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _on_spaa_datasets --purple \
+  --extra aaspo=benchmarks/results/kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc_aaspo/distacc_aaspo.csv,exact300=benchmarks/results/kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc_aaspo/distacc_exact300.csv --extra_first \
   --std_below --shape_below --no_figure --time_row  # table only (2026-11-06), figure: drop these flags
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
-  - `benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc/results.csv`
-  - `benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_aaspo.csv`
-  - `benchmarks/results/kdd28/accuracy/tab-dist-accuracy-ydf/distacc_aaspo/distacc_exact300.csv`
+  - `benchmarks/results/kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc/results.csv`
+  - `benchmarks/results/kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc_aaspo/distacc_aaspo.csv`
+  - `benchmarks/results/kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc_aaspo/distacc_exact300.csv`
 - **Raw cells:** box `~/results/2026-11-03_ydf_defaults_rerun/distacc/` and `~/results/2026-11-04_distacc_aaspo/` on EC2 ariel-dist-accuracy-1 (i-0f90f7764082bf21a), mirrored (logs, models) to the gitignored `ariel_notes/results/2026-11-03_ydf_defaults_rerun/box/distacc/` and `ariel_notes/results/2026-11-04_distacc_aaspo/box/`. REPLICABILITY §J
 
 Regenerated 2026-11-04 from these paths: table and figure bodies equal the Overleaf copies in every non-`%` line.
