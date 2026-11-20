@@ -1,37 +1,46 @@
-# KDD28 results, laid out like the paper (2026-11-04)
+# KDD28 results: measurements in runs/, paper floats in floats/ (2026-11-20)
 
-Paper: `paper/distributed_spo_gbt_kdd28/main.tex` (live copy: the Overleaf clone). One directory per float, named after its
-LaTeX label (`tab:x` -> `tab-x`). A table and the figure drawn from it share the table's directory. Every float dir has a
-`README.md` (labels, caption, status, profile and effective settings, eval suite, machine, date, code, the generator command
-that rebuilds the body, raw-cell links) and an `inputs.txt` (the files the generator reads, one repo-relative path per line).
-How to recreate a run: `benchmarks/src/distributed_spo_gbt/REPLICABILITY.md`.
+Paper: `paper/distributed_spo_gbt_kdd28/main.tex` (live copy: the Overleaf clone). How to recreate a run:
+`benchmarks/src/distributed_spo_gbt/REPLICABILITY.md`.
 
-| Paper section | Dir | Labels | Profile |
+- `runs/<YYYY-MM-DD>_<topic>/`: MEASUREMENT. Each experiment stored once, as the harness or run script wrote it, plus a
+  `README.md` (profile, effective settings, eval suite, machine, date, code, raw-cell locations, which floats read it).
+  `runs/vertex_p_F/` holds the raw Vertex AI cells of several grids (its README lists them).
+- `floats/<section>/<float-label>/`: PRESENTATION. One dir per paper float, named after its LaTeX label (`tab:x` -> `tab-x`).
+  A table and the figure drawn from it share the table's dir. Each has a `README.md` (labels, caption, status, the runs it
+  reads, profile and settings, the generator command), an `inputs.txt` (the files the generator reads, one repo-relative
+  path per line), the selection scripts that build its row subsets, and `derived/` (their output).
+- `analysis/`: evidence with no float. `outdated/`: superseded or stale-bug results, one-line reason each in its README.
+
+| Paper section | Float dir | Labels | Runs read (under `runs/`) |
 |---|---|---|---|
-| Accuracy | `accuracy/tab-accuracy-on-spaa-datasets/` | tab:accuracy-on-spaa-datasets, fig:accuracy-on-spaa-datasets | kdd28_ydf.distacc_* |
-| Accuracy | `accuracy/fig-column-replication-on-spaa-datasets/` | fig:column-replication-on-spaa-datasets | kdd28_ydf.colrep_distacc_spo |
-| Accuracy >100 cols | `accuracy/tab-accuracy-on-datasets-over-100-columns/` | tab:accuracy-on-datasets-over-100-columns, fig:accuracy-on-datasets-over-100-columns, fig:column-replication-over-100-columns | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
-| Accuracy, SPO-advantage datasets | `accuracy/tab-accuracy-where-spo-outperforms-aa/` | tab:accuracy-where-spo-outperforms-aa, fig:accuracy-where-spo-outperforms-aa, fig:column-replication-where-spo-outperforms-aa | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
-| Accuracy, Hao's settings, 5 seeds | `accuracy/tab-accuracy-hao-vs-ydf-params/` | tab:accuracy-hao-vs-ydf-params, fig:accuracy-hao-vs-ydf-params, fig:column-replication-hao-vs-ydf-params | kdd28_hao.distacc_*, kdd28_hao.colrep_distacc_spo |
-| Runtime | `runtime/tab-vertex-hm4-pf-runtime/` | tab:vertex-hm4-pf-runtime, fig:vertex-hm4-hm16-pf-runtime | vertex_grid_pf |
-| Runtime | `runtime/fig-yt8m-barriers/` | fig:yt8m-barriers | vertex_grid_pf |
-| Runtime (cross-worker communication) | `runtime/tab-cross-network/` | tab:cross-network, fig:cross-network | table3 (old settings) |
-| Appendix, earlier settings | `appendix-earlier-settings/tab-dist-accuracy/` | tab:dist-accuracy, fig:dist-accuracy-mean | table8 |
-| Appendix, earlier settings | `appendix-earlier-settings/tab-cc18-aa-spo/` | tab:cc18-aa-spo | cc18_aa_spo |
-| Appendix, earlier settings | `appendix-earlier-settings/tab-column-replication/` | tab:column-replication, fig:column-replication | table2 |
-| Appendix, in-node parallelism | `appendix/tab-in-node-dist-vqsort-ablation/` | tab:in-node-dist-vqsort-ablation | vertex_grid_pf |
-| Appendix, in-node parallelism | `appendix/tab-in-node-dist-vqsort-vertex/` | tab:in-node-dist-vqsort-vertex | in_node_threads |
-| Appendix | `appendix/tab-setup-cost/` | tab:setup-cost | vertex_grid_pf |
-| Appendix | `appendix/fig-cc18-tree-feature-hist/` | fig:cc18-tree-feature-hist | cc18_feature_study |
+| Accuracy | `floats/accuracy/tab-accuracy-on-spaa-datasets/` | tab:accuracy-on-spaa-datasets, fig:accuracy-on-spaa-datasets | `2026-11-03_distacc`, `2026-11-04_distacc_aaspo` |
+| Accuracy (appendix) | `floats/accuracy/fig-column-replication-on-spaa-datasets/` | fig:column-replication-on-spaa-datasets | `2026-11-04_colrep_distacc`, `2026-11-03_distacc` |
+| Accuracy >100 cols (appendix) | `floats/accuracy/tab-accuracy-on-datasets-over-100-columns/` | tab:accuracy-on-datasets-over-100-columns, fig:accuracy-on-datasets-over-100-columns, fig:column-replication-over-100-columns | `2026-11-03_distacc`, `2026-11-04_distacc_aaspo`, `2026-11-04_colrep_distacc`, `2026-11-04_wide_eval` |
+| Accuracy, SPO-advantage datasets | `floats/accuracy/tab-accuracy-where-spo-outperforms-aa/` | tab:accuracy-where-spo-outperforms-aa, fig:accuracy-where-spo-outperforms-aa, fig:column-replication-where-spo-outperforms-aa | `2026-11-03_distacc`, `2026-11-04_distacc_aaspo`, `2026-11-04_colrep_distacc`, `2026-11-04_wide_eval` |
+| Accuracy, Hao's settings, 5 seeds (appendix) | `floats/accuracy/tab-accuracy-hao-vs-ydf-params/` | tab:accuracy-hao-vs-ydf-params, fig:accuracy-hao-vs-ydf-params, fig:column-replication-hao-vs-ydf-params, tab:accuracy-hao-vs-ydf-params-single-machine, tab:accuracy-hao-vs-ydf-params-distributed | `2026-11-06_hao_seeds`, `2026-11-03_distacc`, `2026-11-04_distacc_aaspo` |
+| Evaluation setup (appendix) | `floats/accuracy/tab-ordinal-vs-native/` | tab:ordinal-vs-native | `2026-11-19_ordinal_vs_native` |
+| Runtime | `floats/runtime/tab-vertex-hm4-pf-runtime/` | tab:vertex-hm4-pf-runtime, fig:vertex-hm4-hm16-pf-runtime | `vertex_p_F` (pfhm4fix20261101, pfgridfix20261101) |
+| Runtime | `floats/runtime/fig-yt8m-barriers/` | fig:yt8m-barriers | `vertex_p_F` (pfhm4fix20261101_youtube8m) |
+| Runtime (cross-worker communication) | `floats/runtime/tab-cross-network/` | tab:cross-network, fig:cross-network | `2026-11-01_cross_network` |
+| Appendix, in-node parallelism | `floats/appendix/tab-in-node-dist-vqsort-ablation/` | tab:in-node-dist-vqsort-ablation | `vertex_p_F` (pfw1*20261025) |
+| Appendix, in-node parallelism | `floats/appendix/tab-in-node-dist-vqsort-vertex/` | tab:in-node-dist-vqsort-vertex | `2026-10-22_in_node_parallelism` |
+| Appendix | `floats/appendix/tab-setup-cost/` | tab:setup-cost | `vertex_p_F` (pfhm4fix20261101, pfgridfix20261101, pfw1*20261025) |
+| Appendix | `floats/appendix/fig-cc18-tree-feature-hist/` | fig:cc18-tree-feature-hist | `2026-10-26_cc18_gbt_feature_study` |
+| Appendix, earlier settings | `floats/appendix-earlier-settings/tab-dist-accuracy/` | tab:dist-accuracy, fig:dist-accuracy-mean | `2026-11-01_dist_accuracy_spo`, `2026-10-30_dist_accuracy_aa` |
+| Appendix, earlier settings | `floats/appendix-earlier-settings/tab-cc18-aa-spo/` | tab:cc18-aa-spo | `2026-11-03_cc18_aa_spo` |
+| Appendix, earlier settings | `floats/appendix-earlier-settings/tab-column-replication/` | tab:column-replication, fig:column-replication | `2026-11-01_colrep_vertex_split_budget`, `2026-11-01_colrep_single_spo_10seeds` |
 
-Other top-level dirs: `cells/` (raw Vertex cells shared by several floats), `analysis/` (evidence with no float),
-`outdated/` (superseded or stale-bug results, one-line reason each in its README).
+The three `appendix-earlier-settings/` floats are no longer in the live main.tex (check_layout.py reports them). Diagram
+floats without data (`fig:ydf-dist-gbt-training-loop`, `fig:ydf-dist-gbt-load-balancing`) have no dir.
 
 Rules:
-1. A generator reads only the files its float's `inputs.txt` names (`make_pf_ablation_tables.py` enforces it, the others
-   default to these paths). New results land in the float dir they feed, or in `cells/` for Vertex cells.
-2. When a float is added, renamed or dropped in main.tex, move its dir (dropped -> `outdated/` with a reason line).
-3. Check: `python3 benchmarks/src/distributed_spo_gbt/params/check_layout.py [main.tex]` (default: the repo snapshot).
-   It is also run by `params.py selftest` and `check_argv_equivalence.sh`.
-
-Diagram floats without data (`fig:ydf-dist-gbt-training-loop`, `fig:ydf-dist-gbt-load-balancing`) have no dir.
+1. New measurements land in a new `runs/<YYYY-MM-DD>_<topic>/` with a README, never in a float dir. The topic never names a
+   table or section number. Vertex P = F cells go to `runs/vertex_p_F/` (`run_vertex_barriers.py`).
+2. Files in a run dir are never edited or renamed after the run. A float reads them in place. A row subset or union lives in
+   the float's `derived/`, written by a script in the float dir, and must rebuild byte-identically from `runs/`.
+3. `inputs.txt` paths point into `runs/`, into the float's own `derived/`, or outside the results tree. Reading another
+   float's `derived/` needs a `# cross-float` comment on that line.
+4. When a float is added, renamed or dropped in main.tex, move its dir (dropped -> `outdated/` with a reason line).
+5. Check: `python3 benchmarks/src/distributed_spo_gbt/params/check_layout.py [main.tex]` (default: the Overleaf clone, else
+   the repo snapshot). It is also run by `params.py selftest` and `check_argv_equivalence.sh`.

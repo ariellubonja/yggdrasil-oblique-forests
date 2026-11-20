@@ -12,13 +12,17 @@ import params as kdd28  # noqa: E402  (params/kdd28_params.json)
 
 ROOT = pathlib.Path(__file__).resolve().parents[5]
 # argv: [src_dir (results.csv, summary_pooled.csv, single_machine_spo_gbt.csv)] [out_body.tex] [run note]
+DEFAULT_SRC = ROOT / "benchmarks/results/kdd28/runs/2026-11-01_colrep_vertex_split_budget"
+# Single rows of the default src live in their own run dir (10 seeds)
+DEFAULT_SINGLE = ROOT / "benchmarks/results/kdd28/runs/2026-11-01_colrep_single_spo_10seeds/single_machine_spo_gbt.csv"
 _ap = argparse.ArgumentParser()
-_ap.add_argument("src", nargs="?", default=str(ROOT / "benchmarks/results/kdd28/appendix-earlier-settings/tab-column-replication/table2_single10"))
+_ap.add_argument("src", nargs="?", default=str(DEFAULT_SRC))
 _ap.add_argument("out_pos", nargs="?", default=None, metavar="out")
 _ap.add_argument("note", nargs="?", default="Vertex AI run colrep-fullparity_fullparity20261101 with --split_budget, "
                  "dgbt-spo-full-fixes 10509539; single row 10 seeds (1-5 run 2c0990f0, 6-10 parity audit S1)")
 _ap.add_argument("--out", default=None, help="output body path (same as the 2nd positional)")
-_ap.add_argument("--single_csv", default=None, help="single-machine rows (default: <src>/single_machine_spo_gbt.csv)")
+_ap.add_argument("--single_csv", default=None,
+                 help="single-machine rows (default: <src>/single_machine_spo_gbt.csv, for the default src its 10-seed run file)")
 _ap.add_argument("--dist_arm", default="dist_split", help="profile arm of the distributed rows (kdd28_ydf: colrep_spo)")
 _ap.add_argument("--single_arms", default="single_spo,single_spo_audit", help="profile arms of the single rows")
 _ap.add_argument("--metric", default="test_acc", choices=["test_acc", "test_auc"], help="headline metric")
@@ -33,7 +37,10 @@ if _a.out and _a.out_pos:  # "src --out X note": the 2nd positional is the note
 SRC = pathlib.Path(_a.src).resolve()
 OUT = pathlib.Path(_a.out or _a.out_pos or ROOT / "paper/distributed_spo_gbt_kdd28/tables/table_column_replication_body.tex")
 NOTE = _a.note
-SINGLE = pathlib.Path(_a.single_csv).resolve() if _a.single_csv else SRC / "single_machine_spo_gbt.csv"
+if _a.single_csv:
+    SINGLE = pathlib.Path(_a.single_csv).resolve()
+else:
+    SINGLE = DEFAULT_SINGLE if SRC == DEFAULT_SRC.resolve() else SRC / "single_machine_spo_gbt.csv"
 SINGLE_ARMS = _a.single_arms.split(",")
 EPS = 1e-9
 DASH = r"\multicolumn{1}{c}{---}"

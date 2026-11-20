@@ -3,7 +3,7 @@
 Same cells and selection as make_pf_grid_table.py (imports its grid()); bars = arm x W, hue = arm, lightness = W.
 Writes <out_dir>/fig_vertex_<tag>_pf_body.tex + <tag>.dat per panel; figure environment/caption live in main.tex.
 Usage: make_pf_grid_fig.py [--out_dir DIR] [--hm4_prefix P --hm4_oom_log LOG --hm16_prefix P]
-  (defaults reproduce the paper's fig:vertex-hm4-hm16-pf-runtime panels, cells in benchmarks/results/kdd28/cells/vertex_p_F)"""
+  (defaults reproduce the paper's fig:vertex-hm4-hm16-pf-runtime panels, cells in benchmarks/results/kdd28/runs/vertex_p_F)"""
 import argparse, os, sys
 
 _PKG = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))  # distributed_spo_gbt/
@@ -20,7 +20,7 @@ OUT = os.path.join(HERE, "../../../paper/distributed_spo_gbt_kdd28/figures/evalu
 TEX_DIR = "figures/evaluation/vertex_pf"  # path as seen from main.tex
 PANELS = [  # (tag, title, run_prefix, machine, W list, oom log glob, legend?)
     ("hm4", "n2-highmem-4", "pfhm4fix20261101", "n2-highmem-4", "1,2,4,8,16",
-     kdd28.results_path("cells/vertex_p_F/pfhm4fix20261101_youtube8m/launcher.log")),
+     kdd28.results_path("runs/vertex_p_F/pfhm4fix20261101_youtube8m/launcher.log")),
     ("hm16", "n2-highmem-16", "pfgridfix20261101", "n2-highmem-16", "1,2,4", None),
 ]
 # Light-mode W ramps (validated: adjacent SPO/AA pairs ΔE >= 13.5 CVD, >= 16.6 normal).

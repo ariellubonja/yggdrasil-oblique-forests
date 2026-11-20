@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Paper-generator inputs from the fixed reruns (old fixed_reruns_2026-11-01/ layout, now mapped by layout.py into
-benchmarks/results/kdd28: paper_inputs/X lands in the float dir that reads it):
+benchmarks/results/kdd28: paper_inputs/X lands in the derived/ dir of the float that reads it):
   table2/  results.csv + summary_pooled.csv of table2/fullfix_splitbudget (cluster P = F, the single-machine
            budget) + the unchanged single-machine row
            -> make_column_replication_{table,fig}.py
@@ -89,7 +89,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", default=None, help="an old-layout fixed_reruns dir (default: the kdd28 tree, layout.py)")
     ap.add_argument("--aa_csv", default=os.path.join(
-        REPO, "benchmarks/results/kdd28/appendix-earlier-settings/tab-dist-accuracy/raw/table8_rerun_20261030/results.csv"))
+        REPO, "benchmarks/results/kdd28/runs/2026-10-30_dist_accuracy_aa/results.csv"))
     a = ap.parse_args()
     if a.results:
         os.makedirs(at(a.results, "paper_inputs"), exist_ok=True)

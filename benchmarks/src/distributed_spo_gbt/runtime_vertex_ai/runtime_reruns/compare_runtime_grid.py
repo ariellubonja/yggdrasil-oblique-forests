@@ -12,7 +12,7 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 K = os.path.join(HERE, "../../../../results/kdd28")
-OLD, NEW = os.path.join(K, "outdated/vertex_p_F_prefix_20261025"), os.path.join(K, "cells/vertex_p_F")
+OLD, NEW = os.path.join(K, "outdated/vertex_p_F_prefix_20261025"), os.path.join(K, "runs/vertex_p_F")
 GRIDS = [("n2-highmem-4", "pfhm4_20261025", "pfhm4fix20261101"), ("n2-highmem-16", "pfgrid20261025", "pfgridfix20261101")]
 
 

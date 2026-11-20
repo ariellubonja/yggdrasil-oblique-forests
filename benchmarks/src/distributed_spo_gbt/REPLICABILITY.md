@@ -4,8 +4,9 @@
 trained on cache-bin representatives; plus nondeterministic tie order). §G has the fixes, the reruns, and how to
 recreate them; it supersedes §E/§F for accuracy.
 
-Since 2026-11-04 every KDD28 result on `main` lives in `benchmarks/results/kdd28/`, laid out like the paper (§L): one dir
-per float, named after its LaTeX label. Raw Vertex cells of family A are in `kdd28/cells/vertex_p_F/`. Studies E and F keep
+Since 2026-11-04 every KDD28 result on `main` lives in `benchmarks/results/kdd28/` (§L). Since 2026-11-20 each measurement
+is stored once in `kdd28/runs/<date>_<topic>/` and each paper float has a dir in `kdd28/floats/`, named after its LaTeX
+label. Raw Vertex cells of family A are in `kdd28/runs/vertex_p_F/`. Studies E and F keep
 their results (and the generators of their paper artifacts) on their own branch; `main` holds the code they ran,
 the paper bodies, and the pointers below. They share the C++
 learner (this fork's `learner/distributed_gradient_boosted_trees`, in-worker sparse-oblique kernel) but
@@ -19,9 +20,9 @@ this folder.
 
 | Family | Where it runs | Driver | Results |
 |---|---|---|---|
-| A. Vertex AI grids on natural datasets (GRPC, one VM per manager and per worker) | GCP project `ydf-distributed-spo-gbt`, `us-east1` | `runtime_vertex_ai/run_vertex_barriers.py` + `vertex_build/` | `kdd28/cells/vertex_p_F/<RUN_ID>_<dataset>/<arm>_w<W>/` (P = F), superseded grids in `kdd28/outdated/` |
+| A. Vertex AI grids on natural datasets (GRPC, one VM per manager and per worker) | GCP project `ydf-distributed-spo-gbt`, `us-east1` | `runtime_vertex_ai/run_vertex_barriers.py` + `vertex_build/` | `kdd28/runs/vertex_p_F/<RUN_ID>_<dataset>/<arm>_w<W>/` (P = F), superseded grids in `kdd28/outdated/` |
 | B. Vertex AI weak/strong scaling on trunk data (2026-10-15) | same project, `n2-highmem-2` | the two notebooks + `vertex_build/` | `kdd28/outdated/vertex_scaling_20261015/<RUN_ID>_<cols>c/`; removed from `main.tex` on 2026-10-26 |
-| C. Single box, workers as threads in one process | AWS `m7i.metal-24xl` | `examples/train_distributed_gbt` via `accuracy_multi_thread/run_dgbt*.sh`, `accuracy_multi_thread/queue*.sh` | `kdd28/outdated/inprocess_m7i_grid_20261012/`, `kdd28/appendix/tab-in-node-dist-vqsort-vertex/`; smoke tests since 2026-10-25 |
+| C. Single box, workers as threads in one process | AWS `m7i.metal-24xl` | `examples/train_distributed_gbt` via `accuracy_multi_thread/run_dgbt*.sh`, `accuracy_multi_thread/queue*.sh` | `kdd28/outdated/inprocess_m7i_grid_20261012/`, `kdd28/runs/2026-10-22_in_node_parallelism/`; smoke tests since 2026-10-25 |
 | E. Column replication on CC18 (Vertex, n2-highmem-4) | same project | `runtime_vertex_ai/column_replication/run_vertex_colrep.py` + `vertex_build/train_cells.py` | **branch `column-replication`** (b64346ca), see §E |
 | F. Naive column shipping / cross-network (Vertex, n2-highmem-4) | same project | see the branch | **branch `cross-worker-col-comms`** (f4548d37), see §F |
 | G. Fixed reruns of Tables 2, 3, 8 + distributed-vs-single parity (2026-11-01) | Vertex (2, 3) and the m7i (8) | `accuracy_multi_thread/fixed_reruns/` (8), `runtime_vertex_ai/fixed_reruns/` (2, 3) | code `dgbt-spo-full-fixes` (63d05422), results on `main` spread over `kdd28/` by `accuracy_multi_thread/fixed_reruns/layout.py`, see §G |
@@ -32,7 +33,7 @@ One `CustomJob` per (dataset, arm, W) cell: worker pool 0 = manager, pool 1 = W 
 type. The training image is built from `vertex_build/` (below); the manager writes `barriers.csv` (the
 barrier recorder, `DGBT_BARRIER_CSV`, commit 0e37d40d; `train.py` uploads it since 44cad8d7) next to `eval.json`.
 Finished cells are downloaded to
-`benchmarks/results/kdd28/cells/vertex_p_F/<RUN_ID>_<dataset>/<arm>_w<W>/{eval.json,barriers.csv,manager.log,summary.txt}` and
+`benchmarks/results/kdd28/runs/vertex_p_F/<RUN_ID>_<dataset>/<arm>_w<W>/{eval.json,barriers.csv,manager.log,summary.txt}` and
 summarized with `summarize_barriers.py`. Flags: `--dataset` (epsilon, higgs, susy, youtube8m, climsim,
 numerai, criteo, jane_street, airline), `--workers 1,2,4,8`, `--arms aa,spo`, `--machine` (default
 `n2-highmem-16`), `--trees` (default 50), `--p_total` (default ceil(sqrt F)), `--image`, `--run_id`
@@ -50,13 +51,13 @@ worker = the node's vCPUs (YDF default). SPO arms: binary weights, density 1.5, 
 (`--p_total F`; the per-W exponent is recorded in `eval.json["learner_kwargs"]`). The 2026-10-24 grids
 predate both rules (n2-highmem-4, P = ceil(sqrt F)).
 
-### Runs so far (`kdd28/cells/vertex_p_F/` and `kdd28/outdated/`, all P = F since 2026-10-26)
+### Runs so far (`kdd28/runs/vertex_p_F/` and `kdd28/outdated/`, all P = F since 2026-10-26)
 
 | Folders | Date | Machine | Trees | SPO budget | Cells | Feeds |
 |---|---|---|---|---|---|---|
-| `cells/vertex_p_F/pfw1{base,vqsort,parstd,innode}20261025_{epsilon,higgs,susy}` | 10-25 | n2-highmem-16 | 10 | F | W = 1: aa + four SPO workers (`0e37d40d` main before the fix, `1a1934fa` VQSort only, `4df36453-stdsort` chunk jobs only, `4df36453` both) | `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` |
-| `outdated/vertex_p_F_prefix_20261025/pfhm4_20261025_*`, `.../pfgrid20261025_*` | 10-25 | n2-highmem-4 / n2-highmem-16 | 10 | F | aa, spo (parallel worker on `main`); W = 1..16 / 1..4; Epsilon, HIGGS, SUSY, YouTube-8M | superseded by `cells/vertex_p_F/pf*fix20261101_*` (image fullfix-10509539, 2026-11-01), which feed tab:vertex-hm4-pf-runtime, its figure, fig:yt8m-barriers and tab:setup-cost |
-| `outdated/vertex_p_F_prefix_20261025/pfhm4bar20261025_*` | 10-25 | n2-highmem-4 | 10 | F | aa, spo at W = 16 with the barrier recorder on | superseded: the barrier figures now come from `cells/vertex_p_F/pfhm4fix20261101_youtube8m` (`make_barrier_figs.py` default) |
+| `runs/vertex_p_F/pfw1{base,vqsort,parstd,innode}20261025_{epsilon,higgs,susy}` | 10-25 | n2-highmem-16 | 10 | F | W = 1: aa + four SPO workers (`0e37d40d` main before the fix, `1a1934fa` VQSort only, `4df36453-stdsort` chunk jobs only, `4df36453` both) | `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` |
+| `outdated/vertex_p_F_prefix_20261025/pfhm4_20261025_*`, `.../pfgrid20261025_*` | 10-25 | n2-highmem-4 / n2-highmem-16 | 10 | F | aa, spo (parallel worker on `main`); W = 1..16 / 1..4; Epsilon, HIGGS, SUSY, YouTube-8M | superseded by `runs/vertex_p_F/pf*fix20261101_*` (image fullfix-10509539, 2026-11-01), which feed tab:vertex-hm4-pf-runtime, its figure, fig:yt8m-barriers and tab:setup-cost |
+| `outdated/vertex_p_F_prefix_20261025/pfhm4bar20261025_*` | 10-25 | n2-highmem-4 | 10 | F | aa, spo at W = 16 with the barrier recorder on | superseded: the barrier figures now come from `runs/vertex_p_F/pfhm4fix20261101_youtube8m` (`make_barrier_figs.py` default) |
 
 Deleted on 2026-10-26 (recoverable from commits 9cb1fc0f / 88b70553): `20261024T003657Z_epsilon` (duplicate
 of `162251Z`), `20261024T225254Z_criteo` (2-tree probe), `20261024T224943Z_*` (dropped in-node branch at
@@ -67,7 +68,7 @@ longer be regenerated with those rows). The rest of the 2026-10-24 sqrt(F) data 
 The setup-cost table's n2-highmem-4 column now reads the P = F n2-highmem-4 cells (setup does not depend on P or trees). The `pf*` cells and the three generators were fetched from the m7i
 on 2026-10-26 (box commits ea4dc48e, 44cad8d7 = local branch `m7i-main`; the paired-grid version of
 `make_pf_grid_table.py` and `make_barrier_figs.py` were uncommitted there). OOM marks in the hm4 grid come
-from `cells/vertex_p_F/pfhm4fix20261101_youtube8m/launcher.log` (`--oom_logs`, the default since 2026-11-04).
+from `runs/vertex_p_F/pfhm4fix20261101_youtube8m/launcher.log` (`--oom_logs`, the default since 2026-11-04).
 Barrier taxonomy, the in-process measurement and the GRPC idle/transport numbers:
 `benchmarks/results/kdd28/analysis/barrier_smoke_inprocess_20261022/README.md`.
 
@@ -141,24 +142,24 @@ have not been replaced by Vertex runs yet. Paths inside the scripts are the box'
 | `summarize_barriers.py <csv> [tree_training_s]` | Per-stage sums, per-layer FindSplits, identity check, idle share; used for family A cells too. |
 
 What the CSVs hold (moved 2026-11-04: `results.csv`, `anchors.csv`, `logs/` to `kdd28/outdated/inprocess_m7i_grid_20261012/`,
-`in_node_parallelism_2026-10-22/` to `kdd28/appendix/tab-in-node-dist-vqsort-vertex/`):
+the 2026-10-22 thread sweep to `kdd28/runs/2026-10-22_in_node_parallelism/` since 2026-11-20):
 - `results.csv`: the 2026-10-12 50-tree grid (W = 1, 4; AA and SPO; binary weights) plus 7 rows with
   `trees == 300` that ran **continuous** weights by mistake (CLAUDE.md, 2026-10-12). Since 2026-10-26 the
   `extra` column tags every row `in_process_m7i` and those 7 also `continuous_weights`; the generators
   filter `trees == 50`, so they are never used. `anchors.csv`: same-boot single-machine references, 50 trees.
 - `suite_results.csv`, `logs/suite/`, `suite_table9_compare.md` (the 2026-10-12 Table-9 suite, 33 datasets x 5 folds x
   W in {1,4,8,16} x 2 arms, 300 trees): removed on 2026-11-04 as pre-fix (no discretization fix 7c0eebd3, VQSort tie fix dc1a8494 or fma fix 5e42cd20), recoverable from git history at commit 185b8b53. `compare_suite.py` and `compare_table8_local.py` went with them.
-- `in_node_parallelism_2026-10-22/`: the single-machine thread sweep and the in-process "distributed"
+- `kdd28/runs/2026-10-22_in_node_parallelism/`: the single-machine thread sweep and the in-process "distributed"
   old-vs-new worker comparison (moved here from `runtime/GBT/` on 2026-10-26); source of
   `make_in_node_tables.py`.
 
 ## D. Paper floats and what regenerates them (`paper/distributed_spo_gbt_kdd28/`, checked 2026-11-04)
 
-Generators emit the body only. `main.tex` owns the environments and captions. Each float dir under `benchmarks/results/kdd28/`
-(`K/` below) has a README with the exact generator command, the profile and its effective settings, machine, code and raw
-cells, and an `inputs.txt`. Profile = the `params/kdd28_params.json` setting the CSVs must match.
+Generators emit the body only. `main.tex` owns the environments and captions. Each float dir under `benchmarks/results/kdd28/floats/`
+(`K/` below) has a README with the exact generator command, the runs it reads, the profile and its effective settings,
+and an `inputs.txt`. Machine, code and raw cells: the READMEs in `benchmarks/results/kdd28/runs/`. Profile = the `params/kdd28_params.json` setting the CSVs must match.
 
-| Label(s) (main.tex, Overleaf 86e929e + e57222c) | Body | Generator | Data dir | Profile |
+| Label(s) (main.tex, Overleaf 86e929e + e57222c) | Body | Generator | Float dir | Profile |
 |---|---|---|---|---|
 | tab:accuracy-on-spaa-datasets, fig:accuracy-on-spaa-datasets | `tables/table_dist_accuracy_on_spaa_datasets_body.tex`, `figures/evaluation/fig_dist_accuracy_mean_on_spaa_datasets_body.tex` | `make_paper_tables.py --profile kdd28_ydf --suffix _on_spaa_datasets --purple --extra ...` | `K/accuracy/tab-accuracy-on-spaa-datasets/` | `kdd28_ydf.distacc_*` |
 | tab:accuracy-where-spo-outperforms-aa, fig:accuracy-where-spo-outperforms-aa, fig:column-replication-where-spo-outperforms-aa | `tables/table_dist_accuracy_where_spo_outperforms_aa_body.tex`, `figures/evaluation/fig_{dist_accuracy_mean,column_replication}_where_spo_outperforms_aa_body.tex` + `column_replication_where_spo_outperforms_aa/*.dat` | `select_spo_advantage.py`, then `make_paper_tables.py --suffix _where_spo_outperforms_aa`, `make_column_replication_fig.py --suffix _where_spo_outperforms_aa` (README) | `K/accuracy/tab-accuracy-where-spo-outperforms-aa/` | `kdd28_ydf.distacc_*`, `kdd28_ydf.colrep_distacc_spo` |
@@ -178,7 +179,7 @@ Check 2026-11-04 (every generator run from the new paths into a scratch dir, com
 lines): all bodies and `.dat` files identical except `tables/table_setup_cost_body.tex`. Its Overleaf copy was made from the
 superseded 2026-10-25 cells. The generator now reads only the paper's cells (pf*fix20261101 + pfw1*20261025, listed in
 `K/appendix/tab-setup-cost/inputs.txt`), which lowers every range. Not pushed: the user decides. Dropped float
-tab:cc18-aa-spo-ydf (Overleaf 39e5431): its inputs are in `K/outdated/tab-cc18-aa-spo-ydf/`, the body still regenerates.
+tab:cc18-aa-spo-ydf (Overleaf 39e5431): its inputs are in `benchmarks/results/kdd28/outdated/tab-cc18-aa-spo-ydf/`, the body still regenerates.
 `params/check_layout.py` checks this table's structure against main.tex.
 
 ## E. Column replication on CC18 (Vertex, 2026-10-28/29) - results on branch `column-replication`
@@ -191,7 +192,7 @@ resumable), the launcher `runtime_vertex_ai/column_replication/run_vertex_colrep
 speedups that cut a 374-cell job from ~2 h to ~10 min (all bit-identical).
 
 **Results: branch `column-replication` @ b64346ca, `benchmarks/results/accuracy/distributed_spo_gbt/`.** Pre-fix (stale-bug): the
-paper's appendix tab:column-replication reads the fixed rerun in `kdd28/appendix-earlier-settings/tab-column-replication/`.
+paper's appendix tab:column-replication reads the fixed rerun in `kdd28/runs/2026-11-01_colrep_vertex_split_budget/` (float dir `kdd28/floats/appendix-earlier-settings/tab-column-replication/`).
 `README.md` there indexes the folders:
 - the Vertex run (`column_replication_vertex/`, run `full20261029b`, 1870 cells);
 - the single-machine SPO-GBT baseline;
@@ -231,8 +232,8 @@ That branch is not merged into `main` yet.
 
 Branch `kdd27-fixed-reruns` does not exist (checked 2026-11-04, local and origin). The code is `dgbt-spo-full-fixes` @ 63d05422
 plus `fixed_reruns/` on `main`. The results folder `fixed_reruns_2026-11-01/` was split over `benchmarks/results/kdd28/`
-on 2026-11-04: `accuracy_multi_thread/fixed_reruns/layout.py` maps every old subpath (paper inputs to their float dirs, raw runs to the float's
-`raw/`, fix stages and paper_refs to `outdated/`, parity and comparisons to `analysis/`).
+on 2026-11-04: `accuracy_multi_thread/fixed_reruns/layout.py` maps every old subpath (paper inputs to their float's `derived/`, raw runs to `runs/` (since
+2026-11-20, before: the float's `raw/`), fix stages and paper_refs to `outdated/`, parity and comparisons to `analysis/`).
 
 ### Bugs fixed (each with a regression test or A/B; write-ups under `ariel_notes/results/2026-10-3*`/`2026-11-01_*`)
 
@@ -392,7 +393,7 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   climate-model train.csv (one value printed differently in the last digit) was replaced by the Mac copy.
 - Results: box `~/results/2026-11-03_ydf_defaults_rerun/{distacc,colrep,colrep_single,cc18}/results.csv` (stamped rows,
   `models/`, `logs/`, `DONE` per table, `ALL_DONE`), mirrored by `ariel_notes/results/2026-11-03_ydf_defaults_rerun/mirror.sh`. Tracked copies of the result CSVs (2026-11-04):
-  `kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc/`, `kdd28/outdated/tab-column-replication-ydf-cc18/{colrep,colrep_single}/`
+  `kdd28/runs/2026-11-03_distacc/`, `kdd28/outdated/tab-column-replication-ydf-cc18/{colrep,colrep_single}/`
   (superseded by colrep_distacc), `kdd28/outdated/tab-cc18-aa-spo-ydf/cc18/` (float dropped).
 - Determinism (tested 2026-11-03, `determinism/` there): same seed, same threads, two concurrent runs per cell for qsar-biodeg
   (single, W = 4), credit-g (single, W = 4) and heloc (single, W = 4, W = 16), 300 trees. All 7 pairs have byte-identical
@@ -412,7 +413,7 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   yesterday's binaries: no C++ change e3279f20..c3b01f56). Machine: the same instance resized to **c8i.metal-96xl**
   (Xeon 6975P-C, 384 threads, SMT and turbo on, 755 GiB). The earlier §J runs ran on m7i.metal-24xl with SMT off.
   Same-seed determinism was tested on m7i only. Rows carry a `machine` column. Tracked CSVs:
-  `benchmarks/results/kdd28/accuracy/tab-accuracy-on-spaa-datasets/distacc_aaspo/`. Argv goldens
+  `benchmarks/results/kdd28/runs/2026-11-04_distacc_aaspo/`. Argv goldens
   `params/golden/kdd28_ydf_distacc_{aaspo,exact300}.argv`.
 - Column replication on the tab:dist-accuracy setup (2026-11-04, c8i.metal-96xl, SMT and turbo on): profile arm
   `kdd28_ydf.colrep_distacc_spo` (= distacc_spo at W = 4 plus `--column_replication r`, r = 0.1..1.0),
@@ -428,7 +429,8 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   and folds as above on both evals, `run_kdd28_ydf_ec2.py --profile kdd28_hao --seed s` (launchers
   `ariel_notes/results/2026-11-06_hao_seeds/run_hao_seeds.sh`, `run_hao_spaa_v3.sh`), c8i.metal-96xl, binaries 0416519f-dirty.
   Seed 1 adopts the kdd28_ydf exact300, single AA and W = 4 AA cells (`kdd28_hao._reuses`). Distributed AA at W = 4 only.
-  Inputs and generators: `benchmarks/results/kdd28/accuracy/tab-accuracy-hao-vs-ydf-params{,-over-100-columns}/README.md`.
+  Inputs and generators: `benchmarks/results/kdd28/floats/accuracy/tab-accuracy-hao-vs-ydf-params/README.md` (the over-100-columns
+  counterpart was dropped 2026-11-20), results `benchmarks/results/kdd28/runs/2026-11-06_hao_seeds/`.
 
 ## K. Eval suites: which data and metric code an accuracy table used (user decision, 2026-11-04)
 
@@ -446,7 +448,7 @@ the CC18 suites `params/eval_suites/*.sha256` (hashed from the Mac copies, 2026-
 - Stamps: `run_kdd28_ydf_ec2.py` appends `eval_suite,data_sha,metric_impl` to new results CSVs (`data_sha` =
   `<train sha256[:16]>+<test sha256[:16]>`, hashes cached in `<out>/eval_sha_cache.json`). CSVs started earlier keep
   their header. `params.py backfill-eval <csv>` adds the columns from the manifest: done 2026-11-05 for
-  `accuracy/tab-accuracy-on-spaa-datasets/distacc/results.csv` (2026-11-03 rows), after all 153 dataset-folds the box read on
+  `runs/2026-11-03_distacc/results.csv` (2026-11-03 rows), after all 153 dataset-folds the box read on
   2026-11-04 (colrep_distacc and distacc_aaspo stamps) matched the manifest hashes.
 - Hard stops since 2026-11-05 (bulletproofing audit, `ariel_notes/results/2026-11-04_eval_bulletproofing/report.md`):
   an identity mismatch (dataset or fold not in the suite, file hash, metric implementation, seed, validation, early
@@ -470,12 +472,17 @@ the CC18 suites `params/eval_suites/*.sha256` (hashed from the Mac copies, 2026-
   dresses-sales and jm1, measured 2026-11-04). The two datasets whose fold-0 seed-1 accuracy differs between the tables
   (cylinder-bands, dresses-sales) are among them.
 
-## L. Results layout (user request 2026-11-04)
+## L. Results layout (user request 2026-11-04, runs/floats split 2026-11-20)
 
-`benchmarks/results/kdd28/` mirrors the paper: `accuracy/`, `runtime/` (main-body sections), `appendix-earlier-settings/`,
-`appendix/`, one dir per float named after its label (`tab:x` -> `tab-x`, a table and its chart share the table's dir),
-plus `cells/` (raw Vertex cells shared by several floats), `analysis/` (evidence with no float) and `outdated/` (one-line
-reason each). Index: `benchmarks/results/kdd28/README.md`. `python3 params/check_layout.py [main.tex]` fails on a data float
-without a dir, a dir whose label is not in main.tex, README fields missing, absent `inputs.txt` entries, unnamed
-`outdated/`/`analysis/` entries, and `_floats` labels main.tex lacks. It runs in `params.py selftest` (synthetic cases) and
-in `check_argv_equivalence.sh` (the real tree, main.tex = `$KDD28_MAIN_TEX`, else the Overleaf clone, else the repo snapshot).
+`benchmarks/results/kdd28/runs/<YYYY-MM-DD>_<topic>/` holds each measurement once, as the harness or run script wrote it,
+with a README (profile, settings, eval suite, machine, date, code, raw cells). `floats/` mirrors the paper: `accuracy/`,
+`runtime/` (main-body sections), `appendix-earlier-settings/`, `appendix/`, one dir per float named after its label
+(`tab:x` -> `tab-x`, a table and its chart share the table's dir) with README, `inputs.txt`, selection scripts and
+`derived/` (row subsets and unions that rebuild byte-identically from `runs/`). Also `analysis/` (evidence with no float)
+and `outdated/` (one-line reason each). Index: `benchmarks/results/kdd28/README.md`. `python3 params/check_layout.py
+[main.tex]` fails on a data float without a dir, a dir whose label is not in main.tex, README fields missing, absent
+`inputs.txt` entries, an `inputs.txt` entry inside the results tree outside `runs/` and the float's own `derived/` (another
+float's `derived/` needs a `# cross-float` comment), data files in a float dir outside `derived/`, a run dir without README,
+unnamed `outdated/`/`analysis/` entries, and `_floats` labels main.tex lacks. It runs in `params.py selftest` (synthetic
+cases) and in `check_argv_equivalence.sh` (the real tree, main.tex = `$KDD28_MAIN_TEX`, else the Overleaf clone, else the
+repo snapshot).

@@ -67,6 +67,31 @@ def ds_label(ds, mark=""):
     return f"{name} ({_k(r)}, {f}, cat={c})"
 
 
+def sources(datasets):
+    """[(benchmark, datasets)] in table order, empty groups dropped. TabArena = its binary manifest, TabReD =
+    download_tabred_datasets.DATASETS, OpenML / LibSVM = the wide dataset eval manifest (Epsilon = LibSVM)."""
+    import ast, json
+    data = ROOT / "benchmarks/data"
+    arena = {e["dataset_name"] for e in json.loads((data / "tabarena_binary_manifest.json").read_text())["entries"]
+             if e["status"] == "ok"}
+    tree = ast.parse((data / "download_tabred_datasets.py").read_text())
+    red = next(set(ast.literal_eval(n.value)) for n in tree.body
+               if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "DATASETS")
+    wide = json.loads((data / "kdd28_wide_datasets_manifest.json").read_text())["datasets"]
+    libsvm = {e["name"] for e in wide if e["name"] == "epsilon"}
+    openml = {e["name"] for e in wide if "openml_data_id" in e} - libsvm
+    srcs = [("TabArena", arena), ("TabReD", red), ("OpenML", openml), ("LibSVM", libsvm)]
+    bad = [d for d in datasets if sum(d in m for _, m in srcs) != 1]
+    if bad:
+        sys.exit(f"ERROR: datasets in none or several of {[n for n, _ in srcs]}: {bad}")
+    return [(n, g) for n, m in srcs if (g := [d for d in datasets if d in m])]
+
+
+def source_row(src, ncols):
+    """Italic benchmark row heading a block of datasets."""
+    return r"\multicolumn{%d}{@{}l}{\textit{%s}} \\" % (ncols, src)
+
+
 def purple_pairs(d, metric):
     """{(dataset, W)} where distributed SPO and AA give the same raw metric on every fold."""
     out = set()
@@ -186,7 +211,10 @@ def accuracy_table(metric="test_auc"):
              ["Dataset & " + " & ".join(col(lab) for _, lab, _ in stats) + r" \\"]) + [r"\midrule"]
     means = {lab: [] for _, lab, _ in stats}
     purple = accuracy_stats.purple
-    for ds in done:
+    prev = None
+    for src, ds in [(s, d) for s, g in sources(done) for d in g]:
+        if src != prev:  # italic benchmark row opens each source block
+            lines.append(source_row(src, 1 + len(stats))); prev = src
         gbest = max(s.loc[ds, "mean"] for _, lab, s in stats if lab not in PLACEHOLDERS)
         cells = []
         for fam in fams:
@@ -342,7 +370,7 @@ if __name__ == "__main__":
     EXTRA = [(p, *EXTRA_SPECS[n]) for n, p in (kv.split("=", 1) for kv in args.extra.split(",") if kv)]
     if not args.accuracy_csv:
         ap.error("--accuracy_csv is required (dist-accuracy appendix: --profile table8 --accuracy_csv "
-                 "benchmarks/results/kdd28/appendix-earlier-settings/tab-dist-accuracy/table8_results.csv)")
+                 "benchmarks/results/kdd28/floats/appendix-earlier-settings/tab-dist-accuracy/derived/table8_results.csv)")
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
     if args.accuracy_csv:
         ACC_CSV = args.accuracy_csv

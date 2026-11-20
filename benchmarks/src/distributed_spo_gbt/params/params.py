@@ -33,7 +33,7 @@ sys.path.insert(0, HERE)
 import evalsuite  # noqa: E402
 DB_PATH = os.path.join(HERE, "kdd28_params.json")
 REPO = os.path.abspath(os.path.join(HERE, "../../../.."))
-# Paper-mirroring results tree (benchmarks/results/kdd28/README.md): one dir per float, raw Vertex cells in cells/
+# KDD28 results tree (benchmarks/results/kdd28/README.md): measurements in runs/, one dir per paper float in floats/
 RESULTS = os.path.join(REPO, "benchmarks/results/kdd28")
 
 
@@ -704,11 +704,19 @@ def _layout_selftest():
     try:
         def build():
             shutil.rmtree(os.path.join(t, "k"), ignore_errors=True)
-            os.makedirs(os.path.join(t, "k/accuracy/tab-t"))
-            os.makedirs(os.path.join(t, "k/outdated/old"))
-            open(os.path.join(t, "main.tex"), "w").write(tex)
-            open(os.path.join(t, "k/accuracy/tab-t/README.md"), "w").write("- **Labels:** `tab:t`\n" + fields)
-            open(os.path.join(t, "k/accuracy/tab-t/inputs.txt"), "w").write("main.tex\n")
+            for d in ("k/floats/accuracy/tab-t/derived", "k/floats/accuracy/tab-u/derived", "k/runs/r1", "k/outdated/old"):
+                os.makedirs(os.path.join(t, d))
+            open(os.path.join(t, "main.tex"), "w").write(tex.replace("\\label{fig:d}", "\\label{fig:d}\\label{tab:u}"))
+            for fl in ("t", "u"):
+                open(os.path.join(t, f"k/floats/accuracy/tab-{fl}/README.md"), "w").write(f"- **Labels:** `tab:{fl}`\n" + fields)
+            open(os.path.join(t, "k/floats/accuracy/tab-t/derived/sub.csv"), "w").write("a\n")
+            open(os.path.join(t, "k/floats/accuracy/tab-u/derived/sub.csv"), "w").write("a\n")
+            open(os.path.join(t, "k/floats/accuracy/tab-t/select.py"), "w").write("\n")
+            open(os.path.join(t, "k/runs/r1/results.csv"), "w").write("a\n")
+            open(os.path.join(t, "k/runs/r1/README.md"), "w").write("run\n")
+            open(os.path.join(t, "k/floats/accuracy/tab-t/inputs.txt"), "w").write(
+                "main.tex\nk/runs/r1/results.csv\nk/floats/accuracy/tab-t/derived/sub.csv\n")
+            open(os.path.join(t, "k/floats/accuracy/tab-u/inputs.txt"), "w").write("k/runs/r1/results.csv\n")
             open(os.path.join(t, "k/outdated/README.md"), "w").write("| `old/` | why |\n")
 
         def errs(mutate=None):
@@ -720,15 +728,25 @@ def _layout_selftest():
         def has(mutate, text):
             return any(text in e for e in errs(mutate))
         w = lambda rel, txt: open(os.path.join(t, rel), "w").write(txt)  # noqa: E731
+        u_in = "k/floats/accuracy/tab-u/inputs.txt"
         return [("layout: good tree passes", errs(), []),
-                ("layout: data float without dir", has(lambda: shutil.rmtree(os.path.join(t, "k/accuracy/tab-t")),
+                ("layout: data float without dir", has(lambda: shutil.rmtree(os.path.join(t, "k/floats/accuracy/tab-t")),
                                                        "data float tab:t: no results dir"), True),
                 ("layout: dir label not in main.tex", has(lambda: w("main.tex", "\\label{fig:d}\n"), "not in"), True),
-                ("layout: README field missing", has(lambda: w("k/accuracy/tab-t/README.md", "- **Labels:** `tab:t`\n"),
+                ("layout: README field missing", has(lambda: w("k/floats/accuracy/tab-t/README.md", "- **Labels:** `tab:t`\n"),
                                                      "field **Status:** missing"), True),
-                ("layout: inputs.txt entry absent", has(lambda: w("k/accuracy/tab-t/inputs.txt", "nope.csv\n"),
+                ("layout: inputs.txt entry absent", has(lambda: w("k/floats/accuracy/tab-t/inputs.txt", "nope.csv\n"),
                                                         "nope.csv does not exist"), True),
-                ("layout: outdated entry unnamed", has(lambda: w("k/outdated/README.md", "\n"), "outdated/old/"), True)]
+                ("layout: outdated entry unnamed", has(lambda: w("k/outdated/README.md", "\n"), "outdated/old/"), True),
+                ("layout: input in another float's derived/", has(lambda: w(u_in, "k/floats/accuracy/tab-t/derived/sub.csv\n"),
+                                                                  "is not in runs/"), True),
+                ("layout: cross-float input marked", errs(lambda: w(u_in, "k/floats/accuracy/tab-t/derived/sub.csv  # cross-float\n")),
+                 []),
+                ("layout: data file outside derived/", has(lambda: w("k/floats/accuracy/tab-t/results.csv", "a\n"),
+                                                           "data file in a float dir"), True),
+                ("layout: run dir without README", has(lambda: os.remove(os.path.join(t, "k/runs/r1/README.md")),
+                                                       "runs/r1: README.md missing"), True),
+                ("layout: old top-level dir", has(lambda: os.makedirs(os.path.join(t, "k/cells")), "unknown top-level"), True)]
     finally:
         shutil.rmtree(t)
 

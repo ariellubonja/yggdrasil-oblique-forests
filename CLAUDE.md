@@ -75,6 +75,9 @@ Claude Code is the hub and this repo is the source of truth.
   like to start a Fable-xhigh verifier?" and wait. That verifier compares against the closest reference and checks
   train/inference value parity. Procedure: `~/.claude/skills/verify/SKILL.md` "Model checks".
 
+- **Refactorings get the Fable verifier (user directive, 2026-11-20):** renames and moves of code, scripts, files or dirs
+  count as logic changes for the `verify` reviewer pass (still Fable high+ only). 2026-11-20's table rename silently broke
+  `params/check_argv_equivalence.sh` paths. The brief greps old names/paths and runs `check_argv_equivalence.sh` + `check_layout.py`.
 - **Always VQSort, never std::sort (2026-10-22).** Every hot-path sort uses `hwy::VQSort` on `K32V32` /
   `K64V64` packed pairs (as in `FindBestSplitFlatHighway`), new code included, so arms compare the
   method, not the sort. Before finishing a kernel change, grep the diff for `std::sort`.

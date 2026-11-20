@@ -10,7 +10,7 @@ import argparse, glob, json, os, re, sys
 HERE = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))  # distributed_spo_gbt/
 sys.path.insert(0, os.path.join(HERE, "params"))
 import params as kdd28  # noqa: E402  (params/kdd28_params.json)
-RESULTS = kdd28.results_path("cells/vertex_p_F")  # P = F Vertex cells (pf* prefixes), stored once for all floats
+RESULTS = kdd28.results_path("runs/vertex_p_F")  # P = F Vertex cells (pf* prefixes), stored once for all floats
 DATASETS = [("epsilon", "Epsilon"), ("higgs", "HIGGS"), ("susy", "SUSY"), ("youtube8m", "YouTube-8M")]
 ARMS = [("aa", "AA"), ("spo", "SPO in-node")]
 

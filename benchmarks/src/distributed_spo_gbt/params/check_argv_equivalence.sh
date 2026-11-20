@@ -105,8 +105,8 @@ run_case() { # case -> runs it inside $T with argv captured in $ARGV_LOG
     dgbt_suite) RESULTS=$O/suite.csv WORK=$O/work bash $DS/accuracy_multi_thread/argvcheck_run_dgbt_suite.sh ;;
     dgbt_spo) BIN=$STUB/train_distributed_gbt OUT=$O WORK=$O/work GITSHA=x bash $DS/accuracy_multi_thread/run_dgbt.sh HIGGS 4 SPARSE_OBLIQUE 50 --seed 123456 ;;
     dgbt_aa) BIN=$STUB/train_distributed_gbt OUT=$O WORK=$O/work GITSHA=x bash $DS/accuracy_multi_thread/run_dgbt.sh SUSY 1 AXIS_ALIGNED 300 ;;
-    barrier_spo) TRUNK_DIR=$D/trunk OUT=$O WORK=$O/work bash $DS/accuracy_multi_thread/run_barrier_cell.sh SPARSE_OBLIQUE ;;
-    barrier_aa) TRUNK_DIR=$D/trunk OUT=$O WORK=$O/work bash $DS/accuracy_multi_thread/run_barrier_cell.sh AXIS_ALIGNED 10 2 1 ;;
+    barrier_spo) TRUNK_DIR=$D/trunk OUT=$O WORK=$O/work bash $DS/runtime_vertex_ai/run_barrier_cell.sh SPARSE_OBLIQUE ;;
+    barrier_aa) TRUNK_DIR=$D/trunk OUT=$O WORK=$O/work bash $DS/runtime_vertex_ai/run_barrier_cell.sh AXIS_ALIGNED 10 2 1 ;;
     pf_grid) bash $DS/runtime_vertex_ai/run_pf_grid.sh ;;
     pf_followups) bash $DS/runtime_vertex_ai/run_pf_followups.sh ;;
     vertex_grid_fixed) bash $DS/runtime_vertex_ai/runtime_reruns/run_vertex_grid_fixed.sh ;;
@@ -127,29 +127,29 @@ run_case() { # case -> runs it inside $T with argv captured in $ARGV_LOG
                      --machine n2-highmem-4 --image $IMG:1311deba-x --run_id R ;;  # --budget split (default) on a split-budget image
     cc18_aa_spo) FOLDS="0 1" bash benchmarks/src/cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh "$D/cc18aa" "$STUB/train_oblique_forest"; rm -rf "$D/cc18aa/logs" "$D/cc18aa/models" "$D/cc18aa/results.csv" ;;
     cc18_exact300) ARMS=spo_harness_exact300 bash benchmarks/src/cc18_aa_spo_gbt/run_cc18_aa_spo_gbt.sh "$D/cc18aa" "$STUB/train_oblique_forest"; rm -rf "$D/cc18aa/logs" "$D/cc18aa/models" "$D/cc18aa/results.csv" ;;
-    kdd28_ydf_ec2) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" --cc18_fold0 "$D/cc18" \
+    kdd28_ydf_ec2) python3 $DS/accuracy_multi_thread/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" --cc18_fold0 "$D/cc18" \
                      --cc18_10fold "$D/cc18aa/data" --cpus 4 --off_paper stub-data ;;
-    kdd28_ydf_distacc_aaspo) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
+    kdd28_ydf_distacc_aaspo) python3 $DS/accuracy_multi_thread/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
                      --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --off_paper stub-data --tables distacc_aaspo ;;
-    kdd28_ydf_distacc_exact300) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
+    kdd28_ydf_distacc_exact300) python3 $DS/accuracy_multi_thread/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
                      --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --off_paper stub-data --tables distacc_exact300 ;;
-    kdd28_ydf_colrep_distacc) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
+    kdd28_ydf_colrep_distacc) python3 $DS/accuracy_multi_thread/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --tab_folds "$D/folds" \
                      --cc18_fold0 "$D/cc18" --cc18_10fold "$D/cc18aa/data" --cpus 4 --off_paper stub-data --tables colrep_distacc --colrep_r0 dsA:0 ;;
-    kdd28_ydf_cross_network) python3 $DS/accuracy_multi_thread/ydf_reruns/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --cc18_fold0 "$D/cc18" \
+    kdd28_ydf_cross_network) python3 $DS/accuracy_multi_thread/run_kdd28_ydf_ec2.py --out "$O" --bin_dir "$STUB" --cc18_fold0 "$D/cc18" \
                      --tables cross_network --cpus 4 --off_paper stub-data ;;
     cc18_gbt) python3 benchmarks/src/cc18_gbt_feature_study/run_cc18_gbt.py --jobs 1; rm -rf "$W/home/featstudy" ;;
-    train_cells) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s2 --seed 2 --levels 0,1) ;;
-    train_cells_nosplit) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s1 --seed 1 \
+    train_cells) (cd $DS/runtime_vertex_ai/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s2 --seed 2 --levels 0,1) ;;
+    train_cells_nosplit) (cd $DS/runtime_vertex_ai/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s1 --seed 1 \
                      --levels 0.5 --no_split_budget --num_trees 10 --sparse_oblique_num_projections_exponent=1 \
                      --sparse_oblique_max_num_projections=2147483647 --sparse_oblique_projection_density_factor=1.5) ;;
-    train_cells_table2) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s3 --seed 3 \
+    train_cells_table2) (cd $DS/runtime_vertex_ai/vertex_build && PYTHONPATH=$T/pystub python3 train_cells.py --data gs://b/cc18 --out gs://b/runs/x/s3 --seed 3 \
                      --levels 0 --num_trees 10 --sparse_oblique_num_projections_exponent=1 --sparse_oblique_max_num_projections=2147483647 \
                      --sparse_oblique_projection_density_factor=1.5) ;;
-    train_spo) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train.py --train_ds csv:gs://b/t.csv --test_ds csv:gs://b/v.csv \
+    train_spo) (cd $DS/runtime_vertex_ai/vertex_build && PYTHONPATH=$T/pystub python3 train.py --train_ds csv:gs://b/t.csv --test_ds csv:gs://b/v.csv \
                      --model gs://b/m --label class --distributed --split_axis SPARSE_OBLIQUE --num_trees 10 \
                      --sparse_oblique_num_projections_exponent=0.990254 --sparse_oblique_projection_density_factor=1.5 \
                      --meta='{"arm": "spo", "cols": 18, "workers": 1}' --profile vertex_grid_pf.spo_split) ;;
-    train_aa) (cd $DS/vertex_build && PYTHONPATH=$T/pystub python3 train.py --train_ds csv:gs://b/t.csv --model gs://b/m --label class \
+    train_aa) (cd $DS/runtime_vertex_ai/vertex_build && PYTHONPATH=$T/pystub python3 train.py --train_ds csv:gs://b/t.csv --model gs://b/m --label class \
                      --distributed --split_axis AXIS_ALIGNED --num_trees 10 --max_unique_values_for_discretized_numerical=1 \
                      --meta='{"arm": "aa", "cols": 18, "workers": 1, "profile": "vertex_grid_pf.aa_split"}') ;;
     *) echo "unknown case $1"; return 1 ;;
@@ -211,7 +211,7 @@ for path, prof, spo in ((sys.argv[1], "kdd28_ydf.dist_spo", None), (sys.argv[2],
     bad = bad or diff
 # The container copies of the profiles (PROFILES in train_cells.py and train.py) must equal kdd28_params.json.
 import ast, os
-vb = os.path.join(os.path.dirname(params.__file__), "..", "vertex_build")
+vb = os.path.join(os.path.dirname(params.__file__), "..", "runtime_vertex_ai", "vertex_build")
 for fn in ("train_cells.py", "train.py"):
     tree = ast.parse(open(os.path.join(vb, fn)).read())
     names = {t.id: n.value for n in tree.body if isinstance(n, ast.Assign) for t in n.targets if hasattr(t, "id")}
