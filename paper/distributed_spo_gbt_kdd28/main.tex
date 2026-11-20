@@ -161,7 +161,7 @@
     \item How do ordinal categorical features play in sparse oblique? Do they penalize accuracy vs. Axis-Aligned \texttt{CATEGORICAL}? Ensure scale of ordinal vs. numeric matches. % What does Catboost do?
     \item After training, look at what SPO splits used. Which features were used together? Repeat idea of Fig 3. but w/ SPO. Goal: "$20\%$ of splits are good, so that's all the overhead we need".
     \item Why does AA and Dist-AA $W=1$ accuracy differ slightly? Likely seed
-    \item [\done] \textcolor{gray}{Compare Hao's parameters to YDF \& to Richard AA+SPO on single-machine. Sec.~\ref{}}
+    \item [\done] \textcolor{gray}{Compare Hao's parameters to YDF \& to Richard AA+SPO on single-machine. Sec.~\ref{sec:accuracy-hao-vs-ydf-params}}
 \end{todolist}
 
 \textbf{\textit{Methods \& Experiments}}
@@ -221,7 +221,7 @@ Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs
         \item[\textcolor{gray}{\done}] \textcolor{gray}{Naive SPO with cross-node communication}. See Sec. \ref{sec:cross-network-projections}
     \end{todolist}
     \stepcounter{enumi}\item[\textcolor{gray}{\done}] \textcolor{gray}{(in-worker oblique) Replace std::sort with Highway VQSort}
-    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Multiple runs for Training and accuracy (seed)} 5 seeds: Table~\ref{tab:column-replication-on-spaa-datasets}, Table~\ref{tab:cross-network}
+    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{5 seeds runs for Training} : Table~\ref{tab:cross-network}
     \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Related Work review. Fable: are there any previous work red flags that strongly challenge the novelty of this work? something a reviewer would point to and say "how is this different from that?" run a review with fable-max, then run a 2nd fable-max agent to verify the first, and iterate until both are happy} Sec.~\ref{sec:related-work}
 \end{todolist}
 
@@ -847,7 +847,7 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 
 \twocolumn[{\floatblock
 \section{Accuracy with Hao's Settings, over 5 Seeds}
-\label{sec:accuracy-hao}
+\label{sec:accuracy-hao-vs-ydf-params}
 
 This table shows using Hao's parameters instead of YDF defaults. They outperform in mean across-dataset AUC in the Accuracy tables. Running this over 5 different seeds to ensure it wasn't a seed cause. Switched back to Hao's settings bcs. the runtime is 5x faster and accuracy isn't obviously different.
 
@@ -858,8 +858,8 @@ This table shows using Hao's parameters instead of YDF defaults. They outperform
 \scriptsize
 \setlength{\tabcolsep}{2pt}
 \caption{Test AUC of single-machine vs. $W$-distributed GBT with $P{=}\min(F,1000)$ projections per node, mean over 5 seeds.}
-\label{tab:dist-accuracy-hao}
-\IfFileExists{tables/table_dist_accuracy_hao_body.tex}{\input{tables/table_dist_accuracy_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}
+\label{tab:accuracy-hao-vs-ydf-params}
+\IfFileExists{tables/table_dist_accuracy_hao_vs_ydf_params_body.tex}{\input{tables/table_dist_accuracy_hao_vs_ydf_params_body}}{\TODO{rerun pending: profile kdd28\_hao}}
 \par\smallskip\raggedright\footnotesize Hao's settings: $P{=}\min(F,1000)$ projections per node, density 1.5, split across workers. Otherwise YDF defaults, early stopping off, 300 trees, depth 6. Seeds 1--5 averaged per fold, then mean $\pm$ std over 5 CV folds except Chronological holdouts. Distributed AA-GBT run at $W{=}4$ only (same AUC at every $W$ in Table~\ref{tab:accuracy-on-spaa-datasets}). Seed 1 of single-machine SPO-GBT and AA-GBT reuses the runs of Table~\ref{tab:accuracy-on-spaa-datasets}.
 \end{minipage}
 \par\vskip0.5em
@@ -868,18 +868,18 @@ This table shows using Hao's parameters instead of YDF defaults. They outperform
 \centering
 % body sizes its axis to 0.5\textwidth; match it to the column
 \resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-hao}.}
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_vs_ydf_params_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_vs_ydf_params_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-hao-vs-ydf-params}.}
 \Description{Line chart of mean AUC versus number of workers for SPO-GBT, with distributed AA-GBT at W equals 4 and single-machine references, under Hao's settings.}
-\label{fig:dist-accuracy-mean-hao}
+\label{fig:accuracy-hao-vs-ydf-params}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
 \captionsetup{type=figure}
 \centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_body.tex}{\input{figures/evaluation/fig_column_replication_hao_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-hao}.}
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_vs_ydf_params_body.tex}{\input{figures/evaluation/fig_column_replication_hao_vs_ydf_params_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:accuracy-hao-vs-ydf-params}.}
 \Description{Two stacked panels sharing the replication axis r from 0 to 1, under Hao's settings. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean.}
-\label{fig:column-replication-hao}
+\label{fig:column-replication-hao-vs-ydf-params}
 \par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). pts = percentage points of test AUC. Seeds 1--5 pooled.
 \end{minipage}
 }]
@@ -892,9 +892,9 @@ This table shows using Hao's parameters instead of YDF defaults. They outperform
 \scriptsize
 \setlength{\tabcolsep}{2pt}
 \caption{Test AUC of single-machine vs. $W$-distributed GBT with $P{=}\min(F,1000)$ projections per node on the datasets with $F\geq100$, mean over 5 seeds.}
-\label{tab:dist-accuracy-hao-wide}
-\IfFileExists{tables/table_dist_accuracy_hao_wide_body.tex}{\input{tables/table_dist_accuracy_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}
-\par\smallskip\raggedright\footnotesize The datasets of Table~\ref{tab:accuracy-on-datasets-over-100-columns}. Same settings and seeds as Table~\ref{tab:dist-accuracy-hao}. 5 CV folds except Chronological holdouts and Epsilon (shipped split).
+\label{tab:accuracy-hao-vs-ydf-params-over-100-columns}
+\IfFileExists{tables/table_dist_accuracy_hao_vs_ydf_params_over_100_columns_body.tex}{\input{tables/table_dist_accuracy_hao_vs_ydf_params_over_100_columns_body}}{\TODO{rerun pending: profile kdd28\_hao}}
+\par\smallskip\raggedright\footnotesize The datasets of Table~\ref{tab:accuracy-on-datasets-over-100-columns}. Same settings and seeds as Table~\ref{tab:accuracy-hao-vs-ydf-params}. 5 CV folds except Chronological holdouts and Epsilon (shipped split).
 \end{minipage}
 \par\vskip0.5em
 \noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
@@ -902,18 +902,18 @@ This table shows using Hao's parameters instead of YDF defaults. They outperform
 \centering
 % body sizes its axis to 0.5\textwidth; match it to the column
 \resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_wide_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy-hao-wide}.}
+\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_vs_ydf_params_over_100_columns_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_vs_ydf_params_over_100_columns_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-hao-vs-ydf-params-over-100-columns}.}
 \Description{Line chart of mean AUC versus number of workers for SPO-GBT, with distributed AA-GBT at W equals 4 and single-machine references, on the datasets with at least 100 columns under Hao's settings.}
-\label{fig:dist-accuracy-mean-hao-wide}
+\label{fig:accuracy-hao-vs-ydf-params-over-100-columns}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
 \captionsetup{type=figure}
 \centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_wide_body.tex}{\input{figures/evaluation/fig_column_replication_hao_wide_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:dist-accuracy-hao-wide}.}
+\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_vs_ydf_params_over_100_columns_body.tex}{\input{figures/evaluation/fig_column_replication_hao_vs_ydf_params_over_100_columns_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
+\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:accuracy-hao-vs-ydf-params-over-100-columns}.}
 \Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets with at least 100 columns under Hao's settings. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean.}
-\label{fig:column-replication-hao-wide}
+\label{fig:column-replication-hao-vs-ydf-params-over-100-columns}
 \par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). pts = percentage points of test AUC. Seeds 1--5 pooled.
 \end{minipage}
 }]

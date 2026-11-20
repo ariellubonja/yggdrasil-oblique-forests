@@ -1,10 +1,10 @@
-# tab:dist-accuracy-hao-wide
+# tab:accuracy-hao-vs-ydf-params-over-100-columns
 
-Results behind the KDD28 floats below (section `sec:accuracy-hao`, "Accuracy with Hao's Settings over 5 Seeds"). Index and rules:
+Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`, "Accuracy with Hao's Settings over 5 Seeds"). Index and rules:
 `benchmarks/results/kdd28/README.md`.
 
-- **Labels:** `tab:dist-accuracy-hao-wide`, `fig:dist-accuracy-mean-hao-wide`, `fig:column-replication-hao-wide`. Overleaf 20b3377 (2026-11-07). Metric: test ROC AUC
-- **Status:** current (main body). Wide union (14 datasets with F >= 100: 6 SPAA paper eval + 8 wide dataset eval). Built by `../tab-dist-accuracy-hao/assemble_hao.py`
+- **Labels:** `tab:accuracy-hao-vs-ydf-params-over-100-columns`, `fig:accuracy-hao-vs-ydf-params-over-100-columns`, `fig:column-replication-hao-vs-ydf-params-over-100-columns`. Overleaf 20b3377 (2026-11-07). Metric: test ROC AUC
+- **Status:** current (appendix). Wide union (14 datasets with F >= 100: 6 SPAA paper eval + 8 wide dataset eval). Built by `../tab-accuracy-hao-vs-ydf-params/assemble_hao_vs_ydf_params.py`
 - **Profile:** `kdd28_hao` arms `distacc_single_spo`, `distacc_single_aa`, `distacc_spo`, `distacc_aa` (W = 4 only), `distacc_single_aa_spo`,
   `colrep_distacc_spo`. P = min(F, 1000) projections per node, density 1.5, split across workers. Seeds 1-5
 - **Settings:** effective values from the profile (`params.py show kdd28_hao.<arm>`), checked against the CSV stamp columns by
@@ -21,7 +21,7 @@ Results behind the KDD28 floats below (section `sec:accuracy-hao`, "Accuracy wit
 - **Code:** driver `run_kdd28_ydf_ec2.py` (--profile/--seed/--single_axes/--exclude), binaries 0416519f-dirty (`bin_sha`
   802b16fdf3b2, C++ equal to 57d9fd14), stamped `git=57d9fd14-dirty`. Launch scripts and code.diff:
   `ariel_notes/results/2026-11-06_hao_seeds/`
-- **Generator:** `bash benchmarks/results/kdd28/accuracy/tab-dist-accuracy-hao/regen_hao.sh` (repo root): `assemble_hao.py` builds
+- **Generator:** `bash benchmarks/results/kdd28/accuracy/tab-accuracy-hao-vs-ydf-params/regen_hao_vs_ydf_params.sh` (repo root): `assemble_hao_vs_ydf_params.py` builds
   the inputs from the mirror, then `make_paper_tables.py --seed_mean` (figure, then table) and `make_column_replication_fig.py`
   for both evals
 - **Inputs:** `inputs.txt`

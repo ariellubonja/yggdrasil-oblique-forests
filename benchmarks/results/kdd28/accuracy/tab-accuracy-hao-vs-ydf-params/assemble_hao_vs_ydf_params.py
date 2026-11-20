@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Builds the kdd28_hao 5-seed inputs of tab:dist-accuracy-hao (SPAA paper eval) and tab:dist-accuracy-hao-wide
+"""Builds the kdd28_hao 5-seed inputs of tab:accuracy-hao-vs-ydf-params (SPAA paper eval) and tab:accuracy-hao-vs-ydf-params-over-100-columns
 (wide union) from the EC2 mirror plus the seed-1 rows adopted from kdd28_ydf (profile kdd28_hao "_reuses").
-Run from the repo root: python3 benchmarks/results/kdd28/accuracy/tab-dist-accuracy-hao/assemble_hao.py"""
+Run from the repo root: python3 benchmarks/results/kdd28/accuracy/tab-accuracy-hao-vs-ydf-params/assemble_hao_vs_ydf_params.py"""
 import pathlib
 import pandas as pd
 
@@ -38,11 +38,11 @@ def write(df, path, keys):
 
 
 spaa_ds = None
-for name, parts, rd in (("tab-dist-accuracy-hao", ["spaa"], [(YDF / "distacc/results.csv", YDF / "distacc_aaspo/distacc_exact300.csv")]),
-                        ("tab-dist-accuracy-hao-wide", ["spaa", "wide", "wide_eps"],
+for name, parts, rd in (("tab-accuracy-hao-vs-ydf-params", ["spaa"], [(YDF / "distacc/results.csv", YDF / "distacc_aaspo/distacc_exact300.csv")]),
+                        ("tab-accuracy-hao-vs-ydf-params-over-100-columns", ["spaa", "wide", "wide_eps"],
                          [(YDF / "distacc/results.csv", YDF / "distacc_aaspo/distacc_exact300.csv"),
                           (WEV / "distacc/results.csv", WEV / "distacc_exact300/results.csv")])):
-    keep = (lambda d: d[d.dataset.isin(WIDE)]) if name.endswith("wide") else (lambda d: d)
+    keep = (lambda d: d[d.dataset.isin(WIDE)]) if name.endswith("over-100-columns") else (lambda d: d)
     out = A / name
     k = ["dataset", "fold", "arm"]
     write(keep(pd.concat([hao(parts, "distacc")] + [reused(*p) for p in rd])), out / "distacc/results.csv", k)

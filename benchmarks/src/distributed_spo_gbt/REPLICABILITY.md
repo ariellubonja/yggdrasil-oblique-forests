@@ -424,11 +424,11 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   (split budget applies to ship mode), profile arm `kdd28_ydf.cross_network_ship`, `run_kdd28_ydf_ec2.py --tables cross_network`
   (34 CC18 fold 0 x seeds 1-5, W = 4). Results box `~/results/2026-11-04_cross_network_ydf/`, mirrored by
   `ariel_notes/results/2026-11-04_cross_network_ydf/mirror.sh`. The arm definition is in main's kdd28_params.json.
-- kdd28_hao, seeds 1-5 (2026-11-06/07, sec:accuracy-hao): profile `kdd28_hao` (P = min(F, 1000), density 1.5), same tables
+- kdd28_hao, seeds 1-5 (2026-11-06/07, sec:accuracy-hao-vs-ydf-params): profile `kdd28_hao` (P = min(F, 1000), density 1.5), same tables
   and folds as above on both evals, `run_kdd28_ydf_ec2.py --profile kdd28_hao --seed s` (launchers
   `ariel_notes/results/2026-11-06_hao_seeds/run_hao_seeds.sh`, `run_hao_spaa_v3.sh`), c8i.metal-96xl, binaries 0416519f-dirty.
   Seed 1 adopts the kdd28_ydf exact300, single AA and W = 4 AA cells (`kdd28_hao._reuses`). Distributed AA at W = 4 only.
-  Inputs and generators: `benchmarks/results/kdd28/accuracy/tab-dist-accuracy-hao{,-wide}/README.md`.
+  Inputs and generators: `benchmarks/results/kdd28/accuracy/tab-accuracy-hao-vs-ydf-params{,-over-100-columns}/README.md`.
 
 ## K. Eval suites: which data and metric code an accuracy table used (user decision, 2026-11-04)
 
