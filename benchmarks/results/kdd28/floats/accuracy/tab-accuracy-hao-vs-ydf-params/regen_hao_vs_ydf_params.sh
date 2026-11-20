@@ -13,5 +13,5 @@ python3 $G/paper/tables/make_paper_tables.py "${COMMON[@]}" --group_header --tim
 python3 $G/paper/figures/make_column_replication_fig.py --csv $D/colrep_distacc/results.csv --suffix _hao_vs_ydf_params --metric test_auc \
   --dist_arm colrep_distacc_spo --single_csv $D/distacc/results.csv --single_filter arm=single:SPO --single_arms distacc_single_spo \
   --r0_csv $D/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo --profile kdd28_hao --eval_suite $S
-# tab:accuracy-hao-vs-ydf-params-{single-machine,distributed}: kdd28_ydf seed 1 vs kdd28_hao seeds 1-5
+# tab:accuracy-hao-vs-ydf-params-{single-machine,distributed}: kdd28_ydf seeds 1-5 vs kdd28_hao seeds 1-5
 python3 $G/paper/tables/make_hao_vs_ydf_compare_tables.py --eval_suite $S
