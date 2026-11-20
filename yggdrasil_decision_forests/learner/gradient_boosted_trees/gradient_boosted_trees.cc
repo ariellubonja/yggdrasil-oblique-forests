@@ -928,6 +928,7 @@ GradientBoostedTreesLearner::ShardedSamplingTrain(
       // Note: We don't need to do it for the last tree.
       if (iter_idx < config.gbt_config->num_trees() - 1) {
         std::vector<decision_tree::DecisionTree*> trees;
+        // Ariel: If at least one tree was trained, let's use it to predict?
         if (iter_idx > 0) {
           //  Compile the trees into an engine.
           mdl->set_output_logits(true);
