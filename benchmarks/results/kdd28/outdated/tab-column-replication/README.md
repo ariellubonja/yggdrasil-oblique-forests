@@ -6,7 +6,7 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Labels:** `tab:column-replication`, `fig:column-replication`
   - `tab:column-replication`: "Test accuracy of distributed SPO-GBT \TODO{($W=4$) is this why acc doesn't change?} vs.\ column replication $r$."
   - `fig:column-replication`: "Table~\ref{tab:column-replication} as charts: mean (top) and per-dataset (bottom) $\Delta$ test accuracy vs.\ \texttt{single}."
-- **Status:** appendix, frozen
+- **Status:** outdated: float dropped from main.tex (Overleaf 549e754, 2026-11-04), dir moved from floats/appendix-earlier-settings/ 2026-11-20. Was: appendix, frozen
 - **Runs:** `runs/2026-11-01_colrep_vertex_split_budget/` (distributed rows), `runs/2026-11-01_colrep_single_spo_10seeds/`
   (single row, 10 seeds). Run facts: their READMEs
 - **Profile:** `table2.dist_split`, `table2.single_spo`, `table2.single_spo_audit` (`benchmarks/src/distributed_spo_gbt/params/kdd28_params.json`)

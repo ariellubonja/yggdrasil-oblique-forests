@@ -4,7 +4,7 @@ import os
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../.."))
 K = os.path.join(REPO, "benchmarks/results/kdd28")
-_A1, _O, _R = "floats/appendix-earlier-settings", "outdated", "runs"
+_A1, _O, _R = "outdated", "outdated", "runs"
 MAP = {  # old relative path -> new path under K (longest match wins; anything else -> analysis/fixed_reruns_2026-11-01/)
     "paper_refs": f"{_O}/paper_refs_pre_7c0eebd3",
     **{s: f"{_O}/fixed_reruns_2026-11-01_stages/{s}" for s in (

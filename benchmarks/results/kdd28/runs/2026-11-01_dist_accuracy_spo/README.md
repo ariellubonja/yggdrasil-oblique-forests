@@ -12,5 +12,5 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
 - **Date:** 2026-11-01
 - **Code:** dgbt-spo-full-fixes 10509539
 - **Raw cells:** this file
-- **Read by:** tab:dist-accuracy, fig:dist-accuracy-mean, through `floats/appendix-earlier-settings/tab-dist-accuracy/derived/table8_results.csv`
+- **Read by:** tab:dist-accuracy, fig:dist-accuracy-mean, through `outdated/tab-dist-accuracy/derived/table8_results.csv`
   (`build_paper_inputs.py`, rebuilt byte-identically 2026-11-20)

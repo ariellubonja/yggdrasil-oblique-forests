@@ -27,5 +27,5 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
 - **Raw cells:** box `~/results/2026-11-04_distacc_aaspo/` on EC2 ariel-dist-accuracy-1, mirrored (logs, models) to the
   gitignored `ariel_notes/results/2026-11-04_distacc_aaspo/box/`. REPLICABILITY §J
 - **Read by:** tab:accuracy-on-spaa-datasets, tab:accuracy-on-datasets-over-100-columns (`filter_wide.py`),
-  tab:accuracy-where-spo-outperforms-aa (`select_spo_advantage.py`), tab:accuracy-hao-vs-ydf-params (exact300 = seed-1
-  single SPO, aaspo in the comparison tables)
+  tab:accuracy-where-spo-outperforms-aa (`select_spo_advantage.py`), tab:accuracy-hao-vs-ydf-params-single-machine and
+  -distributed (exact300 = seed-1 Hao single SPO, aaspo = seed-1 YDF AA+SPO)

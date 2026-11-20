@@ -12,4 +12,4 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
 - **Date:** 2026-10-30
 - **Code:** `train_distributed_gbt` 8ddb03f7 (`PROVENANCE.txt`)
 - **Raw cells:** this file
-- **Read by:** tab:dist-accuracy, fig:dist-accuracy-mean, through `floats/appendix-earlier-settings/tab-dist-accuracy/derived/table8_results.csv`
+- **Read by:** tab:dist-accuracy, fig:dist-accuracy-mean, through `outdated/tab-dist-accuracy/derived/table8_results.csv`

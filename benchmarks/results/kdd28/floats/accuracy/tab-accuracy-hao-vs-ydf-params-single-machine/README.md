@@ -1,10 +1,10 @@
-# tab:accuracy-hao-vs-ydf-params
+# tab:accuracy-hao-vs-ydf-params-single-machine
 
 Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`, "Accuracy with Hao's Settings over 5 Seeds"). Index and rules:
 `benchmarks/results/kdd28/README.md`.
 
-- **Labels:** `tab:accuracy-hao-vs-ydf-params`, `fig:accuracy-hao-vs-ydf-params`, `fig:column-replication-hao-vs-ydf-params`, `tab:accuracy-hao-vs-ydf-params-single-machine`, `tab:accuracy-hao-vs-ydf-params-distributed`. Overleaf 20b3377 (2026-11-07), comparison tables fb73e6c (2026-11-20). Metric: test ROC AUC
-- **Status:** current (appendix). SPAA paper eval (33 datasets). The wide counterpart (tab:accuracy-hao-vs-ydf-params-over-100-columns) was dropped from the paper 2026-11-20, results in git history before that date
+- **Labels:** `tab:accuracy-hao-vs-ydf-params-single-machine`, `tab:accuracy-hao-vs-ydf-params-distributed`. Overleaf fb73e6c (2026-11-20). Metric: test ROC AUC
+- **Status:** current (appendix). SPAA paper eval (33 datasets). The wide counterpart (tab:accuracy-hao-vs-ydf-params-over-100-columns) was dropped from the paper 2026-11-20, results in git history before that date. tab:accuracy-hao-vs-ydf-params, fig:accuracy-hao-vs-ydf-params and fig:column-replication-hao-vs-ydf-params (Hao-only 5-seed table and figures) were dropped 2026-11-20 (Overleaf a157f51), generator calls in git history before that date. Their `colrep_distacc` cells stay in the run dir, read by no float
 - **Runs:** `runs/2026-11-06_hao_seeds/` (kdd28_hao seeds 1-5, with the adopted seed-1 rows), `runs/2026-11-03_distacc/` and
   `runs/2026-11-04_distacc_aaspo/` (kdd28_ydf seed 1) and `runs/2026-11-20_ydf_seeds/` (kdd28_ydf seeds 2-5), comparison tables. Run facts: their READMEs
 - **Profile:** `kdd28_hao` arms `distacc_single_spo`, `distacc_single_aa`, `distacc_spo`, `distacc_aa` (W = 4 only), `distacc_single_aa_spo`,
@@ -14,8 +14,7 @@ Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`,
 - **Seed 1 reuse:** single SPO = the kdd28_ydf exact300 cells (same argv, bit-identical on 15/15 smoke folds), single AA and
   dist AA (W = 4) = the kdd28_ydf distacc cells. Profile `kdd28_hao._reuses` lets the generators accept their kdd28_ydf
   stamps, values are still checked. `source` column names each row's origin (`runs/` paths since 2026-11-20)
-- **Seed averaging:** table: each (dataset, fold, arm) averaged over seeds 1-5 (`--seed_mean`, all 5 required), then mean
-  and std over folds. Column-replication figure: seeds pooled (balanced seed sets checked)
+- **Seed averaging:** each (dataset, fold, arm) averaged over seeds 1-5 (all 5 required), then mean over folds
 - **Eval suite:** `kdd28_tabarena33` (seeds 1-5 since 2026-11-06)
 - **Machine:** EC2 c8i.metal-96xl (Xeon 6975P-C), SMT and turbo on, in-process MULTI_THREAD workers, up to ~350 concurrent
   slots (not clean timing). Reused seed-1 AA rows: m7i.metal-24xl (2026-11-03), exact300 rows: c8i
@@ -23,9 +22,8 @@ Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`,
 - **Code:** driver `run_kdd28_ydf_ec2.py` (--profile/--seed/--single_axes/--exclude), binaries 0416519f-dirty (`bin_sha`
   802b16fdf3b2, C++ equal to 57d9fd14), stamped `git=57d9fd14-dirty`. Launch scripts and code.diff:
   `ariel_notes/results/2026-11-06_hao_seeds/`
-- **Generator:** `bash benchmarks/results/kdd28/floats/accuracy/tab-accuracy-hao-vs-ydf-params/regen_hao_vs_ydf_params.sh` (repo root): `runs/2026-11-06_hao_seeds/assemble_hao_vs_ydf_params.py`
-  rebuilds the run's CSVs from the mirror (reproduces them byte-identically), then `make_paper_tables.py --seed_mean` (figure, then table) and `make_column_replication_fig.py`
-  for the SPAA paper eval
+- **Generator:** `bash benchmarks/results/kdd28/floats/accuracy/tab-accuracy-hao-vs-ydf-params-single-machine/regen_hao_vs_ydf_params.sh` (repo root): `runs/2026-11-06_hao_seeds/assemble_hao_vs_ydf_params.py`
+  rebuilds the run's CSVs from the mirror (reproduces them byte-identically), then `make_hao_vs_ydf_compare_tables.py`
 - **Comparison tables (2026-11-20):** `make_hao_vs_ydf_compare_tables.py` (last line of the regen script) sets kdd28_ydf seeds 1-5
   against kdd28_hao seeds 1-5 per arm, single machine and distributed, each (dataset, fold, arm) averaged over its 5 seeds first.
   YDF inputs: seed 1 `runs/2026-11-03_distacc/results.csv` and `runs/2026-11-04_distacc_aaspo/distacc_aaspo.csv`, seeds 2-5

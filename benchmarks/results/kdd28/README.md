@@ -18,7 +18,7 @@ Paper: `paper/distributed_spo_gbt_kdd28/main.tex` (live copy: the Overleaf clone
 | Accuracy (appendix) | `floats/accuracy/fig-column-replication-on-spaa-datasets/` | fig:column-replication-on-spaa-datasets | `2026-11-04_colrep_distacc`, `2026-11-03_distacc` |
 | Accuracy >100 cols (appendix) | `floats/accuracy/tab-accuracy-on-datasets-over-100-columns/` | tab:accuracy-on-datasets-over-100-columns, fig:accuracy-on-datasets-over-100-columns, fig:column-replication-over-100-columns | `2026-11-03_distacc`, `2026-11-04_distacc_aaspo`, `2026-11-04_colrep_distacc`, `2026-11-04_wide_eval` |
 | Accuracy, SPO-advantage datasets | `floats/accuracy/tab-accuracy-where-spo-outperforms-aa/` | tab:accuracy-where-spo-outperforms-aa, fig:accuracy-where-spo-outperforms-aa, fig:column-replication-where-spo-outperforms-aa | `2026-11-03_distacc`, `2026-11-04_distacc_aaspo`, `2026-11-04_colrep_distacc`, `2026-11-04_wide_eval` |
-| Accuracy, Hao's settings, 5 seeds (appendix) | `floats/accuracy/tab-accuracy-hao-vs-ydf-params/` | tab:accuracy-hao-vs-ydf-params, fig:accuracy-hao-vs-ydf-params, fig:column-replication-hao-vs-ydf-params, tab:accuracy-hao-vs-ydf-params-single-machine, tab:accuracy-hao-vs-ydf-params-distributed | `2026-11-06_hao_seeds`, `2026-11-03_distacc`, `2026-11-04_distacc_aaspo`, `2026-11-20_ydf_seeds` |
+| Accuracy, Hao's settings, 5 seeds (appendix) | `floats/accuracy/tab-accuracy-hao-vs-ydf-params-single-machine/` | tab:accuracy-hao-vs-ydf-params-single-machine, tab:accuracy-hao-vs-ydf-params-distributed | `2026-11-06_hao_seeds`, `2026-11-03_distacc`, `2026-11-04_distacc_aaspo`, `2026-11-20_ydf_seeds` |
 | Evaluation setup (appendix) | `floats/accuracy/tab-ordinal-vs-native/` | tab:ordinal-vs-native | `2026-11-19_ordinal_vs_native` |
 | Runtime | `floats/runtime/tab-vertex-hm4-pf-runtime/` | tab:vertex-hm4-pf-runtime, fig:vertex-hm4-hm16-pf-runtime | `vertex_p_F` (pfhm4fix20261101, pfgridfix20261101) |
 | Runtime | `floats/runtime/fig-yt8m-barriers/` | fig:yt8m-barriers | `vertex_p_F` (pfhm4fix20261101_youtube8m) |
@@ -27,11 +27,8 @@ Paper: `paper/distributed_spo_gbt_kdd28/main.tex` (live copy: the Overleaf clone
 | Appendix, in-node parallelism | `floats/appendix/tab-in-node-dist-vqsort-vertex/` | tab:in-node-dist-vqsort-vertex | `2026-10-22_in_node_parallelism` |
 | Appendix | `floats/appendix/tab-setup-cost/` | tab:setup-cost | `vertex_p_F` (pfhm4fix20261101, pfgridfix20261101, pfw1*20261025) |
 | Appendix | `floats/appendix/fig-cc18-tree-feature-hist/` | fig:cc18-tree-feature-hist | `2026-10-26_cc18_gbt_feature_study` |
-| Appendix, earlier settings | `floats/appendix-earlier-settings/tab-dist-accuracy/` | tab:dist-accuracy, fig:dist-accuracy-mean | `2026-11-01_dist_accuracy_spo`, `2026-10-30_dist_accuracy_aa` |
-| Appendix, earlier settings | `floats/appendix-earlier-settings/tab-cc18-aa-spo/` | tab:cc18-aa-spo | `2026-11-03_cc18_aa_spo` |
-| Appendix, earlier settings | `floats/appendix-earlier-settings/tab-column-replication/` | tab:column-replication, fig:column-replication | `2026-11-01_colrep_vertex_split_budget`, `2026-11-01_colrep_single_spo_10seeds` |
 
-The three `appendix-earlier-settings/` floats are no longer in the live main.tex (check_layout.py reports them). Diagram
+Diagram
 floats without data (`fig:ydf-dist-gbt-training-loop`, `fig:ydf-dist-gbt-load-balancing`) have no dir.
 
 Rules:

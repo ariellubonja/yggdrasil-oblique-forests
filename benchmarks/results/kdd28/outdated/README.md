@@ -5,6 +5,9 @@ Kept as history and as the "before" of the fix comparisons. One line each: what 
 
 | Entry | Why outdated |
 |---|---|
+| `tab-dist-accuracy/` | float dir of tab:dist-accuracy, fig:dist-accuracy-mean (earlier settings, profile `table8`): float dropped from main.tex (Overleaf 549e754, 2026-11-04), moved here 2026-11-20. `derived/table8_results.csv` still rebuilds the body |
+| `tab-cc18-aa-spo/` | float dir of tab:cc18-aa-spo (profile `cc18_aa_spo`): float dropped from main.tex (Overleaf 549e754, 2026-11-04), moved here 2026-11-20 |
+| `tab-column-replication/` | float dir of tab:column-replication, fig:column-replication (profile `table2`): float dropped from main.tex (Overleaf 549e754, 2026-11-04), moved here 2026-11-20 |
 | `tab-cc18-aa-spo-ydf/` | kdd28_ydf CC18 arms (a), (d), (e), 1020 rows (2026-11-03 m7i): float dropped from main.tex (Overleaf 39e5431). Valid results, body `table_cc18_aa_spo_ydf_body.tex` still regenerates (with `--recorded` = `runs/2026-11-03_cc18_aa_spo/results.csv`) |
 | `tab-column-replication-ydf-cc18/` | kdd28_ydf CC18 fold-0 column replication (1870 + 340 rows, 2026-11-03 m7i): superseded on 2026-11-04 by the TabArena `colrep_distacc` run in `runs/2026-11-04_colrep_distacc/` |
 | `fixed_reruns_2026-11-01_stages/` | intermediate fix stages of the 2026-11-01 reruns (bin fix only, per-worker budget, numeric typing, a repeat): superseded by the all-fixes runs |

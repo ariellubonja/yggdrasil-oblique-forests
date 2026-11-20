@@ -167,9 +167,9 @@ and an `inputs.txt`. Machine, code and raw cells: the READMEs in `benchmarks/res
 | tab:vertex-hm4-pf-runtime, fig:vertex-hm4-hm16-pf-runtime | `tables/table_vertex_hm4_hm16_pf_body.tex`, `figures/evaluation/vertex_pf/fig_vertex_{hm4,hm16}_pf_body.tex` + `.dat` | `make_pf_grid_table.py`, `make_pf_grid_fig.py` (defaults = the paper) | `K/runtime/tab-vertex-hm4-pf-runtime/` | `vertex_grid_pf` |
 | fig:yt8m-barriers | `figures/evaluation/grcp_n2/fig_yt8m_barriers_{budget,swimlane}_body.tex` + `yt8m_barriers/*.dat` | `make_barrier_figs.py` | `K/runtime/fig-yt8m-barriers/` | `vertex_grid_pf` |
 | tab:cross-network, fig:cross-network | `tables/table_cross_network_body.tex`, `figures/evaluation/fig_cross_network_body.tex` + `cross_network/*.dat` | `make_cross_network_{table,fig}.py` | `K/runtime/tab-cross-network/` | `table3` (old settings, kdd28_ydf rerun pending, §J) |
-| tab:dist-accuracy, fig:dist-accuracy-mean | `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body.tex` | `make_paper_tables.py --profile table8 --accuracy_csv ...` | `K/appendix-earlier-settings/tab-dist-accuracy/` | `table8` |
-| tab:cc18-aa-spo | `tables/table_cc18_aa_spo_body.tex` | `../cc18_aa_spo_gbt/make_cc18_aa_spo_table.py <csv> <out> --time` | `K/appendix-earlier-settings/tab-cc18-aa-spo/` | `cc18_aa_spo` |
-| tab:column-replication, fig:column-replication | `tables/table_column_replication_body.tex`, `figures/evaluation/fig_column_replication_body.tex` + `column_replication/*.dat` | `make_column_replication_{table,fig}.py` (defaults) | `K/appendix-earlier-settings/tab-column-replication/` | `table2` |
+| tab:dist-accuracy, fig:dist-accuracy-mean | `tables/table_dist_accuracy_body.tex`, `figures/evaluation/multi_thread_m7i_metal_24x/fig_dist_accuracy_mean_body.tex` | `make_paper_tables.py --profile table8 --accuracy_csv ...` | `K/outdated/tab-dist-accuracy/` | `table8` |
+| tab:cc18-aa-spo | `tables/table_cc18_aa_spo_body.tex` | `../cc18_aa_spo_gbt/make_cc18_aa_spo_table.py <csv> <out> --time` | `K/outdated/tab-cc18-aa-spo/` | `cc18_aa_spo` |
+| tab:column-replication, fig:column-replication | `tables/table_column_replication_body.tex`, `figures/evaluation/fig_column_replication_body.tex` + `column_replication/*.dat` | `make_column_replication_{table,fig}.py` (defaults) | `K/outdated/tab-column-replication/` | `table2` |
 | tab:in-node-dist-vqsort-ablation, tab:setup-cost | `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` | `make_pf_ablation_tables.py` (each table reads only its float's `inputs.txt`) | `K/appendix/tab-in-node-dist-vqsort-ablation/`, `K/appendix/tab-setup-cost/` | `vertex_grid_pf` |
 | tab:in-node-dist-vqsort-vertex | `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `K/appendix/tab-in-node-dist-vqsort-vertex/` | `in_node_threads` |
 | fig:cc18-tree-feature-hist | `figures/evaluation/cc18_tree_feature_hist_body.tex` + `cc18_tree_feature_hist/*.dat` | `../cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out paper/distributed_spo_gbt_kdd28 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6` | `K/appendix/fig-cc18-tree-feature-hist/` | `cc18_feature_study` |
@@ -192,7 +192,7 @@ resumable), the launcher `runtime_vertex_ai/column_replication/run_vertex_colrep
 speedups that cut a 374-cell job from ~2 h to ~10 min (all bit-identical).
 
 **Results: branch `column-replication` @ b64346ca, `benchmarks/results/accuracy/distributed_spo_gbt/`.** Pre-fix (stale-bug): the
-paper's appendix tab:column-replication reads the fixed rerun in `kdd28/runs/2026-11-01_colrep_vertex_split_budget/` (float dir `kdd28/floats/appendix-earlier-settings/tab-column-replication/`).
+paper's appendix tab:column-replication reads the fixed rerun in `kdd28/runs/2026-11-01_colrep_vertex_split_budget/` (float dir `kdd28/outdated/tab-column-replication/`).
 `README.md` there indexes the folders:
 - the Vertex run (`column_replication_vertex/`, run `full20261029b`, 1870 cells);
 - the single-machine SPO-GBT baseline;
@@ -429,8 +429,8 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   and folds as above on both evals, `run_kdd28_ydf_ec2.py --profile kdd28_hao --seed s` (launchers
   `ariel_notes/results/2026-11-06_hao_seeds/run_hao_seeds.sh`, `run_hao_spaa_v3.sh`), c8i.metal-96xl, binaries 0416519f-dirty.
   Seed 1 adopts the kdd28_ydf exact300, single AA and W = 4 AA cells (`kdd28_hao._reuses`). Distributed AA at W = 4 only.
-  Inputs and generators: `benchmarks/results/kdd28/floats/accuracy/tab-accuracy-hao-vs-ydf-params/README.md` (the over-100-columns
-  counterpart was dropped 2026-11-20), results `benchmarks/results/kdd28/runs/2026-11-06_hao_seeds/`.
+  Inputs and generators: `benchmarks/results/kdd28/floats/accuracy/tab-accuracy-hao-vs-ydf-params-single-machine/README.md` (the over-100-columns
+  counterpart and the Hao-only table and figures were dropped 2026-11-20), results `benchmarks/results/kdd28/runs/2026-11-06_hao_seeds/`.
 
 ## K. Eval suites: which data and metric code an accuracy table used (user decision, 2026-11-04)
 
@@ -476,7 +476,7 @@ the CC18 suites `params/eval_suites/*.sha256` (hashed from the Mac copies, 2026-
 
 `benchmarks/results/kdd28/runs/<YYYY-MM-DD>_<topic>/` holds each measurement once, as the harness or run script wrote it,
 with a README (profile, settings, eval suite, machine, date, code, raw cells). `floats/` mirrors the paper: `accuracy/`,
-`runtime/` (main-body sections), `appendix-earlier-settings/`, `appendix/`, one dir per float named after its label
+`runtime/` (main-body sections), `appendix/`, one dir per float named after its label
 (`tab:x` -> `tab-x`, a table and its chart share the table's dir) with README, `inputs.txt`, selection scripts and
 `derived/` (row subsets and unions that rebuild byte-identically from `runs/`). Also `analysis/` (evidence with no float)
 and `outdated/` (one-line reason each). Index: `benchmarks/results/kdd28/README.md`. `python3 params/check_layout.py

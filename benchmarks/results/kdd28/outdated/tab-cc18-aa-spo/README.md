@@ -5,7 +5,7 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 
 - **Labels:** `tab:cc18-aa-spo`
   - `tab:cc18-aa-spo`: "Test accuracy of single-machine AA and SPO-GBT in CC18."
-- **Status:** appendix, frozen
+- **Status:** outdated: float dropped from main.tex (Overleaf 549e754, 2026-11-04), dir moved from floats/appendix-earlier-settings/ 2026-11-20. Was: appendix, frozen
 - **Runs:** `runs/2026-11-03_cc18_aa_spo/`. Run facts: its README
 - **Profile:** `cc18_aa_spo.aa_ydf`, `cc18_aa_spo.spo_harness`, `cc18_aa_spo.spo_harness_exact300`, `cc18_aa_spo.spo_ydf`, `cc18_aa_spo.aa_spo_ydf` (`benchmarks/src/distributed_spo_gbt/params/kdd28_params.json`)
 - **Settings:** effective values from the profile (`params.py show <arm>`), checked against the CSV stamp columns

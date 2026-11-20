@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the kdd28_hao 5-seed inputs of tab:accuracy-hao-vs-ydf-params (SPAA paper eval) from the EC2 mirror plus the
+"""Builds the kdd28_hao 5-seed inputs of sec:accuracy-hao-vs-ydf-params (SPAA paper eval) from the EC2 mirror plus the
 seed-1 rows adopted from kdd28_ydf (profile kdd28_hao "_reuses").
 Run from the repo root: python3 benchmarks/results/kdd28/runs/2026-11-06_hao_seeds/assemble_hao_vs_ydf_params.py"""
 import pathlib

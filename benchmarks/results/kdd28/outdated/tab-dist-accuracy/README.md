@@ -6,7 +6,7 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Labels:** `tab:dist-accuracy`, `fig:dist-accuracy-mean`
   - `tab:dist-accuracy`: "Test AUC of single-machine vs. $W$-distributed GBT. Single-machine SPO-GBT samples $F$ projections per node, distributed SPO-GBT workers sample $F/W$ projections from their $F/W$ columns."
   - `fig:dist-accuracy-mean`: "Mean test AUC over the datasets of Table~\ref{tab:dist-accuracy}."
-- **Status:** appendix (Accuracy results under the earlier settings), frozen
+- **Status:** outdated: float dropped from main.tex (Overleaf 549e754, 2026-11-04), dir moved from floats/appendix-earlier-settings/ 2026-11-20. Was: appendix (Accuracy results under the earlier settings), frozen
 - **Runs:** `runs/2026-11-01_dist_accuracy_spo/` (SPO dist.), `runs/2026-10-30_dist_accuracy_aa/` (AA dist.), single rows from
   `benchmarks/results/runtime/speedup_map_by_dataset/suite_results.csv` (SPAA27 tree). `derived/table8_results.csv` is built
   from them by `build_paper_inputs.py`. Run facts: their READMEs
@@ -24,11 +24,11 @@ Results behind the KDD28 float(s) below. Rebuild the body with the generator com
 - **Generator:** run from the repo root, writes into the paper dir (`--out` to redirect)
 
 ```
-python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --profile table8 --accuracy_csv benchmarks/results/kdd28/floats/appendix-earlier-settings/tab-dist-accuracy/derived/table8_results.csv \
+python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --profile table8 --accuracy_csv benchmarks/results/kdd28/outdated/tab-dist-accuracy/derived/table8_results.csv \
   --accuracy_note "IN-PROCESS runs on AWS m7i.metal-24xl (Xeon 8488C; workers = threads of one process); SPO dist. = dgbt-spo-full-fixes 10509539"
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
-  - `benchmarks/results/kdd28/floats/appendix-earlier-settings/tab-dist-accuracy/derived/table8_results.csv`
+  - `benchmarks/results/kdd28/outdated/tab-dist-accuracy/derived/table8_results.csv`
 - **Raw cells:** `benchmarks/results/kdd28/runs/2026-11-01_dist_accuracy_spo/` (SPO), `benchmarks/results/kdd28/runs/2026-10-30_dist_accuracy_aa/` (AA, pre-7c0eebd3 but AA is unaffected), built by `accuracy_multi_thread/fixed_reruns/build_paper_inputs.py` (reproduces `derived/table8_results.csv` byte-identically, checked 2026-11-04 and 2026-11-20)
 
 Regenerated 2026-11-04: equal to the Overleaf copies in every non-`%` line. On 2026-11-20 the generator command fails

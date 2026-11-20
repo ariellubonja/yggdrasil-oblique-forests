@@ -176,7 +176,7 @@
 \textbf{\textit{Datasets \& Eval}}
 
 \begin{todolist}
-    \item Expand into more datasets. Verify BeyondArena Rossman store prediction (SPO should significantly outperform).
+    \item Expand into more datasets. Verify BeyondArena Rossman store prediction (SPO should significantly outperform). Since we're training GBTs, we could expand into Regression tasks.
     \item Try Hao's parameters with $F^2$ projections but keep 1.5 columns per projection
 \end{todolist}
 
@@ -413,6 +413,8 @@ Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at
 \section{Accuracy on Datasets Where SPO Outperforms AA}
 \label{sec:accuracy-where-spo-outperforms-aa}
 
+Distributed methods use YDF parameters
+
 \mbox{}\par\vskip0.5em
 \noindent\begin{minipage}{\textwidth}
 \captionsetup{type=table}
@@ -528,130 +530,7 @@ Naive baseline for communication cost. \textbf{Should match local SPO-GBT accura
 \appendix
 \section{Appendix}
 
-\subsection{Evaluation Setup}
-
-Starting off with the datasets of the SPAA paper, 
-
-\textbf{Categorical features} are numbered ordinally (in order of appearance, categories are assigned incremental numbers). \textcolor{purple}{Are they scaled w.r.t other columns? e.g. if numerical columns have mean 0, variance 0.1, categoricals will overflow}. \textbf{This works surprisingly well, as even fully-categorical datasets SPO wins}, but it does cost some accuracy. This was done to extend the list of available natural datasets, as SPO methods cannot natively train on non-numerical features.
-
-\begin{table}[h]
-\centering\footnotesize
-\caption{Test AUC of single-machine AA-GBT with categorical features as ordinal codes vs.\ native YDF categoricals.}
-\Description{Table of test AUC per dataset for ordinal and native categorical encoding, their difference, and the number of folds where native wins.}
-\label{tab:ordinal-vs-native}
-\IfFileExists{tables/table_ordinal_vs_native_body.tex}{\input{tables/table_ordinal_vs_native_body}}{\TODO{rerun pending}}
-\par\smallskip\raggedright\footnotesize Same folds and codes, only the column type differs. YDF defaults, early stopping off, 300 trees, seed 1. Diabetes130US omitted: its imputed categoricals are not integer codes.
-\end{table}
-
-YDF has no native way to convert \texttt{CATEGORICAL} features into ordinal \texttt{NUMERICAL}. % source https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticdiscretized_numerical
-
-\subsection{How does YDF process CATEGORICAL data?}
-
-
-\textbf{\textit{DataSpec dictionary forming}}
-
-\begin{enumerate}
-    \item (count, cat) for each category
-    \item If count < 5 or $\|cats\| > 2000$, replace those with OOD.
-\end{enumerate}
-
-
-\section{GBT Training in a Nutshell}
-\label{sec:gbt-training-nutshel}
-
-
-
-Define gradient as appropriate for your downstream task:
-
-\begin{equation}
-    g := 
-    \begin{cases}
-        y - \dfrac{1}{1 + \exp(-F)} & \text{(Binomial)} \\[4pt]
-        y - p & \text{(MSE)}
-    \end{cases}
-\end{equation}
-
-\textcolor{gray}{Observation: The residuals $y-F$ are proportional to the negative gradient of the MSE, so they're used as placeholder} $\frac{\partial L_{MSE}}{\partial F(x)}=\frac{2}{n}\underbrace{(y-F_m(x))}_{-residual}$
-
-Computing $g$ requires predictions of previous trees $F$.
-
-If tree 0: define previous prediction as the Log-odds of how many positives (classif.) i.e. $F_0=\log(\frac{pos}{1-pos})$ (so not random). \textcolor{gray}{Refresher: Odds is $\frac{p}{!p}$ i.e. "odds are 4:1". This is in $[0,+\infty)$. Claude says Log-odds is used bcs. it makes it $(-\infty,+\infty)$ and therefore makes updates simpler - not constrained in $[0,1]$. Makes sense but not convinced.}
-
-If tree !0: Each row $i$'s gradient is $g_i=F_0+\sum_{i-1}F_j$. Why sum and not avg? Bcs. $F_i$ corrects previous - \textbf{its not a voting Ensemble, it's additive corrections}. leaf value $:= shrinkage \cdot \frac{\sum g}{(\sum h + \lambda)}$. Leaf values differ bcs. they have their own set of rows. I don't understand the math reason behind choosing this formula (skipped as too granular).
-
-How to scan splits? Find biggest mean difference in gradients (see Gain score below, but \textbf{why this objective?}).
-
-
-
-In YDF, there's a per-row gradient $g$ as a pseudolabel (trained as regression). $g$ is the residual
-
-
-
-Where $y$ is the ground truth label and $p$ is the probability of label=1 (Classification task - Binomial loss), or prediction (MSE).
-
-
-
-\texttt{\textbf{NUMERICAL}}
-
-Missing values replaced by column mean.
-
-\begin{enumerate}
-    \item Buckets (\texttt{(value, gradient)} pairs) are sorted by value. Here, 1 bucket contains exactly 1 row, for code generality.
-    \item Iterate over the \texttt{(value, $g_i$)} pairs in \texttt{FindSplit}
-    \begin{enumerate}
-        \item Per each +/- child (aka. on each side of the threshold), keep a running counter of $(count, \sum g, \sum g^2)$.
-        \item Attempt moving 1 row to from positive to negative, trying to maximize gain: $gain = \frac{N^- \cdot N^+}{N^2} \cdot (\mu^- - \mu^+)^2$ (same for every loss), aka. \textbf{biggest difference in mean gradient}, but scaling to keep it balanced.
-        \item If subsequent rows are identical (i.e. when your Numerical column is really discretized), that row is skipped.
-    \end{enumerate}
-    
-\end{enumerate}
-
-\texttt{\textbf{CATEGORICAL}}
-
-\begin{enumerate}
-    \item Missing values replaced by most frequent category
-    \item Buckets ((class, gradient-sum) pairs) i.e. there's as many vectors as unique classes
-\end{enumerate}
-
-\textit{SPO does not use }\texttt{CATEGORICAL}. \textbf{\textit{Presumably bcs. CATEGORICAL are not in "Euclidean" space aka. their relative order has no geometric meaning}}
-
-
-\texttt{DISCRETIZED\_NUMERICAL} should NOT be used. It "tell the learning algorithm to optimize training with a special discretization algorithm. Any NUMERICAL feature can be configured as DISCRETIZED\_NUMERICAL."
-
-NaNs are column mean imputed.
-
-Multi-class classification problems was converted to 1-vs-all binary classification, where 1 is the majority class (if a tie, the smaller index is chosen). % From a systems runtime perspective, this should have no impact. From an accuracy perspective, it should still be OK to compare across methods
-
-
-
-\subsection{Enabling Parallelism for Distributed SPO}
-\label{sec:in-node-parallelism}
-
-
-Added VQSort 25-Oct-2026. 22-Oct-26: Added In-node parallelism in SPO-GBT. single machine gives 2x.
-
-FYI Local SPO only parallelizes in-node when >10 projections. Ensure you're using YDF defaults for num projections, etc. so this doesn't apply.
-
-\begin{table*}[t]
-\noindent\begin{minipage}[t]{0.45\textwidth}\vspace{0pt}
-\captionsetup{type=table}
-\centering\scriptsize\setlength{\tabcolsep}{2pt}
-\caption{Benefit of VQSort and distributed in-node parallelism: tree-training time in seconds ($P{=}F$).}
-\label{tab:in-node-dist-vqsort-ablation}
-\input{tables/table_in_node_ablation_body}
-\par\smallskip\raggedright\footnotesize Vertex AI \texttt{n2-highmem-16}, 10 trees. Ablates Highway VQSort and in-worker parallelism; models are byte-identical.
-\end{minipage}\hfill
-\begin{minipage}[t]{0.53\textwidth}\vspace{0pt}
-\captionsetup{type=table}
-\centering\scriptsize\setlength{\tabcolsep}{2pt}
-% (10 trees, depth 6, exact splits)
-\caption{Fixing limited SPO in-node parallelism: training time in seconds of SPO-GBT with $T$ threads.}
-% Used $P=\lceil\sqrt{F}\rceil$.
-\label{tab:in-node-dist-vqsort-vertex}
-\input{tables/table_in_node_threads_body}
-\par\smallskip\raggedright\footnotesize Single \texttt{m7i.24x}, $P=\sqrt{F}$. Sequential: $P$ projections in $\min(T,\lceil P/10\rceil)$ threads, i.e.\ single-threaded when $P\le 10$. Parallel: $\min(T,P)$. Existing method was due to PR 403 overhead, which is now gone. 10 trees, depth 6.
-\end{minipage}
-\end{table*}
+\subsection{Datasets Used}
 
 \begin{table*}[t]
 \centering
@@ -711,6 +590,15 @@ spambase & bin & 4,601 & 57 & X-Net. \\
 tic-tac-toe & bin & 958 & 9 & X-Net. \\
 wdbc & bin & 569 & 30 & X-Net. \\
 wilt & bin & 4,839 & 5 & X-Net. \\
+\\
+\multicolumn{5}{@{}l}{\textit{Wide datasets ($F{\ge}100$, OpenML)}} \\
+christine~\cite{guyon2019automl} & bin & 5,418 & 1,636 & Acc. \\
+dota2~\cite{tridgell2016dota2} & bin & 102,944 & 116 & Acc. \\
+guillermo~\cite{guyon2019automl} & bin & 20,000 & 4,296 & Acc. \\
+hcdr\_main~\cite{home-credit-default-risk} & bin & 307,511 & 120 & Acc. \\
+philippine~\cite{guyon2019automl} & bin & 5,832 & 308 & Acc. \\
+santander\_transaction~\cite{santander-customer-transaction-prediction} & bin & 200,000 & 200 & Acc. \\
+vehicle\_sensIT~\cite{duarte2004vehicle} & bin & 98,528 & 100 & Acc. \\
 \bottomrule
 \end{tabular}
 \hspace{1.5em}
@@ -784,6 +672,146 @@ weather & reg & 423,795 & 103 & \\
 \label{tab:datasets-used}
 \end{table*}
 
+For our Accuracy measurements, we used the following classification datasets: 30 TabArena datasets, 3 TabReD datasets.
+
+For Runtime, we used the Large Natural Datasets and Trunk synthetic datasets described in 
+
+\subsection{Evaluation Setup}
+
+We ran 5 cross-validation folds where appropriate (some datasets are chronological), and ran 5 seeds (0..4). Interestingly, in YDF AA-GBT, the random seed very slightly changes the accuracy, even though mathematically, AA-GBT does not sample and therefore should be unaffected. YDF shuffles the columns, so if one tests fewer than all columns, the resulting model is dependent on seed. Also, YDF breaks ties using the row with the smaller index, so split thresholds might be slightly different.
+
+Fixing for seed, AA-GBT is deterministic w.r.t. number of workers (features are independently scanned regardless of how many workers there are).
+
+\textbf{\textit{Shortcuts used to speed up eval}}
+
+\begin{todolist}
+    \item [\done] AA-GBT runs were only run for $W=1$, and copied to the other workers. This is after repeatedly proving they are identical. This speeds up experiments by $\sim 1.8\times$.
+    \item [\done] Hao's parameters were used instead of YDF defaults. See section below: they seem to outperform YDF, and run 4-5$\times$ faster!
+    \item [\done] \textbf{Accuracy results are replicable across different AWS machines!} So long as they're running Linux. macOS is not replicable by default, due to different compilers and Linux using \texttt{libstdc++} instead of \texttt{libc++}. So results don't have to be constrained to YDF-1. However, there's still a 3-5\% runtime difference
+    \item Skip repeated projections. Study how often these happen with either Hao or YDF parameters.
+\end{todolist}
+
+\textbf{Categorical features} are numbered ordinally (in order of appearance, categories are assigned incremental numbers). \textcolor{purple}{Are they scaled w.r.t other columns? e.g. if numerical columns have mean 0, variance 0.1, categoricals will overflow}. \textbf{This works surprisingly well, as even fully-categorical datasets SPO wins}, but it does cost some accuracy. This was done to extend the list of available natural datasets, as SPO methods cannot natively train on non-numerical features.
+
+\begin{table}[h]
+\centering\footnotesize
+\caption{Test AUC of single-machine AA-GBT with categorical features as ordinal codes vs.\ native YDF categoricals.}
+\Description{Table of test AUC per dataset for ordinal and native categorical encoding, their difference, and the number of folds where native wins.}
+\label{tab:ordinal-vs-native}
+\IfFileExists{tables/table_ordinal_vs_native_body.tex}{\input{tables/table_ordinal_vs_native_body}}{\TODO{rerun pending}}
+\par\smallskip\raggedright\footnotesize Same folds and codes, only the column type differs. YDF defaults, early stopping off, 300 trees, seed 1. Diabetes130US omitted: its imputed categoricals are not integer codes.
+\end{table}
+
+YDF has no native way to convert \texttt{CATEGORICAL} features into ordinal \texttt{NUMERICAL}. % source https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticdiscretized_numerical
+
+\subsection{How does YDF process CATEGORICAL data?}
+
+
+\textbf{\textit{DataSpec dictionary forming}}
+
+\begin{enumerate}
+    \item (count, cat) for each category
+    \item If count < 5 or $\|cats\| > 2000$, replace those with OOD.
+\end{enumerate}
+
+
+\section{GBT Training in a Nutshell}
+\label{sec:gbt-training-nutshel}
+
+
+
+Define gradient as appropriate for your downstream task:
+
+\begin{equation}
+    g := 
+    \begin{cases}
+        y - \dfrac{1}{1 + \exp(-F)} & \text{(Binomial)} \\[4pt]
+        y - p & \text{(MSE)}
+    \end{cases}
+\end{equation}
+
+\textcolor{gray}{Observation: The residuals $y-F$ are proportional to the negative gradient of the MSE, so they're used as placeholder} $\frac{\partial L_{MSE}}{\partial F(x)}=\frac{2}{n}\underbrace{(y-F_m(x))}_{-residual}$
+
+Computing $g$ requires predictions of previous trees $F$.
+
+If tree 0: define previous prediction as the Log-odds of how many positives (classif.) i.e. $F_0=\log(\frac{pos}{1-pos})$ (so not random). \textcolor{gray}{Refresher: Odds is $\frac{p}{!p}$ i.e. "odds are 4:1". This is in $[0,+\infty)$. Claude says Log-odds is used bcs. it makes it $(-\infty,+\infty)$ and therefore makes updates simpler - not constrained in $[0,1]$. Makes sense but not convinced.}
+
+If tree !0: Each row $i$'s gradient is $g_i=F_0+\sum_{i-1}F_j$. Why sum and not avg? Bcs. $F_i$ corrects previous - \textbf{its not a voting Ensemble, it's additive corrections}. leaf value $:= shrinkage \cdot \frac{\sum g}{(\sum h + \lambda)}$. Leaf values differ bcs. they have their own set of rows. I don't understand the math reason behind choosing this formula (skipped as too granular).
+
+How to scan splits? Find biggest mean difference in gradients (see Gain score below, but \textbf{why this objective?}).
+
+
+
+In YDF, there's a per-row gradient $g$ as a pseudolabel (trained as regression). $g$ is the residual
+
+
+
+Where $y$ is the ground truth label and $p$ is the probability of label=1 (Classification task - Binomial loss), or prediction (MSE).
+
+
+
+\texttt{\textbf{NUMERICAL}}
+
+Missing values replaced by column mean.
+
+\begin{enumerate}
+    \item Buckets (\texttt{(value, gradient)} pairs) are sorted by value. Here, 1 bucket contains exactly 1 row, for code generality.
+    \item Iterate over the \texttt{(value, $g_i$)} pairs in \texttt{FindSplit}
+    \begin{enumerate}
+        \item Per each +/- child (aka. on each side of the threshold), keep a running counter of $(count, \sum g, \sum g^2)$.
+        \item Attempt moving 1 row to from positive to negative, trying to maximize gain: $$gain = \frac{N^- \cdot N^+}{N^2} \cdot (\mu^- - \mu^+)^2$$ (same for every loss), aka. \textbf{biggest difference in mean gradient}, but scaling to keep it balanced.
+        \item If subsequent rows are identical (i.e. when your Numerical column is really discretized), that row is skipped.
+    \end{enumerate}
+    
+\end{enumerate}
+
+\texttt{\textbf{CATEGORICAL}}
+
+\begin{enumerate}
+    \item Missing values replaced by most frequent category
+    \item Buckets ((class, gradient-sum) pairs) i.e. there's as many vectors as unique classes
+\end{enumerate}
+
+\textit{SPO does not use }\texttt{CATEGORICAL}. \textbf{\textit{Presumably bcs. CATEGORICAL are not in "Euclidean" space aka. their relative order has no geometric meaning}}
+
+
+\texttt{DISCRETIZED\_NUMERICAL} should NOT be used. It "tell the learning algorithm to optimize training with a special discretization algorithm. Any NUMERICAL feature can be configured as DISCRETIZED\_NUMERICAL."
+
+NaNs are column mean imputed.
+
+Multi-class classification problems was converted to 1-vs-all binary classification, where 1 is the majority class (if a tie, the smaller index is chosen). % From a systems runtime perspective, this should have no impact. From an accuracy perspective, it should still be OK to compare across methods
+
+
+
+\subsection{Enabling Parallelism for Distributed SPO}
+\label{sec:in-node-parallelism}
+
+
+Added VQSort 25-Oct-2026. 22-Oct-26: Added In-node parallelism in SPO-GBT. single machine gives 2x.
+
+FYI Local SPO only parallelizes in-node when >10 projections. Ensure you're using YDF defaults for num projections, etc. so this doesn't apply.
+
+\begin{table*}[t]
+\noindent\begin{minipage}[t]{0.45\textwidth}\vspace{0pt}
+\captionsetup{type=table}
+\centering\scriptsize\setlength{\tabcolsep}{2pt}
+\caption{Benefit of VQSort and distributed in-node parallelism: tree-training time in seconds ($P{=}F$).}
+\label{tab:in-node-dist-vqsort-ablation}
+\input{tables/table_in_node_ablation_body}
+\par\smallskip\raggedright\footnotesize Vertex AI \texttt{n2-highmem-16}, 10 trees. Ablates Highway VQSort and in-worker parallelism; models are byte-identical.
+\end{minipage}\hfill
+\begin{minipage}[t]{0.53\textwidth}\vspace{0pt}
+\captionsetup{type=table}
+\centering\scriptsize\setlength{\tabcolsep}{2pt}
+% (10 trees, depth 6, exact splits)
+\caption{Fixing limited SPO in-node parallelism: training time in seconds of SPO-GBT with $T$ threads.}
+% Used $P=\lceil\sqrt{F}\rceil$.
+\label{tab:in-node-dist-vqsort-vertex}
+\input{tables/table_in_node_threads_body}
+\par\smallskip\raggedright\footnotesize Single \texttt{m7i.24x}, $P=\sqrt{F}$. Sequential: $P$ projections in $\min(T,\lceil P/10\rceil)$ threads, i.e.\ single-threaded when $P\le 10$. Parallel: $\min(T,P)$. Existing method was due to PR 403 overhead, which is now gone. 10 trees, depth 6.
+\end{minipage}
+\end{table*}
+
 \subsection{Discretization Bug}
 
 
@@ -846,10 +874,10 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 
 
 \twocolumn[{\floatblock
-\section{Comparing Accuracy of Hao's Parameters vs. YDF, over 5 Seeds}
+\section{Accuracy of Hao's Parameters in Distributed and vs. YDF, over 5 Seeds}
 \label{sec:accuracy-hao-vs-ydf-params}
 
-This table shows using Hao's parameters instead of YDF defaults. They outperform in mean across-dataset AUC in the Accuracy tables. Running this over 5 different seeds to ensure it wasn't a seed cause. Switched back to Hao's settings bcs. the runtime is 5x faster and accuracy isn't obviously different.
+This table provides the reason for using Hao's parameters instead of YDF defaults. They outperform in mean across-dataset AUC in the Accuracy tables, and the runtime is 5x faster (measured on shared-run machines, its ballpark).
 
 \mbox{}\par\vskip0.5em
 \noindent\begin{minipage}{\textwidth}
@@ -857,30 +885,25 @@ This table shows using Hao's parameters instead of YDF defaults. They outperform
 \centering
 \scriptsize
 \setlength{\tabcolsep}{2pt}
-\caption{Test AUC of single-machine vs. $W$-distributed GBT with $P{=}\min(F,1000)$ projections per node, mean over 5 seeds.}
-\label{tab:accuracy-hao-vs-ydf-params}
-\IfFileExists{tables/table_dist_accuracy_hao_vs_ydf_params_body.tex}{\input{tables/table_dist_accuracy_hao_vs_ydf_params_body}}{\TODO{rerun pending: profile kdd28\_hao}}
-\par\smallskip\raggedright\footnotesize Hao's settings: $P{=}\min(F,1000)$ projections per node, density 1.5, split across workers. Otherwise YDF defaults, early stopping off, 300 trees, depth 6. Seeds 1--5 averaged per fold, then mean $\pm$ std over 5 CV folds except Chronological holdouts. Distributed AA-GBT run at $W{=}4$ only (same AUC at every $W$ in Table~\ref{tab:accuracy-on-spaa-datasets}). Seed 1 of single-machine SPO-GBT and AA-GBT reuses the runs of Table~\ref{tab:accuracy-on-spaa-datasets}.
+\caption{Comparing YDF's and Hao's settings on test AUC of single-machine GBT.}
+\label{tab:accuracy-hao-vs-ydf-params-single-machine}
+\input{tables/table_accuracy_hao_vs_ydf_params_single_machine_body}
+\par\smallskip\raggedright\footnotesize 
+Datasets are split into 5 folds and trained using Cross-Validation. The mean of this 5 is reported. In 5-seeds case, this is also averaged across seed. In TabReD, all datasets are chronological, so CV wasn't used. 
+YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5. Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. AA-GBT has no projection settings, so its two columns are identical. Hao cells colored by $\Delta$ AUC to YDF (blue higher, red lower). Mean time: training time of the accuracy runs \textbf{on shared machines} (use only as ballpark!). Otherwise YDF defaults, early stopping off, 300 trees, depth 6.
 \end{minipage}
-\par\vskip0.5em
-\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
+}]
+
+\twocolumn[{\floatblock
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
 \centering
-% body sizes its axis to 0.5\textwidth; match it to the column
-\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_hao_vs_ydf_params_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_hao_vs_ydf_params_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-hao-vs-ydf-params}.}
-\Description{Line chart of mean AUC versus number of workers for SPO-GBT, with distributed AA-GBT at W equals 4 and single-machine references, under Hao's settings.}
-\label{fig:accuracy-hao-vs-ydf-params}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_hao_vs_ydf_params_body.tex}{\input{figures/evaluation/fig_column_replication_hao_vs_ydf_params_body}}{\TODO{rerun pending: profile kdd28\_hao}}\end{minipage}}
-\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:accuracy-hao-vs-ydf-params}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1, under Hao's settings. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean.}
-\label{fig:column-replication-hao-vs-ydf-params}
-\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). pts = percentage points of test AUC. Seeds 1--5 pooled.
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Test AUC of $W$-distributed GBT with YDF's and Hao's settings.}
+\label{tab:accuracy-hao-vs-ydf-params-distributed}
+\input{tables/table_accuracy_hao_vs_ydf_params_distributed_body}
+\par\smallskip\raggedright\footnotesize YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5. Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Projections split across workers. AA-GBT has no projection settings, so its two columns are identical. Hao cells colored by $\Delta$ AUC to YDF at the same $W$ (blue higher, red lower). Mean time: training time of the in-process accuracy runs (workers are threads of one process), not distributed timings. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
 \end{minipage}
 }]
 
