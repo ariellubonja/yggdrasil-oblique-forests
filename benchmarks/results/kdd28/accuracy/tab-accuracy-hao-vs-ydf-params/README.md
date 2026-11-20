@@ -4,7 +4,7 @@ Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`,
 `benchmarks/results/kdd28/README.md`.
 
 - **Labels:** `tab:accuracy-hao-vs-ydf-params`, `fig:accuracy-hao-vs-ydf-params`, `fig:column-replication-hao-vs-ydf-params`. Overleaf 20b3377 (2026-11-07). Metric: test ROC AUC
-- **Status:** current (appendix). SPAA paper eval (33 datasets). The wide counterpart is `../tab-accuracy-hao-vs-ydf-params-over-100-columns/`
+- **Status:** current (appendix). SPAA paper eval (33 datasets). The wide counterpart (tab:accuracy-hao-vs-ydf-params-over-100-columns) was dropped from the paper 2026-11-20, results in git history before that date
 - **Profile:** `kdd28_hao` arms `distacc_single_spo`, `distacc_single_aa`, `distacc_spo`, `distacc_aa` (W = 4 only), `distacc_single_aa_spo`,
   `colrep_distacc_spo`. P = min(F, 1000) projections per node, density 1.5, split across workers. Seeds 1-5
 - **Settings:** effective values from the profile (`params.py show kdd28_hao.<arm>`), checked against the CSV stamp columns by
@@ -23,7 +23,7 @@ Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`,
   `ariel_notes/results/2026-11-06_hao_seeds/`
 - **Generator:** `bash benchmarks/results/kdd28/accuracy/tab-accuracy-hao-vs-ydf-params/regen_hao_vs_ydf_params.sh` (repo root): `assemble_hao_vs_ydf_params.py` builds
   the inputs from the mirror, then `make_paper_tables.py --seed_mean` (figure, then table) and `make_column_replication_fig.py`
-  for both evals
+  for the SPAA paper eval
 - **Inputs:** `inputs.txt`
 - **Raw cells:** box `~/results/2026-11-06_hao_seeds/{spaa,wide,wide_eps}/seed<s>/` on ariel-ydf-1 (i-0f90f7764082bf21a, stopped),
   mirrored to the gitignored `ariel_notes/results/2026-11-06_hao_seeds/box/` (CSVs, logs, `models_*.tar.zst`)

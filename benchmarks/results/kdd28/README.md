@@ -13,7 +13,6 @@ How to recreate a run: `benchmarks/src/distributed_spo_gbt/REPLICABILITY.md`.
 | Accuracy >100 cols | `accuracy/tab-accuracy-on-datasets-over-100-columns/` | tab:accuracy-on-datasets-over-100-columns, fig:accuracy-on-datasets-over-100-columns, fig:column-replication-over-100-columns | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
 | Accuracy, SPO-advantage datasets | `accuracy/tab-accuracy-where-spo-outperforms-aa/` | tab:accuracy-where-spo-outperforms-aa, fig:accuracy-where-spo-outperforms-aa, fig:column-replication-where-spo-outperforms-aa | kdd28_ydf.distacc_*, kdd28_ydf.colrep_distacc_spo |
 | Accuracy, Hao's settings, 5 seeds | `accuracy/tab-accuracy-hao-vs-ydf-params/` | tab:accuracy-hao-vs-ydf-params, fig:accuracy-hao-vs-ydf-params, fig:column-replication-hao-vs-ydf-params | kdd28_hao.distacc_*, kdd28_hao.colrep_distacc_spo |
-| Accuracy, Hao's settings, 5 seeds, >100 cols | `accuracy/tab-accuracy-hao-vs-ydf-params-over-100-columns/` | tab:accuracy-hao-vs-ydf-params-over-100-columns, fig:accuracy-hao-vs-ydf-params-over-100-columns, fig:column-replication-hao-vs-ydf-params-over-100-columns | kdd28_hao.distacc_*, kdd28_hao.colrep_distacc_spo |
 | Runtime | `runtime/tab-vertex-hm4-pf-runtime/` | tab:vertex-hm4-pf-runtime, fig:vertex-hm4-hm16-pf-runtime | vertex_grid_pf |
 | Runtime | `runtime/fig-yt8m-barriers/` | fig:yt8m-barriers | vertex_grid_pf |
 | Runtime (cross-worker communication) | `runtime/tab-cross-network/` | tab:cross-network, fig:cross-network | table3 (old settings) |

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Builds the kdd28_hao 5-seed inputs of tab:accuracy-hao-vs-ydf-params (SPAA paper eval) and tab:accuracy-hao-vs-ydf-params-over-100-columns
-(wide union) from the EC2 mirror plus the seed-1 rows adopted from kdd28_ydf (profile kdd28_hao "_reuses").
+"""Builds the kdd28_hao 5-seed inputs of tab:accuracy-hao-vs-ydf-params (SPAA paper eval) from the EC2 mirror plus the
+seed-1 rows adopted from kdd28_ydf (profile kdd28_hao "_reuses").
 Run from the repo root: python3 benchmarks/results/kdd28/accuracy/tab-accuracy-hao-vs-ydf-params/assemble_hao_vs_ydf_params.py"""
 import pathlib
 import pandas as pd
 
 A = pathlib.Path("benchmarks/results/kdd28/accuracy")
 BOX = pathlib.Path("ariel_notes/results/2026-11-06_hao_seeds/box")  # gitignored mirror of ~/results/2026-11-06_hao_seeds
-YDF, WEV = A / "tab-accuracy-on-spaa-datasets", A / "tab-accuracy-on-datasets-over-100-columns/wide_eval"
-WIDE = set(pd.read_csv(A / "tab-accuracy-on-datasets-over-100-columns/wide_shapes.csv").dataset)  # the 14 datasets with F >= 100
+YDF = A / "tab-accuracy-on-spaa-datasets"
 
 
 def hao(parts, table):
@@ -37,14 +36,8 @@ def write(df, path, keys):
     print(path, len(df), "rows,", df.dataset.nunique(), "datasets, seeds", sorted(df.seed.unique()))
 
 
-spaa_ds = None
-for name, parts, rd in (("tab-accuracy-hao-vs-ydf-params", ["spaa"], [(YDF / "distacc/results.csv", YDF / "distacc_aaspo/distacc_exact300.csv")]),
-                        ("tab-accuracy-hao-vs-ydf-params-over-100-columns", ["spaa", "wide", "wide_eps"],
-                         [(YDF / "distacc/results.csv", YDF / "distacc_aaspo/distacc_exact300.csv"),
-                          (WEV / "distacc/results.csv", WEV / "distacc_exact300/results.csv")])):
-    keep = (lambda d: d[d.dataset.isin(WIDE)]) if name.endswith("over-100-columns") else (lambda d: d)
-    out = A / name
-    k = ["dataset", "fold", "arm"]
-    write(keep(pd.concat([hao(parts, "distacc")] + [reused(*p) for p in rd])), out / "distacc/results.csv", k)
-    write(keep(hao(parts, "distacc_aaspo")), out / "distacc_aaspo/results.csv", k)
-    write(keep(hao(parts, "colrep_distacc")), out / "colrep_distacc/results.csv", ["dataset", "fold", "replication"])
+out, k = A / "tab-accuracy-hao-vs-ydf-params", ["dataset", "fold", "arm"]
+write(pd.concat([hao(["spaa"], "distacc"), reused(YDF / "distacc/results.csv", YDF / "distacc_aaspo/distacc_exact300.csv")]),
+      out / "distacc/results.csv", k)
+write(hao(["spaa"], "distacc_aaspo"), out / "distacc_aaspo/results.csv", k)
+write(hao(["spaa"], "colrep_distacc"), out / "colrep_distacc/results.csv", ["dataset", "fold", "replication"])
