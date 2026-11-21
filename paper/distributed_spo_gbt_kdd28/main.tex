@@ -161,7 +161,7 @@
     \item How do ordinal categorical features play in sparse oblique? Do they penalize accuracy vs. Axis-Aligned \texttt{CATEGORICAL}? Ensure scale of ordinal vs. numeric matches. % What does Catboost do?
     \item After training, look at what SPO splits used. Which features were used together? Repeat idea of Fig 3. but w/ SPO. Goal: "$20\%$ of splits are good, so that's all the overhead we need".
     \item Why does AA and Dist-AA $W=1$ accuracy differ slightly? Likely seed
-    \item [\done] \textcolor{gray}{Compare Hao's parameters to YDF \& to Richard AA+SPO on single-machine. Sec.~\ref{sec:accuracy-hao-vs-ydf-params}}
+    \item [\done] \textcolor{gray}{Compare Hao's parameters to YDF \& to Richard AA+SPO on single-machine. Sec.~\ref{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params}}
 \end{todolist}
 
 \textbf{\textit{Methods \& Experiments}}
@@ -410,36 +410,73 @@ Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at
     \end{itemize}
 \end{description}
 
-\twocolumn[{\floatblock
+\clearpage
 \section{Accuracy on Datasets Where SPO Outperforms AA}
 \label{sec:accuracy-where-spo-outperforms-aa}
+\suppressfloats[t]
 
 SPO uses \textbf{Hao's parameters}, AA uses YDF defaults.
 
 \subsection{Column Replication at $W=4$}
 
-$r=0$ means the dataset columns are fully disjoint. 
+$r=0$ means the dataset columns are fully disjoint. $r=1$ means columns are fully replicated.
 
-\mbox{}\par\vskip0.5em
-\noindent\begin{minipage}[t]{0.49\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
+\begin{figure}[t]
 \centering
 \resizebox{\linewidth}{!}{\begin{minipage}{1.6\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body.tex}{\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
 \caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the 20 classification datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
 \Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets where single-machine SPO-GBT beats AA-GBT. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
 \label{fig:column-replication-where-spo-outperforms-aa}
 \par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT. pts = percentage points of test AUC. Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns.
-\end{minipage}\hfill
-\begin{minipage}[t]{0.49\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
+\end{figure}
+
+\begin{figure}[t]
 \centering
 \resizebox{\linewidth}{!}{\begin{minipage}{1.6\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_body.tex}{\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_body}}{\TODO{rerun pending}}\end{minipage}}
 \caption{Relative $\Delta$ test RMSE vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the 6 regression datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
 \Description{Two stacked panels sharing the replication axis r from 0 to 1, for the regression datasets where single-machine SPO-GBT clearly beats AA-GBT. Top: line of the mean relative RMSE difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset relative differences per r, overlaid with the dataset points and the mean.}
 \label{fig:column-replication-where-spo-outperforms-aa-regression}
 \par\smallskip\raggedright\footnotesize RMSE relative to single-machine SPO-GBT, in \%. Positive = worse. Panels as in Figure~\ref{fig:column-replication-where-spo-outperforms-aa}.
-\end{minipage}
-}]
+\end{figure}
+
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+absl::Status SetColumnReplicas(
+    const float replication, const int64_t seed,
+    const dataset::proto::DataSpecification& data_spec,
+    const std::vector<int>& features,
+    distributed_decision_tree::LoadBalancer* load_balancer) {  
+  const int num_workers = load_balancer->NumWorkers();
+  std::vector<std::vector<int>> replicas(num_workers);
+  std::string log;
+  for (int worker_idx = 0; worker_idx < num_workers; worker_idx++) {
+    // Numerical columns owned by the other workers, ascending.
+    std::vector<int> candidates;
+    int num_owned = 0;
+    for (const int feature : features) {
+      // Skip non-Numeric columns (should never be needed for our ordinal datasets)
+      if (data_spec.columns(feature).type() !=
+          dataset::proto::ColumnType::NUMERICAL) { continue; }
+          
+      ASSIGN_OR_RETURN(const int owner, load_balancer->FeatureOwner(feature));
+      
+      if (owner != worker_idx) { candidates.push_back(feature); }
+      else { num_owned++; }
+    }
+    const int num_replicas = static_cast<int>(
+        std::lround(static_cast<double>(replication) * candidates.size()));
+    // Own stream per (seed, worker): the training stream is left untouched.
+    std::seed_seq seed_seq{static_cast<uint32_t>(seed),
+                           static_cast<uint32_t>(seed >> 32),
+                           static_cast<uint32_t>(worker_idx), 0x7e91u};
+    utils::RandomEngine rnd(seed_seq);
+    std::shuffle(candidates.begin(), candidates.end(), rnd);
+    candidates.resize(num_replicas);
+    std::sort(candidates.begin(), candidates.end());
+    absl::SubstituteAndAppend(&log, "\tworker $0: $1 owned + $2 replicated\n",
+                              worker_idx, num_owned, num_replicas);
+    replicas[worker_idx] = std::move(candidates);
+  }
+\end{lstlisting}
 
 \twocolumn[{\floatblock
 \subsection{Accuracy results at $r=0$}
@@ -452,7 +489,7 @@ $r=0$ means the dataset columns are fully disjoint.
 \caption{Test AUC or RMSE of single-machine vs. $W$-distributed GBT at replication factor $r=0$ on the datasets where single-machine SPO-GBT clearly beats AA-GBT. See Section~\ref{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params} for how these datasets were selected.}
 \label{tab:accuracy-where-spo-outperforms-aa}
 \IfFileExists{tables/table_dist_accuracy_where_spo_outperforms_aa_body.tex}{\input{tables/table_dist_accuracy_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize The datasets where single-machine SPO-GBT clearly beats AA-GBT \textbf{under Hao's settings}. SPO: $P{=}\min(F,1000)$, density 1.5, early stopping off, 300 trees. split across workers, mean over seeds 1--5. AA: YDF defaults (wide datasets: seed 1). Regression: test RMSE, mean row = mean RMSE / label std.  5 CV folds were used in all datasets except CC18 (10) and Epsilon (1 fold) and homecredit-default (chronological holdout). The reason for CC18 and Epsilon is they come pre-split into train-val.
+\par\smallskip\raggedright\footnotesize The datasets where single-machine SPO-GBT clearly beats AA-GBT \textbf{under Hao's settings}. SPO: $P{=}\min(F,1000)$, density 1.5, early stopping off, 300 trees. split across workers, mean over seeds 1--5. AA: YDF defaults. Regression: test RMSE, mean row = mean RMSE / label std.  5 CV folds were used in all datasets except CC18 (10) and Epsilon (1 fold) and homecredit-default (chronological holdout). The reason for CC18 and Epsilon is they come pre-split into train-val.
 \end{minipage}
 \par\vskip0.5em
 \noindent\hfill\begin{minipage}[t]{0.24\textwidth}\vspace{0pt}

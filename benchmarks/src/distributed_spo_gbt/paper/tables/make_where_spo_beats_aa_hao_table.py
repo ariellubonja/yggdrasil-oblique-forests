@@ -17,6 +17,9 @@ DX = hv.R / "2026-11-21_where_spo_beats_aa_cc18_reg_distributed"  # distributed 
 DIST = {t: {**{f"ydf_s{s}": (hv.YDF, DX / f"{hv.YDF}/seed{s}/{t}/results.csv", ["distacc_aa"]) for s in hv.SEEDS},
             **{f"hao_s{s}": (hv.HAO, DX / f"{hv.HAO}/seed{s}/{t}/results.csv", ["distacc_spo"]) for s in hv.SEEDS}}
         for t in ("cc18_dist", "reg_dist")}
+WA = hv.R / "2026-11-21_wide_eval_ydf_aa_seeds2to5"  # kdd28_ydf AA seeds 2-5 on the wide rows (2026-11-21)
+WIDE_AA = {f"ydf_s{s}_{p}": (hv.YDF, WA / f"seed{s}/{p}/distacc/results.csv", ["distacc_single_aa", "distacc_aa"])
+           for s in (2, 3, 4, 5) for p in ("philippine", "epsilon", "epsilon_w1")}
 COLS = ([("AA+SPO-GBT single machine", "hao", "single:AA+SPO", None), ("SPO-GBT single machine", "hao", "single:SPO", None)]
         + [(f"$W{{=}}{w}$", "hao", f"{w}:SPO", "single:SPO") for w in WS]
         + [("AA-GBT single machine", "ydf", "single:AA", None)] + [(f"$W{{=}}{w}$", "ydf", f"{w}:AA", "single:AA") for w in WS])
@@ -124,7 +127,13 @@ def main():
         y = hv.per_fold(hv.load_all(hv.INPUTS, "ydf"), list(S))
         h = hv.per_fold(pd.concat([hv.load(hv.INPUTS, "hao"), hv.load(hv.INPUTS, "hao_aaspo")]), list(S))
         kdd28._declare_eval(suites["wide"], __file__)
-        wy = hv.per_fold(hv.load_all(hv.WIDE_INPUTS, "ydf"), [1])  # kdd28_ydf wide: seed 1 only
+        kdd28._EVAL["subset"] = set(pick.get("wide", []))  # seeds 2-5 cover only this table's wide rows
+        wa = pd.concat([pd.read_csv(v[1]) for v in WIDE_AA.values()])  # one check over all files: each covers one dataset
+        wa = wa[wa.rc == 0]
+        kdd28.check_frame(wa, hv.YDF, ["distacc_single_aa", "distacc_aa"], "wide AA seeds 2-5")
+        kdd28._EVAL["subset"] = None
+        wy = hv.load_all(hv.WIDE_INPUTS, "ydf")
+        wy = hv.per_fold(pd.concat([wy[wy.arm.str.endswith(":AA") & wy.dataset.isin(pick.get("wide", []))], wa]), list(S))
         wh = hv.per_fold(pd.concat([hv.load(hv.WIDE_INPUTS, "hao"), hv.load(hv.WIDE_INPUTS, "hao_aaspo")]), list(S))
     if "cc18" in pick:
         kdd28._declare_eval(suites["cc18"], __file__)
@@ -178,7 +187,7 @@ def main():
             r"\cmidrule(lr){4-8}\cmidrule(lr){10-14}", "Dataset & " + " & ".join(hdr_cells) + r" \\", r"\midrule"]
     assert n == 13
     src = ("% source: IN-PROCESS reruns (workers = threads of one process). SPO = kdd28_hao seeds 1-5, AA = kdd28_ydf seeds 1-5 "
-           "(wide: seed 1). Rows: " + a.profile_rows + " pass_rec in " + a.beats_aa + "\n% inputs: " + hv.rel(hv.INPUTS) + " + "
+           "(wide: seed 1 + runs/2026-11-21_wide_eval_ydf_aa_seeds2to5). Rows: " + a.profile_rows + " pass_rec in " + a.beats_aa + "\n% inputs: " + hv.rel(hv.INPUTS) + " + "
            + hv.rel(hv.WIDE_INPUTS) + " + " + hv.rel(hv.CC18_INPUTS) + " + " + hv.rel(hv.REG_INPUTS) + " + "
            + " + ".join(hv.rel(DIST[t]) for t in DIST) + "\n")
     setup = kdd28.setup_line(hv.HAO, ["distacc_single_spo", "distacc_single_aa_spo", "distacc_spo"]) + "\n" + \
