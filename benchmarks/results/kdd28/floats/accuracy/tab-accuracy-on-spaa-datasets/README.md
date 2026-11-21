@@ -28,7 +28,7 @@ python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --a
   --accuracy_note "IN-PROCESS rerun on AWS m7i.metal-24xl (Xeon 8488C; workers = threads of one process)" \
   --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _on_spaa_datasets --purple \
   --extra aaspo=benchmarks/results/kdd28/runs/2026-11-04_distacc_aaspo/distacc_aaspo.csv,exact300=benchmarks/results/kdd28/runs/2026-11-04_distacc_aaspo/distacc_exact300.csv --extra_first \
-  --std_below --shape_below --no_figure --time_row  # table only (2026-11-06), figure: drop these flags
+  --std_below --shape_below --no_figure --time_row --bold_datasets benchmarks/results/kdd28/floats/accuracy/tab-accuracy-where-spo-outperforms-aa/derived/spo_advantage_datasets.txt  # table only (2026-11-06), figure: drop these flags
 ```
 - **Inputs:** `inputs.txt` (one repo-relative path per line)
   - `benchmarks/results/kdd28/runs/2026-11-03_distacc/results.csv`
@@ -37,5 +37,6 @@ python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --a
 - **Raw cells:** box `~/results/2026-11-03_ydf_defaults_rerun/distacc/` and `~/results/2026-11-04_distacc_aaspo/` on EC2 ariel-dist-accuracy-1 (i-0f90f7764082bf21a), mirrored (logs, models) to the gitignored `ariel_notes/results/2026-11-03_ydf_defaults_rerun/box/distacc/` and `ariel_notes/results/2026-11-04_distacc_aaspo/box/`. REPLICABILITY §J
 
 Regenerated 2026-11-04: table and figure bodies equal the Overleaf copies in every non-`%` line. Paths moved to `runs/`
-2026-11-20, bodies unchanged in every non-`%` line.
+2026-11-20, bodies unchanged in every non-`%` line. Since 2026-11-20 `--bold_datasets` bolds the names of the datasets where
+single-machine SPO-GBT beats AA-GBT (9 here, list from tab:accuracy-where-spo-outperforms-aa). Only those 9 name cells changed.
 

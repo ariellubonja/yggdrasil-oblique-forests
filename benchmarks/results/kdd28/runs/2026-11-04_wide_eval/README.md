@@ -23,4 +23,4 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
 - **Raw cells:** box `~/results/2026-11-04_wide_eval/`, mirrored to the gitignored
   `ariel_notes/results/2026-11-04_wide_eval/{ariel-ydf-1,ariel-ydf-7}` (logs, models). Shard scripts
   `ariel_notes/results/2026-11-05_wide_eval_shards/`
-- **Read by:** tab:accuracy-on-datasets-over-100-columns (`union_wide.py`), tab:accuracy-where-spo-outperforms-aa (`select_spo_advantage.py`)
+- **Read by:** tab:accuracy-on-datasets-over-100-columns (`union_wide.py`), tab:accuracy-where-spo-outperforms-aa (`select_spo_advantage.py`), tab:accuracy-hao-vs-ydf-params-single-machine and tab:accuracy-hao-vs-ydf-params-distributed (wide block: `distacc/`, `distacc_aaspo/` as kdd28_ydf seed 1, and `distacc/`, `distacc_exact300/` through the seed-1 rows adopted into `runs/2026-11-06_hao_seeds/wide_eval/`)

@@ -48,14 +48,16 @@ python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_paper_tables.py --a
   --accuracy_note "IN-PROCESS reruns (workers = threads of one process): SPAA paper eval rows on AWS m7i.metal-24xl, wide dataset eval rows on c8i.metal-96xl; datasets with F>=100" \
   --arms distacc_single_spo,distacc_single_aa,distacc_spo,distacc_aa --profile kdd28_ydf --suffix _over_100_columns --purple \
   --extra aaspo=$U/distacc_aaspo/results.csv,exact300=$U/distacc_exact300/results.csv --extra_first --eval_suite kdd28_wide_union \
-  --std_below --shape_below --group_header --no_figure --time_row  # table only (2026-11-06), the figure needs the command without the last 4 flags
+  --std_below --shape_below --group_header --no_figure --time_row --bold_datasets benchmarks/results/kdd28/floats/accuracy/tab-accuracy-where-spo-outperforms-aa/derived/spo_advantage_datasets.txt  # table only (2026-11-06), the figure needs the command without the last 4 flags
 python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_column_replication_fig.py --csv $U/colrep_distacc/results.csv --suffix _over_100_columns --metric test_auc \
   --dist_arm colrep_distacc_spo --single_csv $U/distacc/results.csv --single_filter arm=single:SPO \
   --single_arms distacc_single_spo --r0_csv $U/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo \
   --profile kdd28_ydf --eval_suite kdd28_wide_union
 ```
 
-Every `derived/` file was rebuilt byte-identically by these scripts on 2026-11-20. Expected warnings: the inputs mix the member suites `kdd28_tabarena33` and `kdd28_wide_datasets`,
+Every `derived/` file was rebuilt byte-identically by these scripts on 2026-11-20. Since 2026-11-20 `--bold_datasets` bolds the
+names of the datasets where single-machine SPO-GBT beats AA-GBT (philippine, epsilon here). Only those 2 name cells changed. The
+section is now subsection D.1 of sec:accuracy-on-spaa-datasets (Overleaf dfd8cf8). Expected warnings: the inputs mix the member suites `kdd28_tabarena33` and `kdd28_wide_datasets`,
 and 18 SPAA aaspo rows predate the `oblique_also_axis_aligned` stamp ("empty, not recorded").
 - **Inputs:** `inputs.txt`
 

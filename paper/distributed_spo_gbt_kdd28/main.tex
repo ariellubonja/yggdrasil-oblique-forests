@@ -874,7 +874,7 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 
 
 \twocolumn[{\floatblock
-\section{Accuracy of Hao's Parameters in Distributed and vs. YDF, over 5 Seeds}
+\section{Accuracy of Hao's Parameters in Distributed and vs. YDF, over 5 Seeds (except YDF-Parameter Runs on \texorpdfstring{${\ge}100$}{>=100} Column Datasets: 1 Seed)}
 \label{sec:accuracy-hao-vs-ydf-params}
 
 This table provides the reason for using Hao's parameters instead of YDF defaults. They outperform in mean across-dataset AUC in the Accuracy tables, and the runtime is 5x faster (measured on shared-run machines, its ballpark).
@@ -890,7 +890,7 @@ This table provides the reason for using Hao's parameters instead of YDF default
 \input{tables/table_accuracy_hao_vs_ydf_params_single_machine_body}
 \par\smallskip\raggedright\footnotesize 
 Datasets are split into 5 folds and trained using Cross-Validation. The mean of this 5 is reported. In 5-seeds case, this is also averaged across seed. In TabReD, all datasets are chronological, so CV wasn't used. 
-YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5. Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. AA-GBT has no projection settings, so its two columns are identical. Hao cells colored by $\Delta$ AUC to YDF (blue higher, red lower). Mean time: training time of the accuracy runs \textbf{on shared machines} (use only as ballpark!). Otherwise YDF defaults, early stopping off, 300 trees, depth 6.
+YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. AA-GBT has no projection settings, so its two columns are identical. Hao cells colored by $\Delta$ AUC to YDF (blue higher, red lower). Mean time: training time of the accuracy runs \textbf{on shared machines} (use only as ballpark!). Otherwise YDF defaults, early stopping off, 300 trees, depth 6.
 \end{minipage}
 }]
 
@@ -900,15 +900,15 @@ YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5. Hao: $P{=}\min(F,100
 \centering
 \scriptsize
 \setlength{\tabcolsep}{2pt}
-\caption{Test AUC of $W$-distributed GBT with YDF's and Hao's settings.}
+\caption{Comparing YDF's and Hao's settings on test AUC of Distributed GBT.}
 \label{tab:accuracy-hao-vs-ydf-params-distributed}
 \input{tables/table_accuracy_hao_vs_ydf_params_distributed_body}
-\par\smallskip\raggedright\footnotesize YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5. Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Projections split across workers. AA-GBT has no projection settings, so its two columns are identical. Hao cells colored by $\Delta$ AUC to YDF at the same $W$ (blue higher, red lower). Mean time: training time of the in-process accuracy runs (workers are threads of one process), not distributed timings. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
+\par\smallskip\raggedright\footnotesize YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Projections split across workers. AA-GBT has no projection settings, so its two columns are identical. Hao cells colored by $\Delta$ AUC to YDF at the same $W$ (blue higher, red lower). Mean time: training time of the in-process accuracy runs (workers are threads of one process), not distributed timings. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
 \end{minipage}
 }]
 
 \twocolumn[{\floatblock
-\section{Accuracy on SPAA paper datasets}
+\section{Accuracy on SPAA paper + OpenML $\geq 100$ col datasets}
 \label{sec:accuracy-on-spaa-datasets}
 
 Both learners use YDF defaults with early stopping off, since the distributed learner has none, so every arm trains all 300 trees on the full training set.
@@ -931,7 +931,7 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 \captionsetup{type=figure}
 \centering
 % body sizes its axis to 0.5\textwidth; match it to the column
-\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\resizebox{\linewidth}{!}{\begin{minipage}{1.5\linewidth}\setlength{\textwidth}{2\linewidth}%
 \IfFileExists{figures/evaluation/fig_dist_accuracy_mean_on_spaa_datasets_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_on_spaa_datasets_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
 \caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-on-spaa-datasets}. \textcolor{RoyalPurple}{*Some datasets have few columns, so as $W$ increases, accuracy actually approaches} \textcolor{red}{AA-GBT}}
 \Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}
@@ -940,7 +940,7 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 \begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
 \captionsetup{type=figure}
 \centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_on_spaa_datasets_body.tex}{\input{figures/evaluation/fig_column_replication_on_spaa_datasets_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\resizebox{\linewidth}{!}{\begin{minipage}{1.6\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_on_spaa_datasets_body.tex}{\input{figures/evaluation/fig_column_replication_on_spaa_datasets_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
 \caption{Accuracy by column replication: mean (top) and per-dataset (bottom) $\Delta$ test accuracy at \texttt{MULTI\_THREAD} $W=4$ vs.\ \texttt{single}.}
 \Description{Two stacked panels sharing the replication axis r from 0 to 1. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
 \label{fig:column-replication-on-spaa-datasets}
@@ -949,7 +949,7 @@ Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textco
 }]
 
 \twocolumn[{\floatblock
-\section{Accuracy on Datasets with $\geq$100 Columns}
+\subsection{OpenML Datasets with $\geq$100 Features}
 \label{sec:accuracy-on-datasets-over-100-columns}
 
 Avoids the \textcolor{magenta}{purple issue} above where Workers would end up with 1 column each, matching Axis-Aligned.

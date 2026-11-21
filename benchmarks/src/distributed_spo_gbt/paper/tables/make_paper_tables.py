@@ -46,6 +46,7 @@ SHAPE_BELOW = False  # --shape_below: (rows, cols) under the dataset name, in \t
 GRAY = r"\color{black!55}"
 SEED_MEAN = False  # --seed_mean: each (dataset, fold, arm) cell = mean over the profile's seeds, all required
 SHORT = {"HR_Analytics_Job_Change_of_Data_Scientists": "HR_Data_Scientists"}
+BOLD_DS, BOLD_HIT = set(), set()  # --bold_datasets: names printed in bold, and those this table showed
 
 
 def _k(n):
@@ -53,7 +54,10 @@ def _k(n):
 
 
 def ds_label(ds, mark=""):
-    name = SHORT.get(ds, ds).replace("_", r"\_") + mark
+    name = SHORT.get(ds, ds).replace("_", r"\_")
+    if ds in BOLD_DS:
+        name, _ = r"\textbf{" + name + "}", BOLD_HIT.add(ds)
+    name += mark
     if ds not in SHAPES:
         sys.exit(f"--dataset_shapes has no row for {ds}")
     r, f = SHAPES[ds]
@@ -342,6 +346,8 @@ if __name__ == "__main__":
     ap.add_argument("--time_row", action="store_true", help="add a Mean time (s) row (train_s), single-machine columns only")
     ap.add_argument("--seed_mean", action="store_true", help="average each (dataset, fold, arm) over the profile's seeds "
                     "first (all required), then mean/std over folds")
+    ap.add_argument("--bold_datasets", default="", help="repo-relative file, first token per line = a dataset name to bold "
+                    "(e.g. select_spo_advantage.py's spo_advantage_datasets.txt)")
     ap.add_argument("--shape_below", action="store_true", help="print (rows, cols) under the dataset name in \\tiny gray")
     ap.add_argument("--dataset_categoricals", default=CATS_CSV, help="repo-relative CSV with dataset,categorical,features for cat=X")
     ap.add_argument("--dataset_shapes", default=SHAPES_CSV, help="repo-relative CSV with dataset,rows,features for the (rows, cols) after each name")
@@ -356,6 +362,8 @@ if __name__ == "__main__":
     PLACEHOLDER_W = [int(w) for w in args.placeholder_workers.split(",") if w]
     STD_BELOW = args.std_below
     SHAPE_BELOW = args.shape_below
+    if args.bold_datasets:
+        BOLD_DS = {ln.split()[0] for ln in (ROOT / args.bold_datasets).read_text().splitlines() if ln.strip()}
     SEED_MEAN = args.seed_mean
     TIME_ROW = args.time_row
     GROUP_HEADER = args.group_header
@@ -382,4 +390,7 @@ if __name__ == "__main__":
     if not args.no_figure:
         fig = out.parent / "figures/evaluation" / ("" if args.suffix else "multi_thread_m7i_metal_24x"); fig.mkdir(parents=True, exist_ok=True)
         (fig / f"fig_dist_accuracy_mean{args.suffix}_body.tex").write_text(accuracy_mean_figure())
+    if BOLD_DS:
+        print(f"bold: {len(BOLD_HIT)} of {len(BOLD_DS)} listed datasets in this table, not in it: "
+              f"{', '.join(sorted(BOLD_DS - BOLD_HIT)) or '-'}")
     print(f"wrote accuracy bodies under {out}")

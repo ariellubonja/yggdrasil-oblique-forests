@@ -8,8 +8,13 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
   single:AA and 4:AA rows of `runs/2026-11-03_distacc/` and 153 exact300 rows of `runs/2026-11-04_distacc_aaspo/` (as
   single:SPO). Their `source` column names the run file each row came from (459 cells rewritten by the assembler on
   2026-11-20 after the move to `runs/`, no other cell changed). The file is kept whole, so these rows are stored twice
+  `wide_eval/distacc/results.csv` (1440 rows) and `wide_eval/distacc_aaspo/results.csv` (180): the 8 wide dataset eval sets,
+  seeds 1-5, from the mirror's `wide/` (7 sets) and `wide_eps/` (epsilon). `wide_eval/distacc/results.csv` adopts 108 seed-1
+  rows of kdd28_ydf from `runs/2026-11-04_wide_eval/`: 36 exact300 rows as single:SPO, 36 single:AA, 36 4:AA. Added
+  2026-11-20 by the assembler. They match the 2026-11-07 copy (git 2d6ad0e3, `tab-dist-accuracy-hao-wide/`, filtered to these 8
+  sets) on (dataset, fold, arm, seed, test_auc) in 1440/1440 and 180/180 cells. Only the `source` paths differ (108 rows)
 - **Rebuild:** `python3 benchmarks/results/kdd28/runs/2026-11-06_hao_seeds/assemble_hao_vs_ydf_params.py` (repo root, needs the
-  full mirror, exits without writing if a seed file is missing). Checked 2026-11-20: all three CSVs rebuild byte-identically, a second run changes nothing
+  full mirror, exits without writing if a seed file is missing). Checked 2026-11-20: all three SPAA CSVs rebuild byte-identically, a second run changes nothing. Same check for the two `wide_eval/` CSVs (2026-11-20)
 - **Profile:** `kdd28_hao` (`benchmarks/src/distributed_spo_gbt/params/kdd28_params.json`). P = min(F, 1000) projections per
   node, density 1.5, split across workers. Seeds 1-5
 - **Settings:** effective values (`params.py show <arm>`). Threads 4 single, 2 per worker. No early stopping, no validation
@@ -20,7 +25,7 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
   - `kdd28_hao.distacc_aa`: trees=300, max_depth=6, min_examples=5, split_type=EXACT, max_unique_discretized=1, workers=4, machine=c8i.metal-96xl in-process, folds=5 CV folds (chronological sets: 1 holdout), seeds=1 2 3 4 5, force_numerical=true, profile=kdd28_hao.distacc_aa
   - `kdd28_hao.distacc_single_aa_spo`: trees=300, max_depth=6, min_examples=5, split_type=EXACT, spo_exponent=1, spo_max_projections=1000, spo_density=1.5, spo_min_projections=1, validation_set_ratio=0, early_stopping=NONE, folds=5 CV folds (chronological sets: 1 holdout), seeds=1 2 3 4 5, num_candidate_attributes=-1, include_axis_aligned=true, profile=kdd28_hao.distacc_single_aa_spo
   - `kdd28_hao.colrep_distacc_spo`: trees=300, max_depth=6, min_examples=5, split_type=EXACT, spo_exponent=1, spo_max_projections=1000, spo_density=1.5, spo_min_projections=1, split_budget=true, local_projection_count=false, column_replication=0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1, max_unique_discretized=1, workers=4, machine=c8i.metal-96xl in-process, folds=5 CV folds (chronological sets: 1 holdout), seeds=1 2 3 4 5, force_numerical=true, profile=kdd28_hao.colrep_distacc_spo
-- **Eval suite:** `kdd28_tabarena33` (seeds 1-5 since 2026-11-06)
+- **Eval suite:** `kdd28_tabarena33` (seeds 1-5 since 2026-11-06). `wide_eval/`: `kdd28_wide_datasets`
 - **Machine:** EC2 c8i.metal-96xl (Xeon 6975P-C), SMT and turbo on, in-process MULTI_THREAD workers, up to ~350 concurrent
   slots (not clean timing). Adopted seed-1 AA rows: m7i.metal-24xl (2026-11-03), exact300 rows: c8i
 - **Date:** 2026-11-06 23:53Z to 2026-11-07 07:11Z (adopted rows 2026-11-03/04)
@@ -29,5 +34,6 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
   `ariel_notes/results/2026-11-06_hao_seeds/`
 - **Raw cells:** box `~/results/2026-11-06_hao_seeds/{spaa,wide,wide_eps}/seed<s>/` on ariel-ydf-1 (i-0f90f7764082bf21a),
   mirrored to the gitignored `ariel_notes/results/2026-11-06_hao_seeds/box/` (CSVs, logs, `models_*.tar.zst`)
-- **Read by:** tab:accuracy-hao-vs-ydf-params-single-machine, tab:accuracy-hao-vs-ydf-params-distributed (`distacc/`, `distacc_aaspo/`).
+- **Read by:** tab:accuracy-hao-vs-ydf-params-single-machine, tab:accuracy-hao-vs-ydf-params-distributed (`distacc/`, `distacc_aaspo/`,
+  `wide_eval/distacc/`, `wide_eval/distacc_aaspo/`). The wide `colrep_distacc` cells stay in the mirror only.
   `colrep_distacc/` fed fig:column-replication-hao-vs-ydf-params, dropped 2026-11-20, and is read by no float now
