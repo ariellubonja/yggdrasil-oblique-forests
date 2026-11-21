@@ -159,7 +159,8 @@ def _impute_fold(df: "pd.DataFrame", feature_cols: list[str],
 def make_folds(dataset_name: str, train_csv: str, label_col: str, folds: int,
                 fold_seed: int, work_dir: str, chrono: bool = False,
                 holdout_frac: float = 0.2,
-                max_folds: int | None = None) -> list[tuple[int, str, str]]:
+                max_folds: int | None = None,
+                regression: bool = False) -> list[tuple[int, str, str]]:
     """Fold builder, cached under work_dir/<dataset_name>/.
 
     Two split protocols (both write fold<k>_train.csv / fold<k>_test.csv,
@@ -187,9 +188,10 @@ def make_folds(dataset_name: str, train_csv: str, label_col: str, folds: int,
     work_dir sees fewer cached files than it expects, treats it as a cache
     miss, and transparently backfills the rest (re-writing fold 0 byte-
     identically). Default None preserves the exact prior behaviour.
+    `regression` (2026-11-20): float label kept as is, KFold instead of StratifiedKFold.
     """
     import pandas as pd
-    from sklearn.model_selection import StratifiedKFold
+    from sklearn.model_selection import KFold, StratifiedKFold
 
     ds_out_dir = os.path.join(work_dir, dataset_name)
     os.makedirs(ds_out_dir, exist_ok=True)
@@ -217,6 +219,8 @@ def make_folds(dataset_name: str, train_csv: str, label_col: str, folds: int,
     else:
         expected["folds"] = folds
         expected["fold_seed"] = fold_seed
+    if regression:  # only recorded when set, so cached classification folds.json stay valid
+        expected["regression"] = True
 
     if os.path.exists(folds_json) and all(
             os.path.isfile(tr) and os.path.isfile(te) for _, tr, te in paths):
@@ -239,7 +243,8 @@ def make_folds(dataset_name: str, train_csv: str, label_col: str, folds: int,
     if label_col not in df.columns:
         sys.exit(f"{dataset_name}: label_col {label_col!r} not in {source_csv} "
                   f"columns {list(df.columns)}")
-    df[label_col] = df[label_col].astype(int)
+    if not regression:
+        df[label_col] = df[label_col].astype(int)
     feature_cols = [c for c in df.columns if c != label_col]
 
     if chrono:
@@ -251,7 +256,7 @@ def make_folds(dataset_name: str, train_csv: str, label_col: str, folds: int,
         # n_splits stays the real `folds` (not n_folds_effective) so fold k's
         # rows are byte-identical to a full, non-truncated run; max_folds only
         # limits how many of the yielded splits get written below.
-        skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=fold_seed)
+        skf = (KFold if regression else StratifiedKFold)(n_splits=folds, shuffle=True, random_state=fold_seed)
         split_iter = [(k, train_idx, test_idx)
                       for k, (train_idx, test_idx) in enumerate(skf.split(df, y))
                       if k < n_folds_effective]

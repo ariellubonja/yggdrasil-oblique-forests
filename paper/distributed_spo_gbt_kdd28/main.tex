@@ -183,7 +183,8 @@
 \textbf{\textit{Performance Improvement}}
 
 \begin{todolist}
-    \item A lot of sampled projections are identical in distributed - skip. Projects should be ensured distinct
+    \item A lot of sampled projections are identical in distributed, especially on YDF params. Claude claims $\sim 40\%$, even accounting for $+/- weight$. Can be skipped
+    \item \texttt{hwy::VQSort} at \texttt{splitter\_scanner.h:1807} has a small non-determinism: tied values come out in a random order, which changes tie resolution in late GBTs. This causes same-seed SPO (and presumably AA too) results to change slightly. % changes label-sum rounding and flips near-tied splits in late trees.
 \end{todolist}
 
 
@@ -410,7 +411,7 @@ Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at
 \end{description}
 
 \twocolumn[{\floatblock
-\section{Accuracy on Datasets Where SPO Outperforms AA}
+\section{Accuracy on Datasets Where SPO Outperforms AA (YDF Params)}
 \label{sec:accuracy-where-spo-outperforms-aa}
 
 Distributed methods use YDF parameters
@@ -534,7 +535,7 @@ Naive baseline for communication cost. \textbf{Should match local SPO-GBT accura
 
 \begin{table*}[t]
 \centering
-\caption{Datasets used, by source. Categorical columns are numbered ordinally (in order of appearance, categories are assigned incremental numbers). NaNs are column mean imputed. Multi-class classification problems was converted to 1-vs-all binary on the majority class. Eight datasets appear in both CC18 and TabArena. }
+\caption{Datasets used, by source. Categorical columns are ordinally encoded over their alphabetically sorted values. NaNs are column mean imputed. Multi-class classification problems was converted to 1-vs-all binary on the majority class. Eight datasets appear in both CC18 and TabArena. }
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 bin = binary classification, mul = multi-class classification, reg = regression, $^\dagger$ datasets were truncated to fit into memory.
@@ -556,40 +557,40 @@ Jane Street~\cite{jane-street-real-time-market-data-forecasting}       & reg$^*$
 \multicolumn{5}{@{}l}{\textit{Synthetic}} \\
 Trunk~\cite{trunk} & bin & - & - & \\\\
 \multicolumn{5}{@{}l}{\textit{OpenML CC18 (34 datasets)~\cite{bischl2017openml}}} \\
-adult & bin & 48,842 & 14 & X-Net. \\
-bank-marketing & bin & 45,211 & 16 & X-Net. \\
-banknote-authentication & bin & 1,372 & 4 & X-Net. \\
-Bioresponse & bin & 3,751 & 1,776 & X-Net. \\
-blood-transfusion-service-center & bin & 748 & 4 & X-Net. \\
-breast-w & bin & 699 & 9 & X-Net. \\
-churn & bin & 5,000 & 20 & X-Net. \\
-climate-model-simulation-crashes & bin & 540 & 18 & X-Net. \\
-credit-approval & bin & 690 & 15 & X-Net. \\
-credit-g & bin & 1,000 & 20 & X-Net. \\
-cylinder-bands & bin & 540 & 37 & X-Net. \\
-diabetes & bin & 768 & 8 & X-Net. \\
-dresses-sales & bin & 500 & 12 & X-Net. \\
-electricity & bin & 45,312 & 8 & X-Net. \\
-ilpd & bin & 583 & 10 & X-Net. \\
-Internet-Advertisements & bin & 3,279 & 1,558 & X-Net. \\
-jm1 & bin & 10,885 & 21 & X-Net. \\
-kc1 & bin & 2,109 & 21 & X-Net. \\
-kc2 & bin & 522 & 21 & X-Net. \\
-kr-vs-kp & bin & 3,196 & 36 & X-Net. \\
-madelon & bin & 2,600 & 500 & X-Net. \\
-nomao & bin & 34,465 & 118 & X-Net. \\
-numerai28.6 & bin & 96,320 & 21 & X-Net. \\
-ozone-level-8hr & bin & 2,534 & 72 & X-Net. \\
-pc1 & bin & 1,109 & 21 & X-Net. \\
-pc3 & bin & 1,563 & 37 & X-Net. \\
-pc4 & bin & 1,458 & 37 & X-Net. \\
-PhishingWebsites & bin & 11,055 & 30 & X-Net. \\
-phoneme & bin & 5,404 & 5 & X-Net. \\
-qsar-biodeg & bin & 1,055 & 41 & X-Net. \\
-spambase & bin & 4,601 & 57 & X-Net. \\
-tic-tac-toe & bin & 958 & 9 & X-Net. \\
-wdbc & bin & 569 & 30 & X-Net. \\
-wilt & bin & 4,839 & 5 & X-Net. \\
+adult & bin & 48,842 & 14 & Acc., X-Net. \\
+bank-marketing & bin & 45,211 & 16 & Acc., X-Net. \\
+banknote-authentication & bin & 1,372 & 4 & Acc., X-Net. \\
+Bioresponse & bin & 3,751 & 1,776 & Acc., X-Net. \\
+blood-transfusion-service-center & bin & 748 & 4 & Acc., X-Net. \\
+breast-w & bin & 699 & 9 & Acc., X-Net. \\
+churn & bin & 5,000 & 20 & Acc., X-Net. \\
+climate-model-simulation-crashes & bin & 540 & 18 & Acc., X-Net. \\
+credit-approval & bin & 690 & 15 & Acc., X-Net. \\
+credit-g & bin & 1,000 & 20 & Acc., X-Net. \\
+cylinder-bands & bin & 540 & 37 & Acc., X-Net. \\
+diabetes & bin & 768 & 8 & Acc., X-Net. \\
+dresses-sales & bin & 500 & 12 & Acc., X-Net. \\
+electricity & bin & 45,312 & 8 & Acc., X-Net. \\
+ilpd & bin & 583 & 10 & Acc., X-Net. \\
+Internet-Advertisements & bin & 3,279 & 1,558 & Acc., X-Net. \\
+jm1 & bin & 10,885 & 21 & Acc., X-Net. \\
+kc1 & bin & 2,109 & 21 & Acc., X-Net. \\
+kc2 & bin & 522 & 21 & Acc., X-Net. \\
+kr-vs-kp & bin & 3,196 & 36 & Acc., X-Net. \\
+madelon & bin & 2,600 & 500 & Acc., X-Net. \\
+nomao & bin & 34,465 & 118 & Acc., X-Net. \\
+numerai28.6 & bin & 96,320 & 21 & Acc., X-Net. \\
+ozone-level-8hr & bin & 2,534 & 72 & Acc., X-Net. \\
+pc1 & bin & 1,109 & 21 & Acc., X-Net. \\
+pc3 & bin & 1,563 & 37 & Acc., X-Net. \\
+pc4 & bin & 1,458 & 37 & Acc., X-Net. \\
+PhishingWebsites & bin & 11,055 & 30 & Acc., X-Net. \\
+phoneme & bin & 5,404 & 5 & Acc., X-Net. \\
+qsar-biodeg & bin & 1,055 & 41 & Acc., X-Net. \\
+spambase & bin & 4,601 & 57 & Acc., X-Net. \\
+tic-tac-toe & bin & 958 & 9 & Acc., X-Net. \\
+wdbc & bin & 569 & 30 & Acc., X-Net. \\
+wilt & bin & 4,839 & 5 & Acc., X-Net. \\
 \\
 \multicolumn{5}{@{}l}{\textit{Wide datasets ($F{\ge}100$, OpenML)}} \\
 christine~\cite{guyon2019automl} & bin & 5,418 & 1,636 & Acc. \\
@@ -607,10 +608,10 @@ vehicle\_sensIT~\cite{duarte2004vehicle} & bin & 98,528 & 100 & Acc. \\
 Dataset & Task & Rows & Feat. & Used in \\
 \midrule
 \multicolumn{5}{@{}l}{\textit{TabArena (51 datasets)~\cite{tabarena}}} \\
-airfoil\_self\_noise & reg & 1,503 & 5 & \\
-used-Fiat-500 & reg & 1,538 & 7 & \\
+airfoil\_self\_noise & reg & 1,503 & 5 & Acc. \\
+used-Fiat-500 & reg & 1,538 & 7 & Acc. \\
 Amazon\_employee\_access & bin & 32,769 & 9 & Acc. \\
-anneal & mul & 898 & 38 & \\
+anneal & mul & 898 & 38 & Acc. \\
 APSFailure & bin & 76,000 & 170 & Acc. \\
 bank-marketing & bin & 45,211 & 13 & Acc. \\
 Bank\_Customer\_Churn & bin & 10,000 & 10 & Acc. \\
@@ -618,55 +619,55 @@ Bioresponse & bin & 3,751 & 1,776 & Acc. \\
 blood-transfusion & bin & 748 & 4 & Acc. \\
 churn & bin & 5,000 & 19 & Acc. \\
 coil2000\_insurance\_policies & bin & 9,822 & 85 & Acc. \\
-concrete\_compressive & reg & 1,030 & 8 & \\
+concrete\_compressive & reg & 1,030 & 8 & Acc. \\
 credit-g & bin & 1,000 & 20 & Acc. \\
 credit\_card\_default & bin & 30,000 & 23 & Acc. \\
 customer\_satisf.\_airline & bin & 129,880 & 21 & Acc. \\
 diabetes & bin & 768 & 8 & Acc. \\
 Diabetes130US & bin & 71,518 & 47 & Acc. \\
-diamonds & reg & 53,940 & 9 & \\
+diamonds & reg & 53,940 & 9 & Acc. \\
 E-CommereShippingData & bin & 10,999 & 10 & Acc. \\
 Fitness\_Club & bin & 1,500 & 6 & Acc. \\
-Food\_Delivery\_Time & reg & 45,451 & 9 & \\
+Food\_Delivery\_Time & reg & 45,451 & 9 & Acc. \\
 GiveMeSomeCredit & bin & 150,000 & 10 & Acc. \\
 hazelnut-spread-contam. & bin & 2,400 & 30 & Acc. \\
-healthcare\_insurance & reg & 1,338 & 6 & \\
+healthcare\_insurance & reg & 1,338 & 6 & Acc. \\
 heloc & bin & 10,459 & 23 & Acc. \\
-hiva\_agnostic & mul & 3,845 & 1,617 & \\
-houses & reg & 20,640 & 8 & \\
+hiva\_agnostic & mul & 3,845 & 1,617 & Acc. \\
+houses & reg & 20,640 & 8 & Acc. \\
 HR\_Analytics\_Job\_Change & bin & 19,158 & 12 & Acc. \\
 in\_vehicle\_coupon & bin & 12,684 & 24 & Acc. \\
 Is-this-a-good-customer & bin & 1,723 & 13 & Acc. \\
 jm1 & bin & 10,885 & 21 & Acc. \\
 kddcup09\_appetency & bin & 50,000 & 212 & Acc. \\
 Marketing\_Campaign & bin & 2,240 & 25 & Acc. \\
-maternal\_health\_risk & mul & 1,014 & 6 & \\
-miami\_housing & reg & 13,776 & 15 & \\
-MIC & mul & 1,699 & 111 & \\
+maternal\_health\_risk & mul & 1,014 & 6 & Acc. \\
+miami\_housing & reg & 13,776 & 15 & Acc. \\
+MIC & mul & 1,699 & 111 & Acc. \\
 NATICUSdroid & bin & 7,491 & 86 & Acc. \\
 online\_shoppers\_intention & bin & 12,330 & 17 & Acc. \\
-physiochemical\_protein & reg & 45,730 & 9 & \\
+physiochemical\_protein & reg & 45,730 & 9 & Acc. \\
 polish\_bankruptcy & bin & 5,910 & 64 & Acc. \\
 qsar-biodeg & bin & 1,054 & 41 & Acc. \\
-QSAR-TID-11 & reg & 5,742 & 1,024 & \\
-QSAR\_fish\_toxicity & reg & 907 & 6 & \\
-SDSS17 & mul & 78,053 & 11 & \\
+QSAR-TID-11 & reg & 5,742 & 1,024 & Acc. \\
+QSAR\_fish\_toxicity & reg & 907 & 6 & Acc. \\
+SDSS17 & mul & 78,053 & 11 & Acc. \\
 seismic-bumps & bin & 2,584 & 15 & Acc. \\
-splice & mul & 3,190 & 60 & \\
-students\_dropout & mul & 4,424 & 36 & \\
-superconductivity & reg & 21,263 & 81 & \\
+splice & mul & 3,190 & 60 & Acc. \\
+students\_dropout & mul & 4,424 & 36 & Acc. \\
+superconductivity & reg & 21,263 & 81 & Acc. \\
 taiwanese\_bankruptcy & bin & 6,819 & 94 & Acc. \\
-website\_phishing & mul & 1,353 & 9 & \\
-wine\_quality & reg & 6,497 & 12 & \\\\
+website\_phishing & mul & 1,353 & 9 & Acc. \\
+wine\_quality & reg & 6,497 & 12 & Acc. \\\\
 \multicolumn{5}{@{}l}{\textit{TabReD (8 datasets)~\cite{rubachev2025tabred}}} \\
-cooking-time & reg & 319,986 & 192 & \\
-delivery-eta & reg & 416,451 & 223 & \\
+cooking-time & reg & 40,000$^\dagger$ & 192 & Acc. \\
+delivery-eta & reg & 40,000$^\dagger$ & 223 & Acc. \\
 ecom-offers & bin & 40,000$^\dagger$ & 119 & Acc. \\
 homecredit-default & bin & 40,000$^\dagger$ & 696 & Acc. \\
 homesite-insurance & bin & 40,000$^\dagger$ & 299 & Acc. \\
-maps-routing & reg & 340,981 & 986 & \\
-sberbank-housing & reg & 28,321 & 392 & \\
-weather & reg & 423,795 & 103 & \\
+maps-routing & reg & 40,000$^\dagger$ & 986 & Acc. \\
+sberbank-housing & reg & 23,674$^\dagger$ & 392 & Acc. \\
+weather & reg & 40,000$^\dagger$ & 103 & Acc. \\
 \bottomrule
 \end{tabular}
 \label{tab:datasets-used}
@@ -687,6 +688,7 @@ Fixing for seed, AA-GBT is deterministic w.r.t. number of workers (features are 
 \begin{todolist}
     \item [\done] AA-GBT runs were only run for $W=1$, and copied to the other workers. This is after repeatedly proving they are identical. This speeds up experiments by $\sim 1.8\times$.
     \item [\done] Hao's parameters were used instead of YDF defaults. See section below: they seem to outperform YDF, and run 4-5$\times$ faster!
+    \item [\done] Hao's parameters do not affect AA
     \item [\done] \textbf{Accuracy results are replicable across different AWS machines!} So long as they're running Linux. macOS is not replicable by default, due to different compilers and Linux using \texttt{libstdc++} instead of \texttt{libc++}. So results don't have to be constrained to YDF-1. However, there's still a 3-5\% runtime difference
     \item Skip repeated projections. Study how often these happen with either Hao or YDF parameters.
 \end{todolist}
@@ -779,7 +781,7 @@ Missing values replaced by column mean.
 
 NaNs are column mean imputed.
 
-Multi-class classification problems was converted to 1-vs-all binary classification, where 1 is the majority class (if a tie, the smaller index is chosen). % From a systems runtime perspective, this should have no impact. From an accuracy perspective, it should still be OK to compare across methods
+Multi-class classification problems was converted to 1-vs-all binary classification, where 1 is the majority class (ties go to the smaller class value, compared as a string). % From a systems runtime perspective, this should have no impact. From an accuracy perspective, it should still be OK to compare across methods
 
 
 
@@ -874,10 +876,14 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 
 
 \twocolumn[{\floatblock
-\section{Accuracy of Hao's Parameters in Distributed and vs. YDF, over 5 Seeds (except YDF-Parameter Runs on \texorpdfstring{${\ge}100$}{>=100} Column Datasets: 1 Seed)}
+\section{Accuracy of Hao's Parameters in Distributed and vs. YDF, over 5 Seeds, and where SPO clearly beats AA}
 \label{sec:accuracy-hao-vs-ydf-params}
 
-This table provides the reason for using Hao's parameters instead of YDF defaults. They outperform in mean across-dataset AUC in the Accuracy tables, and the runtime is 5x faster (measured on shared-run machines, its ballpark).
+
+\textcolor{gray}{(except YDF-Parameter Runs on \texorpdfstring{${\ge}100$}{>=100} Column Datasets: 1 Seed)}
+This table provides the reason for using Hao's parameters instead of YDF defaults, and \textbf{argues why the datasets where "SPO beats AA" were chosen}. They outperform in mean across-dataset AUC in the Accuracy tables, and the runtime is 5x faster (measured on shared-run machines, its ballpark). \textbf{Hao outperforms with both a simple mean and size-weighted mean.}
+
+\TODO{YDF may outperform in bigger datasets - see Epsilon!}
 
 \mbox{}\par\vskip0.5em
 \noindent\begin{minipage}{\textwidth}
@@ -890,7 +896,33 @@ This table provides the reason for using Hao's parameters instead of YDF default
 \input{tables/table_accuracy_hao_vs_ydf_params_single_machine_body}
 \par\smallskip\raggedright\footnotesize 
 Datasets are split into 5 folds and trained using Cross-Validation. The mean of this 5 is reported. In 5-seeds case, this is also averaged across seed. In TabReD, all datasets are chronological, so CV wasn't used. 
-YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. AA-GBT has no projection settings, so its two columns are identical. Hao cells colored by $\Delta$ AUC to YDF (blue higher, red lower). Mean time: training time of the accuracy runs \textbf{on shared machines} (use only as ballpark!). Otherwise YDF defaults, early stopping off, 300 trees, depth 6.
+YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Hao's parameters do not affect AA-GBT, so it has only the YDF-parameter column. Hao cells colored by $\Delta$ AUC to YDF (blue higher, red lower). Mean time: training time of the accuracy runs \textbf{on shared machines} (use only as ballpark!). Otherwise YDF defaults, early stopping off, 300 trees, depth 6.
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\ContinuedFloat
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Comparing YDF's and Hao's settings on single-machine GBT (continued): OpenML CC18.}
+\input{tables/table_accuracy_hao_vs_ydf_params_single_machine_cc18_body}
+\par\smallskip\raggedright\footnotesize OpenML CC18 binary tasks, its 10 CV folds. Both settings: mean over seeds 1--5. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=table}
+\ContinuedFloat
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Comparing YDF's and Hao's settings on single-machine GBT (continued): multiclass and regression.}
+\input{tables/table_accuracy_hao_vs_ydf_params_single_machine_mc_reg_body}
+\par\smallskip\raggedright\footnotesize Multiclass tasks trained as majority class vs.\ rest, test AUC. Regression: test RMSE (lower is better), Hao cells colored by \% RMSE change to YDF (blue lower), mean row = mean of RMSE / label standard deviation. Both settings: mean over seeds 1--5. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
 \end{minipage}
 }]
 
@@ -903,7 +935,7 @@ YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter
 \caption{Comparing YDF's and Hao's settings on test AUC of Distributed GBT.}
 \label{tab:accuracy-hao-vs-ydf-params-distributed}
 \input{tables/table_accuracy_hao_vs_ydf_params_distributed_body}
-\par\smallskip\raggedright\footnotesize YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Projections split across workers. AA-GBT has no projection settings, so its two columns are identical. Hao cells colored by $\Delta$ AUC to YDF at the same $W$ (blue higher, red lower). Mean time: training time of the in-process accuracy runs (workers are threads of one process), not distributed timings. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
+\par\smallskip\raggedright\footnotesize YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Projections split across workers. Hao's parameters do not affect AA-GBT, so it has only the YDF-parameter column. Hao cells colored by $\Delta$ AUC to YDF at the same $W$ (blue higher, red lower). Mean time: training time of the in-process accuracy runs (workers are threads of one process), not distributed timings. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
 \end{minipage}
 }]
 
@@ -986,6 +1018,10 @@ Avoids the \textcolor{magenta}{purple issue} above where Workers would end up wi
 \par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy.
 \end{minipage}
 }]
+
+\section{More Datasets tested for where SPO outperforms AA}
+
+The test is done on single-machine versions of the methods. If SPO outperforms AA by \TODO{how much?}, it is added to the main paper body's results and used in our measurements
 
 \section{Vova question on degenerate dataset}
 

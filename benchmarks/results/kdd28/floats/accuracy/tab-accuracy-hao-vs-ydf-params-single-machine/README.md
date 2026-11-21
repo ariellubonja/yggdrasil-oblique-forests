@@ -37,9 +37,26 @@ Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`,
   seed, one dataset, one fold). Single SPO, YDF / Hao: epsilon .9510 / .9464, santander_transaction .8823 / .8842, hcdr_main
   .7558 / .7576, dota2 .6283 / .6315, vehicle_sensIT .9289 / .9287, guillermo .8998 / .8979, philippine .8702 / .8645,
   christine .8196 / .8188. Shapes: `tab-accuracy-on-datasets-over-100-columns/derived/wide_shapes.csv` (`--wide_dataset_shapes`)
+- **CC18, multiclass and regression blocks (user request 2026-11-20):** two continuation floats of the single-machine table
+  (`\ContinuedFloat`, bodies `table_accuracy_hao_vs_ydf_params_single_machine_{cc18,mc_reg}_body.tex`). CC18: 34 binary tasks,
+  10 OpenML folds, `runs/2026-11-20_cc18_seeds/`. Multiclass: 8 TabArena tasks as majority class vs. rest, test AUC. Regression:
+  13 TabArena + 5 TabReD tasks, harness `--task regression`, test RMSE (lower is better), Hao cells colored by % RMSE change,
+  mean row = mean over datasets of RMSE / label std (`derived/extra_label_std.csv`, full-dataset std). Both from
+  `runs/2026-11-20_regression_multiclass_tabarena_tabred/`. All three: both profiles seeds 1-5. Data prep `benchmarks/data/prep_extra_tabular_folds.py`,
+  checked by an independent Fable-xhigh verifier on 2026-11-20 (all 220 fold files re-derived from the raw sources). Shapes and
+  cat= counts: `derived/{cc18,extra}_{shapes,categoricals}.csv` (CC18 cat = OpenML nominal/string features)
+- **AA-GBT column (user directive 2026-11-20):** Hao's settings do not touch AA, so every block shows only the YDF-parameter AA
+  column, in both Hao-vs-YDF tables. Hao AA cells were identical where they ran (CC18 1,700/1,700)
 - **Page fit (2026-11-20):** with the wide block the single-machine float ran past its page (its \twocolumn block was capped at
   \textheight, about 80pt of overflow, Overleaf ba69123). `--single_arraystretch 0.75` shrinks only the row spacing, not the
   font: block height 608.5pt of 626pt, rendered page 15 ends inside the text area. The distributed body fits at 1.0 (607.7pt)
 - **Inputs:** `inputs.txt`
 - **Raw cells:** box `~/results/2026-11-06_hao_seeds/{spaa,wide,wide_eps}/seed<s>/` on ariel-ydf-1 (i-0f90f7764082bf21a, stopped),
   mirrored to the gitignored `ariel_notes/results/2026-11-06_hao_seeds/box/` (CSVs, logs, `models_*.tar.zst`)
+- **SPO clearly beats AA column (2026-11-21, user request):** check marks per profile (YDF, Hao) from
+  `select_spo_clearly_beats_aa.py` (Fable-high analysis 2026-11-20, copy of the gitignored
+  `ariel_notes/results/2026-11-20_where_spo_beats_aa_cc18_openML_Wide_regression_tighter_tolerance/`, outputs byte-identical).
+  Rule: 5-seed mean effect above the floor (AUC edge > 0.005, or RMSE reduction (AA-SPO)/AA > 1 %), one-sided paired t
+  over seed-averaged fold differences survives Benjamini-Hochberg q = 0.05 over all testable rows, effect positive in every
+  seed. Writes `derived/spo_clearly_beats_aa_{per_dataset.csv,report.txt}`. The distributed body shows the same
+  single-machine marks. `Mean (all 41)` rows dropped from both main bodies (user 2026-11-21)

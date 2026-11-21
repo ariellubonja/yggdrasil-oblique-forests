@@ -39,6 +39,7 @@ ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps 
     "colrep_w32_large": "dataset,fold,arm,replication,workers,threads,rc,test_acc,test_auc,test_logloss,"
                         "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
     "cc18": "dataset,fold,arm,threads,rc,test_acc,test_auc,test_logloss,num_trees,train_s,wall_s,git,bin_sha",
+    "reg": "dataset,fold,arm,workers,split_axis,threads,rc,test_rmse,num_trees,train_s,wall_s,git,bin_sha,machine",
     "cross_network": "dataset,seed,workers,threads,trees,max_depth,rc,test_acc,test_auc,test_logloss,num_conditions,"
                      "num_oblique,num_multi_col,held_cols,ship_bytes_in,ship_bytes_out,ship_cols_in,ship_s_max,"
                      "ship_s_sum,cross_worker_splits,train_s,wall_s,git,log",
@@ -46,7 +47,7 @@ ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps 
 KEYS = {"distacc": ("dataset", "fold", "arm"), "distacc_aaspo": ("dataset", "fold", "arm"),
         "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "replication"),
         "colrep_w32_large": ("dataset", "fold", "arm", "replication"), "colrep": ("dataset", "seed", "replication"),
-        "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm"),
+        "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm"), "reg": ("dataset", "fold", "arm"),
         "cross_network": ("dataset", "seed")}
 
 
@@ -76,6 +77,7 @@ def parse_log(path, dist):
     else:
         m = re.findall(r"test-accuracy:(\S+) test-auc:(\S+) test-logloss:(\S+)", txt)
         out["test_acc"], out["test_auc"], out["test_logloss"] = m[-1] if m else ("", "", "")
+        out["test_rmse"] = g(r"test-rmse:(\S+)")  # --task regression (2026-11-20)
         out["train_s"] = g(r"Training block took: ([0-9.e+-]+)")
         out["num_trees"] = g(r"model-num-trees:(\d+)") or g(r"Final model num-trees:(\d+)")  # first: harness >= 2026-11-04
     return out
@@ -187,6 +189,16 @@ def build_cells(a):
             single("distacc_exact300", (d, k, "single:SPO-harness-exact300"), f"{PR}.distacc_single_spo_harness_exact300",
                    tr, te, "label", a.seed, split, os.path.join(a.out, "distacc_exact300", "models", f"{d}__f{k}__single_SPO_h300"),
                    a.single_threads, {"workers": "single", "split_axis": "SPARSE_OBLIQUE"}, cost(tr, False), ydf=False)
+    if "reg" in tables:  # regression sets, single machine (2026-11-20): distacc_single_* settings + --task regression
+        for d, k, tr, te in tab_folds():
+            for A in a.reg_arms.split(","):
+                prof = f"{PR}.distacc_single_{A.lower().replace('+', '_')}"
+                explicit = A != "AA" and PR != "kdd28_ydf"
+                split = (spo_split(prof) if explicit else ["--feature_split_type=Oblique"]) if A != "AA" else [SPLIT_AA]
+                split += ["--oblique_also_axis_aligned"] if A == "AA+SPO" else []
+                single("reg", (d, k, f"single:{A}"), prof, tr, te, "label", a.seed, split + ["--task", "regression"],
+                       os.path.join(a.out, "reg", "models", f"{d}__f{k}__single_{A}"), a.single_threads,
+                       {"workers": "single", "split_axis": A}, cost(tr, A == "AA") * 3, ydf=not explicit)
     if "colrep_distacc" in tables:  # tab:column-replication on the distacc datasets/folds, r = 0 only for --colrep_r0
         cp = kdd28.load_profile(f"{PR}.colrep_distacc_spo")
         r0 = {tuple(x.rsplit(":", 1)) for x in a.colrep_r0.split(",") if x}
@@ -245,16 +257,18 @@ def build_cells(a):
     if "cc18" in tables:
         ds = sorted(d for d in os.listdir(a.cc18_10fold) if os.path.isdir(os.path.join(a.cc18_10fold, d)))
         ds.sort(key=lambda d: -cost(os.path.join(a.cc18_10fold, d, "fold0_train.csv"), False))
-        arms = {"cc18_aa": [SPLIT_AA], "cc18_spo": ["--feature_split_type=Oblique"],
-                "cc18_aa_spo": ["--feature_split_type=Oblique", "--oblique_also_axis_aligned"]}
+        explicit = PR != "kdd28_ydf"  # kdd28_hao: explicit SPO flags, as in distacc (seed via --seed since 2026-11-20)
+        spo = lambda arm: spo_split(f"{PR}.{arm}") if explicit else ["--feature_split_type=Oblique"]  # noqa: E731
+        arms = {"cc18_aa": [SPLIT_AA], "cc18_spo": spo("cc18_spo"),
+                "cc18_aa_spo": spo("cc18_aa_spo") + ["--oblique_also_axis_aligned"]}
         for d in ds:
             lbl = json.load(open(os.path.join(a.cc18_10fold, d, "meta.json")))["label_col"]
             for k in kdd28.load_profile(f"{PR}.cc18_aa")["folds"]:
                 tr, te = (os.path.join(a.cc18_10fold, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
                 for arm, split in arms.items():
-                    single("cc18", (d, k, arm), f"{PR}.{arm}", tr, te, lbl, 1, split,
+                    single("cc18", (d, k, arm), f"{PR}.{arm}", tr, te, lbl, a.seed, split,
                            os.path.join(a.out, "cc18", "models", f"{d}__f{k}__{arm}"), a.single_threads, {},
-                           cost(tr, arm == "cc18_aa"))
+                           cost(tr, arm == "cc18_aa"), ydf=not (explicit and arm != "cc18_aa"))
     return cells
 
 
@@ -281,9 +295,10 @@ def main():
     ap.add_argument("--only", default="", help="comma list of dataset substrings")
     ap.add_argument("--exclude", default="", help="comma list of dataset substrings to skip (applied after --only)")
     ap.add_argument("--workers", default="", help="distacc: comma list of W replacing the profile's workers")
+    ap.add_argument("--reg_arms", default="SPO,AA,AA+SPO", help="reg: single-machine arms (SPO, AA, AA+SPO)")
     ap.add_argument("--dist_axes", default="SPO,AA", help="distacc: distributed split axes to run (SPO, AA)")
     ap.add_argument("--profile", default="kdd28_ydf", choices=["kdd28_ydf", "kdd28_hao"], help="kdd28_ydf or kdd28_hao (arms <profile>.distacc_* etc.)")
-    ap.add_argument("--seed", type=int, default=1, help="distacc, distacc_aaspo, distacc_exact300, colrep_distacc seed")
+    ap.add_argument("--seed", type=int, default=1, help="distacc, distacc_aaspo, distacc_exact300, colrep_distacc, cc18 seed")
     ap.add_argument("--single_axes", default="SPO,AA", help="distacc: single-machine split axes to run (SPO, AA, or empty)")
     ap.add_argument("--off_paper", default="", help="reason: run outside the table's eval suite, mismatches only warn and "
                     "rows are stamped eval_suite=off-paper:<reason>, which paper generators refuse")
@@ -291,13 +306,15 @@ def main():
     global PR
     PR = a.profile
     need = {"distacc": "tab_folds", "distacc_aaspo": "tab_folds", "distacc_exact300": "tab_folds",
-            "colrep_distacc": "tab_folds",
+            "colrep_distacc": "tab_folds", "reg": "tab_folds",
             "colrep_w32_large": "large_csvs", "colrep": "cc18_fold0", "cross_network": "cc18_fold0", "cc18": "cc18_10fold"}
     for t in a.tables.split(","):
         if t not in need:
             ap.error(f"unknown table {t!r} (known: {', '.join(need)})")
         if not getattr(a, need[t]):
             ap.error(f"--tables {t} needs --{need[t]}")
+    if set(a.reg_arms.split(",")) - {"SPO", "AA", "AA+SPO"}:
+        ap.error(f"--reg_arms takes SPO, AA, AA+SPO, got {a.reg_arms!r}")
     if set(a.dist_axes.split(",")) - {"SPO", "AA", ""} or set(a.single_axes.split(",")) - {"SPO", "AA", ""}:
         ap.error(f"--dist_axes/--single_axes take SPO and/or AA, got {a.dist_axes!r}/{a.single_axes!r}")
     cells = build_cells(a)
@@ -378,7 +395,7 @@ def main():
                     csv.writer(f).writerow(row)
                 left[c.table] -= 1
                 fails[c.table] += rc != 0
-                print(f"{time.strftime('%H:%M:%S')} {c.table} {c.tag} rc={rc} auc={m.get('test_auc')} {wall}s", flush=True)
+                print(f"{time.strftime('%H:%M:%S')} {c.table} {c.tag} rc={rc} auc={m.get('test_auc')} rmse={m.get('test_rmse')} {wall}s", flush=True)
                 if left[c.table] == 0:
                     with open(os.path.join(a.out, c.table, "DONE"), "w") as f:
                         f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} failed={fails[c.table]}\n")

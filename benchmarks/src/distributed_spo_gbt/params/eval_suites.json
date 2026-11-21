@@ -10,7 +10,8 @@
   "colrep": "kdd28_cc18_fold0",
   "colrep_single": "kdd28_cc18_fold0",
   "cross_network": "kdd28_cc18_fold0",
-  "cc18": "kdd28_cc18_10fold"
+  "cc18": "kdd28_cc18_10fold",
+  "reg": "kdd28_regression"
  },
  "_generators": {
   "make_paper_tables.py": "kdd28_tabarena33",
@@ -198,7 +199,8 @@
   "kdd28_cc18_10fold": {
    "_note": "34 CC18 binary tasks, 10 OpenML folds, run_cc18_aa_spo_gbt.sh data/. Raw string labels, per-dataset label column. Not comparable with the reference suite, and its fold 0 files differ from kdd28_cc18_fold0 (label name everywhere, cell values in 5 datasets).",
    "floats": [
-    "tab:cc18-aa-spo-ydf"
+    "tab:cc18-aa-spo-ydf",
+    "tab:accuracy-hao-vs-ydf-params-single-machine"
    ],
    "datasets": {
     "Bioresponse": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
@@ -249,12 +251,88 @@
    "label_col": null,
    "label_rule": "raw class strings, label column from <dataset>/meta.json",
    "positive_class": "AUC positive class = the last label-dictionary class = the least frequent training-fold class",
-   "seeds": [1],
-   "seed_protocol": "seed 1 per fold",
+   "seeds": [1, 2, 3, 4, 5],
+   "seed_protocol": "seed 1 per fold (tab:cc18-aa-spo); seeds 1-5 per fold for the kdd28_ydf and kdd28_hao cc18 arms (2026-11-20, runs/2026-11-20_cc18_seeds)",
    "metric_impl": "ydf_eval_v1",
    "headline": "test_acc",
    "validation": "none",
    "early_stopping": "none"
+  },
+  "kdd28_tabarena_multiclass": {
+   "_note": "TabArena multiclass tasks as majority class vs. rest (user request 2026-11-20). Same protocol as kdd28_tabarena33.",
+   "floats": ["tab:accuracy-hao-vs-ydf-params-single-machine"],
+   "datasets": {
+    "MIC": [0, 1, 2, 3, 4],
+    "SDSS17": [0, 1, 2, 3, 4],
+    "anneal": [0, 1, 2, 3, 4],
+    "hiva_agnostic": [0, 1, 2, 3, 4],
+    "maternal_health_risk": [0, 1, 2, 3, 4],
+    "splice": [0, 1, 2, 3, 4],
+    "students_dropout_and_academic_success": [0, 1, 2, 3, 4],
+    "website_phishing": [0, 1, 2, 3, 4]
+   },
+   "files": {
+    "train": "{dataset}/fold{fold}_train.csv",
+    "test": "{dataset}/fold{fold}_test.csv"
+   },
+   "hashes": {
+    "manifest": "benchmarks/data/kdd28_extra_datasets_manifest.sha256",
+    "strip": "folds/"
+   },
+   "data_root": "box ~/results/2026-11-20_extra_datasets/folds (benchmarks/data/prep_extra_tabular_folds.py <folds_dir>)",
+   "label_col": "label",
+   "seeds": [1, 2, 3, 4, 5],
+   "seed_protocol": "seeds 1-5 per fold, kdd28_ydf and kdd28_hao (2026-11-20)",
+   "metric_impl": "ydf_eval_v1",
+   "validation": "none",
+   "early_stopping": "none",
+   "folds_rule": "run_suite.make_folds: 5 stratified CV folds, seed 0",
+   "label_rule": "benchmarks/data/tabular_suite_prep.py encode_binary_label: >2 classes -> 1 iff the majority class (ties: smaller value as string)",
+   "positive_class": "AUC positive class = the last label-dictionary class = the least frequent training-fold class",
+   "headline": "test_auc"
+  },
+  "kdd28_regression": {
+   "_note": "TabArena + TabReD regression tasks (user request 2026-11-20), harness --task regression, test RMSE. TabReD = HF harbor train_full.csv, chronological 80/20 holdout.",
+   "floats": ["tab:accuracy-hao-vs-ydf-params-single-machine"],
+   "datasets": {
+    "Another-Dataset-on-used-Fiat-500": [0, 1, 2, 3, 4],
+    "Food_Delivery_Time": [0, 1, 2, 3, 4],
+    "QSAR-TID-11": [0, 1, 2, 3, 4],
+    "QSAR_fish_toxicity": [0, 1, 2, 3, 4],
+    "airfoil_self_noise": [0, 1, 2, 3, 4],
+    "concrete_compressive_strength": [0, 1, 2, 3, 4],
+    "diamonds": [0, 1, 2, 3, 4],
+    "healthcare_insurance_expenses": [0, 1, 2, 3, 4],
+    "houses": [0, 1, 2, 3, 4],
+    "miami_housing": [0, 1, 2, 3, 4],
+    "physiochemical_protein": [0, 1, 2, 3, 4],
+    "superconductivity": [0, 1, 2, 3, 4],
+    "wine_quality": [0, 1, 2, 3, 4],
+    "cooking-time": [0],
+    "delivery-eta": [0],
+    "maps-routing": [0],
+    "sberbank-housing": [0],
+    "weather": [0]
+   },
+   "files": {
+    "train": "{dataset}/fold{fold}_train.csv",
+    "test": "{dataset}/fold{fold}_test.csv"
+   },
+   "hashes": {
+    "manifest": "benchmarks/data/kdd28_extra_datasets_manifest.sha256",
+    "strip": "folds/"
+   },
+   "data_root": "box ~/results/2026-11-20_extra_datasets/folds (benchmarks/data/prep_extra_tabular_folds.py <folds_dir>)",
+   "label_col": "label",
+   "seeds": [1, 2, 3, 4, 5],
+   "seed_protocol": "seeds 1-5 per fold, kdd28_ydf and kdd28_hao (2026-11-20)",
+   "metric_impl": "ydf_eval_v1",
+   "validation": "none",
+   "early_stopping": "none",
+   "folds_rule": "run_suite.make_folds(regression=True): TabArena 5 KFold CV folds, seed 0. TabReD: chronological holdout, first 80 % train",
+   "label_rule": "float label as in the source, never transformed",
+   "positive_class": "n/a (regression)",
+   "headline": "test_rmse"
   }
  }
 }

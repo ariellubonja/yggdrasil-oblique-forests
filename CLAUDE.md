@@ -173,6 +173,9 @@ Claude Code is the hub and this repo is the source of truth.
   tab:dist-accuracy, tab:column-replication, tab:cross-network use MULTI_THREAD workers on `ariel-dist-accuracy-1`
   (i-0f90f7764082bf21a). Timing stays Vertex only. Same-seed reruns are bit-identical for RF. GBT, single
   or distributed, also needs the same thread count (tested 2026-11-03, 2026-11-19).
+- **Accuracy runs may shard over several EC2 boxes (user directive, 2026-11-20):** accuracy is identical across AWS
+  instance types with the same Linux and compiler (user-tested). After the smoke test, split big queues over several
+  "ariel" boxes (same binaries, same thread counts).
 - **Real distributed numbers come only from Vertex AI CustomJobs (2026-10-25).** The in-process driver
   `examples/train_distributed_gbt` and `run_dgbt*.sh` / `run_barrier_cell.sh` are smoke tests only;
   never report them as distributed.
@@ -204,6 +207,9 @@ Claude Code is the hub and this repo is the source of truth.
 - **No table or section numbers in names (user directive, 2026-11-04):** result dirs, files, profile names and docs
   refer to floats by their LaTeX label (e.g. `dist-accuracy`), never by number (`table8`), because numbers change
   with every paper edit.
+- **Descriptive run and result names (user directive, 2026-11-21):** a run or result dir name says what it holds (task
+  type, suite, profile, what is compared), e.g. `2026-11-20_tabarena_multiclass_and_regression_ydf_hao_5seeds`. Never
+  vague words like `extra`, `misc`, `new`, `more`, `v2`. Bad example: `runs/2026-11-20_extra_datasets` (renamed 2026-11-21 to `runs/2026-11-20_regression_multiclass_tabarena_tabred`).
 
 ## Paper rules
 

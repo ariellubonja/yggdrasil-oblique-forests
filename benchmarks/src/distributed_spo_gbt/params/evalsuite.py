@@ -361,4 +361,5 @@ def driver_preflight(cells, cache_path=None, suite_override=None, off_paper=None
 def stamp(values, metrics):
     """Final eval stamp of a finished cell: metric_impl only when the binary's metric line was parsed."""
     suite, sha, impl = values
-    return [suite, sha, impl if str(metrics.get("test_auc", "")).strip() else ""]
+    parsed = str(metrics.get("test_auc", "")).strip() or str(metrics.get("test_rmse", "")).strip()  # rmse: --task regression
+    return [suite, sha, impl if parsed else ""]

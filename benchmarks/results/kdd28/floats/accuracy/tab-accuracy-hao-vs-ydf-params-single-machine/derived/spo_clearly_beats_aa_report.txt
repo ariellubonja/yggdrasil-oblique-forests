@@ -1,0 +1,431 @@
+0. Recommendation (kdd28_ydf is the primary profile. Details and evidence in sections 1-6)
+  Effect: binary AUC sets use the test-AUC edge SPO - AA. Regression sets use the relative RMSE reduction (AA - SPO) / AA per fold.
+  Both are averaged over folds and over the 5 seeds (YDF wide sets have seed 1 only).
+  RECOMMENDED RULE: 5-seed mean effect > 0.005 AUC (regression: > 1 % relative RMSE reduction), AND the one-sided paired t-test over the
+    seed-averaged fold differences is significant after Benjamini-Hochberg at q = 0.05 over all 100 dataset rows, AND the effect is > 0 in every seed.
+    Passing rows: 25 of 101 (spaa 4, wide 1, cc18 12, multiclass 0, regression 8), 23 unique dataset names. Largest p-value BH accepts: 0.0160.
+    The same rule mirrored (AA beats SPO) passes 2 rows: sberbank-housing[regression], weather[regression].
+    For scale: the floor alone on 5-seed means passes 35 rows, the floor on seed 1 alone (the current rule, all suites) 38.
+  ALTERNATIVE (the v1 rule extended): replace the BH test by effect > 2 SE over folds. Passing rows: 28 (spaa 7, wide 1, cc18 12, multiclass 0, regression 8).
+    Gains over the recommended rule: churn[spaa], Marketing_Campaign[spaa], taiwanese_bankruptcy_prediction[spaa]. Loses: -.
+    Cost: no multiple-comparison control. 2 SE with 5 folds is a one-sided p of 0.058, and 101 rows are tested. Mirrored, it passes 5 AA wins.
+    Middle option: BH at q = 0.10 passes 27 rows (adds Marketing_Campaign[spaa], taiwanese_bankruptcy_prediction[spaa]).
+  STRICT VARIANT (not recommended, for reference): BH on the Nadeau-Bengio corrected t keeps 14 rows (spaa 2, wide 1, cc18 6, multiclass 0, regression 5).
+    It loses Another-Dataset-on-used-Fiat-500[regression], Bioresponse[cc18], climate-model-simulation-crashes[cc18], concrete_compressive_strength[regression], credit-g[cc18], hazelnut-spread-contaminant-detection[spaa], pc3[cc18], pc4[cc18], qsar-biodeg[cc18], qsar-biodeg[spaa], QSAR-TID-11[regression].
+    The plain k-fold paired t is known to be liberal because training folds overlap (Dietterich 1998, Nadeau and Bengio 2003). Its size on these data is not measured here.
+  Why 1 % for regression: 0.005 AUC is 3.7 x the median seed SD of the edge and 1.8 x the median fold SE on the 75 five-seed AUC rows.
+    The same multiples of the regression medians are 0.0106 and 0.0088. A reseed of SPO alone moves the fold-mean AUC by more than 0.005 in 11.5% of seed pairs,
+    and moves the relative RMSE by more than 1 % in 10.0% of seed pairs. Floors from 0.75 % to 1.5 % select the same regression sets.
+  Rows the rule cannot test or that need a footnote:
+    epsilon (kdd28_ydf): 1 shipped split and 1 seed, so no p-value. Edge +0.0107 = 9.7 x the Hanley-McNeil unpaired SE bound. Needs seeds 2-5 to enter by the rule.
+    philippine (kdd28_ydf): passes on seed 1 with 5 folds. Seed agreement is untested under kdd28_ydf (5/5 seeds above the floor under kdd28_hao).
+    Datasets evaluated twice (SPAA eval 5 folds and CC18 10 folds) that pass in only one: Bioresponse (spaa +0.0026, p 0.139. cc18 +0.0052, p 0.006), churn (spaa +0.0094, p 0.053. cc18 +0.0100, p 0.000), credit-g (spaa +0.0073, p 0.099. cc18 +0.0163, p 0.011).
+    Bioresponse is the weakest pass: its SPAA-eval edge is below the floor and 3/5 CC18 seeds are above it. Suggest dropping it or showing the CC18 number only.
+  Anomalies: hiva_agnostic is excluded (AUC < 0.5 in both arms, and its edge is 1.0 SE). sberbank-housing stays in the universe as an AA win (SPO RMSE 3.1 to 4.3 x AA).
+  kdd28_hao (secondary): 26 rows pass the recommended rule (spaa 7, wide 2, cc18 11, multiclass 0, regression 6), 29 the alternative. Lists in section 5.
+
+1. Inputs and fold-file consistency (data_sha per dataset x fold, every seed vs the first seed, and SPO vs AA cells)
+  kdd28_ydf spaa       seeds 5  datasets 33  dataset-folds 153  data_sha mismatches 0
+  kdd28_ydf wide       seeds 1  datasets  8  dataset-folds  36  data_sha mismatches 0
+  kdd28_ydf cc18       seeds 5  datasets 34  dataset-folds 340  data_sha mismatches 0
+  kdd28_ydf multiclass seeds 5  datasets  8  dataset-folds  40  data_sha mismatches 0
+  kdd28_ydf regression seeds 5  datasets 18  dataset-folds  70  data_sha mismatches 0
+  kdd28_hao spaa       seeds 5  datasets 33  dataset-folds 153  data_sha mismatches 0
+  kdd28_hao wide       seeds 5  datasets  8  dataset-folds  36  data_sha mismatches 0
+  kdd28_hao cc18       seeds 5  datasets 34  dataset-folds 340  data_sha mismatches 0
+  kdd28_hao multiclass seeds 5  datasets  8  dataset-folds  40  data_sha mismatches 0
+  kdd28_hao regression seeds 5  datasets 18  dataset-folds  70  data_sha mismatches 0
+  kdd28_hao vs kdd28_ydf fold files (data_sha mismatches): spaa 0, wide 0, cc18 0, multiclass 0, regression 0
+  kdd28_ydf rows 101 over 93 dataset names. In both SPAA eval (5 folds) and CC18 (10 folds, other fold files): Bioresponse, bank-marketing, blood-transfusion-service-center, churn, credit-g, diabetes, jm1, qsar-biodeg
+  YDF wide: seed 1 only (runs/2026-11-04_wide_eval). Epsilon: 1 split and 1 seed under kdd28_ydf, so no noise estimate from these cells
+  Hao seed-1 single:SPO rows of the SPAA and wide sets are the adopted harness_exact300 rows (exponent 1, max 1000, density 1.5, the kdd28_hao values)
+
+2. Calibrating the regression floor against the AUC floor of 0.005 (kdd28_ydf, 5-seed sets)
+  AUC sets n=75: median seed SD of the edge 0.0013, median fold SE 0.0028, median NB SE 0.0042
+  regression n=17 (sberbank-housing left out, see 6): median seed SD of the relative reduction 0.0028, median fold SE 0.0049, median NB SE 0.0073. With sberbank-housing (n=18): seed SD 0.0031
+  0.005 AUC = 3.7 x median seed SD = 1.8 x median fold SE. The same multiples on regression: 0.0106 (seed SD), 0.0088 (fold SE)
+  same-method null |SPO seed s - SPO seed s'| of the fold-mean metric: AUC 750 seed pairs, 88.5% are <= 0.005. The same quantile of the relative RMSE null (170 pairs) is 0.0094. Share of RMSE null pairs <= 0.01: 90.0%
+  relative-error view (not matched): 0.005 AUC = 5.1% of the median AUC error (1 - AA AUC). 1 % RMSE = about 2 % MSE. The floors are matched on noise, not on relative error
+  regression floor sweep (floor only, 5-seed mean, of 17): > 0.0000: 13, > 0.0025: 12, > 0.0050: 12, > 0.0075: 9, > 0.0100: 9, > 0.0150: 9, > 0.0200: 7, > 0.0250: 6, > 0.0300: 4, > 0.0500: 1
+  chosen: relative RMSE reduction > 0.01 (1 %). Any floor from 0.0075 to 0.015 selects the same regression sets
+
+3. Per-dataset table, kdd28_ydf (effect = 5-seed (wide: seed 1) mean. AUC edge SPO-AA, or relative RMSE reduction. SE over seed-averaged folds, '~' = over seeds on a 1-split set. p = one-sided paired t. REC/ALT = passes the recommended/alternative rule, aa = AA wins by the mirrored rule)
+ [spaa]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  polish_companies_bankruptcy             5 5    0.9540    0.9949 +0.0409 +0.0416 0.0054    7.6 0.0081 0.0008 0.0008 [+0.0401,+0.0419] 5/5 5/5 25/25 YES YES
+  jm1                                     5 5    0.7328    0.7541 +0.0213 +0.0208 0.0036    5.8 0.0055 0.0022 0.0017 [+0.0196,+0.0238] 5/5 5/5 25/25 YES YES
+  qsar-biodeg                             5 5    0.9257    0.9398 +0.0141 +0.0166 0.0038    3.7 0.0057 0.0105 0.0019 [+0.0116,+0.0166] 5/5 5/5 25/25 YES YES
+  Marketing_Campaign                      5 5    0.8932    0.9039 +0.0107 +0.0076 0.0036    2.9 0.0054 0.0211 0.0046 [+0.0048,+0.0168] 4/5 5/5 20/25     YES
+  churn                                   5 5    0.9164    0.9257 +0.0094 +0.0108 0.0045    2.1 0.0068 0.0529 0.0018 [+0.0074,+0.0108] 5/5 5/5 20/25     YES
+  hazelnut-spread-contaminant-detection   5 5    0.9734    0.9824 +0.0090 +0.0088 0.0026    3.5 0.0038 0.0122 0.0003 [+0.0087,+0.0095] 5/5 5/5 25/25 YES YES
+  taiwanese_bankruptcy_prediction         5 5    0.9353    0.9430 +0.0076 +0.0070 0.0031    2.5 0.0046 0.0336 0.0022 [+0.0057,+0.0113] 5/5 5/5 21/25     YES
+  credit-g                                5 5    0.7627    0.7700 +0.0073 +0.0158 0.0047    1.5 0.0071 0.0987 0.0059 [+0.0010,+0.0158] 2/5 5/5 15/25        
+  seismic-bumps                           5 5    0.7165    0.7231 +0.0066 -0.0065 0.0169    0.4 0.0253 0.3584 0.0094 [-0.0065,+0.0177] 2/5 4/5 14/25        
+  Amazon_employee_access                  5 5    0.8408    0.8434 +0.0026 +0.0038 0.0047    0.6 0.0071 0.3049 0.0022 [-0.0003,+0.0055] 1/5 4/5 15/25        
+  Bioresponse                             5 5    0.8704    0.8730 +0.0026 +0.0023 0.0020    1.3 0.0031 0.1388 0.0033 [-0.0004,+0.0076] 1/5 3/5 14/25        
+  in_vehicle_coupon_recommendation        5 5    0.8276    0.8302 +0.0026 +0.0054 0.0009    2.8 0.0014 0.0256 0.0018 [+0.0006,+0.0054] 1/5 5/5 18/25        
+  APSFailure                              5 5    0.9900    0.9916 +0.0015 +0.0012 0.0007    2.1 0.0011 0.0520 0.0004 [+0.0012,+0.0022] 0/5 5/5 20/25        
+  online_shoppers_intention               5 5    0.9234    0.9248 +0.0014 +0.0014 0.0014    1.0 0.0021 0.1857 0.0010 [-0.0001,+0.0026] 0/5 4/5 15/25        
+  heloc                                   5 5    0.7831    0.7844 +0.0013 +0.0014 0.0012    1.1 0.0018 0.1660 0.0004 [+0.0009,+0.0019] 0/5 5/5 15/25        
+  customer_satisfaction_in_airline        5 5    0.9929    0.9941 +0.0012 +0.0012 0.0001   12.4 0.0001 0.0001 0.0000 [+0.0012,+0.0012] 0/5 5/5 25/25        
+  credit_card_clients_default             5 5    0.7742    0.7753 +0.0011 +0.0028 0.0012    0.9 0.0017 0.1984 0.0013 [-0.0004,+0.0028] 0/5 4/5 15/25        
+  GiveMeSomeCredit                        5 5    0.8641    0.8640 -0.0001 -0.0003 0.0004   -0.2 0.0006 0.5672 0.0003 [-0.0003,+0.0004] 0/5 2/5 10/25        
+  Bank_Customer_Churn                     5 5    0.8493    0.8492 -0.0002 -0.0006 0.0019   -0.1 0.0029 0.5295 0.0013 [-0.0012,+0.0017] 0/5 2/5 13/25        
+  NATICUSdroid                            5 5    0.9850    0.9846 -0.0004 -0.0004 0.0005   -0.9 0.0007 0.7817 0.0001 [-0.0006,-0.0002] 0/5 0/5 11/25        
+  Fitness_Club                            5 5    0.7651    0.7641 -0.0011 -0.0027 0.0037   -0.3 0.0056 0.6056 0.0034 [-0.0039,+0.0049] 0/5 1/5 11/25        
+  HR_Analytics_Job_Change_of_Data_Scient  5 5    0.7948    0.7937 -0.0011 -0.0013 0.0014   -0.8 0.0022 0.7622 0.0010 [-0.0021,+0.0006] 0/5 1/5  9/25        
+  homesite-insurance                      1 5    0.9554    0.9540 -0.0014 -0.0021 0.0002~  -6.0    -   0.9981 0.0005 [-0.0021,-0.0007] 0/5 0/5  0/ 5        
+  coil2000_insurance_policies             5 5    0.7141    0.7117 -0.0023 -0.0050 0.0024   -1.0 0.0036 0.8081 0.0026 [-0.0050,+0.0010] 0/5 1/5  7/25        
+  E-CommereShippingData                   5 5    0.7358    0.7332 -0.0026 -0.0020 0.0028   -0.9 0.0043 0.7918 0.0016 [-0.0048,-0.0005] 0/5 0/5  9/25        
+  kddcup09_appetency                      5 5    0.8033    0.8007 -0.0026 -0.0034 0.0028   -0.9 0.0041 0.8013 0.0013 [-0.0042,-0.0007] 0/5 0/5  8/25        
+  diabetes                                5 5    0.7987    0.7954 -0.0033 -0.0047 0.0075   -0.4 0.0113 0.6595 0.0027 [-0.0061,+0.0010] 0/5 1/5 12/25        
+  bank-marketing                          5 5    0.7558    0.7522 -0.0035 -0.0048 0.0015   -2.3 0.0023 0.9599 0.0008 [-0.0048,-0.0027] 0/5 0/5  5/25        
+  ecom-offers                             1 5    0.6194    0.6144 -0.0050 -0.0071 0.0013~  -3.8    -   0.9906 0.0029 [-0.0086,-0.0009] 0/5 0/5  0/ 5        
+  blood-transfusion-service-center        5 5    0.6855    0.6791 -0.0064 -0.0088 0.0130   -0.5 0.0195 0.6754 0.0046 [-0.0104,+0.0005] 0/5 1/5 10/25        
+  Is-this-a-good-customer                 5 5    0.6972    0.6898 -0.0073 -0.0098 0.0059   -1.2 0.0089 0.8582 0.0038 [-0.0100,-0.0008] 0/5 0/5  7/25        
+  Diabetes130US                           5 5    0.6589    0.6501 -0.0088 -0.0061 0.0024   -3.7 0.0036 0.9894 0.0027 [-0.0126,-0.0061] 0/5 0/5  2/25        
+  homecredit-default                      1 5    0.8058    0.7924 -0.0134 +0.0031 0.0063~  -2.1    -   0.9496 0.0141 [-0.0334,+0.0031] 0/5 1/5  1/ 5        
+ [wide]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  philippine                              5 1    0.8540    0.8702 +0.0162 +0.0162 0.0022    7.3 0.0033 0.0009    -   [+0.0162,+0.0162] 1/1 1/1  5/ 5 YES YES
+  epsilon                                 1 1    0.9403    0.9510 +0.0107 +0.0107    -       -     -     -       -   [+0.0107,+0.0107] 1/1 1/1  1/ 1        
+  christine                               5 1    0.8149    0.8196 +0.0047 +0.0047 0.0014    3.2 0.0022 0.0157    -   [+0.0047,+0.0047] 0/1 1/1  4/ 5        
+  vehicle_sensIT                          5 1    0.9253    0.9289 +0.0036 +0.0036 0.0004    8.7 0.0006 0.0005    -   [+0.0036,+0.0036] 0/1 1/1  5/ 5        
+  santander_transaction                   5 1    0.8806    0.8823 +0.0017 +0.0017 0.0005    3.2 0.0008 0.0160    -   [+0.0017,+0.0017] 0/1 1/1  5/ 5        
+  dota2                                   5 1    0.6285    0.6283 -0.0002 -0.0002 0.0006   -0.3 0.0010 0.6095    -   [-0.0002,-0.0002] 0/1 0/1  1/ 5        
+  hcdr_main                               5 1    0.7579    0.7558 -0.0022 -0.0022 0.0005   -4.0 0.0008 0.9917    -   [-0.0022,-0.0022] 0/1 0/1  0/ 5        
+  guillermo                               5 1    0.9027    0.8998 -0.0028 -0.0028 0.0015   -1.8 0.0023 0.9300    -   [-0.0028,-0.0028] 0/1 0/1  1/ 5        
+ [cc18]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  climate-model-simulation-crashes       10 5    0.9018    0.9579 +0.0561 +0.0589 0.0161    3.5 0.0233 0.0034 0.0044 [+0.0516,+0.0622] 5/5 5/5 46/50 YES YES
+  pc3                                    10 5    0.8247    0.8562 +0.0315 +0.0368 0.0085    3.7 0.0124 0.0025 0.0061 [+0.0228,+0.0368] 5/5 5/5 40/50 YES YES
+  ozone-level-8hr                        10 5    0.9055    0.9366 +0.0311 +0.0386 0.0048    6.5 0.0069 0.0001 0.0062 [+0.0242,+0.0386] 5/5 5/5 49/50 YES YES
+  madelon                                10 5    0.8895    0.9157 +0.0261 +0.0301 0.0027    9.7 0.0039 0.0000 0.0037 [+0.0212,+0.0301] 5/5 5/5 50/50 YES YES
+  kc1                                    10 5    0.7875    0.8102 +0.0227 +0.0209 0.0049    4.6 0.0071 0.0006 0.0035 [+0.0179,+0.0263] 5/5 5/5 42/50 YES YES
+  jm1                                    10 5    0.7371    0.7573 +0.0202 +0.0239 0.0034    6.0 0.0049 0.0001 0.0038 [+0.0140,+0.0239] 5/5 5/5 46/50 YES YES
+  credit-g                               10 5    0.7652    0.7814 +0.0163 +0.0172 0.0059    2.8 0.0085 0.0110 0.0046 [+0.0084,+0.0196] 5/5 5/5 35/50 YES YES
+  qsar-biodeg                            10 5    0.9243    0.9386 +0.0143 +0.0147 0.0037    3.9 0.0054 0.0019 0.0009 [+0.0130,+0.0152] 5/5 5/5 43/50 YES YES
+  pc4                                    10 5    0.9479    0.9609 +0.0130 +0.0122 0.0034    3.9 0.0049 0.0019 0.0008 [+0.0122,+0.0141] 5/5 5/5 44/50 YES YES
+  phoneme                                10 5    0.9505    0.9628 +0.0123 +0.0115 0.0016    7.8 0.0023 0.0000 0.0008 [+0.0115,+0.0134] 5/5 5/5 50/50 YES YES
+  churn                                  10 5    0.9201    0.9302 +0.0100 +0.0094 0.0020    5.1 0.0028 0.0003 0.0010 [+0.0090,+0.0115] 5/5 5/5 45/50 YES YES
+  wilt                                   10 5    0.9858    0.9933 +0.0075 +0.0071 0.0041    1.8 0.0060 0.0504 0.0009 [+0.0067,+0.0088] 5/5 5/5 44/50        
+  kc2                                    10 5    0.7566    0.7630 +0.0065 +0.0049 0.0149    0.4 0.0216 0.3373 0.0092 [-0.0036,+0.0190] 2/5 3/5 32/50        
+  Bioresponse                            10 5    0.8758    0.8810 +0.0052 +0.0051 0.0017    3.1 0.0024 0.0062 0.0017 [+0.0025,+0.0070] 3/5 5/5 37/50 YES YES
+  ilpd                                   10 5    0.7281    0.7323 +0.0042 +0.0061 0.0124    0.3 0.0180 0.3704 0.0021 [+0.0008,+0.0061] 2/5 5/5 27/50        
+  credit-approval                        10 5    0.9282    0.9316 +0.0034 +0.0040 0.0033    1.1 0.0047 0.1590 0.0011 [+0.0018,+0.0044] 0/5 5/5 32/50        
+  Internet-Advertisements                10 5    0.9781    0.9812 +0.0031 +0.0048 0.0008    4.1 0.0011 0.0014 0.0011 [+0.0020,+0.0048] 0/5 5/5 42/50        
+  pc1                                    10 5    0.8642    0.8671 +0.0029 +0.0099 0.0088    0.3 0.0129 0.3765 0.0053 [-0.0040,+0.0099] 1/5 3/5 26/50        
+  numerai28.6                            10 5    0.5182    0.5205 +0.0024 +0.0011 0.0019    1.3 0.0027 0.1205 0.0015 [+0.0007,+0.0044] 0/5 5/5 30/50        
+  wdbc                                   10 5    0.9936    0.9949 +0.0013 +0.0011 0.0015    0.9 0.0022 0.2020 0.0005 [+0.0008,+0.0020] 0/5 5/5 24/50        
+  spambase                               10 5    0.9890    0.9899 +0.0009 +0.0009 0.0006    1.6 0.0009 0.0771 0.0002 [+0.0006,+0.0012] 0/5 5/5 34/50        
+  PhishingWebsites                       10 5    0.9971    0.9975 +0.0005 +0.0005 0.0001    3.5 0.0002 0.0032 0.0000 [+0.0004,+0.0005] 0/5 5/5 44/50        
+  kr-vs-kp                               10 5    0.9995    0.9999 +0.0004 +0.0004 0.0002    1.8 0.0003 0.0552 0.0000 [+0.0004,+0.0004] 0/5 5/5 25/50        
+  banknote-authentication                10 5    0.9999    1.0000 +0.0001 +0.0000 0.0001    1.4 0.0001 0.0974 0.0000 [+0.0000,+0.0001] 0/5 5/5 10/50        
+  breast-w                               10 5    0.9929    0.9929 +0.0000 -0.0006 0.0013    0.0 0.0019 0.4921 0.0007 [-0.0007,+0.0007] 0/5 3/5 29/50        
+  tic-tac-toe                            10 5    1.0000    1.0000 +0.0000 +0.0000 0.0000     -  0.0000 1.0000 0.0000 [+0.0000,+0.0000] 0/5 0/5  0/50        
+  bank-marketing                         10 5    0.9345    0.9343 -0.0002 -0.0006 0.0003   -1.0 0.0004 0.8173 0.0003 [-0.0006,+0.0001] 0/5 1/5 18/50        
+  nomao                                  10 5    0.9957    0.9952 -0.0004 -0.0004 0.0001   -5.6 0.0001 0.9998 0.0001 [-0.0005,-0.0003] 0/5 0/5  3/50        
+  electricity                            10 5    0.9685    0.9669 -0.0016 -0.0013 0.0004   -4.0 0.0006 0.9984 0.0003 [-0.0020,-0.0013] 0/5 0/5  7/50        
+  adult                                  10 5    0.9294    0.9277 -0.0017 -0.0016 0.0003   -4.9 0.0005 0.9996 0.0002 [-0.0018,-0.0013] 0/5 0/5  5/50        
+  diabetes                               10 5    0.8134    0.8113 -0.0022 +0.0018 0.0057   -0.4 0.0082 0.6447 0.0026 [-0.0049,+0.0018] 0/5 1/5 25/50        
+  cylinder-bands                         10 5    0.9201    0.9171 -0.0029 -0.0038 0.0076   -0.4 0.0111 0.6454 0.0019 [-0.0051,-0.0000] 0/5 0/5 22/50        
+  blood-transfusion-service-center       10 5    0.6796    0.6701 -0.0095 -0.0094 0.0131   -0.7 0.0191 0.7569 0.0050 [-0.0146,-0.0014] 0/5 0/5 22/50        
+  dresses-sales                          10 5    0.5536    0.5209 -0.0327 -0.0236 0.0284   -1.2 0.0413 0.8606 0.0090 [-0.0476,-0.0236] 0/5 0/5 11/50        
+ [multiclass]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  hiva_agnostic                           5 5    0.4708    0.4870 +0.0162 +0.0180 0.0168    1.0 0.0252 0.1941 0.0245 [-0.0241,+0.0420] 4/5 4/5 16/25          INVALID (AUC <= .5)
+  anneal                                  5 5    0.9899    0.9985 +0.0086 +0.0085 0.0085    1.0 0.0127 0.1843 0.0002 [+0.0082,+0.0087] 5/5 5/5 11/25        
+  maternal_health_risk                    5 5    0.9486    0.9525 +0.0039 +0.0058 0.0028    1.4 0.0042 0.1219 0.0011 [+0.0032,+0.0058] 1/5 5/5 17/25        
+  MIC                                     5 5    0.9243    0.9274 +0.0031 +0.0027 0.0050    0.6 0.0074 0.2855 0.0016 [+0.0007,+0.0052] 1/5 5/5 14/25        
+  students_dropout_and_academic_success   5 5    0.9238    0.9250 +0.0012 +0.0008 0.0029    0.4 0.0044 0.3477 0.0012 [-0.0005,+0.0028] 0/5 4/5 13/25        
+  SDSS17                                  5 5    0.9943    0.9952 +0.0009 +0.0008 0.0001   13.2 0.0001 0.0001 0.0001 [+0.0008,+0.0009] 0/5 5/5 25/25        
+  splice                                  5 5    0.9924    0.9931 +0.0006 +0.0008 0.0003    2.0 0.0005 0.0578 0.0003 [+0.0002,+0.0009] 0/5 5/5 19/25        
+  website_phishing                        5 5    0.9690    0.9667 -0.0023 -0.0025 0.0013   -1.7 0.0020 0.9194 0.0006 [-0.0028,-0.0013] 0/5 0/5  6/25        
+ [regression]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  concrete_compressive_strength           5 5    4.2998    4.0569 +0.0559 +0.0625 0.0170    3.3 0.0255 0.0152 0.0077 [+0.0446,+0.0638] 5/5 5/5 25/25 YES YES
+  houses                                  5 5    0.2255    0.2172 +0.0372 +0.0372 0.0046    8.1 0.0069 0.0006 0.0034 [+0.0321,+0.0415] 5/5 5/5 25/25 YES YES
+  superconductivity                       5 5    9.9168    9.5551 +0.0365 +0.0320 0.0049    7.5 0.0073 0.0009 0.0025 [+0.0320,+0.0380] 5/5 5/5 25/25 YES YES
+  wine_quality                            5 5    0.6353    0.6160 +0.0303 +0.0327 0.0028   10.9 0.0042 0.0002 0.0039 [+0.0243,+0.0340] 5/5 5/5 25/25 YES YES
+  physiochemical_protein                  5 5    3.9568    3.8529 +0.0263 +0.0251 0.0009   29.6 0.0013 0.0000 0.0012 [+0.0251,+0.0282] 5/5 5/5 25/25 YES YES
+  Another-Dataset-on-used-Fiat-500        5 5     769.3     749.9 +0.0254 +0.0183 0.0069    3.7 0.0103 0.0106 0.0040 [+0.0183,+0.0279] 5/5 5/5 23/25 YES YES
+  healthcare_insurance_expenses           5 5    4897.3    4791.8 +0.0230 +0.0214 0.0167    1.4 0.0251 0.1208 0.0028 [+0.0205,+0.0276] 5/5 5/5 18/25        
+  Food_Delivery_Time                      5 5    7.3941    7.2551 +0.0188 +0.0193 0.0004   47.0 0.0006 0.0000 0.0003 [+0.0185,+0.0193] 5/5 5/5 25/25 YES YES
+  QSAR-TID-11                             5 5    0.7954    0.7817 +0.0175 +0.0166 0.0038    4.6 0.0057 0.0050 0.0028 [+0.0137,+0.0206] 5/5 5/5 24/25 YES YES
+  QSAR_fish_toxicity                      5 5    0.9252    0.9156 +0.0074 +0.0105 0.0235    0.3 0.0353 0.3842 0.0053 [+0.0002,+0.0142] 2/5 5/5 12/25        
+  diamonds                                5 5     531.4     527.9 +0.0065 +0.0070 0.0045    1.4 0.0068 0.1113 0.0021 [+0.0036,+0.0095] 0/5 5/5 17/25        
+  cooking-time                            1 5    0.4631    0.4607 +0.0050 +0.0090 0.0010~   4.8    -   0.0044 0.0023 [+0.0027,+0.0090] 0/5 5/5  5/ 5        
+  maps-routing                            1 5    0.1649    0.1647 +0.0013 +0.0041 0.0011~   1.2    -   0.1528 0.0025 [-0.0016,+0.0041] 0/5 3/5  3/ 5        
+  miami_housing                           5 5   87049.1   86991.2 -0.0002 -0.0035 0.0132   -0.0 0.0199 0.5061 0.0037 [-0.0035,+0.0049] 0/5 2/5 14/25        
+  delivery-eta                            1 5    0.5585    0.5611 -0.0047 -0.0061 0.0011~  -4.3    -   0.9938 0.0024 [-0.0077,-0.0015] 0/5 0/5  0/ 5        
+  airfoil_self_noise                      5 5    1.6323    1.7510 -0.0754 -0.0770 0.0156   -4.8 0.0233 0.9958 0.0082 [-0.0837,-0.0620] 0/5 0/5  0/25        
+  weather                                 1 5    1.5625    1.7306 -0.1076 -0.1349 0.0071~ -15.1    -   0.9999 0.0160 [-0.1349,-0.0974] 0/5 0/5  0/ 5 aa     
+  sberbank-housing                        1 5    0.2564    0.9248 -2.6058 -2.7242 0.1918~ -13.6    -   0.9999 0.4289 [-3.2335,-2.0784] 0/5 0/5  0/ 5 aa     
+
+3. Per-dataset table, kdd28_hao (effect = 5-seed mean. AUC edge SPO-AA, or relative RMSE reduction. SE over seed-averaged folds, '~' = over seeds on a 1-split set. p = one-sided paired t. REC/ALT = passes the recommended/alternative rule, aa = AA wins by the mirrored rule)
+ [spaa]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  polish_companies_bankruptcy             5 5    0.9540    0.9797 +0.0258 +0.0287 0.0035    7.4 0.0052 0.0009 0.0032 [+0.0217,+0.0287] 5/5 5/5 25/25 YES YES
+  credit-g                                5 5    0.7627    0.7798 +0.0170 +0.0212 0.0054    3.2 0.0081 0.0171 0.0054 [+0.0092,+0.0227] 5/5 5/5 21/25 YES YES
+  jm1                                     5 5    0.7328    0.7465 +0.0137 +0.0109 0.0017    8.1 0.0025 0.0006 0.0022 [+0.0109,+0.0165] 5/5 5/5 24/25 YES YES
+  Marketing_Campaign                      5 5    0.8932    0.9066 +0.0133 +0.0111 0.0026    5.1 0.0039 0.0035 0.0016 [+0.0111,+0.0154] 5/5 5/5 25/25 YES YES
+  qsar-biodeg                             5 5    0.9257    0.9364 +0.0108 +0.0111 0.0029    3.7 0.0044 0.0108 0.0021 [+0.0078,+0.0137] 5/5 5/5 25/25 YES YES
+  seismic-bumps                           5 5    0.7165    0.7266 +0.0100 +0.0107 0.0114    0.9 0.0172 0.2149 0.0078 [-0.0030,+0.0168] 4/5 4/5 18/25        
+  homecredit-default                      1 5    0.8058    0.8151 +0.0094 +0.0090 0.0024~   4.0    -   0.0082 0.0053 [+0.0019,+0.0167] 4/5 5/5  5/ 5 YES YES
+  taiwanese_bankruptcy_prediction         5 5    0.9353    0.9438 +0.0085 +0.0053 0.0043    2.0 0.0064 0.0593 0.0021 [+0.0053,+0.0107] 5/5 5/5 20/25        
+  hazelnut-spread-contaminant-detection   5 5    0.9734    0.9804 +0.0070 +0.0065 0.0016    4.3 0.0024 0.0064 0.0007 [+0.0061,+0.0077] 5/5 5/5 25/25 YES YES
+  churn                                   5 5    0.9164    0.9232 +0.0068 +0.0080 0.0029    2.3 0.0044 0.0405 0.0019 [+0.0046,+0.0087] 4/5 5/5 20/25     YES
+  heloc                                   5 5    0.7831    0.7870 +0.0039 +0.0049 0.0008    5.0 0.0012 0.0036 0.0014 [+0.0016,+0.0050] 1/5 5/5 23/25        
+  credit_card_clients_default             5 5    0.7742    0.7777 +0.0036 +0.0037 0.0010    3.6 0.0015 0.0113 0.0007 [+0.0030,+0.0047] 0/5 5/5 23/25        
+  Bioresponse                             5 5    0.8704    0.8739 +0.0035 +0.0026 0.0019    1.8 0.0029 0.0731 0.0021 [+0.0015,+0.0068] 1/5 5/5 19/25        
+  Bank_Customer_Churn                     5 5    0.8493    0.8525 +0.0032 +0.0048 0.0013    2.4 0.0020 0.0360 0.0012 [+0.0019,+0.0048] 0/5 5/5 21/25        
+  coil2000_insurance_policies             5 5    0.7141    0.7171 +0.0030 -0.0039 0.0023    1.3 0.0035 0.1362 0.0050 [-0.0039,+0.0093] 2/5 4/5 15/25        
+  HR_Analytics_Job_Change_of_Data_Scient  5 5    0.7948    0.7976 +0.0028 +0.0027 0.0015    1.9 0.0022 0.0665 0.0005 [+0.0025,+0.0036] 0/5 5/5 20/25        
+  Is-this-a-good-customer                 5 5    0.6972    0.6998 +0.0027 +0.0028 0.0055    0.5 0.0082 0.3266 0.0061 [-0.0027,+0.0125] 1/5 3/5 17/25        
+  online_shoppers_intention               5 5    0.9234    0.9257 +0.0023 +0.0024 0.0008    3.0 0.0012 0.0207 0.0011 [+0.0012,+0.0036] 0/5 5/5 20/25        
+  diabetes                                5 5    0.7987    0.8010 +0.0023 +0.0098 0.0055    0.4 0.0082 0.3465 0.0046 [-0.0020,+0.0098] 1/5 3/5 14/25        
+  Fitness_Club                            5 5    0.7651    0.7674 +0.0023 +0.0042 0.0036    0.6 0.0054 0.2830 0.0036 [-0.0038,+0.0056] 1/5 4/5 16/25        
+  Amazon_employee_access                  5 5    0.8408    0.8431 +0.0022 +0.0017 0.0028    0.8 0.0043 0.2366 0.0004 [+0.0017,+0.0026] 0/5 5/5 14/25        
+  APSFailure                              5 5    0.9900    0.9914 +0.0014 +0.0012 0.0004    4.0 0.0005 0.0081 0.0002 [+0.0012,+0.0017] 0/5 5/5 22/25        
+  NATICUSdroid                            5 5    0.9850    0.9859 +0.0009 +0.0010 0.0003    3.4 0.0004 0.0132 0.0001 [+0.0008,+0.0010] 0/5 5/5 22/25        
+  GiveMeSomeCredit                        5 5    0.8641    0.8649 +0.0009 +0.0006 0.0003    2.7 0.0005 0.0266 0.0004 [+0.0003,+0.0012] 0/5 5/5 20/25        
+  kddcup09_appetency                      5 5    0.8033    0.8041 +0.0008 +0.0018 0.0029    0.3 0.0044 0.4028 0.0029 [-0.0043,+0.0029] 0/5 4/5 12/25        
+  customer_satisfaction_in_airline        5 5    0.9929    0.9935 +0.0006 +0.0006 0.0001   10.0 0.0001 0.0003 0.0000 [+0.0006,+0.0007] 0/5 5/5 25/25        
+  in_vehicle_coupon_recommendation        5 5    0.8276    0.8280 +0.0004 +0.0005 0.0009    0.4 0.0013 0.3395 0.0015 [-0.0008,+0.0028] 0/5 3/5 16/25        
+  blood-transfusion-service-center        5 5    0.6855    0.6853 -0.0001 +0.0012 0.0113   -0.0 0.0169 0.5045 0.0017 [-0.0029,+0.0013] 0/5 3/5 12/25        
+  bank-marketing                          5 5    0.7558    0.7551 -0.0006 -0.0001 0.0013   -0.5 0.0019 0.6785 0.0006 [-0.0015,+0.0001] 0/5 1/5  9/25        
+  E-CommereShippingData                   5 5    0.7358    0.7351 -0.0007 +0.0017 0.0017   -0.4 0.0025 0.6456 0.0028 [-0.0046,+0.0023] 0/5 2/5 10/25        
+  homesite-insurance                      1 5    0.9554    0.9546 -0.0008 -0.0008 0.0001~  -6.7    -   0.9987 0.0003 [-0.0011,-0.0004] 0/5 0/5  0/ 5        
+  ecom-offers                             1 5    0.6194    0.6178 -0.0016 -0.0056 0.0014~  -1.2    -   0.8450 0.0031 [-0.0056,+0.0028] 0/5 1/5  1/ 5        
+  Diabetes130US                           5 5    0.6589    0.6548 -0.0041 -0.0033 0.0017   -2.4 0.0026 0.9624 0.0013 [-0.0059,-0.0027] 0/5 0/5  5/25        
+ [wide]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  philippine                              5 5    0.8521    0.8645 +0.0124 +0.0099 0.0015    8.2 0.0023 0.0006 0.0030 [+0.0086,+0.0153] 5/5 5/5 24/25 YES YES
+  epsilon                                 1 5    0.9403    0.9464 +0.0061 +0.0061 0.0000~ 180.3    -   0.0000 0.0001 [+0.0060,+0.0062] 5/5 5/5  5/ 5 YES YES
+  santander_transaction                   5 5    0.8804    0.8842 +0.0038 +0.0038 0.0004    9.7 0.0006 0.0003 0.0003 [+0.0034,+0.0042] 0/5 5/5 25/25        
+  vehicle_sensIT                          5 5    0.9253    0.9287 +0.0034 +0.0033 0.0004    9.5 0.0005 0.0003 0.0003 [+0.0030,+0.0038] 0/5 5/5 25/25        
+  christine                               5 5    0.8156    0.8188 +0.0032 +0.0043 0.0013    2.4 0.0020 0.0384 0.0025 [-0.0007,+0.0061] 1/5 4/5 16/25        
+  dota2                                   5 5    0.6285    0.6315 +0.0030 +0.0022 0.0004    7.0 0.0006 0.0011 0.0006 [+0.0022,+0.0036] 0/5 5/5 25/25        
+  hcdr_main                               5 5    0.7579    0.7576 -0.0004 -0.0004 0.0006   -0.6 0.0008 0.7226 0.0005 [-0.0012,+0.0001] 0/5 2/5  9/25        
+  guillermo                               5 5    0.9020    0.8979 -0.0041 -0.0045 0.0009   -4.5 0.0014 0.9947 0.0009 [-0.0049,-0.0026] 0/5 0/5  1/25        
+ [cc18]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  climate-model-simulation-crashes       10 5    0.9018    0.9466 +0.0449 +0.0482 0.0137    3.3 0.0198 0.0047 0.0035 [+0.0390,+0.0482] 5/5 5/5 45/50 YES YES
+  ozone-level-8hr                        10 5    0.9055    0.9341 +0.0286 +0.0329 0.0039    7.4 0.0056 0.0000 0.0041 [+0.0247,+0.0333] 5/5 5/5 50/50 YES YES
+  pc3                                    10 5    0.8247    0.8489 +0.0242 +0.0229 0.0078    3.1 0.0113 0.0062 0.0056 [+0.0155,+0.0290] 5/5 5/5 39/50 YES YES
+  kc1                                    10 5    0.7875    0.8054 +0.0179 +0.0167 0.0056    3.2 0.0082 0.0056 0.0039 [+0.0121,+0.0221] 5/5 5/5 37/50 YES YES
+  madelon                                10 5    0.8895    0.9025 +0.0130 +0.0179 0.0027    4.9 0.0039 0.0004 0.0038 [+0.0074,+0.0179] 5/5 5/5 43/50 YES YES
+  qsar-biodeg                            10 5    0.9243    0.9369 +0.0126 +0.0138 0.0033    3.9 0.0047 0.0019 0.0017 [+0.0107,+0.0139] 5/5 5/5 43/50 YES YES
+  jm1                                    10 5    0.7371    0.7494 +0.0124 +0.0139 0.0030    4.1 0.0043 0.0013 0.0021 [+0.0100,+0.0144] 5/5 5/5 41/50 YES YES
+  credit-g                               10 5    0.7652    0.7769 +0.0117 +0.0132 0.0037    3.1 0.0054 0.0060 0.0017 [+0.0092,+0.0132] 5/5 5/5 35/50 YES YES
+  phoneme                                10 5    0.9505    0.9610 +0.0105 +0.0097 0.0012    8.6 0.0018 0.0000 0.0005 [+0.0097,+0.0112] 5/5 5/5 50/50 YES YES
+  ilpd                                   10 5    0.7281    0.7368 +0.0087 +0.0174 0.0097    0.9 0.0141 0.1955 0.0062 [+0.0007,+0.0174] 4/5 5/5 33/50        
+  pc4                                    10 5    0.9479    0.9553 +0.0075 +0.0068 0.0029    2.5 0.0043 0.0157 0.0010 [+0.0067,+0.0091] 5/5 5/5 36/50 YES YES
+  churn                                  10 5    0.9201    0.9267 +0.0065 +0.0034 0.0008    8.7 0.0011 0.0000 0.0023 [+0.0034,+0.0093] 4/5 5/5 39/50 YES YES
+  pc1                                    10 5    0.8642    0.8705 +0.0063 +0.0154 0.0071    0.9 0.0103 0.1989 0.0076 [-0.0053,+0.0154] 3/5 4/5 30/50        
+  cylinder-bands                         10 5    0.9201    0.9258 +0.0058 +0.0041 0.0053    1.1 0.0078 0.1548 0.0022 [+0.0039,+0.0093] 3/5 5/5 30/50        
+  wilt                                   10 5    0.9858    0.9909 +0.0051 +0.0037 0.0041    1.2 0.0060 0.1255 0.0011 [+0.0037,+0.0067] 2/5 5/5 42/50        
+  credit-approval                        10 5    0.9282    0.9329 +0.0047 +0.0041 0.0027    1.7 0.0040 0.0577 0.0022 [+0.0028,+0.0083] 2/5 5/5 32/50        
+  Bioresponse                            10 5    0.8758    0.8803 +0.0045 +0.0042 0.0016    2.8 0.0023 0.0096 0.0012 [+0.0034,+0.0064] 1/5 5/5 38/50        
+  Internet-Advertisements                10 5    0.9781    0.9827 +0.0045 +0.0066 0.0011    4.0 0.0017 0.0016 0.0017 [+0.0023,+0.0066] 3/5 5/5 43/50        
+  numerai28.6                            10 5    0.5182    0.5225 +0.0044 +0.0047 0.0019    2.3 0.0028 0.0239 0.0012 [+0.0025,+0.0056] 2/5 5/5 37/50        
+  kc2                                    10 5    0.7566    0.7609 +0.0044 +0.0093 0.0089    0.5 0.0129 0.3180 0.0042 [-0.0003,+0.0093] 2/5 4/5 30/50        
+  wdbc                                   10 5    0.9936    0.9952 +0.0016 +0.0016 0.0012    1.4 0.0018 0.1047 0.0008 [+0.0007,+0.0028] 0/5 5/5 26/50        
+  spambase                               10 5    0.9890    0.9900 +0.0010 +0.0009 0.0003    3.0 0.0005 0.0073 0.0001 [+0.0009,+0.0012] 0/5 5/5 41/50        
+  breast-w                               10 5    0.9929    0.9937 +0.0008 +0.0003 0.0012    0.7 0.0017 0.2623 0.0005 [+0.0003,+0.0014] 0/5 5/5 34/50        
+  bank-marketing                         10 5    0.9345    0.9350 +0.0004 +0.0002 0.0003    1.6 0.0004 0.0708 0.0002 [+0.0002,+0.0008] 0/5 5/5 35/50        
+  PhishingWebsites                       10 5    0.9971    0.9975 +0.0004 +0.0004 0.0001    3.2 0.0002 0.0051 0.0000 [+0.0003,+0.0004] 0/5 5/5 42/50        
+  kr-vs-kp                               10 5    0.9995    0.9999 +0.0003 +0.0004 0.0002    1.7 0.0003 0.0655 0.0000 [+0.0003,+0.0004] 0/5 5/5 25/50        
+  banknote-authentication                10 5    0.9999    1.0000 +0.0001 +0.0000 0.0001    1.4 0.0001 0.0974 0.0000 [+0.0000,+0.0001] 0/5 5/5 10/50        
+  tic-tac-toe                            10 5    1.0000    1.0000 +0.0000 +0.0000 0.0000     -  0.0000 1.0000 0.0000 [+0.0000,+0.0000] 0/5 0/5  0/50        
+  nomao                                  10 5    0.9957    0.9955 -0.0001 -0.0001 0.0001   -1.9 0.0001 0.9552 0.0000 [-0.0002,-0.0001] 0/5 0/5 16/50        
+  blood-transfusion-service-center       10 5    0.6796    0.6793 -0.0004 -0.0013 0.0118   -0.0 0.0172 0.5119 0.0057 [-0.0083,+0.0074] 1/5 2/5 24/50        
+  adult                                  10 5    0.9294    0.9288 -0.0006 -0.0002 0.0003   -2.2 0.0004 0.9714 0.0003 [-0.0010,-0.0002] 0/5 0/5 13/50        
+  diabetes                               10 5    0.8134    0.8125 -0.0010 +0.0001 0.0052   -0.2 0.0075 0.5723 0.0026 [-0.0054,+0.0008] 0/5 3/5 24/50        
+  electricity                            10 5    0.9685    0.9638 -0.0046 -0.0047 0.0004  -13.2 0.0005 1.0000 0.0002 [-0.0048,-0.0044] 0/5 0/5  0/50        
+  dresses-sales                          10 5    0.5536    0.5293 -0.0243 -0.0235 0.0249   -1.0 0.0362 0.8225 0.0066 [-0.0323,-0.0171] 0/5 0/5 15/50        
+ [multiclass]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  hiva_agnostic                           5 5    0.4708    0.4818 +0.0110 +0.0218 0.0169    0.6 0.0254 0.2760 0.0085 [-0.0016,+0.0218] 4/5 4/5 15/25          INVALID (AUC <= .5)
+  MIC                                     5 5    0.9243    0.9297 +0.0053 +0.0032 0.0027    2.0 0.0040 0.0593 0.0019 [+0.0032,+0.0074] 2/5 5/5 18/25        
+  maternal_health_risk                    5 5    0.9486    0.9526 +0.0040 +0.0044 0.0026    1.6 0.0038 0.0978 0.0004 [+0.0034,+0.0044] 0/5 5/5 19/25        
+  students_dropout_and_academic_success   5 5    0.9238    0.9270 +0.0032 +0.0028 0.0021    1.5 0.0032 0.1037 0.0008 [+0.0021,+0.0041] 0/5 5/5 18/25        
+  anneal                                  5 5    0.9899    0.9916 +0.0017 +0.0007 0.0012    1.4 0.0018 0.1159 0.0009 [+0.0007,+0.0030] 0/5 5/5 13/25        
+  splice                                  5 5    0.9924    0.9934 +0.0010 +0.0009 0.0002    4.2 0.0004 0.0069 0.0001 [+0.0009,+0.0011] 0/5 5/5 23/25        
+  SDSS17                                  5 5    0.9943    0.9950 +0.0006 +0.0005 0.0001   12.3 0.0001 0.0001 0.0001 [+0.0005,+0.0007] 0/5 5/5 25/25        
+  website_phishing                        5 5    0.9690    0.9691 +0.0001 -0.0006 0.0012    0.1 0.0018 0.4633 0.0005 [-0.0006,+0.0007] 0/5 3/5 13/25        
+ [regression]
+  dataset                                k  s        AA       SPO  effect   seed1      SE eff/SE  SE_NB      p seedSD        seed range >fl >0  cells REC ALT
+  concrete_compressive_strength           5 5    4.2998    4.0694 +0.0537 +0.0567 0.0163    3.3 0.0245 0.0151 0.0082 [+0.0446,+0.0623] 5/5 5/5 23/25 YES YES
+  Another-Dataset-on-used-Fiat-500        5 5     769.3     748.4 +0.0274 +0.0283 0.0038    7.2 0.0057 0.0010 0.0034 [+0.0225,+0.0318] 5/5 5/5 25/25 YES YES
+  healthcare_insurance_expenses           5 5    4897.3    4798.1 +0.0215 +0.0255 0.0154    1.4 0.0231 0.1173 0.0027 [+0.0182,+0.0255] 5/5 5/5 16/25        
+  superconductivity                       5 5    9.9168    9.7110 +0.0208 +0.0187 0.0034    6.1 0.0051 0.0018 0.0025 [+0.0187,+0.0249] 5/5 5/5 25/25 YES YES
+  miami_housing                           5 5   87049.1   85244.7 +0.0202 +0.0193 0.0074    2.7 0.0111 0.0263 0.0028 [+0.0172,+0.0244] 5/5 5/5 22/25     YES
+  Food_Delivery_Time                      5 5    7.3941    7.2589 +0.0183 +0.0182 0.0006   31.5 0.0009 0.0000 0.0004 [+0.0179,+0.0187] 5/5 5/5 25/25 YES YES
+  QSAR_fish_toxicity                      5 5    0.9252    0.9062 +0.0182 +0.0277 0.0191    0.9 0.0287 0.1982 0.0072 [+0.0093,+0.0277] 4/5 5/5 15/25        
+  wine_quality                            5 5    0.6353    0.6247 +0.0167 +0.0207 0.0037    4.5 0.0056 0.0054 0.0026 [+0.0142,+0.0207] 5/5 5/5 24/25 YES YES
+  QSAR-TID-11                             5 5    0.7954    0.7864 +0.0113 +0.0137 0.0039    2.9 0.0059 0.0222 0.0041 [+0.0046,+0.0155] 4/5 5/5 21/25     YES
+  physiochemical_protein                  5 5    3.9568    3.9130 +0.0111 +0.0108 0.0012    9.5 0.0017 0.0003 0.0010 [+0.0099,+0.0126] 4/5 5/5 25/25 YES YES
+  houses                                  5 5    0.2255    0.2238 +0.0079 +0.0112 0.0014    5.6 0.0021 0.0025 0.0033 [+0.0027,+0.0112] 2/5 5/5 24/25        
+  diamonds                                5 5     531.4     529.2 +0.0042 +0.0041 0.0034    1.2 0.0051 0.1420 0.0021 [+0.0010,+0.0068] 0/5 5/5 16/25        
+  cooking-time                            1 5    0.4631    0.4615 +0.0033 +0.0044 0.0004~   8.6    -   0.0005 0.0009 [+0.0022,+0.0044] 0/5 5/5  5/ 5        
+  maps-routing                            1 5    0.1649    0.1646 +0.0020 -0.0007 0.0008~   2.4    -   0.0356 0.0019 [-0.0007,+0.0042] 0/5 4/5  4/ 5        
+  delivery-eta                            1 5    0.5585    0.5584 +0.0001 -0.0009 0.0015~   0.1    -   0.4782 0.0034 [-0.0032,+0.0043] 0/5 2/5  2/ 5        
+  weather                                 1 5    1.5625    1.5834 -0.0134 -0.0189 0.0036~  -3.7    -   0.9899 0.0080 [-0.0238,-0.0045] 0/5 0/5  0/ 5        
+  airfoil_self_noise                      5 5    1.6323    1.7189 -0.0554 -0.0569 0.0178   -3.1 0.0267 0.9822 0.0122 [-0.0703,-0.0378] 0/5 0/5  1/25        
+  sberbank-housing                        1 5    0.2564    0.5649 -1.2037 -1.4752 0.1503~  -8.0    -   0.9993 0.3361 [-1.5271,-0.7335] 0/5 0/5  0/ 5 aa     
+
+4. Rule comparison, kdd28_ydf (101 dataset rows)
+  BH q=0.05 family: 100 rows with a p-value, 33 rejected, largest rejected p 0.0160 (before the floor). Nadeau-Bengio family: 92 multi-fold rows, 17 rejected, largest rejected p 0.0089
+  rule                                                               tot  spaa  wide  cc18 multi regre
+  A  floor only (5-seed mean)                                         35     9     2    14     1     9
+  B  floor AND > 2 SE (folds, or seeds on 1-split sets)               28     7     1    12     0     8
+  C  B AND effect > 0 in every seed                                   28     7     1    12     0     8   <- alternative
+  D  C AND effect > floor in >= 4/5 seeds (needs 5 seeds)             26     7     0    11     0     8
+  E  floor AND > 2 SE Nadeau-Bengio (multi-fold only)                 24     4     1    11     0     8
+  F  floor AND BH q=0.05 on paired t AND effect > 0 in every seed     25     4     1    12     0     8   <- recommended
+  F' as F with BH q=0.10                                              27     6     1    12     0     8
+  G  floor AND BH q=0.05 on Nadeau-Bengio t (multi-fold only)         14     2     1     6     0     5
+  H  floor AND one-sided p < 0.05 (uncorrected)                       27     6     1    12     0     8
+  I  effect > floor in every seed (no fold test)                      28     6     0    12     1     9
+  vs recommended, A: gains anneal[multiclass], churn[spaa], credit-g[spaa], epsilon[wide], healthcare_insurance_expenses[regression], kc2[cc18], Marketing_Campaign[spaa], seismic-bumps[spaa], taiwanese_bankruptcy_prediction[spaa], wilt[cc18]. Loses -
+  vs recommended, B: gains churn[spaa], Marketing_Campaign[spaa], taiwanese_bankruptcy_prediction[spaa]. Loses -
+  vs recommended, C: gains churn[spaa], Marketing_Campaign[spaa], taiwanese_bankruptcy_prediction[spaa]. Loses -
+  vs recommended, D: gains churn[spaa], Marketing_Campaign[spaa], taiwanese_bankruptcy_prediction[spaa]. Loses Bioresponse[cc18], philippine[wide]
+  vs recommended, E: gains -. Loses credit-g[cc18]
+  vs recommended, F': gains Marketing_Campaign[spaa], taiwanese_bankruptcy_prediction[spaa]. Loses -
+  vs recommended, G: gains -. Loses Another-Dataset-on-used-Fiat-500[regression], Bioresponse[cc18], climate-model-simulation-crashes[cc18], concrete_compressive_strength[regression], credit-g[cc18], hazelnut-spread-contaminant-detection[spaa], pc3[cc18], pc4[cc18], qsar-biodeg[cc18], qsar-biodeg[spaa], QSAR-TID-11[regression]
+  vs recommended, H: gains Marketing_Campaign[spaa], taiwanese_bankruptcy_prediction[spaa]. Loses -
+  vs recommended, I: gains anneal[multiclass], churn[spaa], healthcare_insurance_expenses[regression], taiwanese_bankruptcy_prediction[spaa], wilt[cc18]. Loses Bioresponse[cc18], philippine[wide]
+  mirror of the recommended rule (AA beats SPO): 2 rows: sberbank-housing[regression], weather[regression]
+  mirror of the alternative rule (AA beats SPO): 5 rows: airfoil_self_noise[regression], Diabetes130US[spaa], ecom-offers[spaa], sberbank-housing[regression], weather[regression]
+  BH over the 92 multi-fold rows only (seed-only p-values of 1-split sets left out of the family): 25 rows pass. Differences to the recommended rule: -
+  sign of the effect over all rows: > 0 in 67, < 0 in 33, = 0 in 1. Beyond the floor: SPO 35, AA 10
+  floor sweep under the recommended guards (AUC floor / regression floor -> rows passing): 0.0/0.0: 33, 0.0025/0.005: 29, 0.004/0.0075: 26, 0.005/0.01: 25, 0.0075/0.015: 24, 0.01/0.02: 21
+  seed-1-only selection (floor on the seed-1 effect, the paper's current rule extended to all suites): 38 rows. Of these, fail the recommended rule: anneal[multiclass], churn[spaa], credit-g[spaa], epsilon[wide], healthcare_insurance_expenses[regression], ilpd[cc18], in_vehicle_coupon_recommendation[spaa], Marketing_Campaign[spaa], maternal_health_risk[multiclass], pc1[cc18], QSAR_fish_toxicity[regression], taiwanese_bankruptcy_prediction[spaa], wilt[cc18]
+    seed-1-selected rows that pass the recommended rule (n=24): mean effect in floor units, seed 1 4.08, seeds 2-5 3.86
+    seed-1-selected rows that fail it (n=12): mean effect in floor units, seed 1 1.67, seeds 2-5 1.25
+
+4. Rule comparison, kdd28_hao (101 dataset rows)
+  BH q=0.05 family: 101 rows with a p-value, 43 rejected, largest rejected p 0.0207 (before the floor). Nadeau-Bengio family: 92 multi-fold rows, 16 rejected, largest rejected p 0.0076
+  rule                                                               tot  spaa  wide  cc18 multi regre
+  A  floor only (5-seed mean)                                         38    10     2    15     1    10
+  B  floor AND > 2 SE (folds, or seeds on 1-split sets)               29     8     2    11     0     8
+  C  B AND effect > 0 in every seed                                   29     8     2    11     0     8   <- alternative
+  D  C AND effect > floor in >= 4/5 seeds (needs 5 seeds)             29     8     2    11     0     8
+  E  floor AND > 2 SE Nadeau-Bengio (multi-fold only)                 23     6     1    10     0     6
+  F  floor AND BH q=0.05 on paired t AND effect > 0 in every seed     26     7     2    11     0     6   <- recommended
+  F' as F with BH q=0.10                                              29     8     2    11     0     8
+  G  floor AND BH q=0.05 on Nadeau-Bengio t (multi-fold only)         11     2     1     4     0     4
+  H  floor AND one-sided p < 0.05 (uncorrected)                       29     8     2    11     0     8
+  I  effect > floor in every seed (no fold test)                      26     7     2    10     0     7
+  vs recommended, A: gains churn[spaa], cylinder-bands[cc18], healthcare_insurance_expenses[regression], ilpd[cc18], miami_housing[regression], MIC[multiclass], pc1[cc18], QSAR-TID-11[regression], QSAR_fish_toxicity[regression], seismic-bumps[spaa], taiwanese_bankruptcy_prediction[spaa], wilt[cc18]. Loses -
+  vs recommended, B: gains churn[spaa], miami_housing[regression], QSAR-TID-11[regression]. Loses -
+  vs recommended, C: gains churn[spaa], miami_housing[regression], QSAR-TID-11[regression]. Loses -
+  vs recommended, D: gains churn[spaa], miami_housing[regression], QSAR-TID-11[regression]. Loses -
+  vs recommended, E: gains -. Loses epsilon[wide], homecredit-default[spaa], pc4[cc18]
+  vs recommended, F': gains churn[spaa], miami_housing[regression], QSAR-TID-11[regression]. Loses -
+  vs recommended, G: gains -. Loses climate-model-simulation-crashes[cc18], concrete_compressive_strength[regression], credit-g[cc18], credit-g[spaa], epsilon[wide], hazelnut-spread-contaminant-detection[spaa], homecredit-default[spaa], jm1[cc18], kc1[cc18], Marketing_Campaign[spaa], pc3[cc18], pc4[cc18], qsar-biodeg[cc18], qsar-biodeg[spaa], wine_quality[regression]
+  vs recommended, H: gains churn[spaa], miami_housing[regression], QSAR-TID-11[regression]. Loses -
+  vs recommended, I: gains healthcare_insurance_expenses[regression], miami_housing[regression], taiwanese_bankruptcy_prediction[spaa]. Loses churn[cc18], homecredit-default[spaa], physiochemical_protein[regression]
+  mirror of the recommended rule (AA beats SPO): 1 rows: sberbank-housing[regression]
+  mirror of the alternative rule (AA beats SPO): 3 rows: airfoil_self_noise[regression], sberbank-housing[regression], weather[regression]
+  BH over the 92 multi-fold rows only (seed-only p-values of 1-split sets left out of the family): 25 rows pass. Differences to the recommended rule: epsilon[wide], homecredit-default[spaa], QSAR-TID-11[regression]
+  sign of the effect over all rows: > 0 in 83, < 0 in 17, = 0 in 1. Beyond the floor: SPO 38, AA 4
+  floor sweep under the recommended guards (AUC floor / regression floor -> rows passing): 0.0/0.0: 43, 0.0025/0.005: 34, 0.004/0.0075: 29, 0.005/0.01: 26, 0.0075/0.015: 21, 0.01/0.02: 18
+  seed-1-only selection (floor on the seed-1 effect, the paper's current rule extended to all suites): 38 rows. Of these, fail the recommended rule: churn[spaa], diabetes[spaa], healthcare_insurance_expenses[regression], houses[regression], ilpd[cc18], Internet-Advertisements[cc18], kc2[cc18], miami_housing[regression], pc1[cc18], QSAR-TID-11[regression], QSAR_fish_toxicity[regression], seismic-bumps[spaa], taiwanese_bankruptcy_prediction[spaa]
+    seed-1-selected rows that pass the recommended rule (n=25): mean effect in floor units, seed 1 3.10, seeds 2-5 2.95
+    seed-1-selected rows that fail it (n=13): mean effect in floor units, seed 1 2.02, seeds 2-5 1.25
+
+5. Datasets passing, kdd28_ydf. Recommended = floor AND BH q=0.05 on paired t AND effect > 0 in every seed. '+alt' rows pass only the alternative (B AND effect > 0 in every seed with B = floor AND > 2 SE)
+ [spaa] recommended 4, alternative 7, of 33
+       polish_companies_bankruptcy            effect +0.0409  SE 0.0054  (  7.6 SE, p 0.0008)  seeds > floor 5/5, > 0 5/5  cells won 25/25  [in current list]
+       jm1                                    effect +0.0213  SE 0.0036  (  5.8 SE, p 0.0022)  seeds > floor 5/5, > 0 5/5  cells won 25/25  [also in cc18]  [in current list]
+       qsar-biodeg                            effect +0.0141  SE 0.0038  (  3.7 SE, p 0.0105)  seeds > floor 5/5, > 0 5/5  cells won 25/25  [also in cc18]  [in current list]
+       hazelnut-spread-contaminant-detection  effect +0.0090  SE 0.0026  (  3.5 SE, p 0.0122)  seeds > floor 5/5, > 0 5/5  cells won 25/25  [in current list]
+  +alt Marketing_Campaign                     effect +0.0107  SE 0.0036  (  2.9 SE, p 0.0211)  seeds > floor 4/5, > 0 5/5  cells won 20/25  [in current list]
+  +alt churn                                  effect +0.0094  SE 0.0045  (  2.1 SE, p 0.0529)  seeds > floor 5/5, > 0 5/5  cells won 20/25  [also in cc18]  [in current list]
+  +alt taiwanese_bankruptcy_prediction        effect +0.0076  SE 0.0031  (  2.5 SE, p 0.0336)  seeds > floor 5/5, > 0 5/5  cells won 21/25  [in current list]
+ [wide] recommended 1, alternative 1, of 8
+       philippine                             effect +0.0162  SE 0.0022  (  7.3 SE, p 0.0009)  seeds > floor 1/1, > 0 1/1  cells won 5/5  [in current list]
+ [cc18] recommended 12, alternative 12, of 34
+       climate-model-simulation-crashes       effect +0.0561  SE 0.0161  (  3.5 SE, p 0.0034)  seeds > floor 5/5, > 0 5/5  cells won 46/50
+       pc3                                    effect +0.0315  SE 0.0085  (  3.7 SE, p 0.0025)  seeds > floor 5/5, > 0 5/5  cells won 40/50
+       ozone-level-8hr                        effect +0.0311  SE 0.0048  (  6.5 SE, p 0.0001)  seeds > floor 5/5, > 0 5/5  cells won 49/50
+       madelon                                effect +0.0261  SE 0.0027  (  9.7 SE, p 0.0000)  seeds > floor 5/5, > 0 5/5  cells won 50/50
+       kc1                                    effect +0.0227  SE 0.0049  (  4.6 SE, p 0.0006)  seeds > floor 5/5, > 0 5/5  cells won 42/50
+       jm1                                    effect +0.0202  SE 0.0034  (  6.0 SE, p 0.0001)  seeds > floor 5/5, > 0 5/5  cells won 46/50  [also in spaa]
+       credit-g                               effect +0.0163  SE 0.0059  (  2.8 SE, p 0.0110)  seeds > floor 5/5, > 0 5/5  cells won 35/50  [also in spaa]
+       qsar-biodeg                            effect +0.0143  SE 0.0037  (  3.9 SE, p 0.0019)  seeds > floor 5/5, > 0 5/5  cells won 43/50  [also in spaa]
+       pc4                                    effect +0.0130  SE 0.0034  (  3.9 SE, p 0.0019)  seeds > floor 5/5, > 0 5/5  cells won 44/50
+       phoneme                                effect +0.0123  SE 0.0016  (  7.8 SE, p 0.0000)  seeds > floor 5/5, > 0 5/5  cells won 50/50
+       churn                                  effect +0.0100  SE 0.0020  (  5.1 SE, p 0.0003)  seeds > floor 5/5, > 0 5/5  cells won 45/50  [also in spaa]
+       Bioresponse                            effect +0.0052  SE 0.0017  (  3.1 SE, p 0.0062)  seeds > floor 3/5, > 0 5/5  cells won 37/50  [also in spaa]
+ [multiclass] recommended 0, alternative 0, of 8
+ [regression] recommended 8, alternative 8, of 18
+       concrete_compressive_strength          effect +0.0559  SE 0.0170  (  3.3 SE, p 0.0152)  seeds > floor 5/5, > 0 5/5  cells won 25/25
+       houses                                 effect +0.0372  SE 0.0046  (  8.1 SE, p 0.0006)  seeds > floor 5/5, > 0 5/5  cells won 25/25
+       superconductivity                      effect +0.0365  SE 0.0049  (  7.5 SE, p 0.0009)  seeds > floor 5/5, > 0 5/5  cells won 25/25
+       wine_quality                           effect +0.0303  SE 0.0028  ( 10.9 SE, p 0.0002)  seeds > floor 5/5, > 0 5/5  cells won 25/25
+       physiochemical_protein                 effect +0.0263  SE 0.0009  ( 29.6 SE, p 0.0000)  seeds > floor 5/5, > 0 5/5  cells won 25/25
+       Another-Dataset-on-used-Fiat-500       effect +0.0254  SE 0.0069  (  3.7 SE, p 0.0106)  seeds > floor 5/5, > 0 5/5  cells won 23/25
+       Food_Delivery_Time                     effect +0.0188  SE 0.0004  ( 47.0 SE, p 0.0000)  seeds > floor 5/5, > 0 5/5  cells won 25/25
+       QSAR-TID-11                            effect +0.0175  SE 0.0038  (  4.6 SE, p 0.0050)  seeds > floor 5/5, > 0 5/5  cells won 24/25
+ unique dataset names passing the recommended rule: 23 (25 rows): Another-Dataset-on-used-Fiat-500, Bioresponse, churn, climate-model-simulation-crashes, concrete_compressive_strength, credit-g, Food_Delivery_Time, hazelnut-spread-contaminant-detection, houses, jm1, kc1, madelon, ozone-level-8hr, pc3, pc4, philippine, phoneme, physiochemical_protein, polish_companies_bankruptcy, qsar-biodeg, QSAR-TID-11, superconductivity, wine_quality
+   current list (11) vs recommended: not passing in the SPAA/wide rows: churn, credit-g, epsilon, in_vehicle_coupon_recommendation, Marketing_Campaign, taiwanese_bankruptcy_prediction
+ unique dataset names passing the alternative rule: 25 (28 rows): Another-Dataset-on-used-Fiat-500, Bioresponse, churn, climate-model-simulation-crashes, concrete_compressive_strength, credit-g, Food_Delivery_Time, hazelnut-spread-contaminant-detection, houses, jm1, kc1, madelon, Marketing_Campaign, ozone-level-8hr, pc3, pc4, philippine, phoneme, physiochemical_protein, polish_companies_bankruptcy, qsar-biodeg, QSAR-TID-11, superconductivity, taiwanese_bankruptcy_prediction, wine_quality
+   current list (11) vs alternative: not passing in the SPAA/wide rows: credit-g, epsilon, in_vehicle_coupon_recommendation
+ SPAA/CC18 overlap, both evaluations: Bioresponse spaa +0.0026 / cc18 +0.0052*, bank-marketing spaa -0.0035 / cc18 -0.0002, blood-transfusion-service-center spaa -0.0064 / cc18 -0.0095, churn spaa +0.0094 / cc18 +0.0100*, credit-g spaa +0.0073 / cc18 +0.0163*, diabetes spaa -0.0033 / cc18 -0.0022, jm1 spaa +0.0213* / cc18 +0.0202*, qsar-biodeg spaa +0.0141* / cc18 +0.0143*  (* = passes the recommended rule)
+
+5. Datasets passing, kdd28_hao. Recommended = floor AND BH q=0.05 on paired t AND effect > 0 in every seed. '+alt' rows pass only the alternative (B AND effect > 0 in every seed with B = floor AND > 2 SE)
+ [spaa] recommended 7, alternative 8, of 33
+       polish_companies_bankruptcy            effect +0.0258  SE 0.0035  (  7.4 SE, p 0.0009)  seeds > floor 5/5, > 0 5/5  cells won 25/25  [in current list]
+       credit-g                               effect +0.0170  SE 0.0054  (  3.2 SE, p 0.0171)  seeds > floor 5/5, > 0 5/5  cells won 21/25  [also in cc18]  [in current list]
+       jm1                                    effect +0.0137  SE 0.0017  (  8.1 SE, p 0.0006)  seeds > floor 5/5, > 0 5/5  cells won 24/25  [also in cc18]  [in current list]
+       Marketing_Campaign                     effect +0.0133  SE 0.0026  (  5.1 SE, p 0.0035)  seeds > floor 5/5, > 0 5/5  cells won 25/25  [in current list]
+       qsar-biodeg                            effect +0.0108  SE 0.0029  (  3.7 SE, p 0.0108)  seeds > floor 5/5, > 0 5/5  cells won 25/25  [also in cc18]  [in current list]
+       homecredit-default                     effect +0.0094  SE 0.0024~ (  4.0 SE, p 0.0082)  seeds > floor 4/5, > 0 5/5  cells won 5/5
+       hazelnut-spread-contaminant-detection  effect +0.0070  SE 0.0016  (  4.3 SE, p 0.0064)  seeds > floor 5/5, > 0 5/5  cells won 25/25  [in current list]
+  +alt churn                                  effect +0.0068  SE 0.0029  (  2.3 SE, p 0.0405)  seeds > floor 4/5, > 0 5/5  cells won 20/25  [also in cc18]  [in current list]
+ [wide] recommended 2, alternative 2, of 8
+       philippine                             effect +0.0124  SE 0.0015  (  8.2 SE, p 0.0006)  seeds > floor 5/5, > 0 5/5  cells won 24/25  [in current list]
+       epsilon                                effect +0.0061  SE 0.0000~ (180.3 SE, p 0.0000)  seeds > floor 5/5, > 0 5/5  cells won 5/5  [in current list]
+ [cc18] recommended 11, alternative 11, of 34
+       climate-model-simulation-crashes       effect +0.0449  SE 0.0137  (  3.3 SE, p 0.0047)  seeds > floor 5/5, > 0 5/5  cells won 45/50
+       ozone-level-8hr                        effect +0.0286  SE 0.0039  (  7.4 SE, p 0.0000)  seeds > floor 5/5, > 0 5/5  cells won 50/50
+       pc3                                    effect +0.0242  SE 0.0078  (  3.1 SE, p 0.0062)  seeds > floor 5/5, > 0 5/5  cells won 39/50
+       kc1                                    effect +0.0179  SE 0.0056  (  3.2 SE, p 0.0056)  seeds > floor 5/5, > 0 5/5  cells won 37/50
+       madelon                                effect +0.0130  SE 0.0027  (  4.9 SE, p 0.0004)  seeds > floor 5/5, > 0 5/5  cells won 43/50
+       qsar-biodeg                            effect +0.0126  SE 0.0033  (  3.9 SE, p 0.0019)  seeds > floor 5/5, > 0 5/5  cells won 43/50  [also in spaa]
+       jm1                                    effect +0.0124  SE 0.0030  (  4.1 SE, p 0.0013)  seeds > floor 5/5, > 0 5/5  cells won 41/50  [also in spaa]
+       credit-g                               effect +0.0117  SE 0.0037  (  3.1 SE, p 0.0060)  seeds > floor 5/5, > 0 5/5  cells won 35/50  [also in spaa]
+       phoneme                                effect +0.0105  SE 0.0012  (  8.6 SE, p 0.0000)  seeds > floor 5/5, > 0 5/5  cells won 50/50
+       pc4                                    effect +0.0075  SE 0.0029  (  2.5 SE, p 0.0157)  seeds > floor 5/5, > 0 5/5  cells won 36/50
+       churn                                  effect +0.0065  SE 0.0008  (  8.7 SE, p 0.0000)  seeds > floor 4/5, > 0 5/5  cells won 39/50  [also in spaa]
+ [multiclass] recommended 0, alternative 0, of 8
+ [regression] recommended 6, alternative 8, of 18
+       concrete_compressive_strength          effect +0.0537  SE 0.0163  (  3.3 SE, p 0.0151)  seeds > floor 5/5, > 0 5/5  cells won 23/25
+       Another-Dataset-on-used-Fiat-500       effect +0.0274  SE 0.0038  (  7.2 SE, p 0.0010)  seeds > floor 5/5, > 0 5/5  cells won 25/25
+       superconductivity                      effect +0.0208  SE 0.0034  (  6.1 SE, p 0.0018)  seeds > floor 5/5, > 0 5/5  cells won 25/25
+       Food_Delivery_Time                     effect +0.0183  SE 0.0006  ( 31.5 SE, p 0.0000)  seeds > floor 5/5, > 0 5/5  cells won 25/25
+       wine_quality                           effect +0.0167  SE 0.0037  (  4.5 SE, p 0.0054)  seeds > floor 5/5, > 0 5/5  cells won 24/25
+       physiochemical_protein                 effect +0.0111  SE 0.0012  (  9.5 SE, p 0.0003)  seeds > floor 4/5, > 0 5/5  cells won 25/25
+  +alt miami_housing                          effect +0.0202  SE 0.0074  (  2.7 SE, p 0.0263)  seeds > floor 5/5, > 0 5/5  cells won 22/25
+  +alt QSAR-TID-11                            effect +0.0113  SE 0.0039  (  2.9 SE, p 0.0222)  seeds > floor 4/5, > 0 5/5  cells won 21/25
+ unique dataset names passing the recommended rule: 23 (26 rows): Another-Dataset-on-used-Fiat-500, churn, climate-model-simulation-crashes, concrete_compressive_strength, credit-g, epsilon, Food_Delivery_Time, hazelnut-spread-contaminant-detection, homecredit-default, jm1, kc1, madelon, Marketing_Campaign, ozone-level-8hr, pc3, pc4, philippine, phoneme, physiochemical_protein, polish_companies_bankruptcy, qsar-biodeg, superconductivity, wine_quality
+ unique dataset names passing the alternative rule: 25 (29 rows): Another-Dataset-on-used-Fiat-500, churn, climate-model-simulation-crashes, concrete_compressive_strength, credit-g, epsilon, Food_Delivery_Time, hazelnut-spread-contaminant-detection, homecredit-default, jm1, kc1, madelon, Marketing_Campaign, miami_housing, ozone-level-8hr, pc3, pc4, philippine, phoneme, physiochemical_protein, polish_companies_bankruptcy, qsar-biodeg, QSAR-TID-11, superconductivity, wine_quality
+ SPAA/CC18 overlap, both evaluations: Bioresponse spaa +0.0035 / cc18 +0.0045, bank-marketing spaa -0.0006 / cc18 +0.0004, blood-transfusion-service-center spaa -0.0001 / cc18 -0.0004, churn spaa +0.0068 / cc18 +0.0065*, credit-g spaa +0.0170* / cc18 +0.0117*, diabetes spaa +0.0023 / cc18 -0.0010, jm1 spaa +0.0137* / cc18 +0.0124*, qsar-biodeg spaa +0.0108* / cc18 +0.0126*  (* = passes the recommended rule)
+
+6. Anomalies
+  kdd28_ydf hiva_agnostic: AA per seed 0.4577 0.4699 0.4804 0.4754 0.4705 | SPO per seed 0.4757 0.4885 0.4563 0.5175 0.4972 | effect +0.0162, seed SD 0.0245, effect/SE 1.0, folds 5
+  kdd28_ydf sberbank-housing: AA per seed 0.2557 0.2569 0.2569 0.2578 0.2549 | SPO per seed 0.9522 0.8693 0.7907 1.0916 0.9201 | effect -2.6058, seed SD 0.4289, effect/SE -13.6, folds 1
+  kdd28_hao hiva_agnostic: AA per seed 0.4577 0.4699 0.4804 0.4754 0.4705 | SPO per seed 0.4795 0.4838 0.4895 0.4872 0.4689 | effect +0.0110, seed SD 0.0085, effect/SE 0.6, folds 5
+  kdd28_hao sberbank-housing: AA per seed 0.2557 0.2569 0.2569 0.2578 0.2549 | SPO per seed 0.6328 0.5118 0.6491 0.4470 0.5839 | effect -1.2037, seed SD 0.3361, effect/SE -8.0, folds 1
+  rows with a mean AUC <= 0.5 in either arm (an AUC edge is not interpretable there): kdd28_ydf hiva_agnostic[multiclass], kdd28_hao hiva_agnostic[multiclass]
+  kdd28_ydf valid AUC rows with an arm below 0.56 (near chance): dresses-sales[cc18] AA 0.554, numerai28.6[cc18] AA 0.518
+  kdd28_ydf regression, SPO seed SD of the mean RMSE relative to the AA RMSE, top 3: sberbank-housing 0.434, weather 0.016, concrete_compressive_strength 0.009. Median over the 18: 0.0028. SPO/AA RMSE ratio of sberbank-housing: 3.72 3.38 3.08 4.23 3.61
+  kdd28_ydf 1-split sets (no fold SE): ecom-offers[spaa] -0.0050 (5 seeds), homecredit-default[spaa] -0.0134 (5 seeds), homesite-insurance[spaa] -0.0014 (5 seeds), epsilon[wide] +0.0107 (1 seed), cooking-time[regression] +0.0050 (5 seeds), delivery-eta[regression] -0.0047 (5 seeds), maps-routing[regression] +0.0013 (5 seeds), sberbank-housing[regression] -2.6058 (5 seeds), weather[regression] -0.1076 (5 seeds)
+  kdd28_hao regression, SPO seed SD of the mean RMSE relative to the AA RMSE, top 3: sberbank-housing 0.331, airfoil_self_noise 0.012, weather 0.008. Median over the 18: 0.0029. SPO/AA RMSE ratio of sberbank-housing: 2.48 1.99 2.53 1.73 2.29
+  kdd28_hao 1-split sets (no fold SE): ecom-offers[spaa] -0.0016 (5 seeds), homecredit-default[spaa] +0.0094 (5 seeds), homesite-insurance[spaa] -0.0008 (5 seeds), epsilon[wide] +0.0061 (5 seeds), cooking-time[regression] +0.0033 (5 seeds), delivery-eta[regression] +0.0001 (5 seeds), maps-routing[regression] +0.0020 (5 seeds), sberbank-housing[regression] -1.2037 (5 seeds), weather[regression] -0.0134 (5 seeds)
+  kdd28_ydf largest seed SD of the effect, in floor units: sberbank-housing[regression] 42.9, hiva_agnostic[multiclass] 4.9, homecredit-default[spaa] 2.8, seismic-bumps[spaa] 1.9, kc2[cc18] 1.8, dresses-sales[cc18] 1.8
+  epsilon, kdd28_ydf: edge +0.0107 on 1 split and 1 seed. SPO-AA by worker count (other partitions, same test set): single +0.0107, 1 +0.0106, 4 +0.0103, 8 +0.0099, 16 +0.0094, 32 +0.0088. Hanley-McNeil unpaired SE of an AUC difference at 0.9403 with 50k/50k rows: 0.00110 (upper bound for the paired SE), so the edge is 9.7 x that bound. kdd28_hao 5 seeds: +0.0061, seed SD 0.00008
