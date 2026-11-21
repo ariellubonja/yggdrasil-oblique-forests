@@ -35,5 +35,7 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
 - **Raw cells:** box `~/results/2026-11-06_hao_seeds/{spaa,wide,wide_eps}/seed<s>/` on ariel-ydf-1 (i-0f90f7764082bf21a),
   mirrored to the gitignored `ariel_notes/results/2026-11-06_hao_seeds/box/` (CSVs, logs, `models_*.tar.zst`)
 - **Read by:** tab:accuracy-hao-vs-ydf-params-single-machine, tab:accuracy-hao-vs-ydf-params-distributed (`distacc/`, `distacc_aaspo/`,
-  `wide_eval/distacc/`, `wide_eval/distacc_aaspo/`). The wide `colrep_distacc` cells stay in the mirror only.
+  `wide_eval/distacc/`, `wide_eval/distacc_aaspo/`). The wide `colrep_distacc` cells were copied verbatim from the mirror (`box/{wide,wide_eps}/seed<s>/`) to
+  `wide_eval/colrep_distacc/{wide,wide_eps}/seed<s>/results.csv` on 2026-11-21 (1,800 rc = 0 rows, 8 wide sets): read by
+  fig:column-replication-where-spo-outperforms-aa.
   `colrep_distacc/` fed fig:column-replication-hao-vs-ydf-params, dropped 2026-11-20, and is read by no float now

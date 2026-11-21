@@ -411,42 +411,69 @@ Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at
 \end{description}
 
 \twocolumn[{\floatblock
-\section{Accuracy on Datasets Where SPO Outperforms AA (YDF Params)}
+\section{Accuracy on Datasets Where SPO Outperforms AA}
 \label{sec:accuracy-where-spo-outperforms-aa}
 
-Distributed methods use YDF parameters
+SPO uses \textbf{Hao's parameters}, AA uses YDF defaults.
+
+\subsection{Column Replication at $W=4$}
+
+$r=0$ means the dataset columns are fully disjoint. 
 
 \mbox{}\par\vskip0.5em
+\noindent\begin{minipage}[t]{0.49\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.6\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body.tex}{\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
+\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the 20 classification datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets where single-machine SPO-GBT beats AA-GBT. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
+\label{fig:column-replication-where-spo-outperforms-aa}
+\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT. pts = percentage points of test AUC. Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns.
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}\vspace{0pt}
+\captionsetup{type=figure}
+\centering
+\resizebox{\linewidth}{!}{\begin{minipage}{1.6\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_body.tex}{\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_body}}{\TODO{rerun pending}}\end{minipage}}
+\caption{Relative $\Delta$ test RMSE vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the 6 regression datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
+\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the regression datasets where single-machine SPO-GBT clearly beats AA-GBT. Top: line of the mean relative RMSE difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset relative differences per r, overlaid with the dataset points and the mean.}
+\label{fig:column-replication-where-spo-outperforms-aa-regression}
+\par\smallskip\raggedright\footnotesize RMSE relative to single-machine SPO-GBT, in \%. Positive = worse. Panels as in Figure~\ref{fig:column-replication-where-spo-outperforms-aa}.
+\end{minipage}
+}]
+
+\twocolumn[{\floatblock
+\subsection{Accuracy results at $r=0$}
+
 \noindent\begin{minipage}{\textwidth}
 \captionsetup{type=table}
 \centering
 \scriptsize
 \setlength{\tabcolsep}{2pt}
-\caption{Test AUC of single-machine vs. $W$-distributed GBT on the datasets where single-machine SPO-GBT beats AA-GBT.}
+\caption{Test AUC or RMSE of single-machine vs. $W$-distributed GBT at replication factor $r=0$ on the datasets where single-machine SPO-GBT clearly beats AA-GBT. See Section~\ref{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params} for how these datasets were selected.}
 \label{tab:accuracy-where-spo-outperforms-aa}
 \IfFileExists{tables/table_dist_accuracy_where_spo_outperforms_aa_body.tex}{\input{tables/table_dist_accuracy_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize The 11 of the 41 datasets of Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine} where single-machine SPO-GBT beats AA-GBT by more than 0.5 AUC points (mean over folds). Seed-1 runs of that table. YDF defaults, early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Epsilon (shipped split).
+\par\smallskip\raggedright\footnotesize The datasets where single-machine SPO-GBT clearly beats AA-GBT \textbf{under Hao's settings}. SPO: $P{=}\min(F,1000)$, density 1.5, early stopping off, 300 trees. split across workers, mean over seeds 1--5. AA: YDF defaults (wide datasets: seed 1). Regression: test RMSE, mean row = mean RMSE / label std.  5 CV folds were used in all datasets except CC18 (10) and Epsilon (1 fold) and homecredit-default (chronological holdout). The reason for CC18 and Epsilon is they come pre-split into train-val.
 \end{minipage}
 \par\vskip0.5em
-\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\noindent\hfill\begin{minipage}[t]{0.24\textwidth}\vspace{0pt}
 \captionsetup{type=figure}
 \centering
 % body sizes its axis to 0.5\textwidth; match it to the column
-\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
+\resizebox{\linewidth}{!}{\begin{minipage}{1.7\linewidth}\setlength{\textwidth}{2\linewidth}%
 \IfFileExists{figures/evaluation/fig_dist_accuracy_mean_where_spo_outperforms_aa_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
+\caption{Mean test AUC over the 20 classification datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
 \Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT on the datasets where single-machine SPO-GBT beats AA-GBT.}
 \label{fig:accuracy-where-spo-outperforms-aa}
 \end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
+\begin{minipage}[t]{0.24\textwidth}\vspace{0pt}
 \captionsetup{type=figure}
 \centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body.tex}{\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets where single-machine SPO-GBT beats AA-GBT. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
-\label{fig:column-replication-where-spo-outperforms-aa}
-\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT. pts = percentage points of test AUC. Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns.
-\end{minipage}
+\resizebox{\linewidth}{!}{\begin{minipage}{1.7\linewidth}\setlength{\textwidth}{2\linewidth}%
+\IfFileExists{figures/evaluation/fig_dist_rmse_mean_where_spo_outperforms_aa_body.tex}{\input{figures/evaluation/fig_dist_rmse_mean_where_spo_outperforms_aa_body}}{\TODO{rerun pending}}\end{minipage}}
+\caption{Mean test RMSE / label std over the 6 regression datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa} (lower is better).}
+\Description{Line chart of mean test RMSE divided by the label standard deviation versus number of workers for SPO-GBT and AA-GBT on the regression datasets where single-machine SPO-GBT clearly beats AA-GBT. Lower is better.}
+\label{fig:accuracy-where-spo-outperforms-aa-regression}
+\end{minipage}\hfill\mbox{}
 }]
 
 \twocolumn[{\floatblock
@@ -877,7 +904,7 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 
 \twocolumn[{\floatblock
 \section{Where SPO clearly beats AA, and Accuracy of Hao's Parameters in Distributed and vs. YDF, over 5 Seeds}
-\label{sec:accuracy-hao-vs-ydf-params}
+\label{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params}
 
 
 \textcolor{gray}{(except YDF-Parameter Runs on \texorpdfstring{${\ge}100$}{>=100} Column Datasets: 1 Seed)}

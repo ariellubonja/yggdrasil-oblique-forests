@@ -2,9 +2,21 @@
 
 Results behind the KDD28 floats below. Rebuild the bodies with the commands. Index and rules: `benchmarks/results/kdd28/README.md`.
 
-- **Labels:** `tab:accuracy-where-spo-outperforms-aa`, `fig:accuracy-where-spo-outperforms-aa`, `fig:column-replication-where-spo-outperforms-aa` (section
+- **Labels:** `tab:accuracy-where-spo-outperforms-aa`, `fig:accuracy-where-spo-outperforms-aa`, `fig:accuracy-where-spo-outperforms-aa-regression` (2026-11-21), `fig:column-replication-where-spo-outperforms-aa`, `fig:column-replication-where-spo-outperforms-aa-regression` (2026-11-21) (section
   `sec:accuracy-where-spo-outperforms-aa`, "Accuracy on Datasets Where SPO Outperforms AA"). Added 2026-11-06 (Overleaf 8c3e81d). Metric: test ROC AUC
 - **Status:** current (main body).
+- **Table since 2026-11-21:** Hao settings, rows = kdd28_hao `pass_rec` of `spo_clearly_beats_aa_per_dataset.csv` (26 rows), body from
+  `python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_where_spo_beats_aa_hao_table.py`. Distributed CC18 + regression cells:
+  `runs/2026-11-21_where_spo_beats_aa_cc18_reg_distributed/`. The same command writes fig:accuracy-where-spo-outperforms-aa (mean over the 20 classification rows) and
+  fig:accuracy-where-spo-outperforms-aa-regression (mean RMSE / label std, 6 rows). Column-replication figures (Hao, W = 4,
+  seeds 1-5, CC18 rows renamed "<name> (CC18)"): `python3 $E/select_where_spo_beats_aa_hao.py` writes `derived/hao_{cls,reg}/`
+  (strict per-member eval-suite and profile checks), then
+  `make_column_replication_fig.py --csv $E/derived/hao_cls/colrep.csv --r0_csv $E/derived/hao_cls/r0.csv --single_csv
+  $E/derived/hao_cls/single.csv --metric test_auc --suffix _where_spo_outperforms_aa --dist_arm colrep_distacc_spo --r0_arm
+  distacc_spo --single_arms distacc_single_spo,cc18_spo --profile kdd28_hao --eval_suite none` and the same on `hao_reg` with
+  `--metric test_rmse --relative --clip 5 --suffix _where_spo_outperforms_aa_regression`. Runs: `2026-11-06_hao_seeds`
+  (colrep_distacc, wide_eval), `2026-11-21_where_spo_beats_aa_cc18_reg_distributed` (colrep_cc18, colrep_reg). The rest of
+  this README is the superseded YDF version (old 11 sets)
 - **What:** no new runs. Row subsets of the SPAA paper eval and the wide dataset eval, 41 datasets. `select_spo_advantage.py`
   keeps the 11 where single-machine SPO-GBT minus single-machine AA-GBT test AUC (fold means) > 0.005
   (`derived/spo_advantage_datasets.txt`, edge per dataset). Selection uses the same test folds the table reports. Of the 612

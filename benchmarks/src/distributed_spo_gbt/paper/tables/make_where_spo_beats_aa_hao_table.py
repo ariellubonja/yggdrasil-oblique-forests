@@ -13,6 +13,10 @@ import make_paper_tables as mpt  # noqa: E402
 kdd28 = hv.kdd28
 
 WS = (1, 4, 8, 16, 32)
+DX = hv.R / "2026-11-21_where_spo_beats_aa_cc18_reg_distributed"  # distributed CC18 + regression cells (2026-11-21)
+DIST = {t: {**{f"ydf_s{s}": (hv.YDF, DX / f"{hv.YDF}/seed{s}/{t}/results.csv", ["distacc_aa"]) for s in hv.SEEDS},
+            **{f"hao_s{s}": (hv.HAO, DX / f"{hv.HAO}/seed{s}/{t}/results.csv", ["distacc_spo"]) for s in hv.SEEDS}}
+        for t in ("cc18_dist", "reg_dist")}
 COLS = ([("AA+SPO-GBT single machine", "hao", "single:AA+SPO", None), ("SPO-GBT single machine", "hao", "single:SPO", None)]
         + [(f"$W{{=}}{w}$", "hao", f"{w}:SPO", "single:SPO") for w in WS]
         + [("AA-GBT single machine", "ydf", "single:AA", None)] + [(f"$W{{=}}{w}$", "ydf", f"{w}:AA", "single:AA") for w in WS])
@@ -61,6 +65,40 @@ def block_rows(stats, folds, by_source, mean_name, scale):
                    "Mean time (s) & " + " & ".join(sec(stats[i].loc[alld, "time"].mean()) if full[i] else "" for i in range(ncol)) + r" \\"]
 
 
+FIG_GEN = GEN.replace("regenerate", "figure body; regenerate")
+
+
+def mean_figure(parts, rmse, ylabel):
+    """Mean over every dataset of `parts` [(stats list, datasets, scale)] per column, over W (tikzpicture only).
+    Distributed SPO/AA as lines, single-machine SPO, AA, AA+SPO as flat references."""
+    def avg(i):
+        v = [(st[i].loc[d, "mean"] / (sc[d] if sc else 1)) for st, ds, sc in parts for d in ds]
+        return sum(v) / len(v)
+    lab = {c[2]: i for i, c in enumerate(COLS)}
+    xs = [str(w) for w in WS]
+    lines = [r"\begin{tikzpicture}", r"\begin{axis}[width=0.5\textwidth, height=4.6cm, YLIM symbolic x coords={" + ",".join(xs)
+             + "}, xtick=data,", "  xticklabels={" + ",".join(f"$W{{=}}{w}$" for w in xs) + "}, ylabel={" + ylabel + "},",
+             r"  yticklabel style={/pgf/number format/fixed, /pgf/number format/precision=3, /pgf/number format/fixed zerofill},",
+             r"  tick label style={font=\footnotesize}, label style={font=\footnotesize}, tick style={draw=none},",
+             r"  legend style={font=\scriptsize, at={(0.5,1.03)}, anchor=south, draw=none,"
+             r" /tikz/every even column/.append style={column sep=6pt}}, legend columns=2, legend cell align=left]"]
+    vals = []
+    for fam, col, mark, style in (("SPO", "378ADD", "*", ""), ("AA", "D85A30", "diamond*", ", dashed")):
+        m = [avg(lab[f"{w}:{fam}"]) for w in WS]
+        vals += m
+        lines += [rf"\addplot[color={mpt._rgb(col)}, mark={mark}, thick{style}] coordinates {{"
+                  + " ".join(f"({x},{v:.4f})" for x, v in zip(xs, m)) + "};", rf"\addlegendentry{{{fam}-GBT}}"]
+    refs = [(f, c, avg(lab[a])) for f, c, a in (("SPO-GBT", "378ADD", "single:SPO"), ("AA-GBT", "D85A30", "single:AA"),
+                                                  ("AA+SPO-GBT", "5A9E3C", "single:AA+SPO"))]
+    vals += [v for _, _, v in refs]
+    for f, c, v in refs:
+        lines += [rf"\addplot[color={mpt._rgb(c)}, thick, densely dotted, no marks] coordinates {{({xs[0]},{v:.4f}) ({xs[-1]},{v:.4f})}};",
+                  rf"\addlegendentry{{single-machine {f}}}"]
+    lo, hi = min(vals), max(vals)
+    lines[1] = lines[1].replace("YLIM ", f"ymin={lo - 0.1 * (hi - lo):.4f}, ymax={hi + 0.1 * (hi - lo):.4f}, ")
+    return "\n".join(lines + [r"\end{axis}", r"\end{tikzpicture}"]) + "\n"
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default=str(hv.OUT))
@@ -76,6 +114,11 @@ def main():
     S = hv.SEEDS
     suites = {"spaa": "kdd28_tabarena33", "wide": "kdd28_wide_datasets", "cc18": "kdd28_cc18_10fold", "regression": "kdd28_regression"}
     blocks = []
+    def dist_frame(t, side, single):  # distributed cells cover only this table's rows: coverage over those
+        kdd28._EVAL["subset"] = set(pick["cc18" if t == "cc18_dist" else "regression"])
+        x = hv.load_all(DIST[t], side)
+        kdd28._EVAL["subset"] = None
+        return pd.concat([single, x])
     if "spaa" in pick or "wide" in pick:
         kdd28._declare_eval(suites["spaa"], __file__)
         y = hv.per_fold(hv.load_all(hv.INPUTS, "ydf"), list(S))
@@ -85,10 +128,12 @@ def main():
         wh = hv.per_fold(pd.concat([hv.load(hv.WIDE_INPUTS, "hao"), hv.load(hv.WIDE_INPUTS, "hao_aaspo")]), list(S))
     if "cc18" in pick:
         kdd28._declare_eval(suites["cc18"], __file__)
-        cy, ch = (hv.per_fold(hv.load_all(hv.CC18_INPUTS, s, hv.CC18_ARM), list(S)) for s in ("ydf", "hao"))
+        cy, ch = (hv.per_fold(dist_frame("cc18_dist", s, hv.load_all(hv.CC18_INPUTS, s, hv.CC18_ARM)), list(S))
+                  for s in ("ydf", "hao"))
     if "regression" in pick:
         kdd28._declare_eval(suites["regression"], __file__)
-        ry, rh = (hv.per_fold(hv.load_all(hv.REG_INPUTS, s), list(S), "test_rmse") for s in ("ydf", "hao"))
+        ry, rh = (hv.per_fold(dist_frame("reg_dist", s, hv.load_all(hv.REG_INPUTS, s)), list(S), "test_rmse")
+                  for s in ("ydf", "hao"))
     fold_n = lambda s: {d: len(f) for d, f in hv.evalsuite.load_suite(suites[s])["datasets"].items()}  # noqa: E731
 
     def stats_of(yf, hf):
@@ -103,21 +148,25 @@ def main():
         else:
             hv.set_shapes(mpt.SHAPES_CSV, mpt.CATS_CSV)
             hv.set_shapes(hv.WIDE_SHAPES, mpt.CATS_CSV, set(w))
-    rows = []
+    rows, cls_parts, reg_parts = [], [], []
     if "spaa" in pick:
         shapes("spaa", pick.get("wide", []))
+        cls_parts.append((stats_of(y, h), pick["spaa"], None))
         rows += block_rows(stats_of(y, h), fold_n("spaa"), mpt.sources(pick["spaa"]), f"Mean ({len(pick['spaa'])} SPAA datasets)", None)
     if "wide" in pick:
         shapes("wide", pick["wide"])
+        cls_parts.append((stats_of(wy, wh), pick["wide"], None))
         rows += ([r"\midrule"] if rows else []) + block_rows(
             stats_of(wy, wh), fold_n("wide"), mpt.sources(pick["wide"]), f"Mean ({len(pick['wide'])} wide datasets)", None)
     if "cc18" in pick:
         shapes("cc18")
+        cls_parts.append((stats_of(cy, ch), pick["cc18"], None))
         rows += [r"\midrule"] + block_rows(stats_of(cy, ch), fold_n("cc18"), [("OpenML CC18 (10 CV folds)", pick["cc18"])],
                                            f"Mean ({len(pick['cc18'])} CC18 datasets)", None)
     if "regression" in pick:
         shapes("regression")
         std = pd.read_csv(hv.ROOT / hv.FLOAT / "derived/extra_label_std.csv").set_index("dataset")["label_std"].to_dict()
+        reg_parts.append((stats_of(ry, rh), pick["regression"], std))
         rows += [r"\midrule"] + block_rows(stats_of(ry, rh), fold_n("regression"),
                                            [(r"Regression (test RMSE, lower is better)", pick["regression"])],
                                            f"Mean RMSE / label std ({len(pick['regression'])} datasets)", std)
@@ -130,12 +179,20 @@ def main():
     assert n == 13
     src = ("% source: IN-PROCESS reruns (workers = threads of one process). SPO = kdd28_hao seeds 1-5, AA = kdd28_ydf seeds 1-5 "
            "(wide: seed 1). Rows: " + a.profile_rows + " pass_rec in " + a.beats_aa + "\n% inputs: " + hv.rel(hv.INPUTS) + " + "
-           + hv.rel(hv.WIDE_INPUTS) + " + " + hv.rel(hv.CC18_INPUTS) + " + " + hv.rel(hv.REG_INPUTS) + "\n")
+           + hv.rel(hv.WIDE_INPUTS) + " + " + hv.rel(hv.CC18_INPUTS) + " + " + hv.rel(hv.REG_INPUTS) + " + "
+           + " + ".join(hv.rel(DIST[t]) for t in DIST) + "\n")
     setup = kdd28.setup_line(hv.HAO, ["distacc_single_spo", "distacc_single_aa_spo", "distacc_spo"]) + "\n" + \
         kdd28.setup_line(hv.YDF, ["distacc_single_aa", "distacc_aa"])
     out = pathlib.Path(a.out) / "table_dist_accuracy_where_spo_outperforms_aa_body.tex"
     out.write_text(kdd28.add_setup(GEN + src + "\n".join(head + rows + [r"\bottomrule", r"\end{tabular}}"]) + "\n", setup))
     print(f"wrote {out}: " + ", ".join(f"{s} {len(v)}" for s, v in pick.items()))
+    fig = pathlib.Path(a.out).parent / "figures" / "evaluation"
+    for name, parts, rmse, yl in (("accuracy", cls_parts, False, "Mean test ROC AUC"),
+                                  ("rmse", reg_parts, True, "Mean test RMSE / label std")):
+        if parts:
+            f = fig / f"fig_dist_{name}_mean_where_spo_outperforms_aa_body.tex"
+            f.write_text(kdd28.add_setup(FIG_GEN + src + mean_figure(parts, rmse, yl), setup))
+            print(f"wrote {f}: {sum(len(p[1]) for p in parts)} datasets")
 
 
 if __name__ == "__main__":

@@ -309,7 +309,7 @@ def check_rows(rows, profile, allowed, label, arm_of=None, ctx_of=None, columns=
 
 # ---------------------------------------------------------------- eval suite of a generator (warnings only)
 
-_EVAL = {"suite": None, "who": "", "seen": {}, "off_paper": ""}
+_EVAL = {"suite": None, "who": "", "seen": {}, "off_paper": "", "subset": None}  # subset: datasets a row-subset float covers
 
 
 def _declare_eval(name, script):
@@ -333,6 +333,8 @@ def _eval_rows(rows, label, exp=None):
     if not _EVAL["suite"]:
         return
     spec = evalsuite.load_suite(_EVAL["suite"])
+    if _EVAL["subset"] is not None:  # coverage checked over the float's own rows only (2026-11-21)
+        spec = dict(spec, datasets={d: f for d, f in spec["datasets"].items() if d in _EVAL["subset"]})
     for n, p in (exp or {}).items():
         vr, es = p.get("validation_set_ratio"), p.get("early_stopping")
         if spec.get("validation") == "none" and vr not in (None, 0):

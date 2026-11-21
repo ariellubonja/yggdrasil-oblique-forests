@@ -431,6 +431,11 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   counterpart and the Hao-only table and figures were dropped 2026-11-20), results `benchmarks/results/kdd28/runs/2026-11-06_hao_seeds/`.
   Since 2026-11-20 both comparison tables carry a wide dataset eval block (`runs/2026-11-06_hao_seeds/wide_eval/`), compared
   with kdd28_ydf seed 1 (`runs/2026-11-04_wide_eval/`) because kdd28_ydf seeds 2-5 never ran on the wide sets.
+- Distributed CC18 + regression cells of tab:accuracy-where-spo-outperforms-aa (2026-11-21): `run_kdd28_ydf_ec2.py --tables
+  cc18_dist|reg_dist --dist_axes SPO|AA --profile kdd28_hao|kdd28_ydf --seed s --only <table rows>`, launcher
+  `ariel_notes/results/2026-11-21_where_spo_beats_aa_cc18_reg_distributed/run.sh`, 3 EC2 boxes, 7,000 cells. Regression needs
+  `train_distributed_gbt --task REGRESSION` (added 2026-11-21, classification models unchanged: 40/40 cells and
+  `model_identity_check.sh` 7/7 identical). Results and checks: `benchmarks/results/kdd28/runs/2026-11-21_where_spo_beats_aa_cc18_reg_distributed/README.md`.
 
 ## K. Eval suites: which data and metric code an accuracy table used (user decision, 2026-11-04)
 

@@ -40,6 +40,14 @@ ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps 
                         "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
     "cc18": "dataset,fold,arm,threads,rc,test_acc,test_auc,test_logloss,num_trees,train_s,wall_s,git,bin_sha",
     "reg": "dataset,fold,arm,workers,split_axis,threads,rc,test_rmse,num_trees,train_s,wall_s,git,bin_sha,machine",
+    # distributed W = 1..32 on the CC18 10-fold and regression suites (2026-11-21, tab:accuracy-where-spo-outperforms-aa)
+    "cc18_dist": "dataset,fold,arm,workers,split_axis,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git,bin_sha,machine",
+    "reg_dist": "dataset,fold,arm,workers,split_axis,threads,rc,test_rmse,train_s,wall_s,git,bin_sha,machine",
+    # column replication (colrep_distacc setup) on the same CC18 + regression rows (2026-11-21)
+    "colrep_cc18": "dataset,fold,replication,workers,threads,rc,test_acc,test_auc,test_logloss,"
+                   "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
+    "colrep_reg": "dataset,fold,replication,workers,threads,rc,test_rmse,"
+                  "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
     "cross_network": "dataset,seed,workers,threads,trees,max_depth,rc,test_acc,test_auc,test_logloss,num_conditions,"
                      "num_oblique,num_multi_col,held_cols,ship_bytes_in,ship_bytes_out,ship_cols_in,ship_s_max,"
                      "ship_s_sum,cross_worker_splits,train_s,wall_s,git,log",
@@ -48,6 +56,8 @@ KEYS = {"distacc": ("dataset", "fold", "arm"), "distacc_aaspo": ("dataset", "fol
         "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "replication"),
         "colrep_w32_large": ("dataset", "fold", "arm", "replication"), "colrep": ("dataset", "seed", "replication"),
         "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm"), "reg": ("dataset", "fold", "arm"),
+        "cc18_dist": ("dataset", "fold", "arm"), "reg_dist": ("dataset", "fold", "arm"),
+        "colrep_cc18": ("dataset", "fold", "replication"), "colrep_reg": ("dataset", "fold", "replication"),
         "cross_network": ("dataset", "seed")}
 
 
@@ -65,6 +75,7 @@ def parse_log(path, dist):
     if dist:
         out["test_acc"], out["test_auc"] = g(r"^Accuracy: ([0-9.]+)"), g(r"^\s*auc: ([0-9.]+)")
         out["test_logloss"] = g(r"^LogLoss: *:? *([0-9.]+)")
+        out["test_rmse"] = g(r"^RMSE: ([0-9.e+-]+)")  # --task REGRESSION (metric/report.cc:535)
         out["train_s"] = seconds(g(r"Training \(incl\. cache creation\) took ([0-9.a-zµ]+)"))
         c = re.search(r"Conditions: (\d+) total, (\d+) oblique, (\d+) with >1 column", txt)
         out["num_conditions"], out["num_oblique"], out["num_multi_col"] = c.groups() if c else ("", "", "")
@@ -101,7 +112,7 @@ def build_cells(a):
                 "--early_stopping", "NONE", "--num_threads", str(ts), "--seed", str(seed), "--model_out_dir", model]
         cells.append(Cell(table, key, prof, argv, ts, ts, cost, extra, False))
 
-    def dist(table, key, prof, train, test, w, seed, aa, r, model, work, extra, cost, ship=False, label="label"):
+    def dist(table, key, prof, train, test, w, seed, aa, r, model, work, extra, cost, ship=False, label="label", task=None):
         p = kdd28.load_profile(prof)
         spo = [] if aa else ["--sparse_oblique_num_projections_exponent", kdd28._fmt(p["spo_exponent"]),
                              "--sparse_oblique_max_num_projections", kdd28._fmt(p["spo_max_projections"]),
@@ -115,7 +126,7 @@ def build_cells(a):
                 "--num_workers", str(w), "--num_threads", str(a.worker_threads), "--num_trees", str(p["trees"]),
                 "--max_depth", str(p["max_depth"]), "--split_axis", "AXIS_ALIGNED" if aa else "SPARSE_OBLIQUE", *spo,
                 f"--max_unique_values_for_discretized_numerical={p['max_unique_discretized']}", "--seed", str(seed),
-                "--worker_logs=false", "--model_out_dir", model]
+                "--worker_logs=false", "--model_out_dir", model, *(["--task", task] if task else [])]
         t = w * a.worker_threads
         # the cell's own W and r, checked against the binary's effective-params line
         exp = {"workers": w, "column_replication": 0 if r is None else float(r)}
@@ -199,6 +210,42 @@ def build_cells(a):
                 single("reg", (d, k, f"single:{A}"), prof, tr, te, "label", a.seed, split + ["--task", "regression"],
                        os.path.join(a.out, "reg", "models", f"{d}__f{k}__single_{A}"), a.single_threads,
                        {"workers": "single", "split_axis": A}, cost(tr, A == "AA") * 3, ydf=not explicit)
+    def dist_arms(d, k, tr, te, table, label, task):  # W = 1..32 of each --dist_axes axis (profile distacc_* W lists)
+        for x in [x for x in a.dist_axes.split(",") if x]:
+            ws = list(map(int, a.workers.split(","))) if a.workers else kdd28.load_profile(f"{PR}.distacc_{x.lower()}")["workers"]
+            for w in ws:
+                tag = f"{d}__f{k}__{w}_{x}"
+                dist(table, (d, k, f"{w}:{x}"), f"{PR}.distacc_{x.lower()}", tr, te, w, a.seed, x == "AA", None,
+                     os.path.join(a.out, table, "models", tag), os.path.join(a.out, table, "work", tag),
+                     {"workers": w, "split_axis": "AXIS_ALIGNED" if x == "AA" else "SPARSE_OBLIQUE"},
+                     cost(tr, x == "AA") * (3 if task else 1), label=label, task=task)
+    def colrep_arms(d, k, tr, te, table, label, task):  # colrep_distacc_spo: W = 4, r > 0 (r = 0 = the dist W = 4 cell)
+        cp = kdd28.load_profile(f"{PR}.colrep_distacc_spo")
+        for r in [r for r in cp["column_replication"] if r > 0]:
+            tag = f"{d}__f{k}__r{r:.2f}"
+            dist(table, (d, k, float(r)), f"{PR}.colrep_distacc_spo", tr, te, cp["workers"][0], a.seed, False, r,
+                 os.path.join(a.out, table, "models", tag), os.path.join(a.out, table, "work", tag),
+                 {"workers": cp["workers"][0]}, cost(tr, False) * (3 if task else 1), label=label, task=task)
+    if "colrep_cc18" in tables:
+        for d in sorted(x for x in os.listdir(a.cc18_10fold) if os.path.isdir(os.path.join(a.cc18_10fold, x))):
+            lbl = json.load(open(os.path.join(a.cc18_10fold, d, "meta.json")))["label_col"]
+            for k in kdd28.load_profile(f"{PR}.cc18_aa")["folds"]:
+                tr, te = (os.path.join(a.cc18_10fold, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
+                colrep_arms(d, k, tr, te, "colrep_cc18", lbl, None)
+    if "colrep_reg" in tables:
+        for d, k, tr, te in tab_folds():
+            colrep_arms(d, k, tr, te, "colrep_reg", "label", "REGRESSION")
+    if "cc18_dist" in tables:  # CC18 10 folds, distributed (2026-11-21)
+        ds = sorted(d for d in os.listdir(a.cc18_10fold) if os.path.isdir(os.path.join(a.cc18_10fold, d)))
+        ds.sort(key=lambda d: -cost(os.path.join(a.cc18_10fold, d, "fold0_train.csv"), False))
+        for d in ds:
+            lbl = json.load(open(os.path.join(a.cc18_10fold, d, "meta.json")))["label_col"]
+            for k in kdd28.load_profile(f"{PR}.cc18_aa")["folds"]:
+                tr, te = (os.path.join(a.cc18_10fold, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
+                dist_arms(d, k, tr, te, "cc18_dist", lbl, None)
+    if "reg_dist" in tables:  # regression sets, distributed (2026-11-21), test RMSE
+        for d, k, tr, te in tab_folds():
+            dist_arms(d, k, tr, te, "reg_dist", "label", "REGRESSION")
     if "colrep_distacc" in tables:  # tab:column-replication on the distacc datasets/folds, r = 0 only for --colrep_r0
         cp = kdd28.load_profile(f"{PR}.colrep_distacc_spo")
         r0 = {tuple(x.rsplit(":", 1)) for x in a.colrep_r0.split(",") if x}
@@ -306,7 +353,8 @@ def main():
     global PR
     PR = a.profile
     need = {"distacc": "tab_folds", "distacc_aaspo": "tab_folds", "distacc_exact300": "tab_folds",
-            "colrep_distacc": "tab_folds", "reg": "tab_folds",
+            "colrep_distacc": "tab_folds", "reg": "tab_folds", "reg_dist": "tab_folds", "cc18_dist": "cc18_10fold",
+            "colrep_reg": "tab_folds", "colrep_cc18": "cc18_10fold",
             "colrep_w32_large": "large_csvs", "colrep": "cc18_fold0", "cross_network": "cc18_fold0", "cc18": "cc18_10fold"}
     for t in a.tables.split(","):
         if t not in need:
@@ -327,12 +375,13 @@ def main():
         cells = [c for c in cells if any(o in c.key[0] for o in a.only.split(","))]
     if a.exclude:
         cells = [c for c in cells if not any(o in c.key[0] for o in a.exclude.split(","))]
-    bin_sha = ""
-    try:
-        bin_sha = subprocess.run(["sha256sum", os.path.join(a.bin_dir, "train_oblique_forest")], capture_output=True,
-                                 text=True).stdout[:12]
-    except OSError:
-        pass
+    bin_sha = {}  # per binary: distributed cells stamp train_distributed_gbt's sha (2026-11-21)
+    for dist_cell, b in ((False, "train_oblique_forest"), (True, "train_distributed_gbt")):
+        try:
+            bin_sha[dist_cell] = subprocess.run(["sha256sum", os.path.join(a.bin_dir, b)], capture_output=True,
+                                                text=True).stdout[:12]
+        except OSError:
+            bin_sha[dist_cell] = ""
     lock, done, csvs, eval_cols, stamp_w = threading.Lock(), {}, {}, {}, {}
     for t in {c.table for c in cells}:
         os.makedirs(os.path.join(a.out, t, "logs"), exist_ok=True)
@@ -385,7 +434,7 @@ def main():
                 shutil.rmtree(c.work, ignore_errors=True)
             drift = kdd28.check_cell(c.profile, log, expect=c.expect)  # exit 2 on drift (ALLOW_DRIFT=1 -> "!drift")
             v = dict(zip(KEYS[c.table], c.key)) | c.extra | m | {"rc": rc, "wall_s": wall, "git": a.git,
-                                                                  "bin_sha": bin_sha, "threads": c.threads,
+                                                                  "bin_sha": bin_sha[c.dist if c.table in ("cc18_dist", "reg_dist", "colrep_cc18", "colrep_reg") else False], "threads": c.threads,
                                                                   "machine": a.machine, "log": c.tag + ".log"}
             row = [v.get(k, "") for k in ROWS[c.table].split(",")] + kdd28.stamp_values(c.profile + drift, log)[:stamp_w[c.table]]
             if eval_cols[c.table]:

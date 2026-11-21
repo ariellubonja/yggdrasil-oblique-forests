@@ -75,6 +75,9 @@ ABSL_FLAG(std::string, test_csv, "benchmarks/data/HIGGS_test_500k.csv",
 ABSL_FLAG(std::string, label, "class",
           "Label column. Forced to CATEGORICAL in the dataspec guide (HIGGS "
           "stores it as 0.0/1.0 floats).");
+ABSL_FLAG(std::string, task, "CLASSIFICATION",
+          "CLASSIFICATION (label forced CATEGORICAL) or REGRESSION (label "
+          "forced NUMERICAL, squared-error loss, test RMSE).");
 ABSL_FLAG(int64_t, dataspec_scan_rows, 1000000,
           "Rows scanned to accumulate dataspec statistics (-1 = all). Keeps "
           "the 7.6 GB HIGGS scan short in the debug loop.");
@@ -163,7 +166,12 @@ int main(int argc, char** argv) {
   // 1. Training configuration: the distributed learner.
   ydf::model::proto::TrainingConfig train_config;
   train_config.set_learner("DISTRIBUTED_GRADIENT_BOOSTED_TREES");
-  train_config.set_task(ydf::model::proto::Task::CLASSIFICATION);
+  const std::string task = absl::GetFlag(FLAGS_task);
+  QCHECK(task == "CLASSIFICATION" || task == "REGRESSION")
+      << "--task must be CLASSIFICATION or REGRESSION, got " << task;
+  const bool regression = task == "REGRESSION";
+  train_config.set_task(regression ? ydf::model::proto::Task::REGRESSION
+                                   : ydf::model::proto::Task::CLASSIFICATION);
   train_config.set_label(label);
   if (absl::GetFlag(FLAGS_seed) >= 0) {
     train_config.set_random_seed(absl::GetFlag(FLAGS_seed));
@@ -267,7 +275,7 @@ int main(int argc, char** argv) {
               << dgbt->create_cache().max_unique_values_for_discretized_numerical()
               << " force_numerical="
               << (absl::GetFlag(FLAGS_force_numerical_features) ? "true" : "false")
-              << " num_workers=" << num_workers;
+              << " num_workers=" << num_workers << " task=" << task;
   }
   if (absl::GetFlag(FLAGS_print_params_only)) return 0;
 
@@ -281,7 +289,8 @@ int main(int argc, char** argv) {
       absl::GetFlag(FLAGS_dataspec_scan_rows));
   auto* label_guide = guide.add_column_guides();
   label_guide->set_column_name_pattern(absl::StrCat("^", label, "$"));
-  label_guide->set_type(ydf::dataset::proto::ColumnType::CATEGORICAL);
+  label_guide->set_type(regression ? ydf::dataset::proto::ColumnType::NUMERICAL
+                                   : ydf::dataset::proto::ColumnType::CATEGORICAL);
   // Keep labels seen fewer than 5 times (toy datasets). - Vova experiment
   // label_guide->mutable_categorial()->set_min_vocab_frequency(1);
   if (absl::GetFlag(FLAGS_force_numerical_features)) {
@@ -310,7 +319,7 @@ int main(int argc, char** argv) {
         " scan_rows=", absl::GetFlag(FLAGS_dataspec_scan_rows),
         " max_unique=",
         absl::GetFlag(FLAGS_max_unique_values_for_discretized_numerical),
-        " axis=", split_axis, "\n");
+        " axis=", split_axis, regression ? " task=REGRESSION" : "", "\n");
     const std::string signature_path =
         file::JoinPath(work_dir, "cache_signature.txt");
     const auto previous = file::GetContent(signature_path);
