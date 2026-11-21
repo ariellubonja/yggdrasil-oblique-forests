@@ -29,7 +29,7 @@ for t, parts in SRC.items():
         for rs in rows:
             w.writerows(r for r in rs if r["dataset"] in keep)
 shapes = {}
-for p in ("../../../runtime/speedup_map_by_dataset/analysis/per_dataset_summary.csv", "tab-accuracy-on-datasets-over-100-columns/derived/wide_shapes.csv"):
+for p in ("../../../runtime/speedup_map_by_dataset/analysis/per_dataset_summary.csv", "tab-accuracy-hao-vs-ydf-params-single-machine/derived/wide_shapes.csv"):
     for r in read(p):
         shapes.setdefault(r["dataset"], (int(float(r["rows"])), int(float(r["features"]))))
 with open(os.path.join(H, "derived", "spo_advantage_shapes.csv"), "w", newline="") as f:

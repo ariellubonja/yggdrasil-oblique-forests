@@ -14,5 +14,4 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
 - **Code:** driver `c3b01f56-dirty`, binaries built at e3279f20 (`bin_sha` 168e934e2d19)
 - **Raw cells:** box `~/results/2026-11-04_colrep_distacc/` (EC2 ariel-dist-accuracy-1), mirrored with logs and models to the
   gitignored `ariel_notes/results/2026-11-04_colrep_distacc/box/colrep_distacc/`. REPLICABILITY §J
-- **Read by:** fig:column-replication-on-spaa-datasets, fig:column-replication-over-100-columns (`filter_wide.py`),
-  fig:column-replication-where-spo-outperforms-aa (`select_spo_advantage.py`)
+- **Read by:** fig:column-replication-where-spo-outperforms-aa (`select_spo_advantage.py`)

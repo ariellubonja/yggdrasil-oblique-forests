@@ -192,11 +192,11 @@
 
 
 
-\textcolor{cyan}{\done~2. Fix single vs. Distributed full replication accuracy + cross-column comms.} Fig.~\ref{fig:column-replication-on-spaa-datasets}, Sec.~\ref{sec:cross-network-projections}
+\textcolor{cyan}{\done~2. Fix single vs. Distributed full replication accuracy + cross-column comms.} Fig.~\ref{fig:column-replication-where-spo-outperforms-aa}, Sec.~\ref{sec:cross-network-projections}
 
 Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs accuracy. \textbf{4 plots}: $0\% \to 100\%$ replication, under column assignment method. \textbf{100\% replication is equivalent to local SPO}
     \begin{todolist}
-        \item[\textcolor{gray}{\done}] \textcolor{gray}{Round-robin}. Fig.~\ref{fig:column-replication-on-spaa-datasets}
+        \item[\textcolor{gray}{\done}] \textcolor{gray}{Round-robin}. Fig.~\ref{fig:column-replication-where-spo-outperforms-aa}
         \item Random
         \item[\done] \textcolor{cyan}{ensure we're measuring on datasets where SPO > AA accuracy} if AA acc = SPO acc, any partition strategy should get similar accuracy. Start with datasets where SPO is better (perhaps trunk) Section \ref{sec:accuracy-where-spo-outperforms-aa}
         \item Important columns in model trained on 1\% of the dataset
@@ -210,11 +210,11 @@ Tradeoff of Extra memory vs. Accuracy: policy × amount (e.g. 120 \% storage) vs
 \textbf{\textit{Engineering}}
 
 \begin{todolist}
-    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{\href{https://github.com/google/yggdrasil-decision-forests/commit/2fe3a7fae5a3e8646401cd98f5c0a2a9d5d81653}{Richard's new} AA + SPO scan.} Table~\ref{tab:accuracy-on-spaa-datasets}
+    \item[\textcolor{cyan}{\done}] \textcolor{cyan}{\href{https://github.com/google/yggdrasil-decision-forests/commit/2fe3a7fae5a3e8646401cd98f5c0a2a9d5d81653}{Richard's new} AA + SPO scan.} Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}
     \begin{todolist}
         \item[\textcolor{cyan}{\done}] \textcolor{cyan}{implement and vastly increase projections (to YDF defaults).}
-        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{AA, SPO (train\_oblique\_forest.cc default params) vs. SPO (YDF default params). Table~\ref{tab:accuracy-on-spaa-datasets}}
-        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Richard's AA+SPO. \textbf{Include?} Didn't see much accuracy diff. Table~\ref{tab:accuracy-on-spaa-datasets}}
+        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{AA, SPO (train\_oblique\_forest.cc default params) vs. SPO (YDF default params). Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}}
+        \item[\textcolor{cyan}{\done}] \textcolor{cyan}{Richard's AA+SPO. \textbf{Include?} Didn't see much accuracy diff. Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}}
     \end{todolist}
     \item \Claude{why is SPO faster than AA despite Presort time excluded?} %Opus-high then Fable-max to verify.
     \item[\textcolor{gray}{\done}] \textcolor{gray}{Plot Barrier results} See Fig.~\ref{fig:yt8m-barriers}
@@ -425,7 +425,7 @@ Distributed methods use YDF parameters
 \caption{Test AUC of single-machine vs. $W$-distributed GBT on the datasets where single-machine SPO-GBT beats AA-GBT.}
 \label{tab:accuracy-where-spo-outperforms-aa}
 \IfFileExists{tables/table_dist_accuracy_where_spo_outperforms_aa_body.tex}{\input{tables/table_dist_accuracy_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize The 11 of the 41 datasets of Tables~\ref{tab:accuracy-on-spaa-datasets} and~\ref{tab:accuracy-on-datasets-over-100-columns} where single-machine SPO-GBT beats AA-GBT by more than 0.5 AUC points (mean over folds). Same runs as those tables. YDF defaults, early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Epsilon (shipped split). \TODO{Why is single-machine AA vs Dist AA different?}
+\par\smallskip\raggedright\footnotesize The 11 of the 41 datasets of Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine} where single-machine SPO-GBT beats AA-GBT by more than 0.5 AUC points (mean over folds). Seed-1 runs of that table. YDF defaults, early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Epsilon (shipped split).
 \end{minipage}
 \par\vskip0.5em
 \noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
@@ -876,16 +876,36 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 
 
 \twocolumn[{\floatblock
-\section{Accuracy of Hao's Parameters in Distributed and vs. YDF, over 5 Seeds, and where SPO clearly beats AA}
+\section{Where SPO clearly beats AA, and Accuracy of Hao's Parameters in Distributed and vs. YDF, over 5 Seeds}
 \label{sec:accuracy-hao-vs-ydf-params}
 
 
 \textcolor{gray}{(except YDF-Parameter Runs on \texorpdfstring{${\ge}100$}{>=100} Column Datasets: 1 Seed)}
-This table provides the reason for using Hao's parameters instead of YDF defaults, and \textbf{argues why the datasets where "SPO beats AA" were chosen}. They outperform in mean across-dataset AUC in the Accuracy tables, and the runtime is 5x faster (measured on shared-run machines, its ballpark). \textbf{Hao outperforms with both a simple mean and size-weighted mean.}
+This table provides the reason for using Hao's parameters instead of YDF defaults, and \textbf{argues why the datasets where "SPO beats AA" were chosen}. They outperform in mean across-dataset AUC in the Accuracy tables, and the runtime is 5x faster (measured on shared-run machines, its ballpark). \textbf{Hao outperforms with both a simple mean and size-weighted mean.} \textcolor{orange}{YDF might outperform Hao in bigger datasets - see Epsilon}
 
-\TODO{YDF may outperform in bigger datasets - see Epsilon!}
+Threshold for "SPO outperforms" is: SPO has a higher mean AUC (avg. across 5 CV folds $\times$ 5 seeds) by more than 0.5 AUC points, or 1\% lower RMSE on regression. We use a one-sided paired $t$-test over the folds as follows:
 
-\mbox{}\par\vskip0.5em
+\begin{enumerate}
+    \item Each dataset has 5 folds (10 for OpenML-CC18) and 5 seeds. Only datasets where SPO > AA on every seed are considered. Take average of the 5 seeds for each $k$ fold. Let these be $\mu_k^{SPO},\mu_k^{AA}$. Calculate differences $d$ of these for SPO and AA: $d_k = \mu_k^{SPO} - \mu_k^{AA}$, and average into $\mu^{d}$.
+    \item $t=\frac{\mu^d}{\frac{\sigma_{d_k}}{\sqrt{k}}}$ scales the mean difference by the Standard Error (denominator), which accounts for more trials giving more certainty (the $\sqrt{k}$ term), as well as a smaller difference in trials (SD) being more likely correct.
+    \item One can then look up the probability $p$ given the value $t$ above. E.g. for \texttt{hazelnut-spread-contaminant-detection}, $t=3.52\implies p\approx .012$, meaning there's a roughly $\frac{1}{80}$ chance this $t$ value would appear if SPO was no better than AA.
+\end{enumerate}
+
+The motivation for the Benjamini–Hochberg correction is as follows: each of our datasets has a nonzero percentage of being a fluke (see $t$-test explanation above). Say on average that is $5\%$. Due to us trying so many datasets, that means some will be false positives. The Benjamini–Hochberg correction does the following:
+
+\begin{enumerate}
+    \item Sort the $p$-values (see above) for all datasets, ascending. This will rank the datasets from least likely to be a fluke to most.
+    \item Give each rank $i$ a threshold of $.05 \frac{i}{\|datasets\|}$.
+    \item Find the largest $p_{last}$ that still passes the threshold. 
+    \item Everything $p$ that comes before $p_{last}$ is included.
+\end{enumerate}
+
+Our $t$-test with the Benjamini–Hochberg is the threshold for "SPO is better than AA" below, \textbf{done using Hao parameters for SPO}.
+
+Single-machine results are used to test whether SPO vs. AA is more accurate, due to the speed of this on smaller datasets (no startup cost). Distributed runs were only performed for some of the datasets (rather, I ran those before, and kept them here). 
+}]
+
+\twocolumn[{\floatblock
 \noindent\begin{minipage}{\textwidth}
 \captionsetup{type=table}
 \centering
@@ -938,90 +958,6 @@ YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter
 \par\smallskip\raggedright\footnotesize YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Projections split across workers. Hao's parameters do not affect AA-GBT, so it has only the YDF-parameter column. Hao cells colored by $\Delta$ AUC to YDF at the same $W$ (blue higher, red lower). Mean time: training time of the in-process accuracy runs (workers are threads of one process), not distributed timings. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
 \end{minipage}
 }]
-
-\twocolumn[{\floatblock
-\section{Accuracy on SPAA paper + OpenML $\geq 100$ col datasets}
-\label{sec:accuracy-on-spaa-datasets}
-
-Both learners use YDF defaults with early stopping off, since the distributed learner has none, so every arm trains all 300 trees on the full training set.
-
-
-\mbox{}\par\vskip0.5em
-\noindent\begin{minipage}{\textwidth}
-\captionsetup{type=table}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{2pt}
-\caption{Test AUC of single-machine vs. $W$-distributed GBT. Single-machine SPO-GBT samples $\min(F^2,6000)$ projections per node, distributed SPO-GBT splits them across the $W$ workers, each sampling from its $F/W$ columns.}
-\label{tab:accuracy-on-spaa-datasets}
-\IfFileExists{tables/table_dist_accuracy_on_spaa_datasets_body.tex}{\input{tables/table_dist_accuracy_on_spaa_datasets_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize YDF defaults, early stopping off, 300 trees, depth 6, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Chronological holdouts.
-Harness defaults means Hao's settings of density 1.5, $P=F$ projections. \textcolor{RoyalPurple}{SPO matches AA bcs. shard ends up with 1 column per worker}
-\end{minipage}
-\par\vskip0.5em
-\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-% body sizes its axis to 0.5\textwidth; match it to the column
-\resizebox{\linewidth}{!}{\begin{minipage}{1.5\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_on_spaa_datasets_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_on_spaa_datasets_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-on-spaa-datasets}. \textcolor{RoyalPurple}{*Some datasets have few columns, so as $W$ increases, accuracy actually approaches} \textcolor{red}{AA-GBT}}
-\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT.}
-\label{fig:accuracy-on-spaa-datasets}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.6\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_on_spaa_datasets_body.tex}{\input{figures/evaluation/fig_column_replication_on_spaa_datasets_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Accuracy by column replication: mean (top) and per-dataset (bottom) $\Delta$ test accuracy at \texttt{MULTI\_THREAD} $W=4$ vs.\ \texttt{single}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
-\label{fig:column-replication-on-spaa-datasets}
-\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy.
-\end{minipage}
-}]
-
-\twocolumn[{\floatblock
-\subsection{OpenML Datasets with $\geq$100 Features}
-\label{sec:accuracy-on-datasets-over-100-columns}
-
-Avoids the \textcolor{magenta}{purple issue} above where Workers would end up with 1 column each, matching Axis-Aligned.
-
-\mbox{}\par\vskip0.5em
-\noindent\begin{minipage}{\textwidth}
-\captionsetup{type=table}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{2pt}
-\caption{Test AUC of single-machine vs. $W$-distributed GBT on the datasets with $F>100$.}
-\label{tab:accuracy-on-datasets-over-100-columns}
-\IfFileExists{tables/table_dist_accuracy_over_100_columns_body.tex}{\input{tables/table_dist_accuracy_over_100_columns_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize Datasets with $F>100$. YDF defaults: early stopping off, 300 trees, $P{=}\min(F^2,6000)$ split across workers. 5 CV folds except Chronological holdouts and Epsilon (shipped split). YouTube-8M (3.9M rows, 1152 cols) not run: it would need ${\approx}6$ days on an r8i.96xlarge (\$3.8k).
-\end{minipage}
-\par\vskip0.5em
-\noindent\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-% body sizes its axis to 0.5\textwidth; match it to the column
-\resizebox{\linewidth}{!}{\begin{minipage}{1.2\linewidth}\setlength{\textwidth}{2\linewidth}%
-\IfFileExists{figures/evaluation/fig_dist_accuracy_mean_over_100_columns_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_over_100_columns_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean test AUC over the datasets of Table~\ref{tab:accuracy-on-datasets-over-100-columns}. \textcolor{orange}{The difference from single-machine is caused only by \texttt{homecredit-default} only}}
-\Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT on the datasets with more than 100 columns.}
-\label{fig:accuracy-on-datasets-over-100-columns}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\textwidth}\vspace{0pt}
-\captionsetup{type=figure}
-\centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.25\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_over_100_columns_body.tex}{\input{figures/evaluation/fig_column_replication_over_100_columns_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Accuracy by column replication: mean (top) and per-dataset (bottom) $\Delta$ test accuracy at \texttt{MULTI\_THREAD} $W=4$ vs.\ \texttt{single}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets with more than 100 columns. Top: line of the mean accuracy difference to r equals 0 with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
-\label{fig:column-replication-over-100-columns}
-\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT accuracy. pts = percentage points of test accuracy.
-\end{minipage}
-}]
-
-\section{More Datasets tested for where SPO outperforms AA}
-
-The test is done on single-machine versions of the methods. If SPO outperforms AA by \TODO{how much?}, it is added to the main paper body's results and used in our measurements
 
 \section{Vova question on degenerate dataset}
 

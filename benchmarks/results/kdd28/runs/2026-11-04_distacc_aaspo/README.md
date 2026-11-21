@@ -1,4 +1,4 @@
-# runs/2026-11-04_distacc_aaspo: extra single-machine columns of tab:accuracy-on-spaa-datasets (2026-11-04)
+# runs/2026-11-04_distacc_aaspo: extra single-machine columns of the KDD28 accuracy tables (2026-11-04)
 
 Measurement, stored once. Floats read it through their `inputs.txt`. Index and rules: `benchmarks/results/kdd28/README.md`.
 
@@ -12,7 +12,7 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
 - Binaries: `~/results/2026-11-03_ydf_defaults_rerun/bin` (built at e3279f20, no C++ change to the driver commit).
   Driver: `run_kdd28_ydf_ec2.py --tables distacc_aaspo,distacc_exact300` at the commit that adds this folder.
 - `train_s` comes from up to 64 concurrent cells on the shared box: not clean timing.
-- Body: the generator command in `floats/accuracy/tab-accuracy-on-spaa-datasets/README.md`. The distacc CSV these columns
+- Body: the generator commands in the READMEs of the floats under **Read by**. The distacc CSV these columns
   sit next to: `runs/2026-11-03_distacc/`.
 - **Profile:** `kdd28_ydf.distacc_single_aa_spo`, `kdd28_ydf.distacc_single_spo_harness_exact300`
 - **Settings:** effective values of the run (`params.py show <arm>`, seeds as run)
@@ -26,6 +26,5 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
 - **Code:** driver `c3b01f56-dirty`, binaries built at e3279f20 (`bin_sha` 168e934e2d19)
 - **Raw cells:** box `~/results/2026-11-04_distacc_aaspo/` on EC2 ariel-dist-accuracy-1, mirrored (logs, models) to the
   gitignored `ariel_notes/results/2026-11-04_distacc_aaspo/box/`. REPLICABILITY §J
-- **Read by:** tab:accuracy-on-spaa-datasets, tab:accuracy-on-datasets-over-100-columns (`filter_wide.py`),
-  tab:accuracy-where-spo-outperforms-aa (`select_spo_advantage.py`), tab:accuracy-hao-vs-ydf-params-single-machine and
+- **Read by:** tab:accuracy-where-spo-outperforms-aa (`select_spo_advantage.py`), tab:accuracy-hao-vs-ydf-params-single-machine and
   -distributed (exact300 = seed-1 Hao single SPO, aaspo = seed-1 YDF AA+SPO)

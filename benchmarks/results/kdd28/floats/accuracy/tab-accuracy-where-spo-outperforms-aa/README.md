@@ -4,8 +4,7 @@ Results behind the KDD28 floats below. Rebuild the bodies with the commands. Ind
 
 - **Labels:** `tab:accuracy-where-spo-outperforms-aa`, `fig:accuracy-where-spo-outperforms-aa`, `fig:column-replication-where-spo-outperforms-aa` (section
   `sec:accuracy-where-spo-outperforms-aa`, "Accuracy on Datasets Where SPO Outperforms AA"). Added 2026-11-06 (Overleaf 8c3e81d). Metric: test ROC AUC
-- **Status:** current (main body). `derived/spo_advantage_datasets.txt` also feeds `--bold_datasets` of tab:accuracy-on-spaa-datasets and
-  tab:accuracy-on-datasets-over-100-columns (2026-11-20)
+- **Status:** current (main body).
 - **What:** no new runs. Row subsets of the SPAA paper eval and the wide dataset eval, 41 datasets. `select_spo_advantage.py`
   keeps the 11 where single-machine SPO-GBT minus single-machine AA-GBT test AUC (fold means) > 0.005
   (`derived/spo_advantage_datasets.txt`, edge per dataset). Selection uses the same test folds the table reports. Of the 612
@@ -38,7 +37,7 @@ python3 benchmarks/src/distributed_spo_gbt/paper/figures/make_column_replication
   --single_arms distacc_single_spo --r0_csv $E/derived/distacc/results.csv --r0_filter arm=4:SPO --r0_arm distacc_spo \
   --profile kdd28_ydf --eval_suite kdd28_spo_advantage
 ```
-- **Inputs:** `inputs.txt`. The shapes of the 2 wide datasets come from the over-100-columns float's
+- **Inputs:** `inputs.txt`. The shapes of the 2 wide datasets come from the Hao-vs-YDF float's
   `derived/wide_shapes.csv` (marked `# cross-float` there)
 - **Raw cells:** as in the run READMEs
 

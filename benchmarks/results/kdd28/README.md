@@ -14,9 +14,6 @@ Paper: `paper/distributed_spo_gbt_kdd28/main.tex` (live copy: the Overleaf clone
 
 | Paper section | Float dir | Labels | Runs read (under `runs/`) |
 |---|---|---|---|
-| Accuracy | `floats/accuracy/tab-accuracy-on-spaa-datasets/` | tab:accuracy-on-spaa-datasets, fig:accuracy-on-spaa-datasets | `2026-11-03_distacc`, `2026-11-04_distacc_aaspo` |
-| Accuracy (appendix) | `floats/accuracy/fig-column-replication-on-spaa-datasets/` | fig:column-replication-on-spaa-datasets | `2026-11-04_colrep_distacc`, `2026-11-03_distacc` |
-| Accuracy >100 cols (appendix) | `floats/accuracy/tab-accuracy-on-datasets-over-100-columns/` | tab:accuracy-on-datasets-over-100-columns, fig:accuracy-on-datasets-over-100-columns, fig:column-replication-over-100-columns | `2026-11-03_distacc`, `2026-11-04_distacc_aaspo`, `2026-11-04_colrep_distacc`, `2026-11-04_wide_eval` |
 | Accuracy, SPO-advantage datasets | `floats/accuracy/tab-accuracy-where-spo-outperforms-aa/` | tab:accuracy-where-spo-outperforms-aa, fig:accuracy-where-spo-outperforms-aa, fig:column-replication-where-spo-outperforms-aa | `2026-11-03_distacc`, `2026-11-04_distacc_aaspo`, `2026-11-04_colrep_distacc`, `2026-11-04_wide_eval` |
 | Accuracy, Hao's settings, 5 seeds (appendix) | `floats/accuracy/tab-accuracy-hao-vs-ydf-params-single-machine/` | tab:accuracy-hao-vs-ydf-params-single-machine, tab:accuracy-hao-vs-ydf-params-distributed | `2026-11-06_hao_seeds`, `2026-11-03_distacc`, `2026-11-04_distacc_aaspo`, `2026-11-20_ydf_seeds`, `2026-11-04_wide_eval`, `2026-11-20_cc18_seeds`, `2026-11-20_regression_multiclass_tabarena_tabred` |
 | Evaluation setup (appendix) | `floats/accuracy/tab-ordinal-vs-native/` | tab:ordinal-vs-native | `2026-11-19_ordinal_vs_native` |

@@ -21,6 +21,6 @@ Measurement, stored once. Floats read it through their `inputs.txt`. Index and r
 - **Code:** rows `git=e3279f20-dirty` (delta: `ariel_notes/results/2026-11-03_ydf_defaults_rerun/box/code.diff`)
 - **Raw cells:** box `~/results/2026-11-03_ydf_defaults_rerun/distacc/` on EC2 ariel-dist-accuracy-1 (i-0f90f7764082bf21a),
   mirrored (logs, models) to the gitignored `ariel_notes/results/2026-11-03_ydf_defaults_rerun/box/distacc/`. REPLICABILITY §J
-- **Read by:** tab:accuracy-on-spaa-datasets, fig:column-replication-on-spaa-datasets (single and r = 0 rows),
+- **Read by:** fig:column-replication-where-spo-outperforms-aa (single and r = 0 rows),
   tab:accuracy-where-spo-outperforms-aa (`select_spo_advantage.py`), tab:accuracy-hao-vs-ydf-params-single-machine and -distributed (seed-1 YDF rows, seed-1 Hao
-  AA rows), tab:accuracy-on-datasets-over-100-columns (`filter_wide.py`)
+  AA rows)

@@ -36,7 +36,7 @@ Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`,
   generator exits non-zero when a wide cell lacks exactly those seeds, a fold or a dataset (checked 2026-11-20 by deleting one
   seed, one dataset, one fold). Single SPO, YDF / Hao: epsilon .9510 / .9464, santander_transaction .8823 / .8842, hcdr_main
   .7558 / .7576, dota2 .6283 / .6315, vehicle_sensIT .9289 / .9287, guillermo .8998 / .8979, philippine .8702 / .8645,
-  christine .8196 / .8188. Shapes: `tab-accuracy-on-datasets-over-100-columns/derived/wide_shapes.csv` (`--wide_dataset_shapes`)
+  christine .8196 / .8188. Shapes: `derived/wide_shapes.csv` (`--wide_dataset_shapes`), written by `make_wide_shapes.py`
 - **CC18, multiclass and regression blocks (user request 2026-11-20):** two continuation floats of the single-machine table
   (`\ContinuedFloat`, bodies `table_accuracy_hao_vs_ydf_params_single_machine_{cc18,mc_reg}_body.tex`). CC18: 34 binary tasks,
   10 OpenML folds, `runs/2026-11-20_cc18_seeds/`. Multiclass: 8 TabArena tasks as majority class vs. rest, test AUC. Regression:

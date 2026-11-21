@@ -17,7 +17,7 @@ sh = pd.read_csv(ROOT / mpt.SHAPES_CSV).drop_duplicates("dataset").set_index("da
 mpt.SHAPES = {d: (int(r.rows), int(r.features)) for d, r in sh.iterrows()}
 ca = pd.read_csv(ROOT / mpt.CATS_CSV).set_index("dataset")
 mpt.CATS = {d: (int(r.categorical), int(r.features)) for d, r in ca.iterrows()}
-mpt.SHAPE_BELOW = True  # (rows, cols, cat) on a second gray line, as in tab:accuracy-on-spaa-datasets
+mpt.SHAPE_BELOW = True  # (rows, cols, cat) on a second gray line, as in tab:accuracy-hao-vs-ydf-params-distributed
 
 r = pd.read_csv(RES)
 p = r.pivot_table(index=["dataset", "fold"], columns="arm", values="test_auc")
