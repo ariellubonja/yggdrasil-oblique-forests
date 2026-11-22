@@ -35,6 +35,12 @@ def cell(r, bold, rmse, pre):
     return hv.cell(r, bold, pre, rmse)  # one line per row: mean$_{\pm std}$
 
 
+def spo_matches_aa(arm, ds):
+    """Distributed SPO arm with W >= F: each worker holds at most one column, so SPO = AA splits."""
+    w, fam = arm.split(":")
+    return fam == "SPO" and w.isdigit() and int(w) >= mpt.SHAPES[ds][1]
+
+
 def block_rows(stats, folds, by_source, mean_name, scale):
     """stats: column label -> per-dataset stats or None (never run). Missing cells stay empty."""
     rmse, ncol, rows = scale is not None, len(COLS), []
@@ -53,6 +59,8 @@ def block_rows(stats, folds, by_source, mean_name, scale):
                     sys.exit(f"ERROR: {ds} col {i}: {int(r['count'])} folds, suite has {folds[ds]}")
                 rr = get([c[2] for c in COLS].index(ref), ds) if ref else None
                 pre = mpt._delta_color(hv.delta(r["mean"], rr["mean"], rmse)) if rr is not None else ""
+                if spo_matches_aa(COLS[i][2], ds):  # <=1 column per worker: SPO projections are single features
+                    pre = mpt.PURPLE
                 out.append(cell(r, r["mean"] == best, rmse, pre))
             rows.append(mpt.ds_label(ds) + " & " + " & ".join(out) + r" \\")
     alld = [d for _, ds in by_source for d in ds]
