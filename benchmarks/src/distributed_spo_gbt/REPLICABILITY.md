@@ -171,7 +171,10 @@ and an `inputs.txt`. Machine, code and raw cells: the READMEs in `benchmarks/res
 | tab:in-node-dist-vqsort-ablation, tab:setup-cost | `tables/table_in_node_ablation_body.tex`, `tables/table_setup_cost_body.tex` | `make_pf_ablation_tables.py` (each table reads only its float's `inputs.txt`) | `K/appendix/tab-in-node-dist-vqsort-ablation/`, `K/appendix/tab-setup-cost/` | `vertex_grid_pf` |
 | tab:in-node-dist-vqsort-vertex | `tables/table_in_node_threads_body.tex` | `make_in_node_tables.py` | `K/appendix/tab-in-node-dist-vqsort-vertex/` | `in_node_threads` |
 | fig:cc18-tree-feature-hist | `figures/evaluation/cc18_tree_feature_hist_body.tex` + `cc18_tree_feature_hist/*.dat` | `../cc18_gbt_feature_study/make_fig_tree_feature_hist.py --out paper/distributed_spo_gbt_kdd28 --trees 1,44,86,129,172,215,257,300 --hsep 0.45cm --no_counts --k 6` | `K/appendix/fig-cc18-tree-feature-hist/` | `cc18_feature_study` |
+| tab:spo-ordinal-feature-scaling | `tables/table_spo_ordinal_feature_scaling_body.tex` | `make_spo_ordinal_feature_scaling_table.py` | `K/appendix/tab-spo-ordinal-feature-scaling/` | `kdd28_ydf` (off-paper) |
 | `figures/method/*.pdf`, `listings/in_worker_oblique` | hand-made (SVG sources in `benchmarks/results/figures/`) | - | - | - |
+
+tab:spo-ordinal-feature-scaling is an off-paper probe: scaling emulated by pre-scaled fold files, single seed, hosts ariel-ydf-1 and ariel-ydf-7, binary 0416519f-dirty (runs `kdd28/runs/2026-11-21_spo_gbt_feature_scaling_none_vs_trainstd_cc18_tabarena_tabred/`).
 
 Check 2026-11-04 (every generator run from the new paths into a scratch dir, compared with the Overleaf clone ignoring `%`
 lines): all bodies and `.dat` files identical except `tables/table_setup_cost_body.tex`. Its Overleaf copy was made from the
@@ -419,6 +422,9 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   `ariel_notes/results/2026-11-04_colrep_distacc/wait_and_mirror.sh`. r = 0 and `single` reuse the distacc W = 4 SPO and
   single SPO rows. Check: r = 0 rerun on 3 dataset-folds (blood-transfusion f1, diabetes f2, Fitness_Club f0), on m7i and
   again on c8i, gave `nodes-*` and header byte-identical to the distacc W = 4 models and equal AUC.
+- Column replication at W = 4/8/16/32, r = 0.05 steps to 0.5 then 0.1 steps (2026-11-22): profile arm
+  `kdd28_hao.colrep_distacc_spo`, `run_kdd28_ydf_ec2.py --tables colrep_distacc|colrep_cc18|colrep_reg --done_csvs ...`,
+  44,250 cells in `benchmarks/results/kdd28/runs/2026-11-21_colrep_w4_to_w32_r5pct_where_spo_beats_aa_hao/` (README there).
 - Cross-network arm (added 2026-11-04, not yet run): `main` since merge 719fb006 of `cross-worker-col-comms` @ d97fe698
   (split budget applies to ship mode), profile arm `kdd28_ydf.cross_network_ship`, `run_kdd28_ydf_ec2.py --tables cross_network`
   (34 CC18 fold 0 x seeds 1-5, W = 4). Results box `~/results/2026-11-04_cross_network_ydf/`, mirrored by

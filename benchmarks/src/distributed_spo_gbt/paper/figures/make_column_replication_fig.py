@@ -67,7 +67,8 @@ def main():
     ap.add_argument("--single_filter", default="", help="col=value: keep only these single rows")
     ap.add_argument("--single_arms", default="single_spo,single_spo_audit", help="profile arms of the single rows")
     ap.add_argument("--r0_csv", default="", help="rows reused as r = 0, filtered by --r0_filter")
-    ap.add_argument("--r0_filter", default="arm=4:SPO"); ap.add_argument("--r0_arm", default="distacc_spo")
+    ap.add_argument("--r0_filter", default=None, help="default arm=<--workers>:SPO"); ap.add_argument("--r0_arm", default="distacc_spo")
+    ap.add_argument("--workers", type=int, default=4, help="keep the distributed rows of this W (CSVs without a workers column: all)")
     kdd28.add_profile_arg(ap, __file__)
     a = ap.parse_args()
     M, rel = a.metric, f"figures/evaluation/column_replication{a.suffix}"
@@ -86,6 +87,10 @@ def main():
         return df[df[col].astype(str) == val] if col else df
     d = pd.read_csv(a.csv)
     d = d[d.rc == 0]
+    if "workers" in d:
+        d = d[d.workers.astype(int) == a.workers]
+    if a.r0_filter is None:
+        a.r0_filter = f"arm={a.workers}:SPO"
     kdd28.check_frame(d, a.profile, [a.dist_arm], Path(a.csv).name + " (distributed)")
     if a.r0_csv:  # r = 0 cells reused from distacc, as in make_column_replication_table.py
         r0 = filt(pd.read_csv(a.r0_csv).query("rc == 0"), a.r0_filter)
@@ -111,7 +116,7 @@ def main():
     band = np.r_[np.c_[R, lo], np.c_[R[::-1], hi[::-1]]]
     np.savetxt(out / "band.dat", band, fmt="%.4f", header="x y", comments="")
     box, med, dots, n_out = [], [], [], 0
-    hw = 0.03
+    hw = 0.6 * np.diff(R).min() / 2  # box half-width: 60 % of the narrowest r step
     for c, v, bx, dt in [(c, delta[c].values, box, dots) for c in R]:
         q1, q2, q3 = np.percentile(v, [25, 50, 75])
         lw = v[v >= q1 - 1.5 * (q3 - q1)].min()
@@ -122,7 +127,7 @@ def main():
         med += [(c - hw, q2), (c + hw, q2), None]
         keep = np.abs(v) <= CL
         n_out += int((~keep).sum())
-        dt += [(c + j, y) for j, y in zip(rng.uniform(-0.022, 0.022, keep.sum()), v[keep])]
+        dt += [(c + j, y) for j, y in zip(rng.uniform(-hw * 0.022 / 0.03, hw * 0.022 / 0.03, keep.sum()), v[keep])]
     for name, pts in (("boxes", box), ("medians", med)):
         with open(out / f"{name}.dat", "w") as f:
             f.write("x y\n" + "".join("\n" if p is None else f"{p[0]:.4f} {p[1]:.4f}\n" for p in pts))

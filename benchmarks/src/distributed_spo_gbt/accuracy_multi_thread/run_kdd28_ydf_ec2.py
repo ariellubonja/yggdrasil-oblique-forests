@@ -53,11 +53,12 @@ ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps 
                      "ship_s_sum,cross_worker_splits,train_s,wall_s,git,log",
 }
 KEYS = {"distacc": ("dataset", "fold", "arm"), "distacc_aaspo": ("dataset", "fold", "arm"),
-        "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "replication"),
+        "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "workers", "replication"),
         "colrep_w32_large": ("dataset", "fold", "arm", "replication"), "colrep": ("dataset", "seed", "replication"),
         "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm"), "reg": ("dataset", "fold", "arm"),
         "cc18_dist": ("dataset", "fold", "arm"), "reg_dist": ("dataset", "fold", "arm"),
-        "colrep_cc18": ("dataset", "fold", "replication"), "colrep_reg": ("dataset", "fold", "replication"),
+        "colrep_cc18": ("dataset", "fold", "workers", "replication"),
+        "colrep_reg": ("dataset", "fold", "workers", "replication"),
         "cross_network": ("dataset", "seed")}
 
 
@@ -219,13 +220,17 @@ def build_cells(a):
                      os.path.join(a.out, table, "models", tag), os.path.join(a.out, table, "work", tag),
                      {"workers": w, "split_axis": "AXIS_ALIGNED" if x == "AA" else "SPARSE_OBLIQUE"},
                      cost(tr, x == "AA") * (3 if task else 1), label=label, task=task)
-    def colrep_arms(d, k, tr, te, table, label, task):  # colrep_distacc_spo: W = 4, r > 0 (r = 0 = the dist W = 4 cell)
+    def colrep_tag(d, k, w, r):  # W = 4 keeps its pre-2026-11-21 model dir name
+        return f"{d}__f{k}__r{r:.2f}" if w == 4 else f"{d}__f{k}__w{w}__r{r:.2f}"
+
+    def colrep_arms(d, k, tr, te, table, label, task):  # colrep_distacc_spo: each W, r > 0 (r = 0 = the dist cell at W)
         cp = kdd28.load_profile(f"{PR}.colrep_distacc_spo")
-        for r in [r for r in cp["column_replication"] if r > 0]:
-            tag = f"{d}__f{k}__r{r:.2f}"
-            dist(table, (d, k, float(r)), f"{PR}.colrep_distacc_spo", tr, te, cp["workers"][0], a.seed, False, r,
-                 os.path.join(a.out, table, "models", tag), os.path.join(a.out, table, "work", tag),
-                 {"workers": cp["workers"][0]}, cost(tr, False) * (3 if task else 1), label=label, task=task)
+        for w in (list(map(int, a.workers.split(","))) if a.workers else cp["workers"]):
+            for r in [r for r in cp["column_replication"] if r > 0]:
+                tag = colrep_tag(d, k, w, r)
+                dist(table, (d, k, w, float(r)), f"{PR}.colrep_distacc_spo", tr, te, w, a.seed, False, r,
+                     os.path.join(a.out, table, "models", tag), os.path.join(a.out, table, "work", tag),
+                     {}, cost(tr, False) * (3 if task else 1), label=label, task=task)
     if "colrep_cc18" in tables:
         for d in sorted(x for x in os.listdir(a.cc18_10fold) if os.path.isdir(os.path.join(a.cc18_10fold, x))):
             lbl = json.load(open(os.path.join(a.cc18_10fold, d, "meta.json")))["label_col"]
@@ -251,13 +256,13 @@ def build_cells(a):
         r0 = {tuple(x.rsplit(":", 1)) for x in a.colrep_r0.split(",") if x}
         o = os.path.join(a.out, "colrep_distacc")
         for d, k, tr, te in tab_folds():
-            for r in cp["column_replication"]:
-                if r == 0 and (d, str(k)) not in r0:
-                    continue
-                tag = f"{d}__f{k}__r{r:.2f}"
-                dist("colrep_distacc", (d, k, float(r)), f"{PR}.colrep_distacc_spo", tr, te, cp["workers"][0], a.seed, False, r,
-                     os.path.join(o, "models", tag), os.path.join(o, "work", tag),
-                     {"workers": cp["workers"][0]}, cost(tr, False))
+            for w in (list(map(int, a.workers.split(","))) if a.workers else cp["workers"]):
+                for r in cp["column_replication"]:
+                    if r == 0 and (d, str(k)) not in r0:
+                        continue
+                    tag = colrep_tag(d, k, w, r)
+                    dist("colrep_distacc", (d, k, w, float(r)), f"{PR}.colrep_distacc_spo", tr, te, w, a.seed, False, r,
+                         os.path.join(o, "models", tag), os.path.join(o, "work", tag), {}, cost(tr, False))
     if "colrep_w32_large" in tables:  # colrep_distacc setup at W = 32 on large sets with a shipped test set (2026-11-04)
         cp = kdd28.load_profile(f"{PR}.colrep_w32_large_spo")
         o = os.path.join(a.out, "colrep_w32_large")
@@ -339,9 +344,14 @@ def main():
     ap.add_argument("--large_csvs", default="", help="colrep_w32_large: name=train.csv:test.csv:label_col,...")
     ap.add_argument("--eval_suite", default="", help="eval suite for every table (default: eval_suites.json _driver_tables)")
     ap.add_argument("--work_root", default="", help="parent of the per-cell dataset-cache work dirs (default: <out>/<table>)")
+    ap.add_argument("--mem_budget_gb", type=float, default=0, help="RAM budget for concurrent cells (0 = off), see --mem_per_copy_gb")
+    ap.add_argument("--mem_per_copy_gb", type=float, default=0, help="RAM of one worker's full column copy (epsilon: ~12.2)")
+    ap.add_argument("--mem_fixed_gb", type=float, default=0, help="RAM per cell on top (dataset cache in /dev/shm)")
+    ap.add_argument("--done_csvs", default="", help="table=results.csv,...: rc = 0 rows of --seed there count as done "
+                    "(new rows still go to --out)")
     ap.add_argument("--only", default="", help="comma list of dataset substrings")
     ap.add_argument("--exclude", default="", help="comma list of dataset substrings to skip (applied after --only)")
-    ap.add_argument("--workers", default="", help="distacc: comma list of W replacing the profile's workers")
+    ap.add_argument("--workers", default="", help="distacc, dist and colrep tables: comma list of W replacing the profile's workers")
     ap.add_argument("--reg_arms", default="SPO,AA,AA+SPO", help="reg: single-machine arms (SPO, AA, AA+SPO)")
     ap.add_argument("--dist_axes", default="SPO,AA", help="distacc: distributed split axes to run (SPO, AA)")
     ap.add_argument("--profile", default="kdd28_ydf", choices=["kdd28_ydf", "kdd28_hao"], help="kdd28_ydf or kdd28_hao (arms <profile>.distacc_* etc.)")
@@ -403,6 +413,11 @@ def main():
             eval_cols[t] = f.readline().strip().split(",")[-len(evalsuite.COLUMNS):] == evalsuite.COLUMNS
         if not eval_cols[t]:
             evalsuite.warn(f"{path}: no eval-suite columns (recorded before 2026-11-04), new rows unstamped eval")
+    for spec in [x for x in a.done_csvs.split(",") if x]:  # cells already measured elsewhere (same --seed rows only)
+        t, path = spec.split("=", 1)
+        for r in csv.DictReader(open(path)):
+            if r["rc"] == "0" and r.get("seed", str(a.seed)) == str(a.seed):
+                done[(t,) + tuple(r[k] for k in KEYS[t])] = 1
     todo = [c for c in cells if (c.table,) + tuple(str(k) for k in c.key) not in done]
     print(f"{len(cells)} cells, {len(cells) - len(todo)} done, {len(todo)} to run on {a.cpus} CPU slots", flush=True)
     pre = set()
@@ -416,7 +431,7 @@ def main():
                                     off_paper=a.off_paper or None)
     left = {t: sum(1 for c in todo if c.table == t) for t in csvs}
     fails = {t: 0 for t in csvs}
-    cv, state = threading.Condition(), {"free": a.cpus, "stop": False, "running": 0}
+    cv, state = threading.Condition(), {"free": a.cpus, "stop": False, "running": 0, "mem": a.mem_budget_gb or 1e18}
 
     def run(c):
         log = os.path.join(a.out, c.table, "logs", c.tag + ".log")
@@ -453,22 +468,29 @@ def main():
         finally:
             with cv:
                 state["free"] += c.weight
+                state["mem"] += c.mem
                 state["running"] -= 1
                 cv.notify_all()
 
     group = {}  # one dataset's cells stay together, heaviest dataset (any table) first
     for c in todo:
         group[(c.table, c.key[0])] = max(group.get((c.table, c.key[0]), 0), c.cost)
-    pending = sorted(todo, key=lambda c: -group[(c.table, c.key[0])])  # strict FIFO: wide cells never starve
+    for c in todo:  # RAM estimate: held column copies (1 + r (W - 1)) x per-copy GB + fixed (cache, single cells)
+        e = c.expect or {}
+        c.mem = a.mem_fixed_gb + (a.mem_per_copy_gb * (1 + e.get("column_replication", 0) * (e.get("workers", 1) - 1))
+                                  if c.dist else 0) if a.mem_budget_gb else 0
+    # strict FIFO: wide cells never starve. With a RAM budget the biggest cells go first, smaller ones pack around them
+    pending = sorted(todo, key=lambda c: (-group[(c.table, c.key[0])], -c.mem))
     for c in pending:
         c.weight = min(c.weight, a.cpus)
     with cv:
         while pending and not state["stop"]:
-            if pending[0].weight > state["free"]:
+            if pending[0].weight > state["free"] or (pending[0].mem > state["mem"] and state["running"]):
                 cv.wait()
                 continue
             fit = pending.pop(0)
             state["free"] -= fit.weight
+            state["mem"] -= fit.mem
             state["running"] += 1
             threading.Thread(target=run, args=(fit,), daemon=True).start()
         while state["running"]:

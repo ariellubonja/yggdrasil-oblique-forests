@@ -176,6 +176,8 @@ Claude Code is the hub and this repo is the source of truth.
 - **Accuracy runs may shard over several EC2 boxes (user directive, 2026-11-20):** accuracy is identical across AWS
   instance types with the same Linux and compiler (user-tested). After the smoke test, split big queues over several
   "ariel" boxes (same binaries, same thread counts).
+- **Column replication r grid (user directive, 2026-11-21):** every column-replication result uses r = 0, 0.05, …, 0.5
+  (5 % steps), then 0.6, …, 1.0 (10 % steps), at every W. Profile `kdd28_hao.colrep_distacc_spo` (W = 4/8/16/32).
 - **Real distributed numbers come only from Vertex AI CustomJobs (2026-10-25).** The in-process driver
   `examples/train_distributed_gbt` and `run_dgbt*.sh` / `run_barrier_cell.sh` are smoke tests only;
   never report them as distributed.

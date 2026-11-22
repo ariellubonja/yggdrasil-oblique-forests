@@ -16,7 +16,10 @@ Results behind the KDD28 floats below. Rebuild the bodies with the commands. Ind
   $E/derived/hao_cls/single.csv --metric test_auc --suffix _where_spo_outperforms_aa --dist_arm colrep_distacc_spo --r0_arm
   distacc_spo --single_arms distacc_single_spo,cc18_spo --profile kdd28_hao --eval_suite none` and the same on `hao_reg` with
   `--metric test_rmse --relative --clip 5 --suffix _where_spo_outperforms_aa_regression`. Runs: `2026-11-06_hao_seeds`
-  (colrep_distacc, wide_eval), `2026-11-21_where_spo_beats_aa_cc18_reg_distributed` (colrep_cc18, colrep_reg). The rest of
+  (colrep_distacc, wide_eval), `2026-11-21_where_spo_beats_aa_cc18_reg_distributed` (colrep_cc18, colrep_reg),
+  `2026-11-21_colrep_w4_to_w32_r5pct_where_spo_beats_aa_hao` (W = 8/16/32 and r in 0.05 steps to 0.5, since 2026-11-22). Both
+  commands take `--workers W` (default 4). W = 8/16/32 append `_w<W>` to `--suffix`: bodies
+  `fig_column_replication_where_spo_outperforms_aa{,_regression}_w{8,16,32}_body.tex`, no float in main.tex yet. The rest of
   this README is the superseded YDF version (old 11 sets)
 - **What:** no new runs. Row subsets of the SPAA paper eval and the wide dataset eval, 41 datasets. `select_spo_advantage.py`
   keeps the 11 where single-machine SPO-GBT minus single-machine AA-GBT test AUC (fold means) > 0.005
