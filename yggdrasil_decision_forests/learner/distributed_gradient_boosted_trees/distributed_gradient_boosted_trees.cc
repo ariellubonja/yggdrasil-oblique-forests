@@ -2041,6 +2041,7 @@ absl::Status SetColumnReplicas(
     const dataset::proto::DataSpecification& data_spec,
     const std::vector<int>& features,
     distributed_decision_tree::LoadBalancer* load_balancer) {
+  // Code reviewed manually thru debugging by Ariel (written by Claude)
   if (replication < 0 || replication > 1) {
     return absl::InvalidArgumentError(absl::StrCat(
         "in_worker_oblique.column_replication must be in [0,1], got ",
@@ -2050,21 +2051,28 @@ absl::Status SetColumnReplicas(
   std::vector<std::vector<int>> replicas(num_workers);
   std::string log;
   for (int worker_idx = 0; worker_idx < num_workers; worker_idx++) {
-    // Numerical columns owned by the other workers, ascending.
+    // Numerical columns owned by the other workers.
     std::vector<int> candidates;
     int num_owned = 0;
+    // Count columns owned vs. non-owned by this worker (replication candidates)
     for (const int feature : features) {
+      // Skip non-Numeric columns (should never be needed for our ordinal datasets)
       if (data_spec.columns(feature).type() !=
           dataset::proto::ColumnType::NUMERICAL) {
         continue;
       }
       ASSIGN_OR_RETURN(const int owner, load_balancer->FeatureOwner(feature));
+
+      // Gather replication column candidates : cols that don't already belong to this worker
+      // Otherwise, increase num_owned by this worker
       if (owner != worker_idx) {
         candidates.push_back(feature);
       } else {
         num_owned++;
       }
     }
+
+    // n_replicas = rep_factor * num_non_owned_columns 
     const int num_replicas = static_cast<int>(
         std::lround(static_cast<double>(replication) * candidates.size()));
     // Own stream per (seed, worker): the training stream is left untouched.
@@ -2072,14 +2080,30 @@ absl::Status SetColumnReplicas(
                            static_cast<uint32_t>(seed >> 32),
                            static_cast<uint32_t>(worker_idx), 0x7e91u};
     utils::RandomEngine rnd(seed_seq);
+    // Randomly shuffle candidates, to ensure random col selection
     std::shuffle(candidates.begin(), candidates.end(), rnd);
     candidates.resize(num_replicas);
-    std::sort(candidates.begin(), candidates.end());
+
+    // SubstituteAndAppend == printf
     absl::SubstituteAndAppend(&log, "\tworker $0: $1 owned + $2 replicated\n",
                               worker_idx, num_owned, num_replicas);
+    // Ariel: understanding std::move below
+    //  std::vector has metadata (handle) (start, end-of-used, end-of-allocated). This is in stack (scope-lifespan)
+    //  it also has buffer: the actual contiguous ints. This is on heap - doesn't depend on scope. cycled by malloc/free
+    // candidates (stack)            heap
+    // [start | end | cap]  ──────►  [3, 17, 42, 88, ...]
+    // The buffer is owned by the handle: when the handle dies, buffer is destructed
+
+    // std::move only copies the handle to replicas[worker_idx]'s handle, and nulls out candidates
+
+    // This is the C++ equivalent of python's a = [list_of_stuff] and b=a. b is a reference copy to a
+    // can't use auto& sth = candidates (a reference copy) bcs. candidates will only live until scope, then get destructed
+    //    sth will become undefined
     replicas[worker_idx] = std::move(candidates);
   }
-  RETURN_IF_ERROR(load_balancer->SetReplicas(replicas));
+  // here the buffer gets moved.
+  // Ariel: the benefit of going through the code: this is a (tiny) wasted copy
+  RETURN_IF_ERROR(load_balancer->SetReplicas(std::move(replicas)));
   LOG(INFO) << "Column replication " << replication
             << " (numerical columns per worker):\n"
             << log;

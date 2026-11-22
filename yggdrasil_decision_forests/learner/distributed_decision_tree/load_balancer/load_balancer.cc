@@ -509,7 +509,7 @@ const std::vector<int>& LoadBalancer::FeaturesPerWorker(int worker) const {
 }
 
 absl::Status LoadBalancer::SetReplicas(
-    const std::vector<std::vector<int>>& replicas_per_worker) {
+    std::vector<std::vector<int>> replicas_per_worker) {
   if (replicas_per_worker.size() != workers_.size()) {
     return absl::InvalidArgumentError("One replica list per worker expected");
   }
@@ -527,14 +527,20 @@ absl::Status LoadBalancer::SetReplicas(
   num_replicas_ = 0;
 
   for (int worker_idx = 0; worker_idx < workers_.size(); worker_idx++) {
-    auto replicas = replicas_per_worker[worker_idx];
+    auto& replicas = replicas_per_worker[worker_idx];
+#ifndef NDEBUG
+    // Debug builds only: sort so duplicates become neighbours, e.g.
+    // {1, 3, 3, 7}, then adjacent_find finds the first 3.
     std::sort(replicas.begin(), replicas.end());
     if (std::adjacent_find(replicas.begin(), replicas.end()) !=
         replicas.end()) {
       return absl::InvalidArgumentError(
           absl::StrCat("Duplicate replica on worker ", worker_idx));
     }
+#endif
     for (const int feature : replicas) {
+#ifndef NDEBUG
+      // Debug builds only: opt builds trust the caller's feature ids.
       if (feature < 0 || feature >= features_.size() ||
           !features_[feature].active) {
         return absl::InvalidArgumentError(
@@ -544,6 +550,8 @@ absl::Status LoadBalancer::SetReplicas(
         return absl::InvalidArgumentError(absl::StrCat(
             "Worker ", worker_idx, " already owns feature ", feature));
       }
+#endif
+      // Which extra workers hold feature f?
       features_[feature].replicators.push_back(worker_idx);
     }
     num_replicas_ += replicas.size();

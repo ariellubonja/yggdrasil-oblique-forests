@@ -179,13 +179,13 @@ class LoadBalancer {
   // it owns, a worker can hold read-only copies of features owned by others.
   // "replicas_per_worker[w]" lists the extra features of worker w; each must be
   // an active feature not owned by w. Ownership is unchanged. Incompatible with
-  // dynamic balancing.
+  // dynamic balancing. Per-feature validity is checked in debug builds only.
   absl::Status SetReplicas(
-      const std::vector<std::vector<int>>& replicas_per_worker);
+      std::vector<std::vector<int>> replicas_per_worker);
 
   bool HasReplicas() const { return num_replicas_ > 0; }
 
-  // Replicas held by a worker (ascending).
+  // Replicas held by a worker. Ascending in debug builds, caller order in opt.
   const std::vector<int>& ReplicasPerWorker(int worker) const;
 
   // Owned features plus replicas of a worker, ascending.

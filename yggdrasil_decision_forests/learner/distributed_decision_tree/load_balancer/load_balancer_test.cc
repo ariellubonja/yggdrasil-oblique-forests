@@ -66,15 +66,20 @@ TEST(LoadBalancer, Replicas) {
   EXPECT_FALSE(balancer.HasReplicas());
   EXPECT_THAT(balancer.FeatureHolders(0).value(), ElementsAre(1));
 
+#ifndef NDEBUG
   // Invalid: replicating an owned feature, a duplicate, an unknown feature.
+  // These checks are compiled out of opt builds ({{7}, {}} is UB there).
   EXPECT_FALSE(balancer.SetReplicas({{1}, {}}).ok());
   EXPECT_FALSE(balancer.SetReplicas({{0, 0}, {}}).ok());
   EXPECT_FALSE(balancer.SetReplicas({{7}, {}}).ok());
+#endif
+  // Invalid: one list per worker expected (checked in every build).
   EXPECT_FALSE(balancer.SetReplicas({{0}}).ok());
 
   EXPECT_OK(balancer.SetReplicas({{3, 0}, {2}}));
   EXPECT_TRUE(balancer.HasReplicas());
-  EXPECT_THAT(balancer.ReplicasPerWorker(0), ElementsAre(0, 3));
+  // Order is only guaranteed in debug builds.
+  EXPECT_THAT(balancer.ReplicasPerWorker(0), testing::UnorderedElementsAre(0, 3));
   EXPECT_THAT(balancer.ReplicasPerWorker(1), ElementsAre(2));
   EXPECT_THAT(balancer.HeldFeaturesPerWorker(0), ElementsAre(0, 1, 2, 3));
   EXPECT_THAT(balancer.HeldFeaturesPerWorker(1), ElementsAre(0, 2, 3));
