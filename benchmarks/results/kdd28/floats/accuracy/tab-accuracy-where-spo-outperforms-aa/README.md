@@ -7,7 +7,8 @@ Results behind the KDD28 floats below. Rebuild the bodies with the commands. Ind
 - **Status:** current (main body).
 - **Table since 2026-11-21:** Hao settings, rows = kdd28_hao `pass_rec` of `spo_clearly_beats_aa_per_dataset.csv` (26 rows), body from
   `python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_where_spo_beats_aa_hao_table.py`. Distributed CC18 + regression cells:
-  `runs/2026-11-21_where_spo_beats_aa_cc18_reg_distributed/`. The same command writes fig:accuracy-where-spo-outperforms-aa (mean over the 20 classification rows) and
+  `runs/2026-11-21_where_spo_beats_aa_cc18_reg_distributed/`. Table ± (since 2026-11-21): sample std over seeds of the
+  fold-averaged score, none with identical seeds (distributed AA-GBT), as in the Hao-vs-YDF tables. The same command writes fig:accuracy-where-spo-outperforms-aa (mean over the 20 classification rows) and
   fig:accuracy-where-spo-outperforms-aa-regression (mean RMSE / label std, 6 rows). Column-replication figures (Hao, W = 4,
   seeds 1-5, CC18 rows renamed "<name> (CC18)"): `python3 $E/select_where_spo_beats_aa_hao.py` writes `derived/hao_{cls,reg}/`
   (strict per-member eval-suite and profile checks), then

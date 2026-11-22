@@ -16,6 +16,9 @@ Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`,
   dist AA (W = 4) = the kdd28_ydf distacc cells. Profile `kdd28_hao._reuses` lets the generators accept their kdd28_ydf
   stamps, values are still checked. `source` column names each row's origin (`runs/` paths since 2026-11-20)
 - **Seed averaging:** each (dataset, fold, arm) averaged over seeds 1-5 (all 5 required), then mean over folds
+- **± (since 2026-11-21, user decision):** sample std (ddof=1) over seeds of the fold-averaged score (single-holdout
+  sets such as epsilon, homecredit-default: of the holdout score). No ± with 1 seed (wide kdd28_ydf cells) or identical seeds
+  (distributed AA-GBT). Before: std over folds of the seed-averaged score. Means unchanged (checked by diff 2026-11-21)
 - **Eval suite:** `kdd28_tabarena33` (seeds 1-5 since 2026-11-06) for the SPAA block, `kdd28_wide_datasets` for the wide block.
   The generator declares each suite while its block's inputs load (strict: exit 2 on dataset, fold, hash or metric gaps)
 - **Machine:** EC2 c8i.metal-96xl (Xeon 6975P-C), SMT and turbo on, in-process MULTI_THREAD workers, up to ~350 concurrent

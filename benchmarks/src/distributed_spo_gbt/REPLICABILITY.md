@@ -431,6 +431,8 @@ box. This exception to §C covers these accuracy tables only. Timing stays Verte
   counterpart and the Hao-only table and figures were dropped 2026-11-20), results `benchmarks/results/kdd28/runs/2026-11-06_hao_seeds/`.
   Since 2026-11-20 both comparison tables carry a wide dataset eval block (`runs/2026-11-06_hao_seeds/wide_eval/`), compared
   with kdd28_ydf seed 1 (`runs/2026-11-04_wide_eval/`) because kdd28_ydf seeds 2-5 never ran on the wide sets.
+  Since 2026-11-21 the ± of these tables and of tab:accuracy-where-spo-outperforms-aa is the sample std over seeds of the
+  fold-averaged score (before: std over folds of the seed-averaged score). Means unchanged. Other KDD28 accuracy tables keep fold std.
 - Distributed CC18 + regression cells of tab:accuracy-where-spo-outperforms-aa (2026-11-21): `run_kdd28_ydf_ec2.py --tables
   cc18_dist|reg_dist --dist_axes SPO|AA --profile kdd28_hao|kdd28_ydf --seed s --only <table rows>`, launcher
   `ariel_notes/results/2026-11-21_where_spo_beats_aa_cc18_reg_distributed/run.sh`, 3 EC2 boxes, 7,000 cells. Regression needs

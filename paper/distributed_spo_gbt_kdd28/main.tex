@@ -447,9 +447,8 @@ absl::Status SetColumnReplicas(
     distributed_decision_tree::LoadBalancer* load_balancer) {  
   const int num_workers = load_balancer->NumWorkers();
   std::vector<std::vector<int>> replicas(num_workers);
-  std::string log;
+  // Count columns owned vs. non-owned by this worker (replication candidates)
   for (int worker_idx = 0; worker_idx < num_workers; worker_idx++) {
-    // Numerical columns owned by the other workers, ascending.
     std::vector<int> candidates;
     int num_owned = 0;
     for (const int feature : features) {
@@ -471,11 +470,29 @@ absl::Status SetColumnReplicas(
     utils::RandomEngine rnd(seed_seq);
     std::shuffle(candidates.begin(), candidates.end(), rnd);
     candidates.resize(num_replicas);
-    std::sort(candidates.begin(), candidates.end());
+    // printf
     absl::SubstituteAndAppend(&log, "\tworker $0: $1 owned + $2 replicated\n",
                               worker_idx, num_owned, num_replicas);
     replicas[worker_idx] = std::move(candidates);
   }
+  load_balancer->SetReplicas(std::move(replicas))
+}
+
+absl::Status LoadBalancer::SetReplicas(
+    std::vector<std::vector<int>> replicas_per_worker) {
+  num_replicas_ = 0;
+
+  for (int worker_idx = 0; worker_idx < workers_.size(); worker_idx++) {
+    auto& replicas = replicas_per_worker[worker_idx];
+    for (const int feature : replicas) {
+      features_[feature].replicators.push_back(worker_idx);
+    }
+    num_replicas_ += replicas.size();
+    workers_[worker_idx].replicas = std::move(replicas);
+  }
+  // Replicators were appended in ascending worker order.
+  return absl::OkStatus();
+}
 \end{lstlisting}
 
 \twocolumn[{\floatblock
@@ -489,7 +506,7 @@ absl::Status SetColumnReplicas(
 \caption{Test AUC or RMSE of single-machine vs. $W$-distributed GBT at replication factor $r=0$ on the datasets where single-machine SPO-GBT clearly beats AA-GBT. See Section~\ref{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params} for how these datasets were selected.}
 \label{tab:accuracy-where-spo-outperforms-aa}
 \IfFileExists{tables/table_dist_accuracy_where_spo_outperforms_aa_body.tex}{\input{tables/table_dist_accuracy_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}
-\par\smallskip\raggedright\footnotesize The datasets where single-machine SPO-GBT clearly beats AA-GBT \textbf{under Hao's settings}. SPO: $P{=}\min(F,1000)$, density 1.5, early stopping off, 300 trees. split across workers, mean over seeds 1--5. AA: YDF defaults. Regression: test RMSE, mean row = mean RMSE / label std.  5 CV folds were used in all datasets except CC18 (10) and Epsilon (1 fold) and homecredit-default (chronological holdout). The reason for CC18 and Epsilon is they come pre-split into train-val.
+\par\smallskip\raggedright\footnotesize The datasets where single-machine SPO-GBT clearly beats AA-GBT \textbf{under Hao's settings}. SPO: $P{=}\min(F,1000)$, density 1.5, early stopping off, 300 trees. split across workers, mean over seeds 1--5. AA: YDF defaults. Regression: test RMSE, mean row = mean RMSE / label std.  5 CV folds were used in all datasets except CC18 (10) and Epsilon (1 fold) and homecredit-default (chronological holdout). The reason for CC18 and Epsilon is they come pre-split into train-val. $\pm$ is the standard deviation over 5 seeds of the score averaged over CV folds (single-holdout datasets: of the holdout score). Cells without $\pm$ have one seed or the same score in every seed.
 \end{minipage}
 \par\vskip0.5em
 \noindent\hfill\begin{minipage}[t]{0.24\textwidth}\vspace{0pt}
@@ -980,7 +997,7 @@ Single-machine results are used to test whether SPO vs. AA is more accurate, due
 \input{tables/table_accuracy_hao_vs_ydf_params_single_machine_body}
 \par\smallskip\raggedright\footnotesize 
 Datasets are split into 5 folds and trained using Cross-Validation. The mean of this 5 is reported. In 5-seeds case, this is also averaged across seed. In TabReD, all datasets are chronological, so CV wasn't used. 
-YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Hao's parameters do not affect AA-GBT, so it has only the YDF-parameter column. Hao cells colored by $\Delta$ AUC to YDF (blue higher, red lower). Mean time: training time of the accuracy runs \textbf{on shared machines} (use only as ballpark!). Otherwise YDF defaults, early stopping off, 300 trees, depth 6.
+YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Hao's parameters do not affect AA-GBT, so it has only the YDF-parameter column. Hao cells colored by $\Delta$ AUC to YDF (blue higher, red lower). Mean time: training time of the accuracy runs \textbf{on shared machines} (use only as ballpark!). Otherwise YDF defaults, early stopping off, 300 trees, depth 6. $\pm$ is the standard deviation over 5 seeds of the score averaged over CV folds (single-holdout datasets: of the holdout score). Cells without $\pm$ have one seed or the same score in every seed.
 \end{minipage}
 }]
 
@@ -1019,7 +1036,7 @@ YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter
 \caption{Comparing YDF's and Hao's settings on test AUC of Distributed GBT.}
 \label{tab:accuracy-hao-vs-ydf-params-distributed}
 \input{tables/table_accuracy_hao_vs_ydf_params_distributed_body}
-\par\smallskip\raggedright\footnotesize YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Projections split across workers. Hao's parameters do not affect AA-GBT, so it has only the YDF-parameter column. Hao cells colored by $\Delta$ AUC to YDF at the same $W$ (blue higher, red lower). Mean time: training time of the in-process accuracy runs (workers are threads of one process), not distributed timings. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
+\par\smallskip\raggedright\footnotesize YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter runs on ${\ge}100$ column datasets: seed 1 only). Hao: $P{=}\min(F,1000)$, density 1.5, mean over seeds 1--5. Projections split across workers. Hao's parameters do not affect AA-GBT, so it has only the YDF-parameter column. Hao cells colored by $\Delta$ AUC to YDF at the same $W$ (blue higher, red lower). Mean time: training time of the in-process accuracy runs (workers are threads of one process), not distributed timings. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}. $\pm$ is the standard deviation over 5 seeds of the score averaged over CV folds (single-holdout datasets: of the holdout score). Cells without $\pm$ have one seed or the same score in every seed.
 \end{minipage}
 }]
 

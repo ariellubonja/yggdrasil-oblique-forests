@@ -2,7 +2,8 @@
 """tab:accuracy-where-spo-outperforms-aa body (tabular only), Hao settings (user request 2026-11-21).
 Rows = kdd28_hao rows passing the recommended "SPO clearly beats AA" rule (select_spo_clearly_beats_aa.py), per suite.
 SPO columns = kdd28_hao seeds 1-5. AA columns = kdd28_ydf (Hao's settings do not touch AA). Empty cell = not run yet.
-Run from the repo root."""
+Cell = mean over seeds of the fold-averaged score, +- = sample std over seeds of that score (hv.stats, since 2026-11-21).
+The mean figures show means only. Run from the repo root."""
 import argparse, pathlib, sys
 import pandas as pd
 
@@ -124,8 +125,8 @@ def main():
         return pd.concat([single, x])
     if "spaa" in pick or "wide" in pick:
         kdd28._declare_eval(suites["spaa"], __file__)
-        y = hv.per_fold(hv.load_all(hv.INPUTS, "ydf"), list(S))
-        h = hv.per_fold(pd.concat([hv.load(hv.INPUTS, "hao"), hv.load(hv.INPUTS, "hao_aaspo")]), list(S))
+        y = hv.per_seed(hv.load_all(hv.INPUTS, "ydf"), list(S))
+        h = hv.per_seed(pd.concat([hv.load(hv.INPUTS, "hao"), hv.load(hv.INPUTS, "hao_aaspo")]), list(S))
         kdd28._declare_eval(suites["wide"], __file__)
         kdd28._EVAL["subset"] = set(pick.get("wide", []))  # seeds 2-5 cover only this table's wide rows
         wa = pd.concat([pd.read_csv(v[1]) for v in WIDE_AA.values()])  # one check over all files: each covers one dataset
@@ -133,15 +134,15 @@ def main():
         kdd28.check_frame(wa, hv.YDF, ["distacc_single_aa", "distacc_aa"], "wide AA seeds 2-5")
         kdd28._EVAL["subset"] = None
         wy = hv.load_all(hv.WIDE_INPUTS, "ydf")
-        wy = hv.per_fold(pd.concat([wy[wy.arm.str.endswith(":AA") & wy.dataset.isin(pick.get("wide", []))], wa]), list(S))
-        wh = hv.per_fold(pd.concat([hv.load(hv.WIDE_INPUTS, "hao"), hv.load(hv.WIDE_INPUTS, "hao_aaspo")]), list(S))
+        wy = hv.per_seed(pd.concat([wy[wy.arm.str.endswith(":AA") & wy.dataset.isin(pick.get("wide", []))], wa]), list(S))
+        wh = hv.per_seed(pd.concat([hv.load(hv.WIDE_INPUTS, "hao"), hv.load(hv.WIDE_INPUTS, "hao_aaspo")]), list(S))
     if "cc18" in pick:
         kdd28._declare_eval(suites["cc18"], __file__)
-        cy, ch = (hv.per_fold(dist_frame("cc18_dist", s, hv.load_all(hv.CC18_INPUTS, s, hv.CC18_ARM)), list(S))
+        cy, ch = (hv.per_seed(dist_frame("cc18_dist", s, hv.load_all(hv.CC18_INPUTS, s, hv.CC18_ARM)), list(S))
                   for s in ("ydf", "hao"))
     if "regression" in pick:
         kdd28._declare_eval(suites["regression"], __file__)
-        ry, rh = (hv.per_fold(dist_frame("reg_dist", s, hv.load_all(hv.REG_INPUTS, s)), list(S), "test_rmse")
+        ry, rh = (hv.per_seed(dist_frame("reg_dist", s, hv.load_all(hv.REG_INPUTS, s)), list(S), "test_rmse")
                   for s in ("ydf", "hao"))
     fold_n = lambda s: {d: len(f) for d, f in hv.evalsuite.load_suite(suites[s])["datasets"].items()}  # noqa: E731
 
@@ -193,7 +194,7 @@ def main():
     setup = kdd28.setup_line(hv.HAO, ["distacc_single_spo", "distacc_single_aa_spo", "distacc_spo"]) + "\n" + \
         kdd28.setup_line(hv.YDF, ["distacc_single_aa", "distacc_aa"])
     out = pathlib.Path(a.out) / "table_dist_accuracy_where_spo_outperforms_aa_body.tex"
-    out.write_text(kdd28.add_setup(GEN + src + "\n".join(head + rows + [r"\bottomrule", r"\end{tabular}}"]) + "\n", setup))
+    out.write_text(kdd28.add_setup(GEN + hv.PM + src + "\n".join(head + rows + [r"\bottomrule", r"\end{tabular}}"]) + "\n", setup))
     print(f"wrote {out}: " + ", ".join(f"{s} {len(v)}" for s, v in pick.items()))
     fig = pathlib.Path(a.out).parent / "figures" / "evaluation"
     for name, parts, rmse, yl in (("accuracy", cls_parts, False, "Mean test ROC AUC"),
