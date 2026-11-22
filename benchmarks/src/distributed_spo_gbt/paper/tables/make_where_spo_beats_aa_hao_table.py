@@ -77,6 +77,7 @@ def block_rows(stats, folds, by_source, mean_name, scale):
                    "Mean time (s) & " + " & ".join(sec(stats[i].loc[alld, "time"].mean()) if full[i] else "" for i in range(ncol)) + r" \\"]
 
 
+MEANS = "benchmarks/results/kdd28/floats/accuracy/tab-accuracy-where-spo-outperforms-aa/derived/single_machine_means.csv"
 FIG_GEN = GEN.replace("regenerate", "figure body; regenerate")
 
 
@@ -116,6 +117,7 @@ def main():
     ap.add_argument("--out", default=str(hv.OUT))
     ap.add_argument("--beats_aa", default=hv.FLOAT + "/derived/spo_clearly_beats_aa_per_dataset.csv")
     ap.add_argument("--profile_rows", default=hv.HAO, help="profile whose pass_rec rows make the table")
+    ap.add_argument("--means_csv", default=MEANS, help="per-dataset single-machine SPO/AA means (read by the colrep figure)")
     ap.add_argument("--arraystretch", type=float, default=0.8, help="row height factor (local to the float's minipage)")
     a = ap.parse_args()
     sel = pd.read_csv(hv.ROOT / a.beats_aa)
@@ -204,6 +206,13 @@ def main():
     out = pathlib.Path(a.out) / "table_dist_accuracy_where_spo_outperforms_aa_body.tex"
     out.write_text(kdd28.add_setup(GEN + hv.PM + src + "\n".join(head + rows + [r"\bottomrule", r"\end{tabular}}"]) + "\n", setup))
     print(f"wrote {out}: " + ", ".join(f"{s} {len(v)}" for s, v in pick.items()))
+    lab = {c[2]: i for i, c in enumerate(COLS)}  # same cells as the table's single-machine columns
+    cc18 = [p[0] for p in cls_parts[-1:]] if "cc18" in pick else []  # renamed as in select_where_spo_beats_aa_hao.py
+    pd.DataFrame([{"dataset": d + (" (CC18)" if any(st is s for s in cc18) else ""), "task": task, "single_spo": st[lab["single:SPO"]].loc[d, "mean"],
+                   "single_aa": st[lab["single:AA"]].loc[d, "mean"]}
+                  for task, parts in (("cls", cls_parts), ("reg", reg_parts)) for st, ds, _ in parts for d in ds]
+                 ).to_csv(hv.ROOT / a.means_csv, index=False, float_format="%.10g")
+    print(f"wrote {a.means_csv}")
     fig = pathlib.Path(a.out).parent / "figures" / "evaluation"
     for name, parts, rmse, yl in (("accuracy", cls_parts, False, "Mean test ROC AUC"),
                                   ("rmse", reg_parts, True, "Mean test RMSE / label std")):

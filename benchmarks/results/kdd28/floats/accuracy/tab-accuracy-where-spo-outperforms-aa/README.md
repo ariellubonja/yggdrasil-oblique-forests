@@ -18,8 +18,10 @@ Results behind the KDD28 floats below. Rebuild the bodies with the commands. Ind
   `--metric test_rmse --relative --clip 5 --suffix _where_spo_outperforms_aa_regression`. Runs: `2026-11-06_hao_seeds`
   (colrep_distacc, wide_eval), `2026-11-21_where_spo_beats_aa_cc18_reg_distributed` (colrep_cc18, colrep_reg),
   `2026-11-21_colrep_w4_to_w32_r5pct_where_spo_beats_aa_hao` (W = 8/16/32 and r in 0.05 steps to 0.5, since 2026-11-22). Both
-  commands take `--workers W` (default 4). W = 8/16/32 append `_w<W>` to `--suffix`: bodies
-  `fig_column_replication_where_spo_outperforms_aa{,_regression}_w{8,16,32}_body.tex`, no float in main.tex yet. The rest of
+  commands take `--workers W` (default 4) and a shared mean-panel range (since 2026-11-22): `--top_ylim=-2,0.25`
+  (classification), `--top_ylim=-1,4` (regression), the same for every W. Red dotted single-machine AA-GBT line (since 2026-11-22): `--aa_means $E/derived/single_machine_means.csv`, written by the
+  table generator (its single-machine SPO/AA cells, checked against `--single_csv`). W = 8/16/32 append `_w<W>` to `--suffix`: bodies
+  `fig_column_replication_where_spo_outperforms_aa{,_regression}_w{8,16,32}_body.tex`, in one row with W = 4 (Overleaf 3a9bc66). The rest of
   this README is the superseded YDF version (old 11 sets)
 - **What:** no new runs. Row subsets of the SPAA paper eval and the wide dataset eval, 41 datasets. `select_spo_advantage.py`
   keeps the 11 where single-machine SPO-GBT minus single-machine AA-GBT test AUC (fold means) > 0.005
