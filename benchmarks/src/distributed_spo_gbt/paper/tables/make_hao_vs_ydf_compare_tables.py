@@ -45,6 +45,11 @@ CC18_INPUTS = {  # 2026-11-20: kdd28_cc18_10fold, both profiles seeds 1-5 (Hao: 
     **{f"hao_s{s}": (HAO, R / f"2026-11-20_cc18_seeds/{HAO}/seed{s}/cc18/results.csv", ["cc18_spo", "cc18_aa_spo"])
        for s in SEEDS},
 }
+# 2026-11-23: wide AutoML Benchmark sets the wide real-dataset screen selected, Hao SPO vs AA only (user: no YDF SPO, no AA+SPO)
+SC = R / "2026-11-22_wide_real_dataset_candidates_spo_vs_aa_screen_hao"
+AUTOML_INPUTS = {**{f"hao_s{s}": (HAO, SC / f"{HAO}/seed{s}/distacc_stamped/results.csv", ["distacc_single_spo", "distacc_spo"]) for s in SEEDS},
+                 **{f"ydf_s{s}": (YDF, SC / f"{YDF}/seed{s}/distacc_stamped/results.csv", ["distacc_single_aa"]) for s in SEEDS}}
+AUTOML_SEL, AUTOML_SHAPES = SC / "derived/candidates_per_dataset.csv", SC / "derived/what_changed.csv"
 X = R / "2026-11-20_regression_multiclass_tabarena_tabred"
 MC_INPUTS = {  # TabArena multiclass, majority-vs-rest (kdd28_tabarena_multiclass)
     **{f"ydf_s{s}": (YDF, X / f"{YDF}/seed{s}/distacc/results.csv", SINGLE_ARMS[:2]) for s in SEEDS},
@@ -196,11 +201,13 @@ def body(hdr, groups, blocks, joint, setup, stretch=1.0, checks=None):
                     for prof in (YDF, HAO):
                         if (prof, suite, ds) not in checks:
                             sys.exit(f"ERROR: {prof} {suite} {ds}: no row in the SPO-beats-AA selection")
-                        out.append(r"\checkmark" if checks[prof, suite, ds] else "")
+                        v = checks[prof, suite, ds]  # None: that profile's SPO was not run on this set
+                        out.append("--" if v is None else r"\checkmark" if v else "")
                 rows.append(mpt.ds_label(ds) + " & " + " & ".join(out) + r" \\")
         alld = [d for _, ds in by_source for d in ds]  # mean over datasets of the per-dataset mean train_s
         rows += [r"\midrule", mean_row(mean_name, cols, alld, scale, nchk),
-                 "Mean time (s) & " + " & ".join(sec(s.loc[alld, "time"].mean()) for s, _ in cols) + " &" * nchk + r" \\"]
+                 "Mean time (s) & " + " & ".join("--" if s is None else sec(s.loc[alld, "time"].mean()) for s, _ in cols)
+                 + " &" * nchk + r" \\"]
     tail = [r"\bottomrule", r"\end{tabular}}"]
     allds = [d for b in blocks for _, ds in b[2] for d in ds]
     if len(set(allds)) != len(allds):
@@ -230,6 +237,32 @@ def set_shapes(shapes_csv, cats_csv, only=None):
             mpt.CATS[d] = (int(r.categorical), int(r.features))
 
 
+def load_automl(suite):
+    """(selection, datasets, YDF frame, Hao frame, folds) of the AutoML sets: the screen's selected_a classification rows,
+    checked against `suite` as a row subset, every (dataset, fold, arm) with seeds 1-5."""
+    sel = pd.read_csv(AUTOML_SEL)
+    ads = sorted(sel[sel.selected_a & (sel.metric == "auc_edge")].dataset, key=str.lower)
+    kdd28._declare_eval(suite, __file__)
+    kdd28._EVAL["subset"] = set(ads)
+    def side(s):
+        xs = []
+        for k, (prof, path, arms) in AUTOML_INPUTS.items():
+            if k.startswith(s):
+                x = pd.read_csv(path)
+                x = x[(x.rc == 0) & x.dataset.isin(ads)]
+                kdd28.check_frame(x, prof, arms, path.name)
+                xs.append(x)
+        return per_seed(pd.concat(xs), list(SEEDS))
+    ay, ah = side("ydf"), side("hao")
+    kdd28._EVAL["subset"] = None
+    return sel, ads, ay, ah, {d: len(f) for d, f in evalsuite.load_suite(suite)["datasets"].items() if d in ads}
+
+
+def automl_shapes(ads):
+    for d, r in pd.read_csv(AUTOML_SHAPES).set_index("dataset").loc[ads].iterrows():
+        mpt.SHAPES[d], mpt.CATS[d] = (int(r.rows), int(r.features)), (int(r.categorical_encoded), int(r.features))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default=str(OUT))
@@ -239,6 +272,8 @@ def main():
     ap.add_argument("--cc18_eval_suite", default="kdd28_cc18_10fold", type=suite_arg)
     ap.add_argument("--mc_eval_suite", default="kdd28_tabarena_multiclass", type=suite_arg)
     ap.add_argument("--reg_eval_suite", default="kdd28_regression", type=suite_arg)
+    ap.add_argument("--automl_eval_suite", default="kdd28_wide_real_candidates", type=suite_arg,
+                    help="suite of the CC18 body's AutoML block (row subset: the screen's selected sets)")
     ap.add_argument("--wide_ydf_seeds", default="1", help="comma list: kdd28_ydf seeds every wide cell must have")
     ap.add_argument("--dataset_shapes", default=mpt.SHAPES_CSV)
     ap.add_argument("--wide_dataset_shapes", default=WIDE_SHAPES, help="dataset,rows,features of the wide block")
@@ -310,11 +345,27 @@ def main():
         body(hdr, groups(single_arms), main_blocks(single_arms), None, setup, a.single_arraystretch, chk))  # no all-41 mean (user 2026-11-21)
     mpt.SHAPES.clear(), mpt.CATS.clear()  # CC18 shares names with SPAA sets (other files, other shapes)
     set_shapes(f"{a.derived}/cc18_shapes.csv", f"{a.derived}/cc18_categoricals.csv")
+    # AutoML block (2026-11-23): Hao SPO and AA only, the screen's selected classification sets, eval-suite subset
+    sel, ads, ay, ah, afolds = load_automl(a.automl_eval_suite)
+    if set(ads) & set(cds):
+        sys.exit(f"ERROR: AutoML block shares datasets with CC18: {sorted(set(ads) & set(cds))}")
+    acols = [(None, None), (stats(ah, "single:SPO"), None), (None, None), (None, None), (stats(ay, "single:AA"), None)]
+    automl_shapes(ads)
+    if chk is not None:
+        chk.update({(p, "automl", d): (bool(s) if p == HAO else None) for d, s in zip(sel.dataset, sel.selected_a) if d in ads
+                    for p in (YDF, HAO)})
     (out / "table_accuracy_hao_vs_ydf_params_single_machine_cc18_body.tex").write_text(body(
-        f"% source: YDF = kdd28_ydf, Hao = kdd28_hao, mean over seeds 1-5, eval suite {a.cc18_eval_suite}, {rel(CC18_INPUTS)}\n",
+        f"% source: YDF = kdd28_ydf, Hao = kdd28_hao, mean over seeds 1-5, eval suite {a.cc18_eval_suite}, {rel(CC18_INPUTS)}\n"
+        f"% source (AutoML block): Hao SPO + YDF AA, seeds 1-5, eval suite {a.automl_eval_suite} (subset {', '.join(ads)}), "
+        f"{rel(AUTOML_INPUTS)}\n",
         groups(single_arms), [(cols(single_arms, cy, ch), fold_n(cspec), [("OpenML CC18 (binary, 10 CV folds)", cds)],
-                               f"Mean ({len(cds)} CC18 datasets)", None, "cc18")], None,
-        f"% eval suite {a.cc18_eval_suite}, profiles {YDF}.cc18_*, {HAO}.cc18_*, seeds 1-5", a.single_arraystretch, chk))
+                               f"Mean ({len(cds)} CC18 datasets)", None, "cc18"),
+                              (acols, afolds, [(r"OpenML AutoML Benchmark ${\ge}100$ columns (5 CV folds), "
+                                                r"\textbf{Hao SPO-GBT and AA-GBT only}", ads)],
+                               f"Mean ({len(ads)} AutoML datasets)", None, "automl")], None,
+        f"% eval suite {a.cc18_eval_suite}, profiles {YDF}.cc18_*, {HAO}.cc18_*, seeds 1-5\n"
+        f"% AutoML block: eval suite {a.automl_eval_suite}, {HAO}.distacc_single_spo + {YDF}.distacc_single_aa, seeds 1-5",
+        a.single_arraystretch, chk))
     mpt.SHAPES.clear(), mpt.CATS.clear()
     set_shapes(f"{a.derived}/extra_shapes.csv", f"{a.derived}/extra_categoricals.csv")
     (out / "table_accuracy_hao_vs_ydf_params_single_machine_mc_reg_body.tex").write_text(body(

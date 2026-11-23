@@ -1,0 +1,52 @@
+Rule F (floor AND BH q=0.05 on the one-sided paired t AND effect > 0 in every seed). SPO = kdd28_hao.distacc_single_spo, AA = kdd28_ydf.distacc_single_aa.
+(a) BH over the 14 new rows with a p-value: largest accepted p 0.031727733282219346. (b) pooled with 101 existing kdd28_hao rows (115 p-values): largest accepted p 0.0221637.
+BH reimplementation reproduces the stored kdd28_hao bh column on all 101 existing rows.
+Existing kdd28_hao rows whose rule-F verdict flips under pooling: QSAR-TID-11[regression] False->True.
+
+dataset          metric       k s       AA      SPO   effect    seed1      SE       p pos  (a)  (b)
+ct_slices        rel_rmse_red 5 5   2.5996   2.0384  +0.2157  +0.2217  0.0055  0.0000 5/5  YES  YES  EXCLUDED from the selection, see below
+madeline         auc_edge     5 5   0.9033   0.9223  +0.0190  +0.0216  0.0032  0.0020 5/5  YES  YES
+fabert           auc_edge     5 5   0.9438   0.9583  +0.0145  +0.0150  0.0010  0.0001 5/5  YES  YES
+robert           auc_edge     5 5   0.8224   0.8362  +0.0138  +0.0128  0.0011  0.0001 5/5  YES  YES
+jasmine          auc_edge     5 5   0.8649   0.8762  +0.0114  +0.0110  0.0029  0.0083 5/5  YES  YES
+volkert          auc_edge     5 5   0.9908   0.9919  +0.0010  +0.0011  0.0001  0.0002 5/5   -    - 
+Fashion-MNIST    auc_edge     1 5   0.9886   0.9896  +0.0010  +0.0006  0.0001  0.0011 5/5   -    - 
+semeion          auc_edge     5 5   0.9966   0.9975  +0.0009  +0.0011  0.0006  0.0949 5/5   -    - 
+gina_agnostic    auc_edge     5 5   0.9895   0.9902  +0.0006  +0.0008  0.0002  0.0317 5/5   -    - 
+musk             auc_edge     5 5   0.9994   0.9998  +0.0004  +0.0003  0.0002  0.0667 5/5   -    - 
+dilbert          auc_edge     5 5   0.9996   0.9999  +0.0003  +0.0003  0.0001  0.0043 5/5   -    - 
+mfeat-factors    auc_edge     5 5   0.9995   0.9997  +0.0003  +0.0004  0.0002  0.0956 5/5   -    - 
+isolet           auc_edge     1 5   0.9997   0.9999  +0.0002  +0.0003  0.0001  0.0257 4/5   -    - 
+sylva_agnostic   auc_edge     5 5   0.9991   0.9991  +0.0000  +0.0001  0.0001  0.2589 4/5   -    - 
+har              auc_edge     1 1   1.0000   1.0000  +0.0000  +0.0000       -       - 0/1   -    - 
+gisette          auc_edge     1 1   0.9970   0.9967  -0.0002  -0.0002       -       - 0/1   -    - 
+blogfeedback     rel_rmse_red 1 1  23.5949  23.6008  -0.0003  -0.0003       -       - 0/1   -    - 
+
+Selected (rule F and not excluded): (a) fabert, jasmine, madeline, robert. (b) fabert, jasmine, madeline, robert.
+
+EXCLUDED ct_slices: grouped by patient (97 patients), plain KFold puts slices of one patient in train and test.
+  Off-paper GroupKFold(5) by patient, seeds [1] (seeds [2, 3, 4, 5] not run): AA RMSE 6.3577, SPO 6.1223, effect +0.0372 (floor 0.01), folds won 4/5, t 2.104, one-sided p 0.0516: p > q = 0.05, so BH rejects it at any family size.
+
+Distributed SPO at r = 0 minus single SPO (AUC points, or % RMSE: + = worse), kdd28_hao, mean over seeds x folds.
+Colrep grid estimate: r in 0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.6,0.7,0.8,0.9,1.0, 5 seeds, cells x measured r=0 train_s (shared box). CPU-h = cells x s x 2W threads.
+dataset            W cells       gap   seedSD  train_s grid_cells grid_cpu_h
+fabert             4    25   -0.0012   0.0008     17.7        375       14.8
+jasmine            4    25   +0.0011   0.0022      4.4        375        3.7
+madeline           4    25   -0.0039   0.0020      4.9        375        4.1
+robert             4    25   -0.0006   0.0016     40.3        375       33.6
+fabert             8    25   -0.0009   0.0004     12.7        375       21.2
+jasmine            8    25   -0.0029   0.0016      5.7        375        9.4
+madeline           8    25   -0.0137   0.0033      4.8        375        8.0
+robert             8    25   -0.0006   0.0046     30.6        375       51.0
+fabert            16    25   -0.0017   0.0008      9.9        375       32.8
+jasmine           16    25   -0.0022   0.0010      6.6        375       22.0
+madeline          16    25   -0.0165   0.0025      5.1        375       16.9
+robert            16    25   -0.0018   0.0019     25.2        375       83.9
+fabert            32    25   -0.0029   0.0011      9.3        375       61.7
+jasmine           32    25   -0.0046   0.0020      8.1        375       54.1
+madeline          32    25   -0.0281   0.0014      6.4        375       42.9
+robert            32    25   +0.0004   0.0040     25.6        375      170.8
+ct_slices          4    25   -0.4228   1.5636     49.0        375       40.8
+ct_slices          8    25   +1.3084   1.1545     30.2        375       50.3
+ct_slices         16    25   +2.2607   0.8222     21.0        375       70.1
+ct_slices         32    25   +4.8922   1.5633     17.7        375      118.1

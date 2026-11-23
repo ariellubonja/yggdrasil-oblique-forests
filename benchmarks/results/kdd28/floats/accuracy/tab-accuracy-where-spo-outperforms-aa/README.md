@@ -19,8 +19,13 @@ Results behind the KDD28 floats below. Rebuild the bodies with the commands. Ind
   (colrep_distacc, wide_eval), `2026-11-21_where_spo_beats_aa_cc18_reg_distributed` (colrep_cc18, colrep_reg),
   `2026-11-21_colrep_w4_to_w32_r5pct_where_spo_beats_aa_hao` (W = 8/16/32 and r in 0.05 steps to 0.5, since 2026-11-22). Both
   commands take `--workers W` (default 4) and a shared mean-panel range (since 2026-11-22): `--top_ylim=-2,0.25`
-  (classification), `--top_ylim=-1,4` (regression), the same for every W. Red dotted single-machine AA-GBT line (since 2026-11-22): `--aa_means $E/derived/single_machine_means.csv`, written by the
-  table generator (its single-machine SPO/AA cells, checked against `--single_csv`). W = 8/16/32 append `_w<W>` to `--suffix`: bodies
+  (classification), `--top_ylim=-1,4` (regression), the same for every W. Red dotted single-machine AA-GBT line (since 2026-11-22): `--aa_means $E/derived/hao_{cls,reg}/single_means.csv` (since
+  2026-11-23, before: `derived/single_machine_means.csv`), written by the select script = the table generator's
+  `single_machine_means.csv` rows plus the extra sets' means (checked against `--single_csv`). **Since 2026-11-23 the
+  classification figures also hold madeline, jasmine, fabert, robert (24 sets)**, the wide real-dataset screen's selected
+  sets (`selected_a` of `runs/2026-11-22_wide_real_dataset_candidates_spo_vs_aa_screen_hao/derived/candidates_per_dataset.csv`):
+  single SPO/AA and r = 0 from that run, the grid from `runs/2026-11-22_colrep_w4_to_w32_r5pct_madeline_jasmine_fabert_robert_hao/`,
+  eval suite `kdd28_wide_real_candidates` (subset). They are not rows of the table. Regression bodies unchanged. W = 8/16/32 append `_w<W>` to `--suffix`: bodies
   `fig_column_replication_where_spo_outperforms_aa{,_regression}_w{8,16,32}_body.tex`, in one row with W = 4 (Overleaf 3a9bc66). The rest of
   this README is the superseded YDF version (old 11 sets)
 - **What:** no new runs. Row subsets of the SPAA paper eval and the wide dataset eval, 41 datasets. `select_spo_advantage.py`

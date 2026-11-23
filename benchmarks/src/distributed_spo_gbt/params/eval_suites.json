@@ -321,6 +321,47 @@
    "label_rule": "float label as in the source, never transformed",
    "positive_class": "n/a (regression)",
    "headline": "test_rmse"
+  },
+  "kdd28_wide_real_candidates": {
+   "_note": "Wide real-dataset candidates (user request 2026-11-22): real public sets with F >= 100 screened for single SPO-GBT clearly beating AA-GBT. Classification rows (binary, multiclass as majority-vs-rest): test_auc. Regression rows (ct_slices, blogfeedback): harness --task regression, test_rmse. Screening study, read by no float.",
+   "floats": [],
+   "datasets": {"jasmine": [0, 1, 2, 3, 4], "madeline": [0, 1, 2, 3, 4], "gina_agnostic": [0, 1, 2, 3, 4], "sylva_agnostic": [0, 1, 2, 3, 4], "dilbert": [0, 1, 2, 3, 4], "fabert": [0, 1, 2, 3, 4], "volkert": [0, 1, 2, 3, 4], "robert": [0, 1, 2, 3, 4], "musk": [0, 1, 2, 3, 4], "semeion": [0, 1, 2, 3, 4], "mfeat-factors": [0, 1, 2, 3, 4], "gisette": [0], "Fashion-MNIST": [0], "har": [0], "isolet": [0], "ct_slices": [0, 1, 2, 3, 4], "blogfeedback": [0]},
+   "files": {
+    "train": "{dataset}/fold{fold}_train.csv",
+    "test": "{dataset}/fold{fold}_test.csv"
+   },
+   "hashes": {
+    "manifest": "benchmarks/data/kdd28_wide_real_candidates_manifest.sha256",
+    "strip": "folds/"
+   },
+   "data_root": "box ~/results/2026-11-22_wide_real_dataset_candidates_spo_vs_aa_screen_hao/data/folds (benchmarks/data/prep_wide_real_candidate_folds.py <out_dir>)",
+   "label_col": "label",
+   "seeds": [1, 2, 3, 4, 5],
+   "seed_protocol": "seed 1 on every set, seeds 2-5 only where the seed-1 SPO-AA effect is > 0 (the rule needs effect > 0 in every seed)",
+   "metric_impl": "ydf_eval_v1",
+   "validation": "none",
+   "early_stopping": "none",
+   "folds_rule": "run_suite.make_folds: cv5 = 5 CV folds seed 0 (StratifiedKFold, KFold for regression). Shipped split as one holdout fold k=0: gisette, Fashion-MNIST, har, isolet, blogfeedback",
+   "label_rule": "encode_binary_label: two classes majority = 0, >2 classes majority-vs-rest. Regression: float label as in the source",
+   "positive_class": "AUC positive class = label 1 (least frequent training-fold class). n/a for regression",
+   "headline": "test_auc (classification), test_rmse (regression)"
+  },
+  "kdd28_wide_real_colrep_selected": {
+   "_note": "The 4 sets the 2026-11-22 wide real-dataset screen selected (rule F, ct_slices excluded by the user), column-replication grid runs/2026-11-22_colrep_w4_to_w32_r5pct_madeline_jasmine_fabert_robert_hao. Rows keep their member suite's stamp.",
+   "floats": [],
+   "union_of": {
+    "kdd28_wide_real_candidates": ["madeline", "jasmine", "fabert", "robert"]
+   },
+   "files": {
+    "train": "{dataset}/fold{fold}_train.csv",
+    "test": "{dataset}/fold{fold}_test.csv"
+   },
+   "label_col": "label",
+   "seeds": [1, 2, 3, 4, 5],
+   "metric_impl": "ydf_eval_v1",
+   "headline": "test_auc",
+   "validation": "none",
+   "early_stopping": "none"
   }
  }
 }

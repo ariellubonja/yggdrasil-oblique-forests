@@ -29,6 +29,10 @@ Results behind the KDD28 floats below (section `sec:accuracy-hao-vs-ydf-params`,
   `ariel_notes/results/2026-11-06_hao_seeds/`
 - **Generator:** `bash benchmarks/results/kdd28/floats/accuracy/tab-accuracy-hao-vs-ydf-params-single-machine/regen_hao_vs_ydf_params.sh` (repo root): `runs/2026-11-06_hao_seeds/assemble_hao_vs_ydf_params.py`
   rebuilds the run's CSVs from the mirror (reproduces them byte-identically), then `make_hao_vs_ydf_compare_tables.py`
+- **AutoML block of the CC18 body (2026-11-23, user request):** madeline, jasmine, fabert, robert (the wide real-dataset
+  screen's `selected_a`), Hao SPO-GBT and AA-GBT only, seeds 1-5, other cells `--`, YDF check column `--`. Inputs
+  `runs/2026-11-22_wide_real_dataset_candidates_spo_vs_aa_screen_hao/` (`--automl_eval_suite`, default `kdd28_wide_real_candidates`,
+  checked as a subset). The float's CC18-only caption and footnote are hand-owned and not updated
 - **Comparison tables (2026-11-20):** `make_hao_vs_ydf_compare_tables.py` (last line of the regen script) sets kdd28_ydf seeds 1-5
   against kdd28_hao seeds 1-5 per arm, single machine and distributed, each (dataset, fold, arm) averaged over its 5 seeds first.
   YDF inputs: seed 1 `runs/2026-11-03_distacc/results.csv` and `runs/2026-11-04_distacc_aaspo/distacc_aaspo.csv`, seeds 2-5

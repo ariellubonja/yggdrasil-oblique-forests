@@ -33,9 +33,14 @@ ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps 
               "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log",
     "colrep_single": "dataset,seed,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git",
     "distacc_aaspo": "dataset,fold,arm,workers,split_axis,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git,bin_sha,machine",
+    # distacc with bin_sha + machine stamped (2026-11-22, wide real-dataset candidate screen). Dist cells stamp the dist binary
+    "distacc_stamped": "dataset,fold,arm,workers,split_axis,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git,bin_sha,machine",
     "distacc_exact300": "dataset,fold,arm,workers,split_axis,threads,rc,test_acc,test_auc,test_logloss,train_s,wall_s,git,bin_sha,machine",
     "colrep_distacc": "dataset,fold,replication,workers,threads,rc,test_acc,test_auc,test_logloss,"
                       "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
+    # colrep_distacc with bin_sha = the distributed binary's sha (2026-11-22). colrep_distacc itself keeps the single sha
+    "colrep_distacc_stamped": "dataset,fold,replication,workers,threads,rc,test_acc,test_auc,test_logloss,"
+                              "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
     "colrep_w32_large": "dataset,fold,arm,replication,workers,threads,rc,test_acc,test_auc,test_logloss,"
                         "num_conditions,num_oblique,num_multi_col,held_cols,train_s,wall_s,git,log,bin_sha,machine",
     "cc18": "dataset,fold,arm,threads,rc,test_acc,test_auc,test_logloss,num_trees,train_s,wall_s,git,bin_sha",
@@ -52,8 +57,8 @@ ROWS = {  # per-table CSV columns, as in the scripts each table mirrors (stamps 
                      "num_oblique,num_multi_col,held_cols,ship_bytes_in,ship_bytes_out,ship_cols_in,ship_s_max,"
                      "ship_s_sum,cross_worker_splits,train_s,wall_s,git,log",
 }
-KEYS = {"distacc": ("dataset", "fold", "arm"), "distacc_aaspo": ("dataset", "fold", "arm"),
-        "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "workers", "replication"),
+KEYS = {"distacc": ("dataset", "fold", "arm"), "distacc_stamped": ("dataset", "fold", "arm"), "distacc_aaspo": ("dataset", "fold", "arm"),
+        "distacc_exact300": ("dataset", "fold", "arm"), "colrep_distacc": ("dataset", "fold", "workers", "replication"), "colrep_distacc_stamped": ("dataset", "fold", "workers", "replication"),
         "colrep_w32_large": ("dataset", "fold", "arm", "replication"), "colrep": ("dataset", "seed", "replication"),
         "colrep_single": ("dataset", "seed"), "cc18": ("dataset", "fold", "arm"), "reg": ("dataset", "fold", "arm"),
         "cc18_dist": ("dataset", "fold", "arm"), "reg_dist": ("dataset", "fold", "arm"),
@@ -158,7 +163,7 @@ def build_cells(a):
             for k in range(len(json.load(open(os.path.join(a.tab_folds, d, "folds.json")))["indices"])):
                 yield (d, k, *(os.path.join(a.tab_folds, d, f"fold{k}_{s}.csv") for s in ("train", "test")))
 
-    if "distacc" in tables:
+    for T in [t for t in ("distacc", "distacc_stamped") if t in tables]:
         ds = sorted(os.listdir(a.tab_folds))
         ds.sort(key=lambda d: -cost(os.path.join(a.tab_folds, d, "fold0_train.csv"), False))
         wl = {x: list(map(int, a.workers.split(","))) if a.workers else kdd28.load_profile(f"{PR}.distacc_{x.lower()}")["workers"]
@@ -167,7 +172,7 @@ def build_cells(a):
             nf = len(json.load(open(os.path.join(a.tab_folds, d, "folds.json")))["indices"])
             for k in range(nf):
                 tr, te = (os.path.join(a.tab_folds, d, f"fold{k}_{s}.csv") for s in ("train", "test"))
-                o = os.path.join(a.out, "distacc")
+                o = os.path.join(a.out, T)
                 for arm in [f"single:{x}" for x in a.single_axes.split(",") if x] + [f"{w}:{x}" for x in a.dist_axes.split(",") if x for w in wl[x]]:
                     W, A = arm.split(":")
                     key, tag = (d, k, arm), f"{d}__f{k}__{W}_{A}"
@@ -176,10 +181,10 @@ def build_cells(a):
                         prof = f"{PR}.distacc_single_{A.lower()}"
                         explicit = A == "SPO" and PR != "kdd28_ydf"
                         split = spo_split(prof) if explicit else ["--feature_split_type=Oblique"] if A == "SPO" else [SPLIT_AA]
-                        single("distacc", key, prof, tr, te, "label", a.seed, split, model, a.single_threads,
+                        single(T, key, prof, tr, te, "label", a.seed, split, model, a.single_threads,
                                {"workers": W, "split_axis": A}, c, ydf=not explicit)
                     else:
-                        dist("distacc", key, f"{PR}.distacc_{A.lower()}", tr, te, int(W), a.seed, A == "AA", None, model,
+                        dist(T, key, f"{PR}.distacc_{A.lower()}", tr, te, int(W), a.seed, A == "AA", None, model,
                              os.path.join(o, "work", tag), {"workers": W, "split_axis": "AXIS_ALIGNED" if A == "AA"
                                                             else "SPARSE_OBLIQUE"}, c)
     if "distacc_aaspo" in tables:  # single-machine AA+SPO column of tab:dist-accuracy, same folds (2026-11-04)
@@ -251,17 +256,17 @@ def build_cells(a):
     if "reg_dist" in tables:  # regression sets, distributed (2026-11-21), test RMSE
         for d, k, tr, te in tab_folds():
             dist_arms(d, k, tr, te, "reg_dist", "label", "REGRESSION")
-    if "colrep_distacc" in tables:  # tab:column-replication on the distacc datasets/folds, r = 0 only for --colrep_r0
+    for T in [t for t in ("colrep_distacc", "colrep_distacc_stamped") if t in tables]:  # r = 0 only for --colrep_r0
         cp = kdd28.load_profile(f"{PR}.colrep_distacc_spo")
         r0 = {tuple(x.rsplit(":", 1)) for x in a.colrep_r0.split(",") if x}
-        o = os.path.join(a.out, "colrep_distacc")
+        o = os.path.join(a.out, T)
         for d, k, tr, te in tab_folds():
             for w in (list(map(int, a.workers.split(","))) if a.workers else cp["workers"]):
                 for r in cp["column_replication"]:
                     if r == 0 and (d, str(k)) not in r0:
                         continue
                     tag = colrep_tag(d, k, w, r)
-                    dist("colrep_distacc", (d, k, w, float(r)), f"{PR}.colrep_distacc_spo", tr, te, w, a.seed, False, r,
+                    dist(T, (d, k, w, float(r)), f"{PR}.colrep_distacc_spo", tr, te, w, a.seed, False, r,
                          os.path.join(o, "models", tag), os.path.join(o, "work", tag), {}, cost(tr, False))
     if "colrep_w32_large" in tables:  # colrep_distacc setup at W = 32 on large sets with a shipped test set (2026-11-04)
         cp = kdd28.load_profile(f"{PR}.colrep_w32_large_spo")
@@ -362,8 +367,8 @@ def main():
     a = ap.parse_args()
     global PR
     PR = a.profile
-    need = {"distacc": "tab_folds", "distacc_aaspo": "tab_folds", "distacc_exact300": "tab_folds",
-            "colrep_distacc": "tab_folds", "reg": "tab_folds", "reg_dist": "tab_folds", "cc18_dist": "cc18_10fold",
+    need = {"distacc": "tab_folds", "distacc_stamped": "tab_folds", "distacc_aaspo": "tab_folds", "distacc_exact300": "tab_folds",
+            "colrep_distacc": "tab_folds", "colrep_distacc_stamped": "tab_folds", "reg": "tab_folds", "reg_dist": "tab_folds", "cc18_dist": "cc18_10fold",
             "colrep_reg": "tab_folds", "colrep_cc18": "cc18_10fold",
             "colrep_w32_large": "large_csvs", "colrep": "cc18_fold0", "cross_network": "cc18_fold0", "cc18": "cc18_10fold"}
     for t in a.tables.split(","):
@@ -449,7 +454,7 @@ def main():
                 shutil.rmtree(c.work, ignore_errors=True)
             drift = kdd28.check_cell(c.profile, log, expect=c.expect)  # exit 2 on drift (ALLOW_DRIFT=1 -> "!drift")
             v = dict(zip(KEYS[c.table], c.key)) | c.extra | m | {"rc": rc, "wall_s": wall, "git": a.git,
-                                                                  "bin_sha": bin_sha[c.dist if c.table in ("cc18_dist", "reg_dist", "colrep_cc18", "colrep_reg") else False], "threads": c.threads,
+                                                                  "bin_sha": bin_sha[c.dist if c.table in ("cc18_dist", "reg_dist", "colrep_cc18", "colrep_reg", "distacc_stamped", "colrep_distacc_stamped") else False], "threads": c.threads,
                                                                   "machine": a.machine, "log": c.tag + ".log"}
             row = [v.get(k, "") for k in ROWS[c.table].split(",")] + kdd28.stamp_values(c.profile + drift, log)[:stamp_w[c.table]]
             if eval_cols[c.table]:

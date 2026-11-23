@@ -18,6 +18,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 R = ROOT / "benchmarks/results/kdd28/runs"
 H, N = R / "2026-11-06_hao_seeds", R / "2026-11-21_where_spo_beats_aa_cc18_reg_distributed"
 N2 = R / "2026-11-21_colrep_w4_to_w32_r5pct_where_spo_beats_aa_hao"  # W = 8/16/32 + the 0.05-step r (2026-11-22)
+SC = R / "2026-11-22_wide_real_dataset_candidates_spo_vs_aa_screen_hao"  # single SPO/AA + r = 0 of the wide real sets
+N3 = R / "2026-11-22_colrep_w4_to_w32_r5pct_madeline_jasmine_fabert_robert_hao"  # their colrep grid
+SC_SEL = SC / "derived/candidates_per_dataset.csv"
 W = (4, 8, 16, 32)
 SEL = ROOT / "benchmarks/results/kdd28/floats/accuracy/tab-accuracy-hao-vs-ydf-params-single-machine/derived/spo_clearly_beats_aa_per_dataset.csv"
 S = range(1, 6)
@@ -38,7 +41,13 @@ SRC = {
                    [N / f"kdd28_hao/seed{s}/reg_dist/results.csv" for s in S],
                    [R / f"2026-11-20_regression_multiclass_tabarena_tabred/kdd28_hao/seed{s}/reg/results.csv" for s in S],
                    "single:SPO", "distacc_single_spo"),
+    "automl_wide": ("kdd28_wide_real_candidates", [N3 / f"seed{s}/colrep_distacc_stamped/results.csv" for s in S],
+                    [SC / f"kdd28_hao/seed{s}/distacc_stamped/results.csv" for s in S],
+                    [SC / f"kdd28_hao/seed{s}/distacc_stamped/results.csv" for s in S], "single:SPO", "distacc_single_spo"),
 }
+# 2026-11-23: the wide real-dataset screen's selected sets (selected_a), with their single AA means for the red AA line
+AA_MEANS = HERE / "derived/single_machine_means.csv"  # make_where_spo_beats_aa_hao_table.py, the table's rows
+AA_EXTRA = {"automl_wide": [SC / f"kdd28_ydf/seed{s}/distacc_stamped/results.csv" for s in S]}
 
 
 def load(files, ds, keep, suite, arm, label):
@@ -57,7 +66,11 @@ def load(files, ds, keep, suite, arm, label):
 def main():
     sel = pd.read_csv(SEL)
     pick = {s: sorted(g.dataset) for s, g in sel[(sel.profile == "kdd28_hao") & sel.pass_rec].groupby("suite")}
+    c = pd.read_csv(SC_SEL)
+    pick["automl_wide"] = sorted(c[c.selected_a & (c.metric == "auc_edge")].dataset)
     out = {"cls": {"colrep": [], "r0": [], "single": []}, "reg": {"colrep": [], "r0": [], "single": []}}
+    means = pd.read_csv(AA_MEANS)
+    extra = []
     for key, (suite, cf, rf, sf, sarm, sprof) in SRC.items():
         ds = pick.get(key, [])
         if not ds:
@@ -70,6 +83,24 @@ def main():
             if key == "cc18":
                 x = x.assign(dataset=x.dataset + " (CC18)")
             o[k].append(x)
+        if key in AA_EXTRA:  # fold-then-seed means, as make_where_spo_beats_aa_hao_table.py (balanced cells)
+            x = pd.concat([pd.read_csv(f) for f in AA_EXTRA[key]])
+            x = x[(x.rc == 0) & x.dataset.isin(ds) & (x.arm == "single:AA")]
+            kdd28._declare_eval(suite, __file__)
+            kdd28._EVAL["subset"] = set(ds)
+            kdd28.check_frame(x, "kdd28_ydf", ["distacc_single_aa"], f"{key} single AA")
+            kdd28._EVAL["subset"] = None
+            if sorted(set(x.dataset)) != ds or (x.groupby("dataset").seed.nunique() != len(S)).any():
+                sys.exit(f"ERROR {key} single AA: datasets or seeds missing")
+            mean = lambda y: y.groupby(["dataset", "fold"]).test_auc.mean().groupby("dataset").mean()  # noqa: E731
+            extra.append(pd.DataFrame({"task": "cls", "single_spo": mean(parts["single"]), "single_aa": mean(x)})
+                         .rename_axis("dataset").reset_index())
+    if extra:
+        m = pd.concat([means] + extra)
+        assert not m.dataset.duplicated().any(), "a dataset is in single_machine_means.csv and an extra source"
+        for grp in ("cls", "reg"):
+            (HERE / "derived" / f"hao_{grp}").mkdir(parents=True, exist_ok=True)
+            m[m.task == grp].to_csv(HERE / "derived" / f"hao_{grp}" / "single_means.csv", index=False, float_format="%.8f")
     for grp, parts in out.items():
         d = HERE / "derived" / f"hao_{grp}"
         d.mkdir(parents=True, exist_ok=True)

@@ -119,6 +119,8 @@ def main():
     ap.add_argument("--profile_rows", default=hv.HAO, help="profile whose pass_rec rows make the table")
     ap.add_argument("--means_csv", default=MEANS, help="per-dataset single-machine SPO/AA means (read by the colrep figure)")
     ap.add_argument("--arraystretch", type=float, default=0.8, help="row height factor (local to the float's minipage)")
+    ap.add_argument("--automl_eval_suite", default="kdd28_wide_real_candidates",
+                    help="AutoML block (the wide real-dataset screen's selected sets), empty string = no block")
     a = ap.parse_args()
     sel = pd.read_csv(hv.ROOT / a.beats_aa)
     sel = sel[(sel.profile == a.profile_rows) & sel.pass_rec]
@@ -133,6 +135,10 @@ def main():
         x = hv.load_all(DIST[t], side)
         kdd28._EVAL["subset"] = None
         return pd.concat([single, x])
+    # AutoML sets (2026-11-23, user request): rows of the screen's selection, only cells already run (Hao single SPO,
+    # SPO W = 4-32 at r = 0, YDF single AA). AA+SPO, SPO W = 1 and distributed AA stay empty. Not in the mean figure.
+    # Loaded first so the setup comments keep naming the last suite declared below.
+    _, ads, ay, ah, afolds = hv.load_automl(a.automl_eval_suite) if a.automl_eval_suite else (None, [], None, None, {})
     if "spaa" in pick or "wide" in pick:
         kdd28._declare_eval(suites["spaa"], __file__)
         y = hv.per_seed(hv.load_all(hv.INPUTS, "ydf"), list(S))
@@ -154,7 +160,7 @@ def main():
         kdd28._declare_eval(suites["regression"], __file__)
         ry, rh = (hv.per_seed(dist_frame("reg_dist", s, hv.load_all(hv.REG_INPUTS, s)), list(S), "test_rmse")
                   for s in ("ydf", "hao"))
-    fold_n = lambda s: {d: len(f) for d, f in hv.evalsuite.load_suite(suites[s])["datasets"].items()}  # noqa: E731
+    fold_n =lambda s: {d: len(f) for d, f in hv.evalsuite.load_suite(suites[s])["datasets"].items()}  # noqa: E731
 
     def stats_of(yf, hf):
         frames = {"ydf": yf, "hao": hf}
@@ -183,6 +189,12 @@ def main():
         cls_parts.append((stats_of(cy, ch), pick["cc18"], None))
         rows += [r"\midrule"] + block_rows(stats_of(cy, ch), fold_n("cc18"), [("OpenML CC18 (10 CV folds)", pick["cc18"])],
                                            f"Mean ({len(pick['cc18'])} CC18 datasets)", None)
+    if ads:
+        mpt.SHAPES.clear(), mpt.CATS.clear()
+        hv.automl_shapes(ads)
+        rows += [r"\midrule"] + block_rows(stats_of(ay, ah), afolds,
+                                           [(r"OpenML AutoML Benchmark ${\ge}100$ columns (5 CV folds)", ads)],
+                                           f"Mean ({len(ads)} AutoML datasets)", None)
     if "regression" in pick:
         shapes("regression")
         std = pd.read_csv(hv.ROOT / hv.FLOAT / "derived/extra_label_std.csv").set_index("dataset")["label_std"].to_dict()
@@ -201,10 +213,11 @@ def main():
            "(wide: seed 1 + runs/2026-11-21_wide_eval_ydf_aa_seeds2to5). Rows: " + a.profile_rows + " pass_rec in " + a.beats_aa + "\n% inputs: " + hv.rel(hv.INPUTS) + " + "
            + hv.rel(hv.WIDE_INPUTS) + " + " + hv.rel(hv.CC18_INPUTS) + " + " + hv.rel(hv.REG_INPUTS) + " + "
            + " + ".join(hv.rel(DIST[t]) for t in DIST) + "\n")
+    asrc = f"% AutoML block: eval suite {a.automl_eval_suite} (subset {', '.join(ads)}), {hv.rel(hv.AUTOML_INPUTS)}\n" if ads else ""
     setup = kdd28.setup_line(hv.HAO, ["distacc_single_spo", "distacc_single_aa_spo", "distacc_spo"]) + "\n" + \
         kdd28.setup_line(hv.YDF, ["distacc_single_aa", "distacc_aa"])
     out = pathlib.Path(a.out) / "table_dist_accuracy_where_spo_outperforms_aa_body.tex"
-    out.write_text(kdd28.add_setup(GEN + hv.PM + src + "\n".join(head + rows + [r"\bottomrule", r"\end{tabular}}"]) + "\n", setup))
+    out.write_text(kdd28.add_setup(GEN + hv.PM + src + asrc + "\n".join(head + rows + [r"\bottomrule", r"\end{tabular}}"]) + "\n", setup))
     print(f"wrote {out}: " + ", ".join(f"{s} {len(v)}" for s, v in pick.items()))
     lab = {c[2]: i for i, c in enumerate(COLS)}  # same cells as the table's single-machine columns
     cc18 = [p[0] for p in cls_parts[-1:]] if "cc18" in pick else []  # renamed as in select_where_spo_beats_aa_hao.py
