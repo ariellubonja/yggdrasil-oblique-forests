@@ -142,6 +142,9 @@ Claude Code is the hub and this repo is the source of truth.
   `ariel_notes/results/<date>_<topic>/` (gitignored) or tracked `benchmarks/results/...`; name the path
   in every run script and subagent brief. EC2 boxes auto-stop when idle (window per instance:
   `aws cloudwatch describe-alarms`), and a stop wipes `/tmp`.
+- **Boxes run from git (user directive, 2026-11-23):** code is a git checkout at current `origin/main` (plus named
+  uncommitted files), binaries are built from that commit. Never a copied code dir or old `bin/` from another study.
+  Profile names (e.g. `kdd28_hao`) are parameter sets, not binaries.
 - **Agents may start EC2 instances on their own and must stop them when the job is done (2026-11-02):**
   `aws ec2 stop-instances --instance-ids <id>` (stop, never terminate; "ariel" boxes only) after mirroring the
   results off. Auto-stop is a backstop, not the plan.
