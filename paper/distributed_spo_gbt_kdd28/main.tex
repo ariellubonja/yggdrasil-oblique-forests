@@ -150,18 +150,19 @@
 
 \section{Work log - Weekly TODOs}
 
-\textbf{\textit{Ariel TODOs by Nov-21} - Various Partitioning Strategies}
+\textbf{\textit{Ariel TODOs by Nov-23} - Various Partitioning Strategies}
 
 
 \textbf{\textit{Clarifications}}
 
 \begin{todolist}
     \item [\done] How does GBT splitting work? Sec.~\ref{sec:gbt-training-nutshel}
-    \item Why does \texttt{homecredit} perform so much worse even on $W=1?$
-    \item How do ordinal categorical features play in sparse oblique? Do they penalize accuracy vs. Axis-Aligned \texttt{CATEGORICAL}? Ensure scale of ordinal vs. numeric matches. % What does Catboost do?
+    \item [\done] How do ordinal categorical features play in sparse oblique? Do they penalize accuracy vs. Axis-Aligned \texttt{CATEGORICAL}? Yes, a significant amount (Table~\ref{tab:ordinal-vs-native}). Ensure scale of ordinal vs. numeric matches. Scale doesn't seem to affect accuracy~\ref{tab:spo-ordinal-feature-scaling}. Left unscaled% What does Catboost do?
     \item After training, look at what SPO splits used. Which features were used together? Repeat idea of Fig 3. but w/ SPO. Goal: "$20\%$ of splits are good, so that's all the overhead we need".
     \item Why does AA and Dist-AA $W=1$ accuracy differ slightly? Likely seed
-    \item [\done] \textcolor{gray}{Compare Hao's parameters to YDF \& to Richard AA+SPO on single-machine. Sec.~\ref{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params}}
+    \item [\done] Compare Hao's parameters to YDF \& to Richard AA+SPO on single-machine. Sec.~\ref{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params}
+    \item \textcolor{gray}{Why does \texttt{homecredit} perform so much worse even on $W=1?$}
+    \item \textcolor{gray}{Understand YDF native handling of \texttt{CATEGORICAL} - Sec.~\ref{sec:ydf-categorical-handling}.}
 \end{todolist}
 
 \textbf{\textit{Methods \& Experiments}}
@@ -176,8 +177,11 @@
 \textbf{\textit{Datasets \& Eval}}
 
 \begin{todolist}
-    \item Expand into more datasets. Verify BeyondArena Rossman store prediction (SPO should significantly outperform). Since we're training GBTs, we could expand into Regression tasks.
-    \item Try Hao's parameters with $F^2$ projections but keep 1.5 columns per projection
+    \item [\done] Expand into more datasets. Since we're training GBTs, we could expand into Regression tasks. Expanded into CC18, Regression and Multiclass. Went from 11 $\to$ 20 datasets on classification and added 6 regression. See Section~\ref{sec:accuracy-where-spo-outperforms-aa},~\ref{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params}.
+    \item [\done] Expand into $W=8,16,32$. See Sec.~\ref{sec:accuracy-where-spo-outperforms-aa}.
+    \item [\done] Full evaluation of Hao's parameters as the right choice over YDF defaults (accuracy \& performance) - Sec.~\ref{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params}
+    \item Verify BeyondArena Rossman store prediction (SPO should significantly outperform).
+    \item \textcolor{gray}{Try Hao's parameters with $F^2$ projections but keep 1.5 columns per projection}
 \end{todolist}
 
 \textbf{\textit{Performance Improvement}}
@@ -410,90 +414,73 @@ Define $F_{\text{node}} \coloneqq \mathbf{F}$ as the number of columns stored at
     \end{itemize}
 \end{description}
 
-\clearpage
+\twocolumn[{\floatblock
 \section{Accuracy on Datasets Where SPO Outperforms AA}
 \label{sec:accuracy-where-spo-outperforms-aa}
-\suppressfloats[t]
 
-SPO uses \textbf{Hao's parameters}, AA uses YDF defaults.
+SPO uses \textbf{Hao's parameters}, AA doesn't change whether Hao or YDF defaults (Hao parameters don't apply).
 
-\subsection{Column Replication at $W=4$}
+\subsection{Accuracy Benefit of Random Column Replication at $W=4,8,16,32$}
+
+Replication is done randomly (using \texttt{std::shuffle} on the columns not owned by this worker). Full code available in ~\ref{code:random-column-replication}.
+
+The dotted lines are \textcolor{green}{single-machine SPO} and \textcolor{red}{single-machine AA}. As columns get sharded into more and more workers, it is expected that the accuracy of SPO suffers and approaches AA, which is the baseline. This can be seen clearly in the \textcolor{purple}{purple cells} of Table~\ref{tab:accuracy-where-spo-outperforms-aa}, where as workers have a single column, SPO performance matches AA.
+
+The shaded region represents that if a different subset of datasets were sampled from this population, the $\Delta$ would be in the shaded band $95\%$ of the time. This is calculated by sampling $N$ datasets with replacement (i.e. $\sim 65\%$ unique), and calculating the mean, repeat 10000 times, and the middle $95\%$ of sampled means are shown. Note this is after taking the in-dataset mean across seeds and folds.
+
+The scatterplot shows the per-dataset difference from its single-machine SPO method. The boxplot shows the median (line) + the mean (red diamond)
 
 $r=0$ means the dataset columns are fully disjoint. $r=1$ means columns are fully replicated.
 
-\begin{figure}[t]
-\centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.6\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body.tex}{\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean (top) and per-dataset (bottom) $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the 20 classification datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the datasets where single-machine SPO-GBT beats AA-GBT. Top: line of the mean AUC difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset differences per r, overlaid with the dataset points and the mean. A separate green slot labelled single, right of a dotted line, shows single-machine SPO-GBT the same way, with a dashed line at its mean in the top panel.}
-\label{fig:column-replication-where-spo-outperforms-aa}
-\par\smallskip\raggedright\footnotesize Top: 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single})}: single-machine SPO-GBT. pts = percentage points of test AUC. Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns.
-\end{figure}
+\TODO{This may have the problem of datasets that have correlated features}: if a dataset has basically duplicate columns, it won't suffer even at $r=0$ replication.
 
-\begin{figure}[t]
-\centering
-\resizebox{\linewidth}{!}{\begin{minipage}{1.6\linewidth}\IfFileExists{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_body.tex}{\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_body}}{\TODO{rerun pending}}\end{minipage}}
-\caption{Relative $\Delta$ test RMSE vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$ on the 6 regression datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
-\Description{Two stacked panels sharing the replication axis r from 0 to 1, for the regression datasets where single-machine SPO-GBT clearly beats AA-GBT. Top: line of the mean relative RMSE difference to single-machine SPO-GBT with a shaded confidence band. Bottom: one box plot of per-dataset relative differences per r, overlaid with the dataset points and the mean.}
+\par\medskip
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=figure}
+\centering\edef\colrepw{\the\dimexpr0.5\textwidth\relax}%
+\begin{minipage}[t]{0.245\textwidth}\centering\footnotesize $W=4$\\\resizebox{\linewidth}{!}{\begin{minipage}{\colrepw}\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_body}\end{minipage}}\end{minipage}\hfill
+\begin{minipage}[t]{0.245\textwidth}\centering\footnotesize $W=8$\\\resizebox{\linewidth}{!}{\begin{minipage}{\colrepw}\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_w8_body}\end{minipage}}\end{minipage}\hfill
+\begin{minipage}[t]{0.245\textwidth}\centering\footnotesize $W=16$\\\resizebox{\linewidth}{!}{\begin{minipage}{\colrepw}\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_w16_body}\end{minipage}}\end{minipage}\hfill
+\begin{minipage}[t]{0.245\textwidth}\centering\footnotesize $W=32$\\\resizebox{\linewidth}{!}{\begin{minipage}{\colrepw}\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_w32_body}\end{minipage}}\end{minipage}
+\caption{Classification: $\Delta$ test AUC vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4, 8, 16, 32$ on the 24 classification datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
+\Description{Four side-by-side column-replication panels, for W=4, 8, 16 and 32.}
+\label{fig:column-replication-where-spo-outperforms-aa}
+\par\smallskip\raggedright\footnotesize Top: mean $\Delta$ with 95\% bootstrap interval over the datasets. Bottom: per-dataset $\Delta$ (dots) with box plots and the mean (diamonds). \textcolor{green}{Green (\texttt{single SPO})}: single-machine SPO-GBT. \textcolor{red}{Red dotted (\texttt{single AA})}: single-machine AA-GBT, mean over the datasets. pts = percentage points of test AUC. Each worker holds its round-robin column share plus a random fraction $r$ of the other workers' columns. $r=0$: the distributed SPO-GBT run at the same $W$.
+
+\par\bigskip\centering\captionsetup{type=figure}
+\begin{minipage}[t]{0.245\textwidth}\centering\footnotesize $W=4$\\\resizebox{\linewidth}{!}{\begin{minipage}{\colrepw}\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_body}\end{minipage}}\end{minipage}\hfill
+\begin{minipage}[t]{0.245\textwidth}\centering\footnotesize $W=8$\\\resizebox{\linewidth}{!}{\begin{minipage}{\colrepw}\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_w8_body}\end{minipage}}\end{minipage}\hfill
+\begin{minipage}[t]{0.245\textwidth}\centering\footnotesize $W=16$\\\resizebox{\linewidth}{!}{\begin{minipage}{\colrepw}\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_w16_body}\end{minipage}}\end{minipage}\hfill
+\begin{minipage}[t]{0.245\textwidth}\centering\footnotesize $W=32$\\\resizebox{\linewidth}{!}{\begin{minipage}{\colrepw}\input{figures/evaluation/fig_column_replication_where_spo_outperforms_aa_regression_w32_body}\end{minipage}}\end{minipage}
+\caption{Relative $\Delta$ test RMSE vs.\ column replication $r$ at \texttt{MULTI\_THREAD} $W=4$, 8, 16 and 32 on the 6 regression datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
+\Description{Four side-by-side column-replication panels, for W=4, 8, 16 and 32.}
 \label{fig:column-replication-where-spo-outperforms-aa-regression}
 \par\smallskip\raggedright\footnotesize RMSE relative to single-machine SPO-GBT, in \%. Positive = worse. Panels as in Figure~\ref{fig:column-replication-where-spo-outperforms-aa}.
-\end{figure}
+\end{minipage}
+}]
 
-\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
-absl::Status SetColumnReplicas(
-    const float replication, const int64_t seed,
-    const dataset::proto::DataSpecification& data_spec,
-    const std::vector<int>& features,
-    distributed_decision_tree::LoadBalancer* load_balancer) {  
-  const int num_workers = load_balancer->NumWorkers();
-  std::vector<std::vector<int>> replicas(num_workers);
-  // Count columns owned vs. non-owned by this worker (replication candidates)
-  for (int worker_idx = 0; worker_idx < num_workers; worker_idx++) {
-    std::vector<int> candidates;
-    int num_owned = 0;
-    for (const int feature : features) {
-      // Skip non-Numeric columns (should never be needed for our ordinal datasets)
-      if (data_spec.columns(feature).type() !=
-          dataset::proto::ColumnType::NUMERICAL) { continue; }
-          
-      ASSIGN_OR_RETURN(const int owner, load_balancer->FeatureOwner(feature));
-      
-      if (owner != worker_idx) { candidates.push_back(feature); }
-      else { num_owned++; }
-    }
-    const int num_replicas = static_cast<int>(
-        std::lround(static_cast<double>(replication) * candidates.size()));
-    // Own stream per (seed, worker): the training stream is left untouched.
-    std::seed_seq seed_seq{static_cast<uint32_t>(seed),
-                           static_cast<uint32_t>(seed >> 32),
-                           static_cast<uint32_t>(worker_idx), 0x7e91u};
-    utils::RandomEngine rnd(seed_seq);
-    std::shuffle(candidates.begin(), candidates.end(), rnd);
-    candidates.resize(num_replicas);
-    // printf
-    absl::SubstituteAndAppend(&log, "\tworker $0: $1 owned + $2 replicated\n",
-                              worker_idx, num_owned, num_replicas);
-    replicas[worker_idx] = std::move(candidates);
-  }
-  load_balancer->SetReplicas(std::move(replicas))
-}
+\twocolumn[{\floatblock
+\subsection{Column Correlation vs.\ Replication Gain}
+\label{sec:col-correlation-vs-colrep}
 
-absl::Status LoadBalancer::SetReplicas(
-    std::vector<std::vector<int>> replicas_per_worker) {
-  num_replicas_ = 0;
+Correlated columns act as free replication. If a column has a near-duplicate on another worker, that worker can split on almost the same information at $r=0$, so such datasets should gain less from replication. To test this, each dataset gets one column-correlation score: for every feature column, the largest absolute Spearman correlation with any other feature column, averaged over the columns. The label is excluded and constant columns are dropped. The score is computed once per dataset on all rows of its training data (the fold-0 training split where the dataset ships as CV folds).
 
-  for (int worker_idx = 0; worker_idx < workers_.size(); worker_idx++) {
-    auto& replicas = replicas_per_worker[worker_idx];
-    for (const int feature : replicas) {
-      features_[feature].replicators.push_back(worker_idx);
-    }
-    num_replicas_ += replicas.size();
-    workers_[worker_idx].replicas = std::move(replicas);
-  }
-  // Replicators were appended in ascending worker order.
-  return absl::OkStatus();
-}
-\end{lstlisting}
+The replication gain is the change from $r=0$ to $r=1$ at the same $W$, using the cells of Figures~\ref{fig:column-replication-where-spo-outperforms-aa} and~\ref{fig:column-replication-where-spo-outperforms-aa-regression}. Classification uses test AUC in points. Regression uses the relative drop in test RMSE, in \%. Both are means over folds and seeds 1--5, and positive means replication helps. Each panel reports Spearman's $\rho$ between score and gain across datasets, with its two-sided $p$. A CC18 copy of a TabArena dataset holds the same data, so it is counted once, with its TabArena cells. This leaves 21 classification and 6 regression datasets.
+
+\par\medskip
+\noindent\begin{minipage}{\textwidth}
+\captionsetup{type=figure}
+\centering
+\input{figures/evaluation/fig_col_correlation_vs_colrep_body}
+\caption{Column correlation vs.\ the gain from full column replication, one dot per dataset.}
+\Description{Eight scatter panels in two rows, classification on top and regression below, for W=4, 8, 16 and 32. The x axis is the dataset's column correlation, the y axis the gain from r=0 to r=1.}
+\label{fig:col-correlation-vs-colrep}
+\par\smallskip\raggedright\footnotesize Top: classification, $\Delta$ test AUC (pts). Bottom: regression, test RMSE drop (\%). Positive = replication helps. Column correlation: mean over columns of the max $|$Spearman$|$ to another column. $\rho$, $p$: Spearman across datasets.
+\end{minipage}
+}]
+
+
+
 
 \twocolumn[{\floatblock
 \subsection{Accuracy results at $r=0$}
@@ -515,7 +502,7 @@ absl::Status LoadBalancer::SetReplicas(
 % body sizes its axis to 0.5\textwidth; match it to the column
 \resizebox{\linewidth}{!}{\begin{minipage}{1.7\linewidth}\setlength{\textwidth}{2\linewidth}%
 \IfFileExists{figures/evaluation/fig_dist_accuracy_mean_where_spo_outperforms_aa_body.tex}{\input{figures/evaluation/fig_dist_accuracy_mean_where_spo_outperforms_aa_body}}{\TODO{rerun pending: profile kdd28\_ydf}}\end{minipage}}
-\caption{Mean test AUC over the 20 classification datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa}.}
+\caption{Mean test AUC over the 20 classification datasets of Table~\ref{tab:accuracy-where-spo-outperforms-aa} (those with filled $W=i$ cells).}
 \Description{Line chart of mean AUC versus number of workers for SPO-GBT and AA-GBT on the datasets where single-machine SPO-GBT beats AA-GBT.}
 \label{fig:accuracy-where-spo-outperforms-aa}
 \end{minipage}\hfill
@@ -614,6 +601,8 @@ Naive baseline for communication cost. \textbf{Should match local SPO-GBT accura
 
 \subsection{Datasets Used}
 
+See Table~\ref{tab:all-datasets}.
+
 \begin{table*}[t]
 \centering
 \caption{Datasets used, by source. Categorical columns are ordinally encoded over their alphabetically sorted values. NaNs are column mean imputed. Multi-class classification problems was converted to 1-vs-all binary on the majority class. Eight datasets appear in both CC18 and TabArena. }
@@ -676,9 +665,13 @@ wilt & bin & 4,839 & 5 & Acc., X-Net. \\
 \multicolumn{5}{@{}l}{\textit{Wide datasets ($F{\ge}100$, OpenML)}} \\
 christine~\cite{guyon2019automl} & bin & 5,418 & 1,636 & Acc. \\
 dota2~\cite{tridgell2016dota2} & bin & 102,944 & 116 & Acc. \\
+fabert~\cite{guyon2019automl} & mul & 8,237 & 800 & Acc. \\
 guillermo~\cite{guyon2019automl} & bin & 20,000 & 4,296 & Acc. \\
 hcdr\_main~\cite{home-credit-default-risk} & bin & 307,511 & 120 & Acc. \\
+jasmine~\cite{guyon2019automl} & bin & 2,984 & 144 & Acc. \\
+madeline~\cite{guyon2019automl} & bin & 3,140 & 259 & Acc. \\
 philippine~\cite{guyon2019automl} & bin & 5,832 & 308 & Acc. \\
+robert~\cite{guyon2019automl} & mul & 10,000 & 7,200 & Acc. \\
 santander\_transaction~\cite{santander-customer-transaction-prediction} & bin & 200,000 & 200 & Acc. \\
 vehicle\_sensIT~\cite{duarte2004vehicle} & bin & 98,528 & 100 & Acc. \\
 \bottomrule
@@ -754,17 +747,7 @@ weather & reg & 40,000$^\dagger$ & 103 & Acc. \\
 \label{tab:datasets-used}
 \end{table*}
 
-For our Accuracy measurements, we used the following classification datasets: 30 TabArena datasets, 3 TabReD datasets.
-
-For Runtime, we used the Large Natural Datasets and Trunk synthetic datasets described in 
-
-\subsection{Evaluation Setup}
-
-We ran 5 cross-validation folds where appropriate (some datasets are chronological), and ran 5 seeds (0..4). Interestingly, in YDF AA-GBT, the random seed very slightly changes the accuracy, even though mathematically, AA-GBT does not sample and therefore should be unaffected. YDF shuffles the columns, so if one tests fewer than all columns, the resulting model is dependent on seed. Also, YDF breaks ties using the row with the smaller index, so split thresholds might be slightly different.
-
-Fixing for seed, AA-GBT is deterministic w.r.t. number of workers (features are independently scanned regardless of how many workers there are).
-
-\textbf{\textit{Shortcuts used to speed up eval}}
+\subsection{Shortcuts used to speed up eval}
 
 \begin{todolist}
     \item [\done] AA-GBT runs were only run for $W=1$, and copied to the other workers. This is after repeatedly proving they are identical. This speeds up experiments by $\sim 1.8\times$.
@@ -774,29 +757,41 @@ Fixing for seed, AA-GBT is deterministic w.r.t. number of workers (features are 
     \item Skip repeated projections. Study how often these happen with either Hao or YDF parameters.
 \end{todolist}
 
-\textbf{Categorical features} are numbered ordinally (in order of appearance, categories are assigned incremental numbers). \textcolor{purple}{Are they scaled w.r.t other columns? e.g. if numerical columns have mean 0, variance 0.1, categoricals will overflow}. \textbf{This works surprisingly well, as even fully-categorical datasets SPO wins}, but it does cost some accuracy. This was done to extend the list of available natural datasets, as SPO methods cannot natively train on non-numerical features.
+\subsection{Evaluation}
+
+\subsubsection{Dataset Handling}
+
+We ran 5 cross-validation folds where appropriate (some datasets are chronological), and ran 5 seeds (0..4). Interestingly, in YDF AA-GBT, the random seed very slightly changes the accuracy, even though mathematically, AA-GBT should be unaffected. % I think this is due to VQSort outputting ties in an arbitrary order. YDF breaks ties to the lesser index, and this is the likely source of the non-determinism through sort. shuffles the columns, so if one tests fewer than all columns, the resulting model is dependent on seed. Also, YDF breaks ties using the row with the smaller index, so split thresholds might be slightly different.
+
+\textbf{Missing numbers} are treated by taking the training column mean.
+
+
+\textbf{Categorical features} are transformed to numeric by being sorted and numbered ordinally. This was done to extend the list of available natural datasets, as SPO methods cannot natively train on non-numerical features. YDF trains on \texttt{CATEGORICAL} features by bucketing them by category, and updating each bucket. Since SPO requires adding two columns, the only possible way to add two \texttt{CATEGORICAL} features in YDF's native handling is if those columns contain the same set of categorical elements. \textbf{Ordinal replacement works surprisingly well}, considering the category ordinal ordering is essentially arbitrary, though a small penalty over the native handling exists~\ref{tab:ordinal-vs-native}. We believe this is not a problem because we're comparing SPO vs. AA on the same ordinally-replaced dataset, i.e. we care about relative performance of the two methods. We edit the columns in no other way, except dropping ID columns.\textbf{Ordinal numbers are not scaled}. Scaling does not seem to impact accuracy much (Table~\ref{tab:spo-ordinal-feature-scaling}). % YDF has no native way to convert \texttt{CATEGORICAL} features into ordinal \texttt{NUMERICAL}. % source https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticdiscretized_numerical
+
+\textbf{Multi-class} datasets are converted to binary classification by testing the majority class vs. the others.
 
 \begin{table}[h]
 \centering\footnotesize
-\caption{Test AUC of single-machine AA-GBT with categorical features as ordinal codes vs.\ native YDF categoricals.}
-\Description{Table of test AUC per dataset for ordinal and native categorical encoding, their difference, and the number of folds where native wins.}
+\caption{Does ordinal encoding beat dropping categoricals? Test AUC of single-machine AA- and SPO-GBT with categorical features dropped, as ordinal codes, or native (AA only).}
+\Description{Table of test AUC per dataset with categorical features dropped, ordinal, or native, for AA (top) and SPO (bottom), with means.}
 \label{tab:ordinal-vs-native}
 \IfFileExists{tables/table_ordinal_vs_native_body.tex}{\input{tables/table_ordinal_vs_native_body}}{\TODO{rerun pending}}
-\par\smallskip\raggedright\footnotesize Same folds and codes, only the column type differs. YDF defaults, early stopping off, 300 trees, seed 1. Diabetes130US omitted: its imputed categoricals are not integer codes.
+\par\smallskip\raggedright\footnotesize Same folds and codes, only the categorical handling differs. YDF defaults, early stopping off, 300 trees, seed 1. Diabetes130US omitted: its imputed categoricals are not integer codes. $^\dagger$Dataset was all-categorical, so no prediction was made.
 \end{table}
 
-YDF has no native way to convert \texttt{CATEGORICAL} features into ordinal \texttt{NUMERICAL}. % source https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticdiscretized_numerical
+\begin{table}[h]
+\centering\footnotesize
+\caption{Should ordinal features be rescaled? Test AUC of single-machine SPO-GBT with ordinal features scaled by their standard deviation vs.\ unscaled.}
+\Description{Table of the mean change in test AUC from feature scaling per dataset group, the number of datasets that improve or worsen, and a p-value.}
+\label{tab:spo-ordinal-feature-scaling}
+\IfFileExists{tables/table_spo_ordinal_feature_scaling_body.tex}{\input{tables/table_spo_ordinal_feature_scaling_body}}{\TODO{rerun pending}}
+\par\smallskip\raggedright\footnotesize $\Delta$ = scaled minus unscaled, fold mean. Mixed = both categorical and numeric columns. $p$: Wilcoxon signed-rank over datasets. YDF defaults, early stopping off, 300 trees, seed 1.
+\end{table}
 
-\subsection{How does YDF process CATEGORICAL data?}
 
+\subsubsection{Runtime Parameters}
 
-\textbf{\textit{DataSpec dictionary forming}}
-
-\begin{enumerate}
-    \item (count, cat) for each category
-    \item If count < 5 or $\|cats\| > 2000$, replace those with OOD.
-\end{enumerate}
-
+We use 300 trees, depth 6, no early stopping, 1.5 projection density, $P=F$ projections, 4 threads for single-machine and 2 for each worker (for the accuracy section, as num. threads changes the model)
 
 \section{GBT Training in a Nutshell}
 \label{sec:gbt-training-nutshel}
@@ -833,7 +828,7 @@ Where $y$ is the ground truth label and $p$ is the probability of label=1 (Class
 
 
 
-\texttt{\textbf{NUMERICAL}}
+\subsection{\texttt{NUMERICAL}}
 
 Missing values replaced by column mean.
 
@@ -848,14 +843,25 @@ Missing values replaced by column mean.
     
 \end{enumerate}
 
-\texttt{\textbf{CATEGORICAL}}
+\subsection{\texttt{CATEGORICAL}}
+\label{sec:ydf-categorical-handling}
+
+
+\textbf{\textit{DataSpec dictionary forming}}
+
+\begin{enumerate}
+    \item (count, cat) for each category
+    \item If count < 5 or $\|cats\| > 2000$, replace those with OOD.
+\end{enumerate}
+
+\TODO{finish filling YDF categorical GBT training step}
 
 \begin{enumerate}
     \item Missing values replaced by most frequent category
     \item Buckets ((class, gradient-sum) pairs) i.e. there's as many vectors as unique classes
 \end{enumerate}
 
-\textit{SPO does not use }\texttt{CATEGORICAL}. \textbf{\textit{Presumably bcs. CATEGORICAL are not in "Euclidean" space aka. their relative order has no geometric meaning}}
+\textit{SPO does not use }\texttt{CATEGORICAL}. bcs. 2 different features would have to contain the same exact set of categories. Otherwise, addition is undefined. Also, Categorical features are not in "Euclidean" space aka. their relative order has no geometric meaning.
 
 
 \texttt{DISCRETIZED\_NUMERICAL} should NOT be used. It "tell the learning algorithm to optimize training with a special discretization algorithm. Any NUMERICAL feature can be configured as DISCRETIZED\_NUMERICAL."
@@ -902,7 +908,7 @@ The issue: By default, YDF Dataset cache bins columns with $<16000$ distinct val
 
 
 
-\subsection{Setup cost}
+\subsection{VertexAI Setup cost}
 
 Training a distributed model includes \emph{setup}: the time from job start until the manager logs \texttt{Start tree training} (noted based on whether included). Setup covers reading the CSV from Cloud Storage, building the distributed dataset cache in the shared directory (one file per column, numerical columns presorted) and waiting until every worker has loaded its column partition. (Table~\ref{tab:setup-cost}).
 
@@ -937,6 +943,54 @@ distributed_gradient_boosted_trees.cc
 
 \input{listings/in_worker_oblique}
 
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize,label={code:random-column-replication}]
+// Random Column Replication Code
+absl::Status SetColumnReplicas(
+    const float replication, const int64_t seed,
+    const dataset::proto::DataSpecification& data_spec,
+    const std::vector<int>& features,
+    distributed_decision_tree::LoadBalancer* load_balancer) {  
+  const int num_workers = load_balancer->NumWorkers();
+  std::vector<std::vector<int>> replicas(num_workers);
+  // Count columns owned vs. non-owned by this worker (replication candidates)
+  for (int worker_idx = 0; worker_idx < num_workers; worker_idx++) {
+    std::vector<int> candidates;
+    int num_owned = 0;
+    for (const int feature : features) {
+      // Skip non-Numeric columns (should never be needed for our ordinal datasets)
+      if (data_spec.columns(feature).type() !=
+          dataset::proto::ColumnType::NUMERICAL) { continue; }
+          
+      ASSIGN_OR_RETURN(const int owner, load_balancer->FeatureOwner(feature));
+      
+      if (owner != worker_idx) { candidates.push_back(feature); }
+      else { num_owned++; }
+    }
+    const int num_replicas = static_cast<int>(
+        std::lround(static_cast<double>(replication) * candidates.size()));
+    // Own stream per (seed, worker): the training stream is left untouched.
+    std::seed_seq seed_seq{static_cast<uint32_t>(seed),
+                           static_cast<uint32_t>(seed >> 32),
+                           static_cast<uint32_t>(worker_idx), 0x7e91u};
+    utils::RandomEngine rnd(seed_seq);
+    std::shuffle(candidates.begin(), candidates.end(), rnd);
+    candidates.resize(num_replicas);
+    // printf
+    absl::SubstituteAndAppend(&log, "\tworker $0: $1 owned + $2 replicated\n",
+                              worker_idx, num_owned, num_replicas);
+    replicas[worker_idx] = std::move(candidates);
+  }
+  // Bookkeeping replicas (features replicated for worker) and replicators (workers replicating this feature)
+  load_balancer->SetReplicas(std::move(replicas))
+}
+
+// owned_features updated so workers can fetch
+std::vector<int> LoadBalancer::HeldFeaturesPerWorker(int worker);
+
+// then in worker.cc::Setup(), Each worker Loads its dataset.
+const auto& worker_features =   welcome_.owned_features(WorkerIdx()).features();
+\end{lstlisting}
+
 
 \twocolumn[{\floatblock
 \subsection{Are there Popular Columns across Trees?}
@@ -956,7 +1010,6 @@ Figure~\ref{fig:cc18-tree-feature-hist} shows which features the trees of an axi
 }]
 
 
-\twocolumn[{\floatblock
 \section{Where SPO clearly beats AA, and Accuracy of Hao's Parameters in Distributed and vs. YDF, over 5 Seeds}
 \label{sec:accuracy-spo-outperforms-aa-and-hao-vs-ydf-params}
 
@@ -984,7 +1037,6 @@ The motivation for the Benjamini–Hochberg correction is as follows: each of ou
 Our $t$-test with the Benjamini–Hochberg is the threshold for "SPO is better than AA" below, \textbf{done using Hao parameters for SPO}.
 
 Single-machine results are used to test whether SPO vs. AA is more accurate, due to the speed of this on smaller datasets (no startup cost). Distributed runs were only performed for some of the datasets (rather, I ran those before, and kept them here). 
-}]
 
 \twocolumn[{\floatblock
 \noindent\begin{minipage}{\textwidth}
@@ -1008,9 +1060,9 @@ YDF: $P{=}\min(F^2,6000)$, density 2, mean over seeds 1--5 (except YDF-parameter
 \centering
 \scriptsize
 \setlength{\tabcolsep}{2pt}
-\caption{Comparing YDF's and Hao's settings on single-machine GBT (continued): OpenML CC18.}
+\caption{Comparing YDF's and Hao's settings on single-machine GBT (continued): OpenML CC18 and OpenML AutoML.}
 \input{tables/table_accuracy_hao_vs_ydf_params_single_machine_cc18_body}
-\par\smallskip\raggedright\footnotesize OpenML CC18 binary tasks, its 10 CV folds. Both settings: mean over seeds 1--5. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
+\par\smallskip\raggedright\footnotesize OpenML CC18 binary tasks, its 10 CV folds. Both settings: mean over seeds 1--5. AutoML block: 5 CV folds, Hao SPO-GBT and AA-GBT only. Otherwise as Table~\ref{tab:accuracy-hao-vs-ydf-params-single-machine}.
 \end{minipage}
 }]
 

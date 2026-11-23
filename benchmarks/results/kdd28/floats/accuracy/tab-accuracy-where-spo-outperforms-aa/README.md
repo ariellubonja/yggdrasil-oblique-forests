@@ -5,6 +5,12 @@ Results behind the KDD28 floats below. Rebuild the bodies with the commands. Ind
 - **Labels:** `tab:accuracy-where-spo-outperforms-aa`, `fig:accuracy-where-spo-outperforms-aa`, `fig:accuracy-where-spo-outperforms-aa-regression` (2026-11-21), `fig:column-replication-where-spo-outperforms-aa`, `fig:column-replication-where-spo-outperforms-aa-regression` (2026-11-21) (section
   `sec:accuracy-where-spo-outperforms-aa`, "Accuracy on Datasets Where SPO Outperforms AA"). Added 2026-11-06 (Overleaf 8c3e81d). Metric: test ROC AUC
 - **Status:** current (main body).
+- **fig:col-correlation-vs-colrep** (2026-11-23, Overleaf 8fa11ae, `sec:col-correlation-vs-colrep`): per-dataset column
+  correlation (mean over columns of the max |Spearman| to another column, `col_correlation.py`, all rows, values and source
+  files in `derived/col_correlation.csv`) vs. gain r = 0 -> 1 from `derived/hao_{cls,reg}/{colrep,r0}.csv` (Δ test AUC pts,
+  RMSE drop %), 21 cls (CC18 copies of TabArena sets counted once) + 6 reg. Body: `python3
+  benchmarks/src/distributed_spo_gbt/paper/figures/make_col_correlation_vs_colrep_fig.py` (also writes
+  `derived/col_correlation_vs_colrep_gain.csv`). Epsilon, AutoML and regression scores were computed on EC2 (ariel-ydf-1/-4).
 - **Table since 2026-11-21:** Hao settings, rows = kdd28_hao `pass_rec` of `spo_clearly_beats_aa_per_dataset.csv` (26 rows), body from
   `python3 benchmarks/src/distributed_spo_gbt/paper/tables/make_where_spo_beats_aa_hao_table.py`. Distributed CC18 + regression cells:
   `runs/2026-11-21_where_spo_beats_aa_cc18_reg_distributed/`. Table ± (since 2026-11-21): sample std over seeds of the
