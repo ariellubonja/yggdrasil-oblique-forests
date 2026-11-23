@@ -4,6 +4,7 @@ Inputs (tab-accuracy-where-spo-outperforms-aa/derived): col_correlation.csv (col
 Writes the pgfplots body + .dat files into the paper snapshot. Usage: python3 <this file> (from the repo root).
 """
 import pathlib
+import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
@@ -42,19 +43,22 @@ def main():
         for W in WS:
             t = g[g.W == W]
             t[["x", "y"]].to_csv(FIG / NAME / f"{task}_w{W}.dat", sep=" ", index=False, float_format="%.5f")
-            stats[task, W] = (len(t), *spearmanr(t.x, t.y))
+            slope, icept = np.polyfit(t.x, t.y, 1)  # least-squares trendline, drawn over the data's x range
+            stats[task, W] = (len(t), *spearmanr(t.x, t.y), slope, icept, t.x.min(), t.x.max())
         g["task"] = task
         rows.append(g)
     pd.concat(rows).to_csv(DER / "col_correlation_vs_colrep_gain.csv", index=False)
 
     def panel(task, W, first, ylabel, ymin, ymax, color):
-        n, rho, p = stats[task, W]
+        n, rho, p, slope, icept, x0, x1 = stats[task, W]
         ptxt = "$p<0.01$" if p < 0.01 else f"$p={p:.2f}$"
+        trend = (f"\\addplot[black!65, dashed, thick, forget plot] coordinates "
+                 f"{{({x0:.4f},{icept + slope * x0:.4f}) ({x1:.4f},{icept + slope * x1:.4f})}};\n")
         opts = f"ymin={ymin}, ymax={ymax}, title={{$W={W}$: $\\rho={rho:+.2f}$, {ptxt}}}"
         if first:
             opts += f", ylabel={{{ylabel}}}"
         return (f"\\nextgroupplot[{opts}]\n"
-                f"\\addplot[gray!70, forget plot] coordinates {{(0,0) (1,0)}};\n"
+                f"\\addplot[gray!70, forget plot] coordinates {{(0,0) (1,0)}};\n" + trend +
                 f"\\addplot[only marks, mark=*, mark size=1.4pt, color={{{color}}}, fill opacity=0.85] "
                 f"table[x=x, y=y] {{figures/evaluation/{NAME}/{task}_w{W}.dat}};\n")
 
@@ -71,8 +75,8 @@ def main():
         body.append(panel("reg", W, k == 0, "RMSE drop, $r{=}0\\to1$ (\\%)", -1, 5.5, GREEN))
     body += ["\\end{groupplot}", "\\end{tikzpicture}", ""]
     (FIG / f"fig_{NAME}_body.tex").write_text("\n".join(body))
-    for (task, W), (n, rho, p) in stats.items():
-        print(f"{task} W={W:2d} n={n:2d} rho={rho:+.2f} p={p:.3f}")
+    for (task, W), (n, rho, p, slope, icept, _, _) in stats.items():
+        print(f"{task} W={W:2d} n={n:2d} rho={rho:+.2f} p={p:.3f} slope={slope:+.2f}")
     g = pd.concat(rows)
     print("y range:", g.groupby("task").y.agg(["min", "max"]).round(2).to_dict("index"))
 

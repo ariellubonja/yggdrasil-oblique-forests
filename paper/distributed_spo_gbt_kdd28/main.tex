@@ -172,6 +172,7 @@
     \item CoreSet on features: use a small amount of data.
     \item Covariance - repeat fig \ref{fig:cc18-tree-feature-hist} for all 2-pairs and 3-pairs column combos. Figure out what scoring function GBT uses in Regression. Understand what a "good" projection is?
     \item Can optimal trees be used? would it tell us the best projection/column ? Can do this at a tiny dataset?
+    \item[\done] [\textbf{Extra}] Column correlation's impact on replication score - Sec.~\ref{sec:col-correlation-vs-colrep}
 \end{todolist}
 
 \textbf{\textit{Datasets \& Eval}}
@@ -432,8 +433,6 @@ The scatterplot shows the per-dataset difference from its single-machine SPO met
 
 $r=0$ means the dataset columns are fully disjoint. $r=1$ means columns are fully replicated.
 
-\TODO{This may have the problem of datasets that have correlated features}: if a dataset has basically duplicate columns, it won't suffer even at $r=0$ replication.
-
 \par\medskip
 \noindent\begin{minipage}{\textwidth}
 \captionsetup{type=figure}
@@ -463,9 +462,10 @@ $r=0$ means the dataset columns are fully disjoint. $r=1$ means columns are full
 \subsection{Column Correlation vs.\ Replication Gain}
 \label{sec:col-correlation-vs-colrep}
 
-Correlated columns act as free replication. If a column has a near-duplicate on another worker, that worker can split on almost the same information at $r=0$, so such datasets should gain less from replication. To test this, each dataset gets one column-correlation score: for every feature column, the largest absolute Spearman correlation with any other feature column, averaged over the columns. The label is excluded and constant columns are dropped. The score is computed once per dataset on all rows of its training data (the fold-0 training split where the dataset ships as CV folds).
+% \TODO{This may have the problem of datasets that have correlated features}: if a dataset has basically duplicate columns, it won't suffer even at $r=0$ replication.
+Correlated columns act as free replication. If a column has a near-duplicate on another worker, that worker can split on almost the same information at $r=0$, so such datasets should gain less from replication. \textbf{To test this}, each dataset column gets the largest absolute Spearman correlation score with any other column, and the mean of this is used for the dataset. The label is excluded and \textcolor{orange}{constant columns are dropped (\texttt{homecredit-default,fabert}) have 32,6 constant respectively. Is this why homecredit performs so poorly?)}. The score is computed on the training data rows (the fold-0 training split where the dataset already ships as CV folds).
 
-The replication gain is the change from $r=0$ to $r=1$ at the same $W$, using the cells of Figures~\ref{fig:column-replication-where-spo-outperforms-aa} and~\ref{fig:column-replication-where-spo-outperforms-aa-regression}. Classification uses test AUC in points. Regression uses the relative drop in test RMSE, in \%. Both are means over folds and seeds 1--5, and positive means replication helps. Each panel reports Spearman's $\rho$ between score and gain across datasets, with its two-sided $p$. A CC18 copy of a TabArena dataset holds the same data, so it is counted once, with its TabArena cells. This leaves 21 classification and 6 regression datasets.
+Replication gain is the change from $r=0$ to $r=1$ at the same $W$, using the cells of Figures~\ref{fig:column-replication-where-spo-outperforms-aa} and~\ref{fig:column-replication-where-spo-outperforms-aa-regression}. Both are means over folds and seeds 1--5, and positive means replication helps. Each panel reports Spearman's $\rho$ between score and gain across datasets, with its two-sided $p$.
 
 \par\medskip
 \noindent\begin{minipage}{\textwidth}
@@ -475,7 +475,7 @@ The replication gain is the change from $r=0$ to $r=1$ at the same $W$, using th
 \caption{Column correlation vs.\ the gain from full column replication, one dot per dataset.}
 \Description{Eight scatter panels in two rows, classification on top and regression below, for W=4, 8, 16 and 32. The x axis is the dataset's column correlation, the y axis the gain from r=0 to r=1.}
 \label{fig:col-correlation-vs-colrep}
-\par\smallskip\raggedright\footnotesize Top: classification, $\Delta$ test AUC (pts). Bottom: regression, test RMSE drop (\%). Positive = replication helps. Column correlation: mean over columns of the max $|$Spearman$|$ to another column. $\rho$, $p$: Spearman across datasets.
+\par\smallskip\raggedright\footnotesize Top: classification, $\Delta$ test AUC (pts). Bottom: regression, test RMSE drop (\%). Positive = replication helps. Column correlation: mean over columns of the max $|$Spearman$|$ to another column. $\rho$, $p$: Spearman across datasets. Dashed: least-squares line.
 \end{minipage}
 }]
 
@@ -1044,7 +1044,7 @@ Single-machine results are used to test whether SPO vs. AA is more accurate, due
 \centering
 \scriptsize
 \setlength{\tabcolsep}{2pt}
-\caption{Comparing YDF's and Hao's settings on test AUC of single-machine GBT.}
+\caption{Comparing YDF's and Hao's settings on test AUC of single-machine GBT and showing where SPO outperforms AA.}
 \label{tab:accuracy-hao-vs-ydf-params-single-machine}
 \input{tables/table_accuracy_hao_vs_ydf_params_single_machine_body}
 \par\smallskip\raggedright\footnotesize 
